@@ -1,5 +1,6 @@
-import { StyleSheet, Text, type TextProps } from 'react-native';
+import { Text, type TextProps } from 'react-native';
 
+import { useResponsive } from '@/hooks/use-responsive';
 import { useThemeColor } from '@/hooks/use-theme-color';
 
 export type ThemedTextProps = TextProps & {
@@ -16,45 +17,27 @@ export function ThemedText({
   ...rest
 }: ThemedTextProps) {
   const color = useThemeColor({ light: lightColor, dark: darkColor }, 'text');
+  const { moderateScale } = useResponsive();
+
+  const typeStyle = (() => {
+    switch (type) {
+      case 'title':
+        return { fontSize: moderateScale(32), fontWeight: 'bold' as const, lineHeight: moderateScale(38) };
+      case 'subtitle':
+        return { fontSize: moderateScale(20), fontWeight: 'bold' as const };
+      case 'defaultSemiBold':
+        return { fontSize: moderateScale(16), lineHeight: moderateScale(24), fontWeight: '600' as const };
+      case 'link':
+        return { fontSize: moderateScale(16), lineHeight: moderateScale(30), color: '#0a7ea4' };
+      default:
+        return { fontSize: moderateScale(16), lineHeight: moderateScale(24) };
+    }
+  })();
 
   return (
     <Text
-      style={[
-        { color },
-        type === 'default' ? styles.default : undefined,
-        type === 'title' ? styles.title : undefined,
-        type === 'defaultSemiBold' ? styles.defaultSemiBold : undefined,
-        type === 'subtitle' ? styles.subtitle : undefined,
-        type === 'link' ? styles.link : undefined,
-        style,
-      ]}
+      style={[{ color }, typeStyle, style]}
       {...rest}
     />
   );
 }
-
-const styles = StyleSheet.create({
-  default: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  defaultSemiBold: {
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: '600',
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    lineHeight: 32,
-  },
-  subtitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  link: {
-    lineHeight: 30,
-    fontSize: 16,
-    color: '#0a7ea4',
-  },
-});
