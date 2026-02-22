@@ -19,28 +19,28 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol name={require('@/src/assets/tabs/home.png')} size={28} color={color} />,
         }}
       />
       <Tabs.Screen
         name="connections"
         options={{
           title: 'Connections',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="heart" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol name={require('@/src/assets/tabs/connections.png')} size={28} color={color} />,
         }}
       />
       <Tabs.Screen
         name="transits"
         options={{
           title: 'Transits',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="globe" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol name={require('@/src/assets/tabs/transits.png')} size={28} color={color} />,
         }}
       />
       <Tabs.Screen
         name="chat"
         options={{
           title: 'Chat',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="bubble.left" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol name={require('@/src/assets/tabs/chat.png')} size={28} color={color} />,
         }}
       />
     </Tabs>
