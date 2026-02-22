@@ -30,7 +30,11 @@ yarn-error.*
 .DS_Store
 *.pem
 
+# VSCode local settings
+.vscode/settings.local.json
+
 # local env files
+.env
 .env*.local
 
 # typescript
