@@ -18,15 +18,15 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Today',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="star.fill" color={color} />,
+          title: 'Home',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house" color={color} />,
         }}
       />
       <Tabs.Screen
         name="connections"
         options={{
           title: 'Connections',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="heart.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="heart" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -40,7 +40,7 @@ export default function TabLayout() {
         name="chat"
         options={{
           title: 'Chat',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="bubble.left.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="bubble.left" color={color} />,
         }}
       />
     </Tabs>
