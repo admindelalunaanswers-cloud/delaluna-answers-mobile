@@ -30,7 +30,6 @@ export default function HomeScreen() {
             {Platform.select({
               ios: 'cmd + d',
               android: 'cmd + m',
-              web: 'F12',
             })}
           </ThemedText>{' '}
           to open developer tools.
