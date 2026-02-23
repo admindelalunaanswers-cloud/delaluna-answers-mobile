@@ -2,10 +2,13 @@ import { StyleSheet } from 'react-native';
 
 import { ThemedText } from '@/src/components/themed-text';
 import { ThemedView } from '@/src/components/themed-view';
+import { Ionicons } from '@expo/vector-icons';
+
 export default function TransitsScreen() {
   return (
     <ThemedView style={styles.container}>
       <ThemedText type="title">Transits</ThemedText>
+      <Ionicons name="lock-closed-outline" size={64} color="#0a7ea4" />
     </ThemedView>
   );
 }
