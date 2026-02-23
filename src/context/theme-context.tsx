@@ -1,6 +1,12 @@
 import React, { createContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import type { ColorValue, ImageSourcePropType } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// Safe AsyncStorage wrapper — silently no-ops if native module isn't in the build yet
+let AsyncStorage: { getItem(k: string): Promise<string | null>; setItem(k: string, v: string): Promise<void> };
+try {
+  AsyncStorage = require('@react-native-async-storage/async-storage').default;
+} catch {
+  AsyncStorage = { getItem: async () => null, setItem: async () => {} };
+}
 
 // ===== Images =====
 const defaultImg  = require('@/src/assets/themes-png/default-theme.png');

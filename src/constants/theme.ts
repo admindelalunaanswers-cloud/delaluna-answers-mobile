@@ -51,7 +51,7 @@ export const Fonts = Platform.select({
 export const C = {
   // Deep backgrounds
   void:       '#240046',
-  cosmos:     '#513877',
+  cosmos:     '#020105',
   nebula:     '#0c0c24',
   deepSpace:  '#101030',
   starfield:  '#1c1c48',
