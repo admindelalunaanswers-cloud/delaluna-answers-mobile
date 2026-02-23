@@ -30,7 +30,7 @@ export default function Welcome() {
       {/* TOP: animation fills, logo centered on top */}
       <View pointerEvents="none" style={styles.topContainer}>
         <LottieView
-          source={require('@/assets/animations/galaxy.json')}
+          source={require('@/src/assets/animations/galaxy.json')}
           autoPlay
           loop
           style={styles.topAnimation}  // absolute fill inside top container
@@ -39,7 +39,7 @@ export default function Welcome() {
         <View pointerEvents="none" style={styles.logoWrap}>
           
          <LottieView
-          source={require('@/assets/animations/logo.json')}
+          source={require('@/src/assets/animations/logo.json')}
           autoPlay
           loop={false}
           style={{ width: '100%', aspectRatio: 0.95 / 2}}
