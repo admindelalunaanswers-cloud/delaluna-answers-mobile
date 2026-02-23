@@ -1,13 +1,13 @@
-import React, { useEffect } from 'react';
-import { View, StyleSheet, ImageBackground, useWindowDimensions } from 'react-native';
-import LottieView from 'lottie-react-native';
 import { router } from 'expo-router';
+import LottieView from 'lottie-react-native';
+import React from 'react';
+import { ImageBackground, StyleSheet, useWindowDimensions, View } from 'react-native';
 
-import { StatusBar } from 'expo-status-bar';
-import { scale, verticalScale } from '@/src/utils/responsive';
 import PrimaryButton from '@/src/assets/buttons/primary-button-component';
 import SecondaryButton from '@/src/assets/buttons/secondary-button-component';
 import ButtonText from '@/src/components/typography/button-text';
+import { scale, verticalScale } from '@/src/utils/responsive';
+import { StatusBar } from 'expo-status-bar';
 
 
 export default function Welcome() {
@@ -22,7 +22,7 @@ export default function Welcome() {
       </StatusBar>
       {/* background image */}
       <ImageBackground
-        source={require('@/assets/images/background.jpg')}
+        source={require('@/src/assets/start-up/welcome-background.jpg')}
         style={styles.background}
         resizeMode="cover"
       />
