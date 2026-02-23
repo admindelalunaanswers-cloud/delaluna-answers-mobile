@@ -1,25 +1,38 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
 import { Slot } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { type ReactNode } from 'react';
+import { ImageBackground } from 'react-native';
 import 'react-native-reanimated';
 
+import ThemeProvider from '@/src/context/theme-context';
+import { useTheme } from '@/src/hooks/use-theme';
 import { useColorScheme } from '@/src/hooks/use-color-scheme';
-import { ImageBackground } from 'react-native';
 
-export default function RootLayout() {
+function ThemedRoot({ children }: { children: ReactNode }) {
   const colorScheme = useColorScheme();
+  const { theme } = useTheme();
 
   return (
-  <ImageBackground
-        source={require("../src/assets/main/main-background.png")}
-        style={{ flex: 1 }}
-        resizeMode="cover"
-      >
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Slot />
-      <StatusBar style="auto" />
-      
-    </ThemeProvider>
+    <ImageBackground
+      source={theme.backgroundImage}
+      style={{ flex: 1 }}
+      resizeMode="cover"
+    >
+      <NavThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        {children}
+        <StatusBar style="auto" />
+      </NavThemeProvider>
     </ImageBackground>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <ThemedRoot>
+        <Slot />
+      </ThemedRoot>
+    </ThemeProvider>
   );
 }

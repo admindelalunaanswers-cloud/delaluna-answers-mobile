@@ -1,12 +1,10 @@
 import { Tabs } from 'expo-router';
 
-import { HapticTab } from '@/src/components/haptic-tab';
 import { IconSymbol } from '@/src/components/ui/icon-symbol';
-import { C, Colors } from '@/src/constants/theme';
-import { useColorScheme } from '@/src/hooks/use-color-scheme';
+import { useTheme } from '@/src/hooks/use-theme';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const { theme: { colors: C } } = useTheme();
 
   return (
     <Tabs
@@ -15,6 +13,10 @@ export default function TabLayout() {
         tabBarInactiveTintColor: C.inactiveTabs,
         headerShown: false,
         sceneStyle: { backgroundColor: 'transparent' },
+        tabBarStyle: {
+            backgroundColor: C.headerBg,
+            borderTopColor: 'transparent',
+          },
       }}>
       <Tabs.Screen
         name="index"
