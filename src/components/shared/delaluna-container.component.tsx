@@ -1,7 +1,7 @@
 import React from "react";
 import { View, StyleSheet, ViewStyle, StyleProp } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { scale, verticalScale } from "@/utils/responsive";
+import { scale, verticalScale } from "@/src/utils/responsive";
 
 type Variant = "default" | "highlight" | "subtle";
 

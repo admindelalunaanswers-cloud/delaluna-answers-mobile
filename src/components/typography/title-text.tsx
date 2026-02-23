@@ -1,6 +1,6 @@
 import React from 'react';
 import { Text, TextStyle } from 'react-native';
-import { moderateScale } from '@/utils/responsive';
+import { moderateScale } from '@/src/utils/responsive';
 
 type Props = {
   children: React.ReactNode;

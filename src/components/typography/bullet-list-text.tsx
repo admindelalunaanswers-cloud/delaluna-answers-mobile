@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { scale, verticalScale, moderateScale } from "@/utils/responsive";
+import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
 
 interface BulletListProps {
   items: string[];

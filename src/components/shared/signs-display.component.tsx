@@ -15,7 +15,7 @@ interface HomeSignsDisplayProps {
 }
 
 export default function HomeSignsDisplay({ sun, moon, rising, showViewChart = true, birthChartReady = false }: HomeSignsDisplayProps) {
-  const goToBirthchart = () => router.replace("/(supporting)/birth-chart.screen");
+  const goToBirthchart = () => console.log("router.replace(\"/(supporting)/birth-chart.screen\")");
 
   return (
     <View style={styles.container}>
