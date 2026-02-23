@@ -10,8 +10,7 @@ import Animated, {
 import { ThemedView } from '@/src/components/themed-view';
 import { useColorScheme } from '@/src/hooks/use-color-scheme';
 import { useThemeColor } from '@/src/hooks/use-theme-color';
-
-const HEADER_HEIGHT = 250;
+import { useResponsive } from '@/src/hooks/use-responsive';
 
 type Props = PropsWithChildren<{
   headerImage: ReactElement;
@@ -25,8 +24,12 @@ export default function ParallaxScrollView({
 }: Props) {
   const backgroundColor = useThemeColor({}, 'background');
   const colorScheme = useColorScheme() ?? 'light';
+  const { height, moderateScale } = useResponsive();
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const scrollOffset = useScrollOffset(scrollRef);
+
+  const HEADER_HEIGHT = Math.round(height * 0.28);
+
   const headerAnimatedStyle = useAnimatedStyle(() => {
     return {
       transform: [
@@ -51,29 +54,22 @@ export default function ParallaxScrollView({
       scrollEventThrottle={16}>
       <Animated.View
         style={[
-          styles.header,
+          { height: HEADER_HEIGHT, overflow: 'hidden' },
           { backgroundColor: headerBackgroundColor[colorScheme] },
           headerAnimatedStyle,
         ]}>
         {headerImage}
       </Animated.View>
-      <ThemedView style={styles.content}>{children}</ThemedView>
+      <ThemedView style={[styles.content, { padding: moderateScale(32), gap: moderateScale(16) }]}>
+        {children}
+      </ThemedView>
     </Animated.ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    height: HEADER_HEIGHT,
-    overflow: 'hidden',
-  },
   content: {
     flex: 1,
-    padding: 32,
-    gap: 16,
     overflow: 'hidden',
   },
 });
