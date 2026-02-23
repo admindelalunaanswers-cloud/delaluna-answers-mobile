@@ -15,5 +15,5 @@ export function useResponsive() {
   const moderateScale = (size: number, factor = 0.3) =>
     Math.round(size + (scale(size) - size) * factor);
 
-  return { width, height, moderateScale };
+  return { width, height, scale, moderateScale };
 }
