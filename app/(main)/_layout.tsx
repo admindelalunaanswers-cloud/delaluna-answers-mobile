@@ -9,6 +9,7 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
+        
         tabBarActiveTintColor: C.activeTab,
         tabBarInactiveTintColor: C.inactiveTabs,
         headerShown: false,
@@ -19,7 +20,7 @@ export default function TabLayout() {
           },
       }}>
       <Tabs.Screen
-        name="index"
+        name="home"
         options={{
           title: 'Home',
           tabBarIcon: ({ color }) => <IconSymbol name={require('@/src/assets/tabs/home.png')} size={28} color={color} />,
@@ -44,6 +45,13 @@ export default function TabLayout() {
         options={{
           title: 'Chat',
           tabBarIcon: ({ color }) => <IconSymbol name={require('@/src/assets/tabs/chat.png')} size={28} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Test',
+          tabBarIcon: ({ color }) => <IconSymbol name={"binoculars"} size={28} color={color} />,
         }}
       />
     </Tabs>
