@@ -4,20 +4,23 @@
  * Dark cosmic — gold on void.
  */
 
+import BirthChartWheel from '@/src/components/natalChart/BirthChartWheel';
+import { C, R, S } from '@/src/constants/theme';
+import { Aspect, calculateAspects, MoonData, PlanetPosition } from '@/src/services/astroEngine';
+import { TestingStore } from '@/src/stores/testing-store';
+import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, StatusBar, useWindowDimensions,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { RootStack } from './InputScreen';
-import type { PlanetPosition, MoonData, Aspect } from '../utils/astroEngine';
-import { calculateAspects } from '../utils/astroEngine';
-import { C, S, R } from '../utils/theme';
-import BirthChartWheel from '../components/BirthChartWheel';
 
-type Props = NativeStackScreenProps<RootStack, 'Results'>;
 type Tab = 'Natal' | 'Transits' | 'Moon' | 'Houses' | 'Chart' | 'Aspects' | 'Table';
 const TABS: Tab[] = ['Natal', 'Transits', 'Moon', 'Houses', 'Chart', 'Aspects', 'Table'];
 
@@ -247,8 +250,8 @@ function EditorialTable({ planets, asc }: {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export default function ResultsScreen({ route, navigation }: Props) {
-  const { natalChart, transits, transitDate, name, birthData } = route.params;
+export default function ResultsScreen() {
+  const { natalChart, transits, transitDate, name, birthData } = TestingStore.getResults()!;
   const [tab, setTab] = useState<Tab>('Natal');
   const { width } = useWindowDimensions();
   const wheelSize = width - S.md * 2;
@@ -267,7 +270,7 @@ export default function ResultsScreen({ route, navigation }: Props) {
 
       {/* ── Top bar ─────────────────────────────────────────────────────── */}
       <View style={ss.topBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={ss.backBtn}>
+        <TouchableOpacity onPress={() => router.navigate('/')} style={ss.backBtn}>
           <Text style={ss.backArrow}>←</Text>
         </TouchableOpacity>
         <View style={{ flex: 1, alignItems: 'center' }}>
@@ -276,7 +279,7 @@ export default function ResultsScreen({ route, navigation }: Props) {
         </View>
         <TouchableOpacity
           style={ss.compareBtn}
-          onPress={() => navigation.navigate('Synastry', { chartA: natalChart, nameA: name })}
+          onPress={() => { TestingStore.setSynastry({ chartA: natalChart, nameA: name }); router.push('/connection/SynastryScreen'); }}
         >
           <Text style={ss.compareBtnText}>♡</Text>
         </TouchableOpacity>

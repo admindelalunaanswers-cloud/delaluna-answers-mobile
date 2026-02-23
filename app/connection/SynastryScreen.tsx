@@ -11,15 +11,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { RootStack } from './InputScreen';
-import {
-  calculateNatalChart, calculateSynastry,
-  BirthData, NatalChart, Aspect,
-} from '../utils/astroEngine';
-import { C, S, R } from '../utils/theme';
-
-type Props = NativeStackScreenProps<RootStack, 'Synastry'>;
+import { router } from 'expo-router';
+import { calculateNatalChart, calculateSynastry, BirthData, Aspect, NatalChart } from '@/src/services/astroEngine';
+import { C, R, S } from '@/src/constants/theme';
+import { TestingStore } from '@/src/stores/testing-store';
 
 type NominatimResult = {
   place_id: number;
@@ -131,8 +126,8 @@ function Card({ children }: { children: React.ReactNode }) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export default function SynastryScreen({ route, navigation }: Props) {
-  const { chartA, nameA } = route.params;
+export default function SynastryScreen() {
+  const { chartA, nameA } = TestingStore.getSynastry()!;
 
   // Step: 'input' shows the form, 'results' shows aspects
   const [step, setStep] = useState<'input' | 'results'>('input');
@@ -304,7 +299,8 @@ export default function SynastryScreen({ route, navigation }: Props) {
   const fDate = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   const fTime = (d: Date) => d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
 
-  const sunA = chartA.planets.find(p => p.name === 'Sun');
+  const sunA  = chartA.planets.find(p => p.name === 'Sun');
+  const moonA = chartA.planets.find(p => p.name === 'Moon');
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -321,7 +317,7 @@ export default function SynastryScreen({ route, navigation }: Props) {
 
       {/* ── Top bar ─────────────────────────────────────────────────────── */}
       <View style={sc.topBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={sc.backBtn}>
+        <TouchableOpacity onPress={() => router.back()} style={sc.backBtn}>
           <Text style={sc.backArrow}>←</Text>
         </TouchableOpacity>
         <View style={{ flex: 1, alignItems: 'center' }}>
@@ -349,11 +345,11 @@ export default function SynastryScreen({ route, navigation }: Props) {
         <View style={sc.personAStrip}>
           <Text style={sc.personALabel}>PERSON A</Text>
           <Text style={sc.personAName}>{nameA}</Text>
-          {sunA && (
-            <Text style={sc.personAMeta}>
-              {sunA.signSymbol} {sunA.sign}  ·  {chartA.ascendant.signSymbol} {chartA.ascendant.sign} Rising
-            </Text>
-          )}
+          <Text style={sc.personAMeta}>
+            {chartA.ascendant.signSymbol} {chartA.ascendant.sign} Rising
+            {moonA ? `  ·  ${moonA.signSymbol} ${moonA.sign} Moon` : ''}
+            {sunA  ? `  ·  ${sunA.signSymbol} ${sunA.sign} Sun`   : ''}
+          </Text>
         </View>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
@@ -465,16 +461,17 @@ export default function SynastryScreen({ route, navigation }: Props) {
           <>
             {/* ── Person B summary strip ───────────────────────────────── */}
             {chartB && (() => {
-              const sunB = chartB.planets.find(p => p.name === 'Sun');
+              const sunB  = chartB.planets.find(p => p.name === 'Sun');
+              const moonB = chartB.planets.find(p => p.name === 'Moon');
               return (
                 <View style={[sc.personAStrip, sc.personBStrip]}>
                   <Text style={sc.personALabel}>PERSON B</Text>
                   <Text style={sc.personAName}>{nameB}</Text>
-                  {sunB && (
-                    <Text style={sc.personAMeta}>
-                      {sunB.signSymbol} {sunB.sign}  ·  {chartB.ascendant.signSymbol} {chartB.ascendant.sign} Rising
-                    </Text>
-                  )}
+                  <Text style={sc.personAMeta}>
+                    {chartB.ascendant.signSymbol} {chartB.ascendant.sign} Rising
+                    {moonB ? `  ·  ${moonB.signSymbol} ${moonB.sign} Moon` : ''}
+                    {sunB  ? `  ·  ${sunB.signSymbol} ${sunB.sign} Sun`   : ''}
+                  </Text>
                 </View>
               );
             })()}
