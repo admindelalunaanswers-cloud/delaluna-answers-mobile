@@ -8,6 +8,7 @@
     "scheme": "delalunaanswersmobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "platforms": ["ios", "android"],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.delalunaanswers.mobile",
