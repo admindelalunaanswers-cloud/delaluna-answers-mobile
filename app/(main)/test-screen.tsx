@@ -7,6 +7,13 @@
 import { C, R, S } from '@/src/constants/theme';
 import { BirthData, calculateNatalChart, calculateTransits } from '@/src/services/astroEngine';
 import { TestingStore } from '@/src/stores/testing-store';
+import {
+  NominatimResult,
+  formatPlace,
+  searchNominatim,
+  detectTimezoneOffset,
+  formatUtcOffset,
+} from '@/src/utils/location';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -25,35 +32,6 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type NominatimResult = {
-  place_id: number;
-  display_name: string;
-  lat: string;
-  lon: string;
-  type: string;
-  address: {
-    city?: string; town?: string; village?: string; municipality?: string;
-    state?: string; country?: string;
-  };
-};
-
-// Keep only results that have a city/town/village name in their structured address.
-// Filters out counties, states, countries, and other non-city results regardless of Nominatim type.
-function hasCity(r: NominatimResult): boolean {
-  const a = r.address;
-  return !!(a.city ?? a.town ?? a.village ?? a.municipality);
-}
-
-function formatPlace(r: NominatimResult): string {
-  const a = r.address;
-  const place = a.city ?? a.town ?? a.village ?? a.municipality;
-  return [place, a.state, a.country].filter(Boolean).join(', ') || r.display_name;
-}
-
-
 
 // ─── Tiny reusable bits ───────────────────────────────────────────────────────
 
@@ -86,31 +64,6 @@ function TextBox({
 function Card({ children }: { children: React.ReactNode }) {
   return <View style={st.card}>{children}</View>;
 }
-
-// ─── Timezone auto-detect helpers ─────────────────────────────────────────────
-
-/**
- * Given an IANA timezone name and a Date, return the UTC offset in hours
- * (e.g. -5 for CDT, +5.5 for IST) at that exact moment — DST included.
- * Rounds to nearest 15 min to cover offsets like Nepal +5:45, Chatham +12:45.
- */
-function getUtcOffsetHours(ianaTimezone: string, date: Date): number {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: ianaTimezone,
-    year: 'numeric', month: 'numeric', day: 'numeric',
-    hour: 'numeric', minute: 'numeric',
-    hour12: false,
-  }).formatToParts(date);
-  const get = (type: string) => {
-    const p = parts.find(x => x.type === type);
-    return p ? parseInt(p.value) : 0;
-  };
-  let h = get('hour');
-  if (h === 24) h = 0;  // midnight edge-case
-  const localMs = Date.UTC(get('year'), get('month') - 1, get('day'), h, get('minute'));
-  return Math.round((localMs - date.getTime()) / 900000) * 0.25;
-}
-
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
@@ -246,22 +199,7 @@ export default function InputScreen() {
   const searchLocation = useCallback(async (query: string) => {
     setLocationSearching(true);
     try {
-      const resp = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=10&addressdetails=1`,
-        { headers: { 'Accept-Language': 'en', 'User-Agent': 'AstroNatal/1.0' } }
-      );
-      if (!resp.ok) throw new Error();
-      const all = await resp.json() as NominatimResult[];
-      const seen = new Set<string>();
-      setLocationResults(
-        all.filter(r => {
-          if (!hasCity(r)) return false;
-          const label = formatPlace(r);
-          if (seen.has(label)) return false;
-          seen.add(label);
-          return true;
-        })
-      );
+      setLocationResults(await searchNominatim(query));
     } catch {
       setLocationResults([]);
     } finally {
@@ -286,44 +224,9 @@ export default function InputScreen() {
   // Called automatically when a location is selected.
 
   const detectTimezone = useCallback(async (latNum: number, lonNum: number): Promise<void> => {
-    try {
-      // Open-Meteo returns the IANA timezone name for any coordinate.
-      // Free, no API key, extremely reliable. The `timezone` field at root
-      // level is always present when timezone=auto is passed.
-      const resp = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${latNum}&longitude=${lonNum}&timezone=auto&current=temperature_2m`
-      );
-      if (!resp.ok) return;
-      const data = await resp.json() as { timezone?: string; utc_offset_seconds?: number };
-      const tzName = data.timezone;
-      if (!tzName) return;
-
-      // Use noon UTC on the birth date so historical DST rules apply correctly.
-      const refDate = new Date(Date.UTC(
-        birthDate.getFullYear(),
-        birthDate.getMonth(),
-        birthDate.getDate(),
-        12, 0, 0
-      ));
-
-      let offset: number;
-      try {
-        offset = getUtcOffsetHours(tzName, refDate);
-      } catch {
-        // Intl fallback: use Open-Meteo's current UTC offset (may be off by
-        // 1 hr at DST transitions vs. the historical birth-date offset).
-        offset = Math.round(((data.utc_offset_seconds ?? 0) / 3600) * 4) / 4;
-      }
-
-      setTzValue(offset);
-      const sign = offset >= 0 ? '+' : '−';
-      const absH = Math.floor(Math.abs(offset));
-      const absM = Math.round((Math.abs(offset) % 1) * 60);
-      const offsetStr = absM ? `UTC${sign}${absH}:${String(absM).padStart(2, '0')}` : `UTC${sign}${absH}`;
-      setTzDisplay(`${tzName}  ·  ${offsetStr}`);
-    } catch {
-      // silent fail — tzValue stays at 0 (UTC)
-    }
+    const offset = await detectTimezoneOffset(latNum, lonNum, birthDate);
+    setTzValue(offset);
+    setTzDisplay(`${formatUtcOffset(offset)}`);
   }, [birthDate]);
 
   const selectLocation = useCallback((r: NominatimResult) => {
