@@ -1,7 +1,7 @@
 import { db } from '@/firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View, ScrollView, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResponsive } from '@/src/hooks/use-responsive';
 
@@ -13,6 +13,7 @@ import { useUser } from '@/src/context/user-context';
 import type { NatalChartDetailsDoc } from '@/src/types/user.type';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import SectionTitle from '@/src/components/shared/section-title.component';
+import LoadingScreen from '../(util)/loading-screen';
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -32,9 +33,9 @@ export default function HomeScreen() {
       .finally(() => setChartLoading(false));
   }, []);
 
-  const loading    = userLoading || chartLoading;
-  const sunSign    = chartDetails?.planets.find(p => p.name === 'Sun')?.sign  ?? '—';
-  const moonSign   = chartDetails?.planets.find(p => p.name === 'Moon')?.sign ?? '—';
+  const loading = userLoading || chartLoading;
+  const sunSign = chartDetails?.planets.find(p => p.name === 'Sun')?.sign ?? '—';
+  const moonSign = chartDetails?.planets.find(p => p.name === 'Moon')?.sign ?? '—';
   const risingSign = chartDetails?.ascendant.sign ?? '—';
 
   const today = new Date().toLocaleDateString('en-US', {
@@ -47,54 +48,68 @@ export default function HomeScreen() {
     throw new Error('Function not implemented.');
   }
 
+  // ACtions
+  const goToProfile = () => {
+    console.log('go to profile');
+  }
+
+  const goToChat = () => {
+    console.log('go to chat');
+  }
+
+  const goToViewNatalChart = () => {
+    console.log('go to natal chart');
+  }
+
   return (
     <ThemedView style={styles.container}>
       <HeaderNav
         title={userDoc?.name ?? 'Home'}
         rightIconName="person-circle-outline"
-        onRightPress={() => console.log('go to profile')}
+        onRightPress={() => goToProfile()}
       />
-      
-        <View style={[styles.content, { paddingTop: headerHeight }]}>
-          <HomeSignsDisplay
-            sun={sunSign}
-            moon={moonSign}
-            rising={risingSign}
-            showViewChart={true}
-            birthChartReady={!!chartDetails}
-          />
-          <DateSwitcher
-            value={today}
-            dates={[today]}
-            onChange={(date) => console.log('selected date', date)}
-          />
-          <ScrollView style={styles.scroll}>
-            <SectionTitle sectionName="quote" title="Quote" />
 
+      {loading ? <LoadingScreen /> : (
+      <View style={[styles.content, { paddingTop: headerHeight }]}>
+        <HomeSignsDisplay
+          sun={sunSign}
+          moon={moonSign}
+          rising={risingSign}
+          showViewChart={true}
+          birthChartReady={!!chartDetails}
+        />
+        <DateSwitcher
+          value={today}
+          dates={[today]}
+          onChange={(date) => console.log('selected date', date)}
+        />
+        <ScrollView style={styles.scroll}>
+          <SectionTitle sectionName="quote" title="Quote" />
 
-            <SectionTitle sectionName="advice" title="Advice" />
+          <SectionTitle sectionName="advice" title="Advice" />
 
-            <SectionTitle sectionName="dos" title="Do's" />
+          <SectionTitle sectionName="dos" title="Do's" />
 
-              <SectionTitle sectionName="donts" title="Don'ts" />
+          <SectionTitle sectionName="donts" title="Don'ts" />
 
-              <SectionTitle sectionName="affirmation" title="Affirmation" />
+          <SectionTitle sectionName="affirmation" title="Affirmation" />
 
-              <SectionTitle sectionName="tarot" title="Today's Cards" />
+          <SectionTitle sectionName="tarot" title="Today's Cards" />
 
-              <SectionTitle sectionName="message" title="Message in a Bottle" />
+          <SectionTitle sectionName="message" title="Message in a Bottle" />
 
-              <SectionTitle sectionName="moon" title="Moon Phase" />
+          <SectionTitle sectionName="moon" title="Moon Phase" />
 
-              <SectionTitle sectionName="retrograde" title="Planets in Retrograde" />
+          <SectionTitle sectionName="retrograde" title="Planets in Retrograde" />
 
-              <SectionTitle sectionName="newLove" title="New Love" />
+          <SectionTitle sectionName="newLove" title="New Love" />
 
-              <SectionTitle sectionName="returns" title="Returns" />
-              
-              <SectionTitle sectionName="warning" title="Warning" />
-          </ScrollView>
-        </View>
+          <SectionTitle sectionName="returns" title="Returns" />
+
+          <SectionTitle sectionName="warning" title="Warning" />
+        </ScrollView>
+      </View>
+      )}
     </ThemedView>
   );
 }
@@ -108,7 +123,6 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
   },
-  // paddingTop applied inline using headerHeight from hooks
   scroll: {
     flex: 1,
   },
