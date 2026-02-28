@@ -9,7 +9,6 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        
         tabBarActiveTintColor: C.activeTab,
         tabBarInactiveTintColor: C.inactiveTabs,
         headerShown: false,
@@ -20,7 +19,7 @@ export default function TabLayout() {
           },
       }}>
       <Tabs.Screen
-        name="home"
+        name="index"
         options={{
           title: 'Home',
           tabBarIcon: ({ color }) => <IconSymbol name={require('@/src/assets/tabs/home.png')} size={28} color={color} />,
@@ -48,7 +47,7 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="index"
+        name="test-screen"
         options={{
           title: 'Test',
           tabBarIcon: ({ color }) => <IconSymbol name={"binoculars"} size={28} color={color} />,
