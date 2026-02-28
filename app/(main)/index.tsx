@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResponsive } from '@/src/hooks/use-responsive';
-
+import { router } from 'expo-router';
 import DateSwitcher from '@/src/components/home/date-switcher.component';
 import HeaderNav from '@/src/components/shared/header-nav';
 import HomeSignsDisplay from '@/src/components/shared/signs-display.component';
@@ -51,15 +51,13 @@ export default function HomeScreen() {
   // ACtions
   const goToProfile = () => {
     console.log('go to profile');
+    //router.push('/profile');
   }
 
   const goToChat = () => {
     console.log('go to chat');
   }
 
-  const goToViewNatalChart = () => {
-    console.log('go to natal chart');
-  }
 
   return (
     <ThemedView style={styles.container}>
