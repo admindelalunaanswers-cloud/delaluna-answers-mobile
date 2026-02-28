@@ -2,11 +2,13 @@ import { Tabs } from 'expo-router';
 
 import { IconSymbol } from '@/src/components/ui/icon-symbol';
 import { useTheme } from '@/src/hooks/use-theme';
+import { UserProvider } from '@/src/context/user-context';
 
 export default function TabLayout() {
   const { theme: { colors: C } } = useTheme();
 
   return (
+    <UserProvider>
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: C.activeTab,
@@ -54,5 +56,6 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
+    </UserProvider>
   );
 }
