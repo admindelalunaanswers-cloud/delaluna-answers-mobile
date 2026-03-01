@@ -27,7 +27,7 @@ export function ThemedText({
       case 'subtitle':
         return { fontSize: moderateScale(20), fontWeight: 'bold' as const };
       case 'defaultSemiBold':
-        return { fontSize: moderateScale(16), lineHeight: moderateScale(24), fontWeight: '600' as const };
+        return { fontSize: moderateScale(16), lineHeight: moderateScale(24), color: C.white, fontWeight: '600' as const };
       case 'link':
         return { fontSize: moderateScale(16), lineHeight: moderateScale(30), color: '#0a7ea4' };
       default:
