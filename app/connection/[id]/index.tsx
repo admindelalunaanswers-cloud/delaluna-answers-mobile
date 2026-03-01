@@ -1,23 +1,530 @@
-import { useLocalSearchParams } from 'expo-router';
-import { StyleSheet } from 'react-native';
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Dimensions,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withDelay,
+} from "react-native-reanimated";
+import { router, useLocalSearchParams } from "expo-router";
+import { doc, onSnapshot } from "firebase/firestore";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ThemedText } from '@/src/components/themed-text';
-import { ThemedView } from '@/src/components/themed-view';
-export default function ConnectionDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+import { db } from "@/firebaseConfig";
+import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
+import { useUser } from "@/src/context/user-context";
+import HeaderNav from "@/src/components/shared/header-nav";
+
+const NAV_BAR_HEIGHT = 44;
+const BAR_MAX_WIDTH = Dimensions.get("window").width - scale(18) * 2;
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type StatusState = "pending" | "processing" | "complete" | "error" | string;
+
+interface ConnectionStatus {
+  state: StatusState;
+  type?: string;
+  message?: string;
+}
+
+interface PersonInfo {
+  firstName?: string;
+  lastName?: string;
+  sun?: string;
+  moon?: string;
+  rising?: string;
+  pronouns?: string;
+}
+
+interface CompatibilityScores {
+  interest?: number;
+  communication?: number;
+  resonation?: number;
+  trust?: number;
+  longevity?: number;
+  sexAndChemistry?: number;
+  [key: string]: number | undefined;
+}
+
+interface CompatibilityReport {
+  title: string;
+  summary: string;
+  closing: string;
+  overallCompatibility: number | null;
+  scores: CompatibilityScores;
+}
+
+interface ConnectionDoc {
+  connectionId: string;
+  relationshipType?: string;
+  status?: ConnectionStatus;
+  firstPerson?: PersonInfo;
+  secondPerson?: PersonInfo;
+  compatibility?: CompatibilityReport;
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const LOADING_SAYINGS = [
+  "Calculating cosmic alignment...",
+  "Reading the stars...",
+  "Consulting the planets...",
+  "Aligning your birth charts...",
+  "Channeling celestial energy...",
+  "Mapping planetary positions...",
+  "Decoding your connection...",
+  "Syncing with the universe...",
+];
+
+const KEYWORD_DEFINITIONS: Record<string, string> = {
+  interest: "How naturally your attention and curiosity gravitate toward each other.",
+  communication: "How clearly you exchange thoughts, emotions, and ideas.",
+  resonation: "The level of emotional frequency and energy alignment.",
+  reasoning: "Your shared logic, perspective, and problem-solving flow.",
+  loyalty: "Consistency, dependability, and commitment to the bond.",
+  attraction: "Physical and magnetic chemistry that draws you together.",
+  stubbornness: "Your ability (or inability) to compromise when differences arise.",
+  sacrifice: "How much each person is willing to give for the relationship.",
+  trust: "The foundation of reliability and emotional safety between you.",
+  longevity: "The long-term potential and staying power of the bond.",
+  sexandchemistry: "Physical intimacy and magnetic pull.",
+};
+
+const getBarColor = (value: number) => {
+  if (value >= 75) return "#41FF88";
+  if (value >= 50) return "#FFDD00";
+  return "#FF3B3B";
+};
+
+const SIGN_ICONS = {
+  sun: require("@/src/assets/main/sun_icon.png"),
+  moon: require("@/src/assets/main/moon_icon.png"),
+  rising: require("@/src/assets/main/arrow_upward_icon.png"),
+};
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function ScoreBar({ value, color, delay }: { value: number; color: string; delay: number }) {
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    progress.value = withDelay(delay, withTiming(value / 100 * BAR_MAX_WIDTH, { duration: 900 }));
+  }, [value]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    width: progress.value,
+  }));
 
   return (
-    <ThemedView style={styles.container}>
-      <ThemedText type="title">Connection</ThemedText>
-      <ThemedText>{id}</ThemedText>
-    </ThemedView>
+    <View style={styles.barBackground}>
+      <Animated.View style={[styles.barFill, { backgroundColor: color }, animStyle]} />
+    </View>
   );
 }
 
+function SignRow({ icon, value }: { icon: any; value?: string }) {
+  return (
+    <View style={styles.signRow}>
+      <Image
+        source={icon}
+        style={styles.signIcon}
+        resizeMode="contain"
+        tintColor="rgba(255,255,255,0.6)"
+      />
+      <Text style={styles.signValue} numberOfLines={1}>{value || "—"}</Text>
+    </View>
+  );
+}
+
+// ─── Screen ───────────────────────────────────────────────────────────────────
+
+export default function ConnectionViewScreen() {
+  const { id: connectionId } = useLocalSearchParams<{ id: string }>();
+  const { authUser } = useUser();
+  const insets = useSafeAreaInsets();
+  const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
+
+  const [connection, setConnection] = useState<ConnectionDoc | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [expandedKeyword, setExpandedKeyword] = useState<string | null>(null);
+  const [loadingMessage, setLoadingMessage] = useState(LOADING_SAYINGS[0]);
+
+  // Rotate loading messages while waiting for report
+  useEffect(() => {
+    if (connection?.compatibility) return;
+    let index = 0;
+    const interval = setInterval(() => {
+      index = (index + 1) % LOADING_SAYINGS.length;
+      setLoadingMessage(LOADING_SAYINGS[index]);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [connection?.compatibility]);
+
+  // Real-time listener
+  useEffect(() => {
+    if (!authUser?.uid || !connectionId) return;
+
+    const ref = doc(db, "users", authUser.uid, "connections", connectionId);
+
+    const unsubscribe = onSnapshot(
+      ref,
+      (snap) => {
+        if (!snap.exists()) {
+          setError("Connection not found.");
+          setLoading(false);
+          return;
+        }
+        const data = snap.data() as any;
+        setConnection({
+          connectionId: data.connectionId ?? connectionId,
+          relationshipType: data.relationshipType,
+          status: data.status,
+          firstPerson: data.firstPerson,
+          secondPerson: data.secondPerson,
+          compatibility: data.compatibility,
+        });
+        setLoading(false);
+      },
+      (err) => {
+        console.error("Firestore listener error:", err);
+        setError("Something went wrong loading this connection.");
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [authUser?.uid, connectionId]);
+
+  const handleToggleKeyword = (keyword: string) => {
+    setExpandedKeyword((prev) => (prev === keyword ? null : keyword));
+  };
+
+  const statusLabel = (() => {
+    const state = connection?.status?.state;
+    switch (state) {
+      case "pending":    return "Preparing your compatibility reading...";
+      case "processing": return "Channeling the stars... almost there";
+      case "error":      return "We ran into an issue generating this reading.";
+      default:           return loadingMessage;
+    }
+  })();
+
+  const report = connection?.compatibility;
+  const firstName = connection?.firstPerson?.firstName || "Person 1";
+  const secondName = connection?.secondPerson?.firstName || "Person 2";
+
+  // ─── Loading / Error states ─────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <View style={styles.wrapper}>
+        <HeaderNav
+          title="Compatibility"
+          leftIconName="arrow-back"
+          onLeftPress={() => router.replace("/(main)/connections")}
+        />
+        <View style={[styles.centered, { marginTop: headerHeight }]}>
+          <ActivityIndicator size="large" color="#C77DFF" />
+        </View>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.wrapper}>
+        <HeaderNav
+          title="Compatibility"
+          leftIconName="arrow-back"
+          onLeftPress={() => router.replace("/(main)/connections")}
+        />
+        <View style={[styles.centered, { marginTop: headerHeight }]}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // ─── Main view ──────────────────────────────────────────────────────────────
+
+  return (
+    <View style={styles.wrapper}>
+      <HeaderNav
+        title="Compatibility"
+        leftIconName="arrow-back"
+        onLeftPress={() => router.replace("/(main)/connections")}
+        rightIconName="create-outline"
+        onRightPress={() =>
+          router.push({ pathname: "/connection/[id]/edit", params: { id: connectionId } })
+        }
+      />
+
+      <View style={[styles.mainContent, { marginTop: headerHeight }]}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Names + relationship type */}
+          <Text style={styles.namesText}>{firstName} & {secondName}</Text>
+          {connection?.relationshipType && (
+            <Text style={styles.relationshipBadge}>
+              {connection.relationshipType.toUpperCase()}
+            </Text>
+          )}
+
+          {/* Overall score */}
+          {report?.overallCompatibility != null && (
+            <Text style={styles.overallScore}>
+              {Math.round(report.overallCompatibility)}%
+            </Text>
+          )}
+
+          {/* Report title + summary */}
+          {report?.title && <Text style={styles.reportTitle}>{report.title}</Text>}
+          {report?.summary && <Text style={styles.reportSummary}>{report.summary}</Text>}
+
+          {/* Big Three */}
+          {(connection?.firstPerson?.sun || connection?.secondPerson?.sun) && (
+            <View style={styles.bigThreeCard}>
+              <Text style={styles.sectionLabel}>BIG THREE</Text>
+              <View style={styles.signsRow}>
+                <View style={styles.signsCol}>
+                  <Text style={styles.signPersonLabel}>{firstName}</Text>
+                  <SignRow icon={SIGN_ICONS.sun} value={connection?.firstPerson?.sun} />
+                  <SignRow icon={SIGN_ICONS.moon} value={connection?.firstPerson?.moon} />
+                  <SignRow icon={SIGN_ICONS.rising} value={connection?.firstPerson?.rising} />
+                </View>
+                <View style={styles.signsDivider} />
+                <View style={styles.signsCol}>
+                  <Text style={styles.signPersonLabel}>{secondName}</Text>
+                  <SignRow icon={SIGN_ICONS.sun} value={connection?.secondPerson?.sun} />
+                  <SignRow icon={SIGN_ICONS.moon} value={connection?.secondPerson?.moon} />
+                  <SignRow icon={SIGN_ICONS.rising} value={connection?.secondPerson?.rising} />
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* Score bars or pending state */}
+          {!report ? (
+            <View style={styles.pendingCard}>
+              <ActivityIndicator size="small" color="#C77DFF" />
+              <Text style={styles.pendingText}>{statusLabel}</Text>
+              {connection?.status?.state === "error" && (
+                <Text style={styles.errorText}>Something went wrong generating the report.</Text>
+              )}
+            </View>
+          ) : (
+            <>
+              <Text style={styles.sectionLabel}>SCORES</Text>
+              {Object.entries(report.scores || {}).map(([keyword, value], index) => {
+                if (typeof value !== "number") return null;
+                const barColor = getBarColor(value);
+                const defKey = keyword.toLowerCase().replace(/\s+/g, "");
+                const definition = KEYWORD_DEFINITIONS[defKey];
+                const label = keyword.charAt(0).toUpperCase() + keyword.slice(1);
+
+                return (
+                  <View key={keyword} style={styles.keywordContainer}>
+                    <TouchableOpacity
+                      onPress={() => definition && handleToggleKeyword(keyword)}
+                      activeOpacity={definition ? 0.7 : 1}
+                    >
+                      <View style={styles.row}>
+                        <Text style={styles.keyword}>{label}</Text>
+                        <Text style={styles.valueText}>{Math.round(value)}%</Text>
+                      </View>
+                      <ScoreBar value={value} color={barColor} delay={index * 80} />
+                    </TouchableOpacity>
+                    {expandedKeyword === keyword && definition && (
+                      <Text style={styles.definition}>{definition}</Text>
+                    )}
+                  </View>
+                );
+              })}
+
+              {report.closing && (
+                <Text style={styles.closing}>{report.closing}</Text>
+              )}
+            </>
+          )}
+        </ScrollView>
+      </View>
+    </View>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  container: {
+  wrapper: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  },
+  mainContent: {
+    flex: 1,
+    overflow: "hidden",
+  },
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: scale(40),
+  },
+  content: {
+    paddingHorizontal: scale(18),
+    paddingTop: verticalScale(20),
+    paddingBottom: verticalScale(48),
+  },
+  namesText: {
+    color: "#B8A3FF",
+    fontSize: moderateScale(18),
+    fontWeight: "600",
+    textAlign: "center",
+    marginBottom: verticalScale(4),
+  },
+  relationshipBadge: {
+    color: "rgba(255,255,255,0.45)",
+    fontSize: moderateScale(10),
+    letterSpacing: 1.5,
+    textAlign: "center",
+    marginBottom: verticalScale(8),
+  },
+  overallScore: {
+    color: "#FFFFFF",
+    fontSize: moderateScale(52),
+    fontWeight: "700",
+    textAlign: "center",
+    marginBottom: verticalScale(4),
+  },
+  reportTitle: {
+    color: "#FFFFFF",
+    fontSize: moderateScale(16),
+    fontWeight: "600",
+    textAlign: "center",
+    marginBottom: verticalScale(8),
+  },
+  reportSummary: {
+    color: "rgba(255,255,255,0.75)",
+    fontSize: moderateScale(13),
+    lineHeight: 21,
+    textAlign: "center",
+    marginBottom: verticalScale(20),
+  },
+  bigThreeCard: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: scale(12),
+    padding: scale(14),
+    marginBottom: verticalScale(20),
+  },
+  sectionLabel: {
+    color: "rgba(255,255,255,0.4)",
+    fontSize: moderateScale(10),
+    letterSpacing: 1.5,
+    marginBottom: verticalScale(10),
+  },
+  signsRow: {
+    flexDirection: "row",
+  },
+  signsCol: {
+    flex: 1,
+    gap: verticalScale(6),
+  },
+  signsDivider: {
+    width: 1,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    marginHorizontal: scale(12),
+  },
+  signPersonLabel: {
+    color: "#B8A3FF",
+    fontSize: moderateScale(12),
+    fontWeight: "600",
+    marginBottom: verticalScale(4),
+  },
+  signRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: scale(6),
+  },
+  signIcon: {
+    width: scale(16),
+    height: scale(16),
+    flexShrink: 0,
+  },
+  signValue: {
+    color: "rgba(255,255,255,0.8)",
+    fontSize: moderateScale(13),
+    flexShrink: 1,
+  },
+  pendingCard: {
+    alignItems: "center",
+    gap: verticalScale(10),
+    paddingVertical: verticalScale(24),
+  },
+  pendingText: {
+    color: "rgba(255,255,255,0.75)",
+    fontSize: moderateScale(14),
+    textAlign: "center",
+  },
+  keywordContainer: {
+    marginBottom: verticalScale(14),
+  },
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  keyword: {
+    color: "#FFFFFF",
+    fontSize: moderateScale(14),
+    fontWeight: "600",
+  },
+  valueText: {
+    color: "#FFFFFF",
+    fontSize: moderateScale(13),
+    fontWeight: "500",
+  },
+  barBackground: {
+    height: 7,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderRadius: 6,
+    marginTop: verticalScale(4),
+    overflow: "hidden",
+  },
+  barFill: {
+    height: 7,
+    borderRadius: 6,
+  },
+  definition: {
+    color: "#D3CFFF",
+    fontSize: moderateScale(12),
+    lineHeight: 20,
+    fontStyle: "italic",
+    marginTop: verticalScale(5),
+    paddingLeft: 2,
+  },
+  closing: {
+    color: "rgba(255,255,255,0.8)",
+    fontSize: moderateScale(13),
+    lineHeight: 22,
+    textAlign: "center",
+    marginTop: verticalScale(24),
+  },
+  errorText: {
+    color: "#FF6B6B",
+    fontSize: moderateScale(14),
+    textAlign: "center",
   },
 });
