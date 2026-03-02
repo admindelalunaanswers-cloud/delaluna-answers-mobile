@@ -1,98 +1,46 @@
-// src/data/moonPhaseImages.ts
-// Static image map for moon phase assets (React Native requires static require calls)
+// src/constants/moonPhaseImages.ts
+// SVG imports — react-native-svg-transformer returns React components
 
-import { ImageSourcePropType } from "react-native";
+import { ComponentType } from "react";
+import { SvgProps } from "react-native-svg";
 
-const MOON_IMAGES = {
-  new_moon: require("@/assets/delaluna_moon_assets/style-1/new_moon.png"),
-  waxing_crescent_1: require("@/assets/delaluna_moon_assets/style-1/waxing_crescent_1.png"),
-  waxing_crescent_2: require("@/assets/delaluna_moon_assets/style-1/waxing_crescent_2.png"),
-  waxing_crescent_3: require("@/assets/delaluna_moon_assets/style-1/waxing_crescent_3.png"),
-  waxing_crescent_4: require("@/assets/delaluna_moon_assets/style-1/waxing_crescent_4.png"),
-  waxing_crescent_5: require("@/assets/delaluna_moon_assets/style-1/waxing_crescent_5.png"),
-  waxing_crescent_6: require("@/assets/delaluna_moon_assets/style-1/waxing_crescent_6.png"),
-  waxing_crescent_7: require("@/assets/delaluna_moon_assets/style-1/waxing_crescent_7.png"),
-  waxing_crescent_8: require("@/assets/delaluna_moon_assets/style-1/waxing_crescent_8.png"),
-  waxing_gibbous_1: require("@/assets/delaluna_moon_assets/style-1/waxing_gibbous_1.png"),
-  waxing_gibbous_2: require("@/assets/delaluna_moon_assets/style-1/waxing_gibbous_2.png"),
-  waxing_gibbous_3: require("@/assets/delaluna_moon_assets/style-1/waxing_gibbous_3.png"),
-  waxing_gibbous_4: require("@/assets/delaluna_moon_assets/style-1/waxing_gibbous_4.png"),
-  full_moon: require("@/assets/delaluna_moon_assets/style-1/full_moon.png"),
-  waning_gibbous_1: require("@/assets/delaluna_moon_assets/style-1/waning_gibbous_1.png"),
-  waning_gibbous_2: require("@/assets/delaluna_moon_assets/style-1/waning_gibbous_2.png"),
-  waning_gibbous_3: require("@/assets/delaluna_moon_assets/style-1/waning_gibbous_3.png"),
-  waning_gibbous_4: require("@/assets/delaluna_moon_assets/style-1/waning_gibbous_4.png"),
-  waning_gibbous_5: require("@/assets/delaluna_moon_assets/style-1/waning_gibbous_5.png"),
-  last_quarter: require("@/assets/delaluna_moon_assets/style-1/last_quarter.png"),
-  waning_crescent_1: require("@/assets/delaluna_moon_assets/style-1/waning_crescent_1.png"),
-  waning_crescent_2: require("@/assets/delaluna_moon_assets/style-1/waning_crescent_2.png"),
-  waning_crescent_3: require("@/assets/delaluna_moon_assets/style-1/waning_crescent_3.png"),
-  waning_crescent_4: require("@/assets/delaluna_moon_assets/style-1/waning_crescent_4.png"),
-} as const;
+import NewMoon from "@/src/assets/moon-phases/new_moon.svg";
+import WaxingCrescent from "@/src/assets/moon-phases/waxing_crescent.svg";
+import FirstQuarter from "@/src/assets/moon-phases/first_quarter.svg";
+import WaxingGibbous from "@/src/assets/moon-phases/waxing_gibbous.svg";
+import FullMoon from "@/src/assets/moon-phases/full_moon.svg";
+import WaningGibbous from "@/src/assets/moon-phases/waning_gibbous.svg";
+import ThirdQuarter from "@/src/assets/moon-phases/third_quarter.svg";
+import WaningCrescent from "@/src/assets/moon-phases/waning_crescent.svg";
+
+export type MoonSvgComponent = ComponentType<SvgProps>;
 
 /**
- * Picks the variant number (1-based) from an illumination percentage.
- * Clamps to [1, totalVariants].
- */
-function pickVariant(fraction: number, totalVariants: number): number {
-  const v = Math.ceil(fraction * totalVariants);
-  return Math.max(1, Math.min(v, totalVariants));
-}
-
-/**
- * Returns the correct moon phase image source based on the phase name
- * and illumination percentage (0-100).
+ * Returns the SVG component for the given moon phase name.
  *
- * Phase names match the normalized API values:
+ * Phase names match normalized API values:
  *   "New Moon" | "Waxing Crescent" | "First Quarter" | "Waxing Gibbous"
  *   "Full Moon" | "Waning Gibbous" | "Last Quarter" | "Waning Crescent"
  */
-export function getMoonPhaseImage(
-  phaseName: string,
-  illumination: number,
-): ImageSourcePropType {
-  // Normalize illumination to 0-1
-  const illum = illumination > 1 ? illumination / 100 : illumination;
-
+export function getMoonPhaseImage(phaseName: string): MoonSvgComponent {
   switch (phaseName) {
     case "New Moon":
-      return MOON_IMAGES.new_moon;
-
-    case "Waxing Crescent": {
-      // illumination ~0-50%, 8 variants (1 = thinnest sliver, 8 = near half)
-      const v = pickVariant(illum / 0.5, 8);
-      return MOON_IMAGES[`waxing_crescent_${v}` as keyof typeof MOON_IMAGES];
-    }
-
+      return NewMoon;
+    case "Waxing Crescent":
+      return WaxingCrescent;
     case "First Quarter":
-      // No dedicated first_quarter asset — use the fullest waxing crescent
-      return MOON_IMAGES.waxing_crescent_8;
-
-    case "Waxing Gibbous": {
-      // illumination ~50-100%, 4 variants (1 = just past half, 4 = near full)
-      const v = pickVariant((illum - 0.5) / 0.5, 4);
-      return MOON_IMAGES[`waxing_gibbous_${v}` as keyof typeof MOON_IMAGES];
-    }
-
+      return FirstQuarter;
+    case "Waxing Gibbous":
+      return WaxingGibbous;
     case "Full Moon":
-      return MOON_IMAGES.full_moon;
-
-    case "Waning Gibbous": {
-      // illumination ~100-50%, 5 variants (1 = just past full, 5 = near half)
-      const v = pickVariant((1 - illum) / 0.5, 5);
-      return MOON_IMAGES[`waning_gibbous_${v}` as keyof typeof MOON_IMAGES];
-    }
-
+      return FullMoon;
+    case "Waning Gibbous":
+      return WaningGibbous;
     case "Last Quarter":
-      return MOON_IMAGES.last_quarter;
-
-    case "Waning Crescent": {
-      // illumination ~50-0%, 4 variants (1 = near half, 4 = thinnest sliver)
-      const v = pickVariant((0.5 - illum) / 0.5, 4);
-      return MOON_IMAGES[`waning_crescent_${v}` as keyof typeof MOON_IMAGES];
-    }
-
+      return ThirdQuarter;
+    case "Waning Crescent":
+      return WaningCrescent;
     default:
-      return MOON_IMAGES.new_moon;
+      return NewMoon;
   }
 }

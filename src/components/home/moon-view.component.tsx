@@ -1,11 +1,11 @@
-// src/components/home/moon-view.component
+import React from "react";
+
+import { View, Text, StyleSheet } from "react-native";
 
 import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
-import React from "react";
-import { View, Text, StyleSheet } from "react-native";
-import MoonPhaseImageFrame from "../home/moon-image-view.component";
-import DelalunaContainer from "./delaluna-container.component";
 
+import DelalunaContainer from "../shared/delaluna-container.component";
+import MoonPhaseImageFrame from "../home/moon-image-view.component";
 
 interface MoonProps {
   phaseName?: string;
