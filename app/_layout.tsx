@@ -1,13 +1,15 @@
-import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
-import { Slot } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
 import { type ReactNode } from 'react';
+
 import { ImageBackground } from 'react-native';
-import 'react-native-reanimated';
+
+import { Slot } from 'expo-router';
+
+import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
+import { StatusBar } from 'expo-status-bar';
 
 import ThemeProvider from '@/src/context/theme-context';
-import { useTheme } from '@/src/hooks/use-theme';
 import { useColorScheme } from '@/src/hooks/use-color-scheme';
+import { useTheme } from '@/src/hooks/use-theme';
 
 function ThemedRoot({ children }: { children: ReactNode }) {
   const colorScheme = useColorScheme();
