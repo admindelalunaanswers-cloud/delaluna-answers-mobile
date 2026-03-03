@@ -22,7 +22,11 @@ import { ThemeContext } from '@/src/context/theme-context';
 import { useUser } from '@/src/context/user-context';
 import { signUp, createUserDoc } from '@/src/services/user.service';
 import { FinalSignupPayload } from '@/src/types/signup.types';
-import { calculateNatalChart, BirthData } from '@/src/services/astroEngine';
+import { calculateNatalChart, calculateTransits, BirthData } from '@/src/services/astroEngine';
+import { requestBreakdown } from '@/src/services/natal-chart-breakdown.service';
+import { requestHoroscope, getTodayDateId } from '@/src/services/horoscope.service';
+import { requestTransitReading } from '@/src/services/transit-reading.service';
+import type { NatalChartDetailsDoc } from '@/src/types/user.type';
 import { db } from '@/firebaseConfig';
 import { verticalScale, scale, moderateScale } from '@/src/utils/responsive';
 import ChatFlow, { StepConfig } from '@/src/components/sign-up/chat-flow';
@@ -204,16 +208,43 @@ export default function SignUpChatScreen() {
         timezone: payload.birthTimezone,
       };
       const natalChart = await calculateNatalChart(bd);
-      await setDoc(doc(db, 'users', userCred.user.uid, 'natalChart', 'details'), {
+      const chartPlanets = natalChart.planets.map(({ name, symbol, longitude, sign, signSymbol, degree, minutes, seconds, speed, isRetrograde, house }) =>
+        ({ name, symbol, longitude, sign, signSymbol, degree, minutes, seconds, speed, isRetrograde, house })
+      );
+      const chartPayload = {
         createdAt: serverTimestamp(),
-        planets: natalChart.planets.map(({ name, symbol, longitude, sign, signSymbol, degree, minutes, seconds, speed, isRetrograde, house }) =>
-          ({ name, symbol, longitude, sign, signSymbol, degree, minutes, seconds, speed, isRetrograde, house })
-        ),
+        planets: chartPlanets,
         houses: natalChart.houses,
         moon: natalChart.moon,
         ascendant: natalChart.ascendant,
         midheaven: natalChart.midheaven,
-      });
+      };
+
+      await setDoc(doc(db, 'users', userCred.user.uid, 'natalChart', 'details'), chartPayload);
+      await setDoc(doc(db, 'users', userCred.user.uid, 'birthChart', 'data'), chartPayload);
+
+      // Step 5 — Trigger AI generation (fire and forget — backend extension handles these)
+      const chartDetailsDoc: NatalChartDetailsDoc = {
+        createdAt: null as any,
+        planets: chartPlanets,
+        houses: natalChart.houses,
+        moon: natalChart.moon,
+        ascendant: natalChart.ascendant,
+        midheaven: natalChart.midheaven,
+      };
+      const uid = userCred.user.uid;
+      const dateId = getTodayDateId();
+
+      requestBreakdown(uid, chartDetailsDoc, 'free').catch(console.error);
+
+      calculateTransits(new Date(), bd.lat, bd.lon)
+        .then(transits => {
+          const retrogrades = transits.planets.filter(p => p.isRetrograde).map(p => p.name);
+          requestTransitReading(uid, dateId, chartDetailsDoc, transits, 'free').catch(console.error);
+          return requestHoroscope(uid, dateId, chartDetailsDoc, transits.moon, retrogrades);
+        })
+        .catch(() => requestHoroscope(uid, dateId, chartDetailsDoc, natalChart.moon))
+        .catch(console.error);
 
       setLoadingMessage('Welcome to your cosmic journey!');
       // Navigation handled by the useEffect watching authUser
@@ -292,13 +323,13 @@ export default function SignUpChatScreen() {
               style={styles.header}
               onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
             >
-              {step > 0 ? (
-                <TouchableOpacity onPress={() => { Keyboard.dismiss(); setStep(step - 1); }}>
-                  <Text style={styles.goBackText}>← Go Back</Text>
-                </TouchableOpacity>
-              ) : (
-                <View />
-              )}
+              <TouchableOpacity onPress={() => {
+                Keyboard.dismiss();
+                if (step === 0) router.replace('/(startup)/welcome');
+                else setStep(step - 1);
+              }}>
+                <Text style={styles.goBackText}>← Go Back</Text>
+              </TouchableOpacity>
               <TouchableOpacity onPress={onCancelPress}>
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
