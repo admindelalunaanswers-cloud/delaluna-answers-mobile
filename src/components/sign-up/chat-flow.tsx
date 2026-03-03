@@ -1,6 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -10,6 +12,8 @@ import {
   View,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
 import {
@@ -18,6 +22,8 @@ import {
   searchNominatim,
   detectTimezoneOffset,
 } from '@/src/utils/location';
+import { checkEmailExists } from '@/src/services/user.service';
+import PasswordInput from '@/src/components/shared/password-input';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,6 +57,35 @@ const QUESTIONS: Record<string, (a: Record<string, any>) => string> = {
     `Your secrets are safe with us, ${a.firstName} 🔐`,
 };
 
+// ─── Answer display formatter ─────────────────────────────────────────────────
+
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+const formatAnswer = (s: StepConfig, a: Record<string, any>): string => {
+  if (s.inputType === 'final') return '';
+  if (s.key === 'placeOfBirth' && a.isPlaceOfBirthUnknown) return "I don't know";
+  if (s.key === 'birthtime' && a.isBirthTimeUnknown) return "I don't know";
+  if (s.inputType === 'secure') return '••••••••';
+  const val = a[s.key];
+  if (!val && val !== 0) return '';
+  if (s.inputType === 'date' && typeof val === 'string') {
+    const [y, m, d] = val.split('-').map(Number);
+    return `${MONTHS[m - 1]} ${d}, ${y}`;
+  }
+  if (s.inputType === 'time' && typeof val === 'string') {
+    const [h, min] = val.split(':').map(Number);
+    const period = h >= 12 ? 'PM' : 'AM';
+    const hour12 = h % 12 === 0 ? 12 : h % 12;
+    return `${hour12}:${String(min).padStart(2, '0')} ${period}`;
+  }
+  return String(val);
+};
+
+// ─── Props ────────────────────────────────────────────────────────────────────
+
 interface ChatFlowProps {
   steps: StepConfig[];
   onComplete: (answers: Record<string, any>) => void;
@@ -58,10 +93,6 @@ interface ChatFlowProps {
   setStep: (n: number) => void;
   keyboardOffset?: number;
 }
-
-// Fallback coords (Greenwich) when location is unknown
-const FALLBACK_LAT = 51.4779;
-const FALLBACK_LON = 0.0015;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -72,18 +103,81 @@ export default function ChatFlow({
   setStep,
   keyboardOffset = 0,
 }: ChatFlowProps) {
+  const insets = useSafeAreaInsets();
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [currentValue, setCurrentValue] = useState('');
   const [dateValue, setDateValue] = useState(new Date());
+  const [dateError, setDateError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [emailChecking, setEmailChecking] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [pickerVisible, setPickerVisible] = useState(false);
 
   // Location search state
   const [locationQuery, setLocationQuery] = useState('');
   const [locationResults, setLocationResults] = useState<NominatimResult[]>([]);
   const [locationSearching, setLocationSearching] = useState(false);
   const [locationTzLoading, setLocationTzLoading] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState<{ label: string; lat: number; lon: number; tz: number } | null>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const inputRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ScrollView>(null);
+
+  // Scroll to bottom whenever the step advances (new bubble appears)
+  useEffect(() => {
+    const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+    return () => clearTimeout(t);
+  }, [step]);
+
+  // Restore saved answer + auto-focus input whenever step changes (forward or back)
+  useEffect(() => {
+    const s = steps[step];
+    if (!s) return;
+    const saved = answers[s.key];
+
+    setDateError(null);
+    setEmailError(null);
+    setPasswordError(null);
+    setPickerVisible(false);
+
+    if (s.inputType === 'text' || s.inputType === 'email' || s.inputType === 'secure') {
+      setCurrentValue(saved != null ? String(saved) : '');
+    } else if (s.inputType === 'date') {
+      if (saved) {
+        const [y, m, d] = String(saved).split('-').map(Number);
+        setDateValue(new Date(y, m - 1, d));
+        setCurrentValue(`${String(m).padStart(2, '0')}/${String(d).padStart(2, '0')}/${y}`);
+      } else {
+        setCurrentValue('');
+      }
+    } else if (s.inputType === 'time') {
+      if (saved && !answers.isBirthTimeUnknown) {
+        const [h, min] = String(saved).split(':').map(Number);
+        const dt = new Date();
+        dt.setHours(h, min, 0, 0);
+        setDateValue(dt);
+        const period = h >= 12 ? 'PM' : 'AM';
+        const hour12 = h % 12 === 0 ? 12 : h % 12;
+        setCurrentValue(`${hour12}:${String(min).padStart(2, '0')} ${period}`);
+      } else {
+        setCurrentValue('');
+      }
+    } else if (s.inputType === 'location') {
+      const label = saved != null ? String(saved) : '';
+      setLocationQuery(label);
+      if (label && answers.birthLat != null && !answers.isPlaceOfBirthUnknown) {
+        setSelectedLocation({ label, lat: answers.birthLat, lon: answers.birthLon, tz: answers.birthTimezone ?? 0 });
+      } else {
+        setSelectedLocation(null);
+      }
+    }
+
+    if (['text', 'email', 'secure', 'location', 'date', 'time'].includes(s.inputType)) {
+      const t = setTimeout(() => inputRef.current?.focus(), 120);
+      return () => clearTimeout(t);
+    }
+  }, [step]);
 
   const currentStep = steps[step];
   if (!currentStep) return null;
@@ -92,8 +186,13 @@ export default function ChatFlow({
     setAnswers(updatedAnswers);
     setCurrentValue('');
     setDateValue(new Date());
+    setDateError(null);
+    setEmailError(null);
+    setPasswordError(null);
     setLocationQuery('');
     setLocationResults([]);
+    setSelectedLocation(null);
+    setPickerVisible(false);
     if (step < steps.length - 1) {
       setStep(step + 1);
     } else {
@@ -101,27 +200,190 @@ export default function ChatFlow({
     }
   };
 
+  // ── Email validation ──────────────────────────────────────────────────────
+
+  const handleEmailNext = async () => {
+    const email = currentValue.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailError('Please enter a valid email address.');
+      return;
+    }
+    setEmailChecking(true);
+    setEmailError(null);
+    try {
+      const exists = await checkEmailExists(email);
+      if (exists) {
+        setEmailError('That email is already registered. Please sign in or use a different address.');
+        return;
+      }
+      advance({ ...answers, [currentStep.key]: email });
+    } catch {
+      setEmailError('Could not verify email. Please try again.');
+    } finally {
+      setEmailChecking(false);
+    }
+  };
+
   // ── Standard next ─────────────────────────────────────────────────────────
 
   const handleNext = () => {
     const { key, inputType } = currentStep;
+    if (inputType === 'email') { void handleEmailNext(); return; }
     if (inputType === 'final') { onComplete(answers); return; }
+    if (inputType === 'secure') {
+      const pwd = currentValue;
+      if (pwd.length < 8) {
+        setPasswordError('Password must be at least 8 characters.');
+        return;
+      }
+      if (!/[A-Z]/.test(pwd)) {
+        setPasswordError('Password must contain at least one uppercase letter.');
+        return;
+      }
+      setPasswordError(null);
+    }
     let value: any = currentValue;
     if (inputType === 'date') {
-      const yyyy = dateValue.getFullYear();
-      const mm = String(dateValue.getMonth() + 1).padStart(2, '0');
-      const dd = String(dateValue.getDate()).padStart(2, '0');
+      if (!currentValue.trim()) {
+        setDateError('Please enter or select a date.');
+        return;
+      }
+      const parts = currentValue.trim().split('/');
+      let parsed: Date | null = null;
+      if (parts.length === 3) {
+        const [mo, da, yr] = parts.map(Number);
+        const d = new Date(yr, mo - 1, da);
+        if (!isNaN(d.getTime()) && d.getFullYear() === yr && d.getMonth() === mo - 1 && d.getDate() === da) {
+          parsed = d;
+        }
+      }
+      if (!parsed) {
+        setDateError('Please enter a valid date in MM/DD/YYYY format.');
+        return;
+      }
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (parsed > today) {
+        setDateError('Date cannot be in the future.');
+        return;
+      }
+      const ageDiff = today.getFullYear() - parsed.getFullYear();
+      const monthDiff = today.getMonth() - parsed.getMonth();
+      const dayDiff = today.getDate() - parsed.getDate();
+      const age = ageDiff - (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0) ? 1 : 0);
+      if (age < 18) {
+        setDateError('You must be at least 18 years old to register.');
+        return;
+      }
+      setDateError(null);
+      const yyyy = parsed.getFullYear();
+      const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+      const dd = String(parsed.getDate()).padStart(2, '0');
       value = `${yyyy}-${mm}-${dd}`;
     } else if (inputType === 'time') {
-      const hh = String(dateValue.getHours()).padStart(2, '0');
-      const min = String(dateValue.getMinutes()).padStart(2, '0');
-      value = `${hh}:${min}`;
+      if (!currentValue.trim()) {
+        setDateError('Please enter or select a time.');
+        return;
+      }
+      const ampmMatch = currentValue.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+      const hhmmMatch = currentValue.trim().match(/^(\d{1,2}):(\d{2})$/);
+      if (ampmMatch) {
+        let h = parseInt(ampmMatch[1]);
+        const min = parseInt(ampmMatch[2]);
+        const period = ampmMatch[3].toUpperCase();
+        if (period === 'PM' && h !== 12) h += 12;
+        if (period === 'AM' && h === 12) h = 0;
+        value = `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+      } else if (hhmmMatch) {
+        value = `${String(parseInt(hhmmMatch[1])).padStart(2, '0')}:${hhmmMatch[2]}`;
+      } else {
+        setDateError('Please enter a valid time (e.g. 3:45 PM or 15:45).');
+        return;
+      }
     }
     advance({ ...answers, [key]: value });
   };
 
   const handleSkipTime = () => {
-    advance({ ...answers, [currentStep.key]: null, isBirthTimeUnknown: true });
+    advance({ ...answers, [currentStep.key]: '12:00', isBirthTimeUnknown: true });
+  };
+
+  const onDateTextChange = (text: string) => {
+    setDateError(null);
+
+    // Deletion: pass through as-is
+    if (text.length < currentValue.length) {
+      setCurrentValue(text);
+      return;
+    }
+
+    // Extract digits only and auto-format as MM/DD/YYYY
+    const digits = text.replace(/\D/g, '').slice(0, 8);
+    if (!digits) { setCurrentValue(''); return; }
+
+    let formatted = digits.slice(0, 2);
+    if (digits.length >= 2) formatted += '/';
+    if (digits.length >= 3) formatted += digits.slice(2, 4);
+    if (digits.length >= 4) formatted += '/';
+    if (digits.length >= 5) formatted += digits.slice(4, 8);
+
+    setCurrentValue(formatted);
+
+    // Sync dateValue when all 8 digits are present
+    if (digits.length === 8) {
+      const mo = parseInt(digits.slice(0, 2));
+      const da = parseInt(digits.slice(2, 4));
+      const yr = parseInt(digits.slice(4, 8));
+      const d = new Date(yr, mo - 1, da);
+      if (!isNaN(d.getTime()) && d.getFullYear() === yr && d.getMonth() === mo - 1 && d.getDate() === da) {
+        setDateValue(d);
+      }
+    }
+  };
+
+  const onTimeTextChange = (text: string) => {
+    setDateError(null);
+
+    // Deletion: pass through as-is
+    if (text.length < currentValue.length) {
+      setCurrentValue(text);
+      return;
+    }
+
+    // Colon already present: update freely and sync dateValue
+    if (text.includes(':')) {
+      setCurrentValue(text);
+      const ampm = text.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+      const hhmm = text.trim().match(/^(\d{1,2}):(\d{2})$/);
+      if (ampm) {
+        let h = parseInt(ampm[1]); const min = parseInt(ampm[2]);
+        const p = ampm[3].toUpperCase();
+        if (p === 'PM' && h !== 12) h += 12;
+        if (p === 'AM' && h === 12) h = 0;
+        const dt = new Date(); dt.setHours(h, min, 0, 0); setDateValue(dt);
+      } else if (hhmm) {
+        const dt = new Date(); dt.setHours(parseInt(hhmm[1]), parseInt(hhmm[2]), 0, 0); setDateValue(dt);
+      }
+      return;
+    }
+
+    // No colon yet — extract digits and auto-insert colon when hour is complete
+    const digits = text.replace(/\D/g, '');
+    if (!digits) { setCurrentValue(''); return; }
+
+    if (digits.length === 1) {
+      // Digit 2–9: single-digit hour is done, auto-add colon
+      setCurrentValue(parseInt(digits) >= 2 ? digits + ':' : digits);
+    } else {
+      const twoDigit = parseInt(digits.slice(0, 2));
+      if (twoDigit > 12) {
+        // First digit alone is the hour (e.g. "35" → "3:5")
+        setCurrentValue(digits[0] + ':' + digits.slice(1, 3));
+      } else {
+        // Two-digit hour complete, append minutes
+        setCurrentValue(digits.slice(0, 2) + ':' + digits.slice(2, 4));
+      }
+    }
   };
 
   const handleChoice = (choice: string) => {
@@ -144,6 +406,7 @@ export default function ChatFlow({
   const onLocationChange = (text: string) => {
     setLocationQuery(text);
     setLocationResults([]);
+    setSelectedLocation(null);
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     if (text.trim().length >= 2) {
       searchTimerRef.current = setTimeout(() => searchLocation(text), 600);
@@ -159,15 +422,21 @@ export default function ChatFlow({
       ? (() => { const [y, m, d] = birthdayStr.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d, 12, 0, 0)); })()
       : new Date();
     setLocationResults([]);
+    setLocationQuery(label);
     setLocationTzLoading(true);
     const tz = await detectTimezoneOffset(lat, lon, birthDate);
     setLocationTzLoading(false);
+    setSelectedLocation({ label, lat, lon, tz });
+  };
+
+  const handleLocationNext = () => {
+    if (!selectedLocation) return;
     advance({
       ...answers,
-      [currentStep.key]: label,
-      birthLat: lat,
-      birthLon: lon,
-      birthTimezone: tz,   // numeric UTC offset (e.g. -5 for EST)
+      [currentStep.key]: selectedLocation.label,
+      birthLat: selectedLocation.lat,
+      birthLon: selectedLocation.lon,
+      birthTimezone: selectedLocation.tz,
       isPlaceOfBirthUnknown: false,
     });
   };
@@ -176,8 +445,8 @@ export default function ChatFlow({
     advance({
       ...answers,
       [currentStep.key]: null,
-      birthLat: FALLBACK_LAT,
-      birthLon: FALLBACK_LON,
+      birthLat: 0,
+      birthLon: 0,
       birthTimezone: 0,
       isPlaceOfBirthUnknown: true,
     });
@@ -187,20 +456,46 @@ export default function ChatFlow({
 
   const { inputType, placeholder, choices } = currentStep;
   const question = QUESTIONS[currentStep.key]?.(answers) ?? '';
-  const isTextType = ['text', 'email', 'secure'].includes(inputType);
 
   return (
-    <ScrollView
-      contentContainerStyle={[styles.container, { paddingBottom: keyboardOffset + verticalScale(32) }]}
-      keyboardShouldPersistTaps="handled"
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={insets.top + keyboardOffset}
     >
-      {/* Question bubble */}
-      <View style={styles.questionBubble}>
-        <Text style={styles.questionText}>{question}</Text>
-      </View>
+      {/* ── Chat history ── */}
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+      >
+        {/* Completed Q&A pairs */}
+        {steps.slice(0, step).map((s, i) => {
+          if (s.inputType === 'final') return null;
+          const answerDisplay = formatAnswer(s, answers);
+          return (
+            <View key={i} style={styles.chatPair}>
+              <View style={styles.questionBubble}>
+                <Text style={styles.questionText}>{QUESTIONS[s.key]?.(answers) ?? ''}</Text>
+              </View>
+              {!!answerDisplay && (
+                <View style={styles.answerBubble}>
+                  <Text style={styles.answerText}>{answerDisplay}</Text>
+                </View>
+              )}
+            </View>
+          );
+        })}
 
-      {/* Input area */}
-      <View style={styles.inputArea}>
+        {/* Current question */}
+        <View style={styles.questionBubble}>
+          <Text style={styles.questionText}>{question}</Text>
+        </View>
+      </ScrollView>
+
+      {/* ── Input area (fixed at bottom) ── */}
+      <View style={[styles.inputArea, { paddingBottom: insets.bottom + verticalScale(8) }]}>
 
         {/* Choices */}
         {inputType === 'choices' && choices && (
@@ -217,30 +512,202 @@ export default function ChatFlow({
           </View>
         )}
 
-        {/* Date / Time picker */}
-        {(inputType === 'date' || inputType === 'time') && (
-          <View style={styles.pickerWrapper}>
-            <DateTimePicker
-              value={dateValue}
-              mode={inputType}
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              textColor="#ffffff"
-              themeVariant="dark"
-              onChange={(_, selected) => selected && setDateValue(selected)}
-            />
-            <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
-              <Text style={styles.nextButtonText}>Next →</Text>
-            </TouchableOpacity>
-            {inputType === 'time' && (
-              <TouchableOpacity style={styles.skipButton} onPress={handleSkipTime}>
-                <Text style={styles.skipButtonText}>I don't know my birth time</Text>
-              </TouchableOpacity>
+        {/* Date picker */}
+        {inputType === 'date' && (
+          <View style={styles.fieldWrapper}>
+            {/* iOS: toggle between text field and inline spinner */}
+            {Platform.OS === 'ios' && pickerVisible ? (
+              <View style={styles.textInputRow}>
+                <View style={{ flex: 1 }}>
+                  <DateTimePicker
+                    value={dateValue}
+                    mode="date"
+                    display="spinner"
+                    textColor="#ffffff"
+                    themeVariant="dark"
+                    onChange={(_, selected) => {
+                      if (selected) {
+                        setDateValue(selected);
+                        const mo = String(selected.getMonth() + 1).padStart(2, '0');
+                        const da = String(selected.getDate()).padStart(2, '0');
+                        setCurrentValue(`${mo}/${da}/${selected.getFullYear()}`);
+                        setDateError(null);
+                      }
+                    }}
+                  />
+                </View>
+                <TouchableOpacity
+                  style={styles.iconButton}
+                  onPress={() => setPickerVisible(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  focusable={false}
+                >
+                  <Ionicons name="keypad-outline" size={moderateScale(22)} color="rgba(111,255,233,0.7)" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.sendButton, !currentValue.trim() && styles.sendButtonDisabled]}
+                  onPress={handleNext}
+                  disabled={!currentValue.trim()}
+                >
+                  <Text style={styles.sendButtonText}>→</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.textInputRow}>
+                <View style={styles.inputWithIcon}>
+                  <TextInput
+                    ref={inputRef}
+                    style={styles.inputInner}
+                    value={currentValue}
+                    onChangeText={onDateTextChange}
+                    placeholder="MM/DD/YYYY"
+                    placeholderTextColor="rgba(255,255,255,0.4)"
+                    keyboardType="numbers-and-punctuation"
+                    returnKeyType="next"
+                    onSubmitEditing={handleNext}
+                    maxLength={10}
+                  />
+                  <TouchableOpacity
+                    style={styles.iconButton}
+                    onPress={() => { Keyboard.dismiss(); setPickerVisible(true); }}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    focusable={false}
+                  >
+                    <Ionicons name="calendar-outline" size={moderateScale(22)} color="rgba(255,255,255,0.55)" />
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity
+                  style={[styles.sendButton, !currentValue.trim() && styles.sendButtonDisabled]}
+                  onPress={handleNext}
+                  disabled={!currentValue.trim()}
+                >
+                  <Text style={styles.sendButtonText}>→</Text>
+                </TouchableOpacity>
+              </View>
             )}
+            {/* Android: text input always visible; icon triggers modal */}
+            {Platform.OS === 'android' && pickerVisible && (
+              <DateTimePicker
+                value={dateValue}
+                mode="date"
+                display="default"
+                onChange={(_, selected) => {
+                  setPickerVisible(false);
+                  if (selected) {
+                    setDateValue(selected);
+                    const mo = String(selected.getMonth() + 1).padStart(2, '0');
+                    const da = String(selected.getDate()).padStart(2, '0');
+                    setCurrentValue(`${mo}/${da}/${selected.getFullYear()}`);
+                    setDateError(null);
+                  }
+                }}
+              />
+            )}
+            {!!dateError && <Text style={styles.errorText}>{dateError}</Text>}
+          </View>
+        )}
+
+        {/* Time picker */}
+        {inputType === 'time' && (
+          <View style={styles.fieldWrapper}>
+            {Platform.OS === 'ios' && pickerVisible ? (
+              <View style={styles.textInputRow}>
+                <View style={{ flex: 1 }}>
+                  <DateTimePicker
+                    value={dateValue}
+                    mode="time"
+                    display="spinner"
+                    textColor="#ffffff"
+                    themeVariant="dark"
+                    onChange={(_, selected) => {
+                      if (selected) {
+                        setDateValue(selected);
+                        const h = selected.getHours();
+                        const min = selected.getMinutes();
+                        const period = h >= 12 ? 'PM' : 'AM';
+                        const hour12 = h % 12 === 0 ? 12 : h % 12;
+                        setCurrentValue(`${hour12}:${String(min).padStart(2, '0')} ${period}`);
+                        setDateError(null);
+                      }
+                    }}
+                  />
+                </View>
+                <TouchableOpacity
+                  style={styles.iconButton}
+                  onPress={() => setPickerVisible(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  focusable={false}
+                >
+                  <Ionicons name="keypad-outline" size={moderateScale(22)} color="rgba(111,255,233,0.7)" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.sendButton, !currentValue.trim() && styles.sendButtonDisabled]}
+                  onPress={handleNext}
+                  disabled={!currentValue.trim()}
+                >
+                  <Text style={styles.sendButtonText}>→</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.textInputRow}>
+                <View style={styles.inputWithIcon}>
+                  <TextInput
+                    ref={inputRef}
+                    style={styles.inputInner}
+                    value={currentValue}
+                    onChangeText={onTimeTextChange}
+                    placeholder="H:MM AM/PM"
+                    placeholderTextColor="rgba(255,255,255,0.4)"
+                    keyboardType="numbers-and-punctuation"
+                    returnKeyType="next"
+                    onSubmitEditing={handleNext}
+                  />
+                  <TouchableOpacity
+                    style={styles.iconButton}
+                    onPress={() => { Keyboard.dismiss(); setPickerVisible(true); }}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    focusable={false}
+                  >
+                    <Ionicons name="time-outline" size={moderateScale(22)} color="rgba(255,255,255,0.55)" />
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity
+                  style={[styles.sendButton, !currentValue.trim() && styles.sendButtonDisabled]}
+                  onPress={handleNext}
+                  disabled={!currentValue.trim()}
+                >
+                  <Text style={styles.sendButtonText}>→</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            {Platform.OS === 'android' && pickerVisible && (
+              <DateTimePicker
+                value={dateValue}
+                mode="time"
+                display="default"
+                onChange={(_, selected) => {
+                  setPickerVisible(false);
+                  if (selected) {
+                    setDateValue(selected);
+                    const h = selected.getHours();
+                    const min = selected.getMinutes();
+                    const period = h >= 12 ? 'PM' : 'AM';
+                    const hour12 = h % 12 === 0 ? 12 : h % 12;
+                    setCurrentValue(`${hour12}:${String(min).padStart(2, '0')} ${period}`);
+                    setDateError(null);
+                  }
+                }}
+              />
+            )}
+            <TouchableOpacity style={[styles.choiceButton, { alignSelf: 'center' }]} onPress={handleSkipTime}>
+              <Text style={styles.choiceText}>I don't know</Text>
+            </TouchableOpacity>
+            {!!dateError && <Text style={styles.errorText}>{dateError}</Text>}
           </View>
         )}
 
         {/* Text inputs */}
-        {isTextType && (
+        {inputType === 'text' && (
           <View style={styles.textInputRow}>
             <TextInput
               ref={inputRef}
@@ -249,10 +716,7 @@ export default function ChatFlow({
               onChangeText={setCurrentValue}
               placeholder={placeholder ?? 'Type here…'}
               placeholderTextColor="rgba(255,255,255,0.4)"
-              keyboardType={inputType === 'email' ? 'email-address' : 'default'}
-              secureTextEntry={inputType === 'secure'}
-              autoCapitalize={['email', 'secure'].includes(inputType) ? 'none' : 'words'}
-              autoFocus
+              autoCapitalize="words"
               returnKeyType="next"
               onSubmitEditing={handleNext}
             />
@@ -266,27 +730,86 @@ export default function ChatFlow({
           </View>
         )}
 
-        {/* Location search with Nominatim geocoding */}
+        {/* Password input */}
+        {inputType === 'secure' && (
+          <View style={styles.fieldWrapper}>
+            <View style={styles.textInputRow}>
+              <PasswordInput
+                ref={inputRef}
+                value={currentValue}
+                onChangeText={(t) => { setCurrentValue(t); setPasswordError(null); }}
+                placeholder={placeholder ?? 'Password…'}
+                placeholderTextColor="rgba(255,255,255,0.4)"
+                autoCapitalize="none"
+                returnKeyType="next"
+                onSubmitEditing={handleNext}
+              />
+              <TouchableOpacity
+                style={[styles.sendButton, !currentValue.trim() && styles.sendButtonDisabled]}
+                onPress={handleNext}
+                disabled={!currentValue.trim()}
+              >
+                <Text style={styles.sendButtonText}>→</Text>
+              </TouchableOpacity>
+            </View>
+            {!!passwordError && <Text style={styles.errorText}>{passwordError}</Text>}
+          </View>
+        )}
+
+        {/* Email input */}
+        {inputType === 'email' && (
+          <View style={styles.fieldWrapper}>
+            <View style={styles.textInputRow}>
+              <TextInput
+                ref={inputRef}
+                style={styles.textInput}
+                value={currentValue}
+                onChangeText={(t) => { setCurrentValue(t); setEmailError(null); }}
+                placeholder="Email address…"
+                placeholderTextColor="rgba(255,255,255,0.4)"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="next"
+                onSubmitEditing={() => void handleEmailNext()}
+                editable={!emailChecking}
+              />
+              <TouchableOpacity
+                style={[styles.sendButton, (!currentValue.trim() || emailChecking) && styles.sendButtonDisabled]}
+                onPress={() => void handleEmailNext()}
+                disabled={!currentValue.trim() || emailChecking}
+              >
+                {emailChecking
+                  ? <ActivityIndicator size="small" color="#6FFFE9" />
+                  : <Text style={styles.sendButtonText}>→</Text>
+                }
+              </TouchableOpacity>
+            </View>
+            {!!emailError && <Text style={styles.errorText}>{emailError}</Text>}
+          </View>
+        )}
+
+        {/* Location search */}
         {inputType === 'location' && (
-          <View style={styles.locationWrapper}>
+          <View style={styles.fieldWrapper}>
             <View style={styles.locationInputRow}>
               <TextInput
+                ref={inputRef}
                 style={[styles.textInput, styles.locationInput]}
                 value={locationQuery}
                 onChangeText={onLocationChange}
                 placeholder={placeholder ?? 'Search city…'}
                 placeholderTextColor="rgba(255,255,255,0.4)"
                 autoCapitalize="words"
-                autoFocus
                 returnKeyType="search"
               />
-              {(locationSearching || locationTzLoading) && (
-                <ActivityIndicator
-                  style={styles.locationSpinner}
-                  size="small"
-                  color="#6FFFE9"
-                />
-              )}
+              <TouchableOpacity
+                style={[styles.sendButton, (!selectedLocation || locationSearching || locationTzLoading) && styles.sendButtonDisabled]}
+                onPress={handleLocationNext}
+                disabled={!selectedLocation || locationSearching || locationTzLoading}
+              >
+                <Text style={styles.sendButtonText}>→</Text>
+              </TouchableOpacity>
             </View>
             {locationResults.length > 0 && (
               <ScrollView
@@ -300,15 +823,13 @@ export default function ChatFlow({
                     style={styles.locationRow}
                     onPress={() => selectLocation(r)}
                   >
-                    <Text style={styles.locationRowText} numberOfLines={2}>
-                      {formatPlace(r)}
-                    </Text>
+                    <Text style={styles.locationRowText} numberOfLines={2}>{formatPlace(r)}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
             )}
-            <TouchableOpacity style={styles.skipButton} onPress={skipLocation}>
-              <Text style={styles.skipButtonText}>I don't know where I was born</Text>
+            <TouchableOpacity style={[styles.choiceButton, { alignSelf: 'center' }]} onPress={skipLocation}>
+              <Text style={styles.choiceText}>I don't know</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -320,7 +841,7 @@ export default function ChatFlow({
           </TouchableOpacity>
         )}
       </View>
-    </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -331,7 +852,11 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: scale(16),
     paddingTop: verticalScale(24),
-    justifyContent: 'space-between',
+    paddingBottom: verticalScale(16),
+  },
+  // ── Chat bubbles ──
+  chatPair: {
+    marginBottom: verticalScale(20),
   },
   questionBubble: {
     backgroundColor: 'rgba(111,255,233,0.08)',
@@ -339,17 +864,37 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(111,255,233,0.3)',
     borderRadius: moderateScale(16),
     padding: scale(16),
-    marginBottom: verticalScale(32),
     alignSelf: 'flex-start',
     maxWidth: '85%',
+    marginBottom: verticalScale(8),
   },
   questionText: {
     color: '#ffffff',
     fontSize: moderateScale(16),
     lineHeight: moderateScale(24),
   },
+  answerBubble: {
+    alignSelf: 'flex-end',
+    backgroundColor: 'rgba(111,255,233,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(111,255,233,0.5)',
+    borderRadius: moderateScale(16),
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(10),
+    maxWidth: '75%',
+  },
+  answerText: {
+    color: '#ffffff',
+    fontSize: moderateScale(15),
+  },
+  // ── Input area (fixed bottom) ──
   inputArea: {
-    gap: verticalScale(12),
+    paddingHorizontal: scale(16),
+    paddingTop: verticalScale(10),
+    gap: verticalScale(8),
+  },
+  fieldWrapper: {
+    gap: verticalScale(6),
   },
   choicesContainer: {
     flexDirection: 'row',
@@ -425,19 +970,6 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(17),
     fontWeight: '600',
   },
-  skipButton: {
-    alignSelf: 'center',
-    paddingVertical: verticalScale(8),
-    paddingHorizontal: scale(16),
-  },
-  skipButtonText: {
-    color: 'rgba(255,255,255,0.45)',
-    fontSize: moderateScale(13),
-    textDecorationLine: 'underline',
-  },
-  locationWrapper: {
-    gap: verticalScale(8),
-  },
   locationInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -445,13 +977,9 @@ const styles = StyleSheet.create({
   },
   locationInput: {
     flex: 1,
-    marginBottom: 0,
-  },
-  locationSpinner: {
-    marginLeft: scale(4),
   },
   locationDrop: {
-    maxHeight: verticalScale(200),
+    maxHeight: verticalScale(180),
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: moderateScale(12),
     borderWidth: 1,
@@ -467,5 +995,31 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: moderateScale(14),
     lineHeight: moderateScale(20),
+  },
+  errorText: {
+    color: '#ff6b6b',
+    fontSize: moderateScale(13),
+    textAlign: 'center',
+  },
+  iconButton: {
+    paddingHorizontal: scale(8),
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  inputWithIcon: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(111,255,233,0.4)',
+    borderRadius: moderateScale(12),
+    paddingHorizontal: scale(16),
+  },
+  inputInner: {
+    flex: 1,
+    paddingVertical: verticalScale(12),
+    color: '#ffffff',
+    fontSize: moderateScale(16),
   },
 });
