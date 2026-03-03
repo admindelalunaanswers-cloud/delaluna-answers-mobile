@@ -3,6 +3,7 @@ import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/fires
 import { db } from '@/firebaseConfig';
 import type { HoroscopeResult } from '@/src/types/horoscope.types';
 import type { NatalChartDetailsDoc } from '@/src/types/user.type';
+import { calculateTransits } from '@/src/services/astroEngine';
 import { getTarotCardDraw } from '@/src/services/tarot-card.service';
 import { HOROSCOPE_PROMPT_TEMPLATE } from '@/src/prompts/horoscope-prompt';
 
@@ -61,6 +62,21 @@ function formatMoonSummary(moon: MoonSummary): string {
   return `${moon.sign} Moon, ${moon.phase}, ${moon.degree}° ${moon.illumination}% illumination`;
 }
 
+/** Offset a YYYY-MM-DD string by ±N days. */
+function offsetDateId(dateId: string, days: number): string {
+  const [y, m, d] = dateId.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
+
+/** Convert a YYYY-MM-DD string to a Date at noon local time. */
+function dateIdToDate(dateId: string): Date {
+  const [y, m, d] = dateId.split('-').map(Number);
+  const dt = new Date(y, m - 1, d, 12, 0, 0);
+  return dt;
+}
+
 /**
  * Parse the AI result from the Firestore document.
  * The extension may write a raw JSON string or a parsed object.
@@ -116,27 +132,17 @@ export async function fetchHoroscope(
   return { result: null, pending: true };
 }
 
-/**
- * Write a trigger document to users/{uid}/horoscope/{dateId}.
- * Renders the Handlebars prompt client-side and writes it to the `prompt`
- * field that the horoscope-chatbot-b6wc extension watches.
- */
-export async function requestHoroscope(
+async function writeHoroscopeDoc(
   uid: string,
   dateId: string,
-  chart: NatalChartDetailsDoc,
-  todaysMoon: MoonSummary,
-  retrogradeplanets: string[] = [],
+  natalChart: string,
+  moon: MoonSummary,
+  retrogrades: string[],
+  tarotKeywords: string,
 ): Promise<void> {
   const date = formatDateLabel(dateId);
-  const natalChart = buildNatalChartSummary(chart);
-
-  const tarotKeywords = await getTarotCardDraw(uid, 3)
-    .then(draw => draw.today.keywordString)
-    .catch(() => '');
-
-  const todaysMoonStr = formatMoonSummary(todaysMoon);
-  const retrogradeStr = retrogradeplanets.length > 0 ? retrogradeplanets.join(', ') : 'none';
+  const todaysMoonStr = formatMoonSummary(moon);
+  const retrogradeStr = retrogrades.length > 0 ? retrogrades.join(', ') : 'none';
 
   const prompt = renderPrompt({
     tarotKeywords,
@@ -155,6 +161,59 @@ export async function requestHoroscope(
     retrogradeplanets: retrogradeStr,
     requestedAt: serverTimestamp(),
   });
+}
+
+/**
+ * Writes trigger documents for yesterday, today, and tomorrow.
+ * Today uses the already-computed moon/retrogrades passed in by the caller.
+ * Yesterday and tomorrow call calculateTransits for their respective dates
+ * (lat/lon default to 0 — moon sign and retrograde status are ecliptic values
+ * unaffected by geographic location).
+ */
+export async function requestHoroscope(
+  uid: string,
+  dateId: string,
+  chart: NatalChartDetailsDoc,
+  todaysMoon: MoonSummary,
+  retrogradeplanets: string[] = [],
+  options?: { skipTarotDraw?: boolean },
+): Promise<void> {
+  const natalChart = buildNatalChartSummary(chart);
+
+  // Skip tarot draw when regenerating from a birth-data edit (cards are unchanged).
+  const tarotDraw = options?.skipTarotDraw
+    ? null
+    : await getTarotCardDraw(uid, 3).catch(() => null);
+
+  // Today is what the user sees first — await it.
+  await writeHoroscopeDoc(
+    uid, dateId, natalChart,
+    todaysMoon,
+    retrogradeplanets,
+    tarotDraw?.today.keywordString ?? '',
+  );
+
+  // Yesterday and tomorrow are prefetched in the background.
+  const yesterdayId = offsetDateId(dateId, -1);
+  const tomorrowId  = offsetDateId(dateId, +1);
+
+  calculateTransits(dateIdToDate(yesterdayId))
+    .then(t => writeHoroscopeDoc(
+      uid, yesterdayId, natalChart,
+      t.moon,
+      t.planets.filter(p => p.isRetrograde).map(p => p.name),
+      tarotDraw?.yesterday.keywordString ?? '',
+    ))
+    .catch(console.error);
+
+  calculateTransits(dateIdToDate(tomorrowId))
+    .then(t => writeHoroscopeDoc(
+      uid, tomorrowId, natalChart,
+      t.moon,
+      t.planets.filter(p => p.isRetrograde).map(p => p.name),
+      tarotDraw?.tomorrow.keywordString ?? '',
+    ))
+    .catch(console.error);
 }
 
 /**
