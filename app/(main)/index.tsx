@@ -1,12 +1,9 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { doc, getFirestore, updateDoc } from 'firebase/firestore';
 
-import { doc, getDoc } from 'firebase/firestore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-import { calculateTransits } from '@/src/services/astroEngine';
-import type { MoonData } from '@/src/services/astroEngine';
 
 import DateSwitcher from '@/src/components/home/date-switcher.component';
 import HomeTextBox from '@/src/components/home/home-text-box.component';
@@ -14,150 +11,129 @@ import HeaderNav from '@/src/components/shared/header-nav';
 import HomeSignsDisplay from '@/src/components/shared/signs-display.component';
 import SectionTitle from '@/src/components/shared/section-title.component';
 import { ThemedView } from '@/src/components/themed-view';
-import { db } from '@/firebaseConfig';
+import { useHoroscope } from '@/src/context/horoscope-context';
 import { useResponsive } from '@/src/hooks/use-responsive';
 import { usePullToRefresh } from '@/src/hooks/use-pull-to-refresh';
-import {
-  fetchHoroscope,
-  getTodayDateId,
-  requestHoroscope,
-  subscribeToHoroscope,
-} from '@/src/services/horoscope.service';
-import type { HoroscopeResult } from '@/src/types/horoscope.types';
-import type { NatalChartDetailsDoc } from '@/src/types/user.type';
 import { useUser } from '@/src/context/user-context';
+import { getTarotCardDraw } from '@/src/services/tarot-card.service';
+import { fetchHoroscope, getTodayDateId } from '@/src/services/horoscope.service';
+import { calculateTransits } from '@/src/services/astroEngine';
+import type { DailyCardPack } from '@/src/schemas/dailyCardPack.schema';
+import type { HoroscopeResult } from '@/src/types/horoscope.types';
 
 import LoadingScreen from '../(util)/loading-screen';
 
 const NAV_BAR_HEIGHT = 44;
-// TODO: replace with authUser.uid once chart fetching is wired to the real user
-const CHART_UID = 'seed-user-001';
 
 export default function HomeScreen() {
-  const { userDoc, loading: userLoading } = useUser();
+  const { authUser, userDoc, loading: userLoading } = useUser();
+  const {
+    chartDetails,
+    horoscope,
+    transitMoon,
+    loading: horoscopeLoading,
+    refresh,
+  } = useHoroscope();
+
+  const todayDateId = getTodayDateId();
+  const [selectedDate, setSelectedDate] = useState(todayDateId);
+  const [cardDraw, setCardDraw] = useState<Record<string, DailyCardPack>>({});
+  const [horoscopeByDate, setHoroscopeByDate] = useState<Record<string, HoroscopeResult>>({});
+  const [moonByDate, setMoonByDate] = useState<Record<string, { phaseName: string; illumination: number; moonSign: string }>>({});
+
+  useEffect(() => {
+    if (!authUser) return;
+
+    getTarotCardDraw(authUser.uid, 3)
+      .then(draw => {
+        const packs = draw as unknown as { yesterday: DailyCardPack; today: DailyCardPack; tomorrow: DailyCardPack };
+        setCardDraw({
+          [packs.yesterday.date]: packs.yesterday,
+          [packs.today.date]:     packs.today,
+          [packs.tomorrow.date]:  packs.tomorrow,
+        });
+      })
+      .catch(console.error);
+
+    const offset = (days: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() + days);
+      return {
+        dateId: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+        date: d,
+      };
+    };
+
+    const { dateId: yesterdayId, date: yesterdayDate } = offset(-1);
+    const { dateId: tomorrowId,  date: tomorrowDate  } = offset(+1);
+
+    Promise.all([
+      fetchHoroscope(authUser.uid, yesterdayId),
+      fetchHoroscope(authUser.uid, tomorrowId),
+      calculateTransits(yesterdayDate, 0, 0),
+      calculateTransits(tomorrowDate,  0, 0),
+    ]).then(([yest, tmrw, yestTransits, tmrwTransits]) => {
+      setHoroscopeByDate(prev => ({
+        ...prev,
+        ...(yest.result ? { [yesterdayId]: yest.result } : {}),
+        ...(tmrw.result ? { [tomorrowId]:  tmrw.result } : {}),
+      }));
+      setMoonByDate(prev => ({
+        ...prev,
+        [yesterdayId]: { phaseName: yestTransits.moon.phase, illumination: yestTransits.moon.illumination, moonSign: yestTransits.moon.sign },
+        [tomorrowId]:  { phaseName: tmrwTransits.moon.phase, illumination: tmrwTransits.moon.illumination, moonSign: tmrwTransits.moon.sign },
+      }));
+    }).catch(console.error);
+  }, [authUser?.uid]);
+
+  // Keep today's horoscope and moon in the by-date maps
+  useEffect(() => {
+    if (horoscope) setHoroscopeByDate(prev => ({ ...prev, [todayDateId]: horoscope }));
+  }, [horoscope]);
+
+  useEffect(() => {
+    if (transitMoon) {
+      setMoonByDate(prev => ({
+        ...prev,
+        [todayDateId]: { phaseName: transitMoon.phase, illumination: transitMoon.illumination, moonSign: transitMoon.sign },
+      }));
+    }
+  }, [transitMoon]);
+
+  const activeCards = cardDraw[selectedDate] ?? null;
+  const activeHoroscope = horoscopeByDate[selectedDate] ?? null;
+
+  const handleCardReveal = async () => {
+    if (!authUser || !activeCards) return;
+    const db = getFirestore();
+    await updateDoc(doc(db, 'users', authUser.uid, 'cards', selectedDate), { firstView: true });
+    setCardDraw(prev => ({
+      ...prev,
+      [selectedDate]: { ...prev[selectedDate], firstView: true },
+    }));
+  };
+
   const insets = useSafeAreaInsets();
   const { scale } = useResponsive();
   const headerHeight = insets.top + scale(NAV_BAR_HEIGHT);
 
-  const [chartDetails, setChartDetails] = useState<NatalChartDetailsDoc | null>(null);
-  const [chartLoading, setChartLoading] = useState(false);
-  const [horoscope, setHoroscope] = useState<HoroscopeResult | null>(null);
-  const [horoscopeGenerating, setHoroscopeGenerating] = useState(false);
-  const [transitMoon, setTransitMoon] = useState<MoonData | null>(null);
-  const [transitRetrogrades, setTransitRetrogrades] = useState<string[]>([]);
-
-  const unsubHoroscopeRef = useRef<(() => void) | null>(null);
-
-  // ─── Chart fetch ────────────────────────────────────────────────────────────
-
-  const fetchChartDetails = useCallback(async () => {
-    try {
-      const snap = await getDoc(doc(db, 'users', CHART_UID, 'natalChart', 'details'));
-      setChartDetails(snap.exists() ? (snap.data() as NatalChartDetailsDoc) : null);
-    } catch {
-      setChartDetails(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    setChartLoading(true);
-    fetchChartDetails().finally(() => setChartLoading(false));
-  }, []);
-
-  // ─── Horoscope fetch / generation ───────────────────────────────────────────
-
-  useEffect(() => {
-    if (!chartDetails) return;
-
-    let cancelled = false;
-    const dateId = getTodayDateId();
-    const lat = userDoc?.birthLat ?? 0;
-    const lon = userDoc?.birthLon ?? 0;
-
-    // Run transit calculation and horoscope fetch in parallel
-    const transitsPromise = calculateTransits(new Date(), lat, lon)
-      .then(t => {
-        if (!cancelled) {
-          setTransitMoon(t.moon);
-          setTransitRetrogrades(t.planets.filter(p => p.isRetrograde).map(p => p.name));
-        }
-        return t;
-      })
-      .catch(() => null);
-
-    Promise.all([fetchHoroscope(CHART_UID, dateId), transitsPromise])
-      .then(([{ result, pending }, transits]) => {
-        if (cancelled) return;
-
-        if (result) {
-          setHoroscope(result);
-          return;
-        }
-
-        setHoroscopeGenerating(true);
-
-        const unsub = subscribeToHoroscope(CHART_UID, dateId, (r) => {
-          setHoroscope(r);
-          setHoroscopeGenerating(false);
-          unsubHoroscopeRef.current?.();
-          unsubHoroscopeRef.current = null;
-        });
-        unsubHoroscopeRef.current = unsub;
-
-        if (!pending) {
-          // Use today's transiting moon; fall back to natal moon if transits failed
-          const moon = transits?.moon ?? chartDetails.moon;
-          requestHoroscope(CHART_UID, dateId, chartDetails, moon).catch(console.error);
-        }
-      })
-      .catch(console.error);
-
-    return () => {
-      cancelled = true;
-      unsubHoroscopeRef.current?.();
-      unsubHoroscopeRef.current = null;
-    };
-  }, [chartDetails]);
-
   // ─── Pull-to-refresh ────────────────────────────────────────────────────────
 
-  const refreshAll = useCallback(async () => {
-    const dateId = getTodayDateId();
-    await fetchChartDetails();
-    const { result } = await fetchHoroscope(CHART_UID, dateId);
-    if (result) setHoroscope(result);
-  }, [fetchChartDetails]);
-
-  const { refreshControl } = usePullToRefresh(refreshAll);
+  const { refreshControl } = usePullToRefresh(refresh);
 
   // ─── Derived values ─────────────────────────────────────────────────────────
 
-  const loading = userLoading || chartLoading;
+  const loading = userLoading || horoscopeLoading;
 
-  const sunSign = chartDetails?.planets.find(p => p.name === 'Sun')?.sign ?? '—';
-  const moonSign = chartDetails?.planets.find(p => p.name === 'Moon')?.sign ?? '—';
+  const sunSign    = chartDetails?.planets.find(p => p.name === 'Sun')?.sign  ?? '—';
+  const moonSign   = chartDetails?.planets.find(p => p.name === 'Moon')?.sign ?? '—';
   const risingSign = chartDetails?.ascendant.sign ?? '—';
 
-  // Prefer today's transiting moon; fall back to natal moon while loading
-  const moonSource = transitMoon ?? chartDetails?.moon ?? null;
-  const moonData = moonSource
-    ? {
-        phaseName: moonSource.phase,       // text name → maps to phase asset image
-        illumination: moonSource.illumination,
-        moonSign: moonSource.sign,
-      }
-    : undefined;
+  const activeMoonData = moonByDate[selectedDate];
 
-  // Use calculated retrogrades from Swiss Ephemeris; fall back to AI list if not yet computed
-  const retrogrades = transitRetrogrades.length > 0
-    ? transitRetrogrades
-    : (horoscope?.planetsRetrograde ?? []).filter(p => p.toLowerCase() !== 'none');
+  const retrogrades = (activeHoroscope?.planetsRetrograde ?? []).filter(p => p.toLowerCase() !== 'none');
 
-  const today = new Date().toLocaleDateString('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  const dateSwitcherDates = Object.keys(cardDraw).sort();
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
@@ -179,9 +155,9 @@ export default function HomeScreen() {
             birthChartReady={!!chartDetails}
           />
           <DateSwitcher
-            value={today}
-            dates={[today]}
-            onChange={(date) => console.log('selected date', date)}
+            value={selectedDate}
+            dates={dateSwitcherDates.length > 0 ? dateSwitcherDates : [todayDateId]}
+            onChange={setSelectedDate}
           />
 
           <ScrollView
@@ -190,30 +166,29 @@ export default function HomeScreen() {
             refreshControl={refreshControl}
             showsVerticalScrollIndicator={false}
           >
-            {horoscopeGenerating && (
-              <View style={styles.generatingRow}>
-                <ActivityIndicator size="small" color="#BCA8F4" />
-                <Text style={styles.generatingText}>Generating your horoscope...</Text>
-              </View>
-            )}
-
             <SectionTitle sectionName="quote" title="Quote" />
-            <HomeTextBox sectionName="quote" content={horoscope?.quote} />
+            <HomeTextBox sectionName="quote" content={activeHoroscope?.quote} />
 
             <SectionTitle sectionName="advice" title="Advice" />
-            <HomeTextBox sectionName="advice" content={horoscope?.advice} />
+            <HomeTextBox sectionName="advice" content={activeHoroscope?.advice} />
 
             <SectionTitle sectionName="dos" title="Do's" />
-            <HomeTextBox sectionName="dos" content={horoscope?.do ?? []} />
+            <HomeTextBox sectionName="dos" content={activeHoroscope?.do ?? []} />
 
             <SectionTitle sectionName="donts" title="Don'ts" />
-            <HomeTextBox sectionName="donts" content={horoscope?.dont ?? []} />
+            <HomeTextBox sectionName="donts" content={activeHoroscope?.dont ?? []} />
 
             <SectionTitle sectionName="affirmation" title="Affirmation" />
-            <HomeTextBox sectionName="affirmation" content={horoscope?.affirmation} />
+            <HomeTextBox sectionName="affirmation" content={activeHoroscope?.affirmation} />
 
             <SectionTitle sectionName="tarot" title="Today's Cards" />
-            <HomeTextBox sectionName="tarot" content={horoscope?.tarot} />
+            <HomeTextBox
+              sectionName="tarot"
+              content={activeHoroscope?.tarot}
+              cards={activeCards?.cards}
+              firstView={activeCards?.firstView}
+              onReveal={handleCardReveal}
+            />
 
             <SectionTitle sectionName="message" title="Message in a Bottle" />
             <HomeTextBox sectionName="message" />
@@ -221,25 +196,25 @@ export default function HomeScreen() {
             <SectionTitle sectionName="moon" title="Moon Phase" />
             <HomeTextBox
               sectionName="moon"
-              content={horoscope?.moonPhaseDetails}
-              contentTwo={horoscope?.moon}
-              moonData={moonData}
+              content={activeHoroscope?.moonPhaseDetails}
+              contentTwo={activeHoroscope?.moon}
+              moonData={activeMoonData}
             />
 
             <SectionTitle sectionName="retrograde" title="Planets in Retrograde" />
             <HomeTextBox sectionName="retrograde" content={retrogrades} />
 
             <SectionTitle sectionName="newLove" title="New Love" />
-            <HomeTextBox sectionName="newLove" content={horoscope?.newLove ?? []} />
+            <HomeTextBox sectionName="newLove" content={activeHoroscope?.newLove ?? []} />
 
             <SectionTitle sectionName="returns" title="Returns" />
-            <HomeTextBox sectionName="returns" content={horoscope?.returns ?? []} />
+            <HomeTextBox sectionName="returns" content={activeHoroscope?.returns ?? []} />
 
             <SectionTitle sectionName="luckyNumbers" title="Lucky Numbers" />
-            <HomeTextBox sectionName="luckyNumbers" content={horoscope?.luckyNumbers ?? []} />
+            <HomeTextBox sectionName="luckyNumbers" content={activeHoroscope?.luckyNumbers ?? []} />
 
             <SectionTitle sectionName="warning" title="Warning" />
-            <HomeTextBox sectionName="warning" content={horoscope?.warning} />
+            <HomeTextBox sectionName="warning" content={activeHoroscope?.warning} />
           </ScrollView>
         </View>
       )}
