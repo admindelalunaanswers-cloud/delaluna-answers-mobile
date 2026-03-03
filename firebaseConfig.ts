@@ -40,7 +40,12 @@ import Constants from "expo-constants";
 import { FirebaseOptions, getApp, getApps, initializeApp } from "firebase/app";
 
 // Auth
-import { Auth, connectAuthEmulator, getAuth, initializeAuth, inMemoryPersistence } from "firebase/auth";
+import { Auth, connectAuthEmulator, getAuth, initializeAuth } from "firebase/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+// getReactNativePersistence is exported by the Metro/RN bundle of firebase/auth
+// but absent from the browser TypeScript definitions — require() bypasses that.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { getReactNativePersistence } = require("firebase/auth");
 
 // Firestore
 import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
@@ -70,11 +75,11 @@ const firebaseConfig: FirebaseOptions = {
 // Initialize Firebase
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// Auth — initializeAuth with inMemoryPersistence (safe for React Native).
+// Auth — use AsyncStorage persistence so users stay logged in across app restarts.
 // Falls back to getAuth on hot reload when auth is already initialized.
 let auth: Auth;
 try {
-  auth = initializeAuth(app, { persistence: inMemoryPersistence });
+  auth = initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) });
 } catch (e: any) {
   if (e.code === 'auth/already-initialized') {
     auth = getAuth(app);
