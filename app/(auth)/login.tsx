@@ -1,9 +1,6 @@
-import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import React, { useContext, useEffect, useState, useRef } from 'react';
+
 import {
-  View,
-  Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
@@ -14,18 +11,25 @@ import {
   Keyboard,
   Alert,
 } from 'react-native';
-import LoadingScreen from '../(util)/loading-screen';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { useRouter } from 'expo-router';
-import { doc, getDoc } from 'firebase/firestore';
-import { StatusBar } from 'expo-status-bar';
-import { Ionicons } from '@expo/vector-icons';
 
-import { useUser } from '@/src/context/user-context';
+import { useRouter } from 'expo-router';
+
+import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
+import { doc, getDoc } from 'firebase/firestore';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+
 import SecondaryButton from '@/src/assets/buttons/secondary-button-component';
 import { ThemeContext } from '@/src/context/theme-context';
-import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
+import { ThemedText } from '@/src/components/themed-text';
+import { ThemedView } from '@/src/components/themed-view';
 import { auth, db } from '@/firebaseConfig';
+import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
+import { useUser } from '@/src/context/user-context';
+
+import LoadingScreen from '../(util)/loading-screen';
 
 // Safe AsyncStorage wrapper (mirrors theme-context pattern)
 let AsyncStorage: { getItem(k: string): Promise<string | null>; setItem(k: string, v: string): Promise<void> };
@@ -149,14 +153,14 @@ export default function Login() {
           resizeMode="cover"
         />
 
-        <View style={{ flex: 1 }}>
-          <View style={styles.logoContainer}>
+        <ThemedView style={{ flex: 1 }}>
+          <ThemedView style={styles.logoContainer}>
             <Image
               source={require('@/src/assets/dlla-branded/delaluna_logo.png')}
               style={styles.logo}
               resizeMode="contain"
             />
-          </View>
+          </ThemedView>
 
           <BlurView
             intensity={90}
@@ -175,8 +179,8 @@ export default function Login() {
               locations={[0, 0.49, 1]}
               style={StyleSheet.absoluteFillObject}
             >
-              <View style={styles.bodyContainer}>
-                <View style={styles.form}>
+              <ThemedView style={styles.bodyContainer}>
+                <ThemedView style={styles.form}>
                   {/* EMAIL */}
                   <TextInput
                     placeholder="Email"
@@ -193,7 +197,7 @@ export default function Login() {
                   />
 
                   {/* PASSWORD */}
-                  <View style={styles.passwordWrapper}>
+                  <ThemedView style={styles.passwordWrapper}>
                     <TextInput
                       ref={passwordRef}
                       placeholder="Password"
@@ -216,24 +220,24 @@ export default function Login() {
                         color="rgba(255,255,255,0.6)"
                       />
                     </TouchableOpacity>
-                  </View>
+                  </ThemedView>
 
                   <TouchableOpacity
                     style={styles.forgotPasswordButton}
                     onPress={() => router.replace('/(auth)/forgot-password' as any)}
                   >
-                    <Text style={styles.forgotPassword}>Forgot Password?</Text>
+                    <ThemedText style={styles.forgotPassword}>Forgot Password?</ThemedText>
                   </TouchableOpacity>
-                </View>
+                </ThemedView>
 
                 <TouchableOpacity
                   style={[styles.loginButton, loading && { opacity: 0.6 }]}
                   onPress={handleLogin}
                   disabled={loading}
                 >
-                  <Text style={styles.loginButtonText}>
+                  <ThemedText style={styles.loginButtonText}>
                     {loading ? 'Signing in…' : 'Login'}
-                  </Text>
+                  </ThemedText>
                 </TouchableOpacity>
 
                 <SecondaryButton
@@ -241,10 +245,10 @@ export default function Login() {
                   linkString="Sign up"
                   onPress={() => router.replace('/(auth)/sign-up')}
                 />
-              </View>
+              </ThemedView>
             </LinearGradient>
           </BlurView>
-        </View>
+        </ThemedView>
       </KeyboardAvoidingView>
     </>
   );
