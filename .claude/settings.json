@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status -u)",
+      "Bash(npx svgo --version)",
+      "Bash(grep -l \"\\\\.svg\" /Users/naicode/Developer/GitHub/delaluna-answers-mobile/src/assets/buttons/*.tsx)"
+    ]
+  }
+}
