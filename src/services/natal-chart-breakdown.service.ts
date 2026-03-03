@@ -3,9 +3,10 @@ import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/fires
 import { db } from '@/firebaseConfig';
 import type { NatalChartBreakdownResult } from '@/src/types/natal-chart-breakdown.types';
 import type { NatalChartDetailsDoc } from '@/src/types/user.type';
+import { NATAL_CHART_PROMPT_TEMPLATE } from '@/src/prompts/natal-chart-prompt';
 
-// The extension watches users/{uid}/natalChart — we write to this fixed document
-const BREAKDOWN_DOC = 'breakdown';
+// The extension watches users/{uid}/natalChart/details
+const BREAKDOWN_DOC = 'details';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -27,8 +28,14 @@ function buildNatalChartSummary(chart: NatalChartDetailsDoc): string {
   });
 }
 
+function renderPrompt(vars: { tier: string; natalChart: string }): string {
+  return NATAL_CHART_PROMPT_TEMPLATE
+    .replace('{{tier}}', vars.tier)
+    .replace('{{natalChart}}', vars.natalChart);
+}
+
 function parseResult(data: Record<string, any>): NatalChartBreakdownResult | null {
-  const raw = data?.result ?? data?.output;
+  const raw = data?.response ?? data?.result ?? data?.output;
   if (!raw) return null;
   try {
     return typeof raw === 'string' ? JSON.parse(raw) : (raw as NatalChartBreakdownResult);
@@ -57,8 +64,8 @@ export async function fetchBreakdown(uid: string): Promise<BreakdownFetchResult>
 }
 
 /**
- * Write the Handlebars variable fields to users/{uid}/natalChart/breakdown.
- * The extension renders the configured template server-side.
+ * Merges prompt + tier into users/{uid}/natalChart/details.
+ * Uses merge so the raw chart fields written during sign-up are preserved.
  */
 export async function requestBreakdown(
   uid: string,
@@ -66,11 +73,13 @@ export async function requestBreakdown(
   tier: 'free' | 'premium',
 ): Promise<void> {
   const natalChart = buildNatalChartSummary(chart);
-  await setDoc(doc(db, 'users', uid, 'natalChart', BREAKDOWN_DOC), {
-    natalChart,
-    tier,
-    requestedAt: serverTimestamp(),
-  });
+  const prompt = renderPrompt({ tier, natalChart });
+
+  await setDoc(
+    doc(db, 'users', uid, 'natalChart', BREAKDOWN_DOC),
+    { prompt, tier, natalChart, requestedAt: serverTimestamp() },
+    { merge: true },
+  );
 }
 
 /**
