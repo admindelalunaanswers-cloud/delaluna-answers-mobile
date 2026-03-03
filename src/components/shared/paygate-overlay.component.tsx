@@ -1,0 +1,69 @@
+import React from 'react';
+import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+
+import { BlurView } from 'expo-blur';
+
+import PremiumUnlock from './premium-unlock.component';
+
+interface PaygateOverlayProps {
+  locked: boolean;
+  children: React.ReactNode;
+  onUnlock?: () => void;
+  unlockTitle?: string;
+  unlockMessage?: string;
+  style?: StyleProp<ViewStyle>;
+}
+
+/**
+ * Wraps any content with a blurred paygate overlay when `locked` is true.
+ * The underlying content remains faintly visible to tease the user.
+ *
+ * Usage:
+ *   <PaygateOverlay locked={!isPremium} onUnlock={handleUpgrade}>
+ *     <PremiumContent />
+ *   </PaygateOverlay>
+ */
+export default function PaygateOverlay({
+  locked,
+  children,
+  onUnlock,
+  unlockTitle,
+  unlockMessage,
+  style,
+}: PaygateOverlayProps) {
+  return (
+    <View style={[styles.container, style]}>
+      {children}
+
+      {locked && (
+        <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill}>
+          {/* Extra tint so content is clearly obscured on Android where blur may be weaker */}
+          <View style={styles.tint} />
+          <View style={styles.cta}>
+            <PremiumUnlock
+              onUnlock={onUnlock}
+              title={unlockTitle}
+              message={unlockMessage}
+            />
+          </View>
+        </BlurView>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    position: 'relative',
+  },
+  tint: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(10, 6, 30, 0.45)',
+  },
+  cta: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+});
