@@ -1,17 +1,47 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native';
 
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { deleteUser } from 'firebase/auth';
 
 import { ThemedView } from '@/src/components/themed-view';
 import HeaderNav from '@/src/components/shared/header-nav';
 import { useUser } from '@/src/context/user-context';
 import { useHoroscope } from '@/src/context/horoscope-context';
-import { updateUserDoc } from '@/src/services/user.service';
+import { updateUserDoc, signOut } from '@/src/services/user.service';
+import { auth } from '@/firebaseConfig';
+import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
 
 const NAV_BAR_HEIGHT = 44;
+
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+function formatDateDisplay(value: any): string {
+  if (!value) return '';
+  let dateId = '';
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    dateId = value;
+  } else if (typeof value === 'object' && typeof value.toDate === 'function') {
+    const d = value.toDate() as Date;
+    dateId = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  if (!dateId) return String(value);
+  const [y, m, d] = dateId.split('-').map(Number);
+  return `${MONTHS[m - 1]} ${d}, ${y}`;
+}
+
+function formatTimeDisplay(time: string): string {
+  if (!time) return '';
+  const [h, min] = time.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${String(min).padStart(2, '0')} ${period}`;
+}
 
 export default function ProfileScreen() {
   const { authUser, userDoc, refresh: refreshUser } = useUser();
@@ -19,7 +49,13 @@ export default function ProfileScreen() {
   const [busy, setBusy] = useState(false);
 
   const insets = useSafeAreaInsets();
-  const isPremium = userDoc?.isPremiumMember ?? false;
+  const ud = userDoc as any;
+  const isPremium = ud?.isPremiumMember ?? false;
+
+  const isBirthTimeUnknown  = ud?.isBirthTimeUnknown ?? !ud?.birthtime;
+  const isPlaceOfBirthUnknown = ud?.isPlaceOfBirthUnknown ?? !ud?.placeOfBirth;
+  const placeOfBirth = ud?.placeOfBirth ?? ud?.birthplace ?? null;
+  const birthtime    = ud?.birthtime ?? ud?.birthTime ?? '';
 
   const togglePremium = async () => {
     if (!authUser?.uid) return;
@@ -35,6 +71,53 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleLogout = () => {
+    Alert.alert('Log out', 'Are you sure you want to log out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Log out',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await signOut();
+          } catch {
+            Alert.alert('Error', 'Could not log out. Please try again.');
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete account',
+      'This will permanently delete your account and all your data. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const user = auth.currentUser;
+              if (!user) return;
+              await deleteUser(user);
+            } catch (err: any) {
+              if (err?.code === 'auth/requires-recent-login') {
+                Alert.alert(
+                  'Re-authentication required',
+                  'For security, please log out and log back in before deleting your account.',
+                );
+              } else {
+                Alert.alert('Error', 'Could not delete account. Please try again.');
+              }
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <ThemedView style={styles.container}>
       <HeaderNav
@@ -43,19 +126,23 @@ export default function ProfileScreen() {
         onLeftPress={() => router.back()}
       />
 
-      <View style={[styles.content, { paddingTop: insets.top + NAV_BAR_HEIGHT + 24 }]}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + scale(NAV_BAR_HEIGHT) + scale(24) }]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Avatar */}
-        <Ionicons name="person-circle-outline" size={80} color="#BCA8F4" />
+        <Ionicons name="person-circle-outline" size={scale(80)} color="#BCA8F4" />
 
         {/* Name / email */}
-        <Text style={styles.name}>{userDoc?.name ?? '—'}</Text>
-        <Text style={styles.email}>{userDoc?.email ?? authUser?.email ?? '—'}</Text>
+        <Text style={styles.name}>{ud?.name ?? '—'}</Text>
+        <Text style={styles.email}>{ud?.email ?? authUser?.email ?? '—'}</Text>
 
         {/* Membership badge */}
         <View style={[styles.badge, isPremium ? styles.badgePremium : styles.badgeFree]}>
           <Ionicons
             name={isPremium ? 'sparkles' : 'lock-closed-outline'}
-            size={13}
+            size={scale(13)}
             color={isPremium ? '#FFD700' : '#888'}
           />
           <Text style={[styles.badgeText, isPremium ? styles.badgeTextPremium : styles.badgeTextFree]}>
@@ -63,7 +150,94 @@ export default function ProfileScreen() {
           </Text>
         </View>
 
-        {/* Mock toggle */}
+        {/* Edit profile button */}
+        <TouchableOpacity
+          style={[styles.editButton, styles.editButtonDisabled]}
+          disabled
+          activeOpacity={1}
+        >
+          <Ionicons name="pencil-outline" size={scale(15)} color="rgba(111,255,233,0.3)" />
+          <Text style={[styles.editButtonText, styles.editButtonTextDisabled]}>Edit Profile</Text>
+        </TouchableOpacity>
+
+        {/* ── Account info ── */}
+        <View style={styles.detailsCard}>
+          <Text style={styles.sectionLabel}>ACCOUNT</Text>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>First name</Text>
+            <Text style={styles.detailValue}>{ud?.firstName ?? '—'}</Text>
+          </View>
+
+          <View style={styles.separator} />
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Last name</Text>
+            <Text style={styles.detailValue}>{ud?.lastName ?? '—'}</Text>
+          </View>
+
+          <View style={styles.separator} />
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Email</Text>
+            <Text style={styles.detailValue} numberOfLines={1}>
+              {ud?.email ?? authUser?.email ?? '—'}
+            </Text>
+          </View>
+        </View>
+
+        {/* ── Birth details ── */}
+        <View style={[styles.detailsCard, { marginTop: 12 }]}>
+          <View style={styles.sectionLabelRow}>
+            <Text style={[styles.sectionLabel, { paddingHorizontal: 0, paddingTop: 0, paddingBottom: 0 }]}>BIRTH DETAILS</Text>
+            {(() => {
+              const used = ud?.birthDetailsChangeCount ?? 0;
+              const remaining = Math.max(0, 3 - used);
+              return (
+                <Text style={[styles.changesRemaining, remaining === 0 && styles.changesRemainingNone]}>
+                  {remaining === 0 ? 'No changes left' : `${remaining} ${remaining === 1 ? 'change' : 'changes'} left`}
+                </Text>
+              );
+            })()}
+          </View>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Birthday</Text>
+            <Text style={styles.detailValue}>
+              {ud?.birthday ? formatDateDisplay(ud.birthday) : '—'}
+            </Text>
+          </View>
+
+          <View style={styles.separator} />
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Birth time</Text>
+            <Text style={[styles.detailValue, isBirthTimeUnknown && styles.detailValueMuted]}>
+              {isBirthTimeUnknown ? "I don't know" : (birthtime ? formatTimeDisplay(birthtime) : '—')}
+            </Text>
+          </View>
+
+          <View style={styles.separator} />
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Birth place</Text>
+            <Text style={[styles.detailValue, isPlaceOfBirthUnknown && styles.detailValueMuted]}>
+              {isPlaceOfBirthUnknown ? "I don't know" : (placeOfBirth ?? '—')}
+            </Text>
+          </View>
+
+          {ud?.pronouns ? (
+            <>
+              <View style={styles.separator} />
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Pronouns</Text>
+                <Text style={styles.detailValue}>{ud.pronouns}</Text>
+              </View>
+            </>
+          ) : null}
+        </View>
+
+        {/* Mock premium toggle */}
         <TouchableOpacity
           style={[
             styles.button,
@@ -86,14 +260,38 @@ export default function ProfileScreen() {
         <Text style={styles.hint}>
           After toggling, pull to refresh on content screens to load the updated tier.
         </Text>
-      </View>
+
+        {/* ── Account actions ── */}
+        <View style={styles.accountActions}>
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={handleLogout}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="log-out-outline" size={scale(18)} color="#fff" />
+            <Text style={styles.logoutText}>Log out</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={handleDeleteAccount}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="trash-outline" size={scale(16)} color="#ff4d4f" />
+            <Text style={styles.deleteText}>Delete account</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ height: verticalScale(32) }} />
+      </ScrollView>
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content:   { flex: 1, paddingHorizontal: 24, alignItems: 'center', gap: 8 },
+  scroll:    { flex: 1 },
+  content:   { paddingHorizontal: 24, alignItems: 'center', gap: 8 },
 
   name:  { color: '#fff',                    fontSize: 20, fontWeight: '700', marginTop: 8 },
   email: { color: 'rgba(255,255,255,0.45)',   fontSize: 13, marginBottom: 8 },
@@ -105,11 +303,36 @@ const styles = StyleSheet.create({
   badgeTextPremium: { color: '#FFD700' },
   badgeTextFree:    { color: '#888' },
 
-  button:         { marginTop: 32, borderRadius: 24, paddingVertical: 13, paddingHorizontal: 28, width: '100%', alignItems: 'center' },
+  editButton:             { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(111,255,233,0.4)', backgroundColor: 'rgba(111,255,233,0.08)' },
+  editButtonDisabled:     { borderColor: 'rgba(111,255,233,0.15)', backgroundColor: 'rgba(111,255,233,0.03)', opacity: 0.5 },
+  editButtonText:         { color: '#6FFFE9', fontSize: 13, fontWeight: '600' },
+  editButtonTextDisabled: { color: 'rgba(111,255,233,0.4)' },
+
+  // Details card
+  detailsCard:  { width: '100%', marginTop: 20, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', overflow: 'hidden' },
+  sectionLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '700', letterSpacing: 1.2, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10 },
+  detailRow:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 13 },
+  detailLabel:  { color: 'rgba(255,255,255,0.55)', fontSize: 14 },
+  detailValue:  { color: '#fff', fontSize: 14, fontWeight: '500', flexShrink: 1, textAlign: 'right', marginLeft: 16 },
+  detailValueMuted: { color: 'rgba(255,255,255,0.35)', fontStyle: 'italic', fontWeight: '400' },
+  separator:    { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.08)', marginHorizontal: 16 },
+
+  sectionLabelRow:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10 },
+  changesRemaining:     { color: 'rgba(111,255,233,0.6)', fontSize: 11, fontWeight: '600' },
+  changesRemainingNone: { color: 'rgba(255,77,79,0.8)' },
+
+  button:         { marginTop: 24, borderRadius: 24, paddingVertical: 13, paddingHorizontal: 28, width: '100%', alignItems: 'center' },
   buttonUpgrade:  { backgroundColor: '#8E44AD' },
   buttonDowngrade:{ backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' },
   buttonDisabled: { opacity: 0.5 },
   buttonText:     { color: '#fff', fontSize: 14, fontWeight: '700' },
 
-  hint: { color: 'rgba(255,255,255,0.3)', fontSize: 11, textAlign: 'center', marginTop: 12, paddingHorizontal: 16, lineHeight: 17 },
+  hint: { color: 'rgba(255,255,255,0.3)', fontSize: 11, textAlign: 'center', marginTop: 8, paddingHorizontal: 16, lineHeight: 17 },
+
+  // Account actions
+  accountActions: { width: '100%', marginTop: 32, gap: 12 },
+  logoutButton:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 14, backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
+  logoutText:     { color: '#fff', fontSize: 15, fontWeight: '600' },
+  deleteButton:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 13 },
+  deleteText:     { color: '#ff4d4f', fontSize: 14, fontWeight: '500' },
 });

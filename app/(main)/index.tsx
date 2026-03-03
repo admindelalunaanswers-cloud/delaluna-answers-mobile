@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { doc, getFirestore, updateDoc } from 'firebase/firestore';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,18 +15,22 @@ import { useHoroscope } from '@/src/context/horoscope-context';
 import { useResponsive } from '@/src/hooks/use-responsive';
 import { usePullToRefresh } from '@/src/hooks/use-pull-to-refresh';
 import { useUser } from '@/src/context/user-context';
+import { updateUserDoc } from '@/src/services/user.service';
 import { getTarotCardDraw } from '@/src/services/tarot-card.service';
+import { HOME_STRINGS } from '@/src/constants/strings';
 import { fetchHoroscope, getTodayDateId } from '@/src/services/horoscope.service';
 import { calculateTransits } from '@/src/services/astroEngine';
 import type { DailyCardPack } from '@/src/schemas/dailyCardPack.schema';
 import type { HoroscopeResult } from '@/src/types/horoscope.types';
 
+import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
 import LoadingScreen from '../(util)/loading-screen';
+import { router } from 'expo-router';
 
 const NAV_BAR_HEIGHT = 44;
 
 export default function HomeScreen() {
-  const { authUser, userDoc, loading: userLoading } = useUser();
+  const { authUser, userDoc, loading: userLoading, refresh: refreshUser } = useUser();
   const {
     chartDetails,
     horoscope,
@@ -134,6 +138,13 @@ export default function HomeScreen() {
   const retrogrades = (activeHoroscope?.planetsRetrograde ?? []).filter(p => p.toLowerCase() !== 'none');
 
   const dateSwitcherDates = Object.keys(cardDraw).sort();
+  const isPaygated = selectedDate !== todayDateId && !(userDoc?.isPremiumMember ?? false);
+
+  const handleUnlock = async () => {
+    if (!authUser?.uid) return;
+    await updateUserDoc(authUser.uid, { isPremiumMember: true });
+    await refreshUser();
+  };
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
@@ -142,7 +153,7 @@ export default function HomeScreen() {
       <HeaderNav
         title={userDoc?.name ?? 'Home'}
         rightIconName="person-circle-outline"
-        onRightPress={() => console.log('go to profile')}
+        onRightPress={() => router.push('/profile')}
       />
 
       {loading ? <LoadingScreen /> : (
@@ -160,9 +171,16 @@ export default function HomeScreen() {
             onChange={setSelectedDate}
           />
 
+          <PaygateOverlay
+            locked={isPaygated}
+            style={{ flex: 1 }}
+            unlockTitle="Unlock Past & Future Readings"
+            unlockMessage="Upgrade to Premium to view yesterday's and tomorrow's horoscope."
+            onUnlock={handleUnlock}
+          >
           <ScrollView
             style={styles.scroll}
-            contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + scale(80) }]}
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + scale(20) }]}
             refreshControl={refreshControl}
             showsVerticalScrollIndicator={false}
           >
@@ -205,10 +223,21 @@ export default function HomeScreen() {
             <HomeTextBox sectionName="retrograde" content={retrogrades} />
 
             <SectionTitle sectionName="newLove" title="New Love" />
+            <Text style={styles.sectionDefinition}>{HOME_STRINGS.newLove.definition}</Text>
             <HomeTextBox sectionName="newLove" content={activeHoroscope?.newLove ?? []} />
+            <TouchableOpacity style={styles.questionButton} onPress={() => router.push('/(main)/chat')} activeOpacity={0.7}>
+              <Text style={styles.questionButtonText}>{HOME_STRINGS.newLove.questionFunnel}</Text>
+            </TouchableOpacity>
 
             <SectionTitle sectionName="returns" title="Returns" />
+            <Text style={styles.sectionDefinition}>{HOME_STRINGS.returns.definition}</Text>
             <HomeTextBox sectionName="returns" content={activeHoroscope?.returns ?? []} />
+            <TouchableOpacity style={styles.questionButton} onPress={() => router.push('/(main)/chat')} activeOpacity={0.7}>
+              <Text style={styles.questionButtonText}>{HOME_STRINGS.returns.questionFunnel1}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.questionButton, { marginTop: 8 }]} onPress={() => router.push('/(main)/chat')} activeOpacity={0.7}>
+              <Text style={styles.questionButtonText}>{HOME_STRINGS.returns.questionFunnel2}</Text>
+            </TouchableOpacity>
 
             <SectionTitle sectionName="luckyNumbers" title="Lucky Numbers" />
             <HomeTextBox sectionName="luckyNumbers" content={activeHoroscope?.luckyNumbers ?? []} />
@@ -216,6 +245,7 @@ export default function HomeScreen() {
             <SectionTitle sectionName="warning" title="Warning" />
             <HomeTextBox sectionName="warning" content={activeHoroscope?.warning} />
           </ScrollView>
+          </PaygateOverlay>
         </View>
       )}
     </ThemedView>
@@ -249,5 +279,28 @@ const styles = StyleSheet.create({
   generatingText: {
     color: '#BCA8F4',
     fontSize: 14,
+  },
+  sectionDefinition: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: -8,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  questionButton: {
+    borderWidth: 1,
+    borderColor: 'rgba(188,168,244,0.35)',
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginBottom: 24,
+    backgroundColor: 'rgba(188,168,244,0.07)',
+  },
+  questionButtonText: {
+    color: '#BCA8F4',
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
   },
 });

@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { doc, getDoc } from 'firebase/firestore';
 
 import { ThemedText } from '@/src/components/themed-text';
 import { ThemedView } from '@/src/components/themed-view';
@@ -10,8 +11,9 @@ import HeaderNav from '@/src/components/shared/header-nav';
 import NatalWheelTab from '@/src/components/natalChart/natal-chart-wheel';
 import NatalTable from '@/src/components/natalChart/natal-chart-table';
 import { useHoroscope } from '@/src/context/horoscope-context';
-import { useResponsive } from '@/src/hooks/use-responsive';
-import { usePullToRefresh } from '@/src/hooks/use-pull-to-refresh';
+import { useUser } from '@/src/context/user-context';
+import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
+import { db } from '@/firebaseConfig';
 import type { NatalChart } from '@/src/services/astroEngine';
 import type { NatalChartBreakdownResult } from '@/src/types/natal-chart-breakdown.types';
 
@@ -20,20 +22,60 @@ import LoadingScreen from '../(util)/loading-screen';
 const NAV_BAR_HEIGHT = 44;
 
 export default function BirthChartScreen() {
-  const {
-    chartDetails,
-    breakdown,
-    loading,
-    refresh,
-  } = useHoroscope();
+  const { chartDetails, loading } = useHoroscope();
+  const { authUser } = useUser();
+
+  const [breakdown, setBreakdown] = useState<NatalChartBreakdownResult | null>(null);
+  const [breakdownLoading, setBreakdownLoading] = useState(true);
+  const [breakdownError, setBreakdownError] = useState<string | null>(null);
+
+  const fetchBreakdown = useCallback(async () => {
+    const uid = authUser?.uid;
+    if (!uid) {
+      setBreakdownLoading(false);
+      return;
+    }
+    setBreakdownLoading(true);
+    setBreakdownError(null);
+    try {
+      const snap = await getDoc(doc(db, 'users', uid, 'natalChart', 'details'));
+      if (!snap.exists()) {
+        setBreakdownError('No breakdown available yet.');
+        return;
+      }
+      const data = snap.data();
+      const state: string | undefined = data?.status?.state;
+      if (state === 'ERROR') {
+        setBreakdownError('Breakdown generation failed. Please try again later.');
+        return;
+      }
+      const raw = data?.response ?? data?.result ?? data?.output;
+      if (!raw) {
+        setBreakdownError(state ? `Still generating… (${state})` : 'Breakdown not ready yet.');
+        return;
+      }
+      const cleaned = typeof raw === 'string'
+        ? raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
+        : null;
+      const parsed: NatalChartBreakdownResult =
+        cleaned !== null ? JSON.parse(cleaned) : raw;
+      setBreakdown(parsed);
+    } catch (err: any) {
+      console.error('[BirthChart] breakdown fetch error:', err);
+      setBreakdownError(err?.message ?? 'Could not load breakdown.');
+    } finally {
+      setBreakdownLoading(false);
+    }
+  }, [authUser?.uid]);
+
+  useEffect(() => {
+    fetchBreakdown();
+  }, [fetchBreakdown]);
 
   const [activeTab, setActiveTab] = useState<'Natal Wheel' | 'Natal Table'>('Natal Wheel');
 
   const insets = useSafeAreaInsets();
-  const { scale } = useResponsive();
   const headerHeight = insets.top + scale(NAV_BAR_HEIGHT);
-
-  const { refreshControl } = usePullToRefresh(refresh);
 
   // ─── Render helpers ─────────────────────────────────────────────────────────
 
@@ -147,10 +189,12 @@ export default function BirthChartScreen() {
                   )
                 ) : (
                   chartDetails ? (
-                    <NatalTable
-                      planets={chartDetails.planets as unknown as NatalChart['planets']}
-                      asc={chartDetails.ascendant}
-                    />
+                    <ScrollView showsVerticalScrollIndicator={false}>
+                      <NatalTable
+                        planets={chartDetails.planets as unknown as NatalChart['planets']}
+                        asc={chartDetails.ascendant}
+                      />
+                    </ScrollView>
                   ) : (
                     <ThemedText>No chart data available.</ThemedText>
                   )
@@ -163,14 +207,17 @@ export default function BirthChartScreen() {
               style={styles.breakdownScroll}
               contentContainerStyle={[
                 styles.breakdownContent,
-                { paddingBottom: insets.bottom + scale(24) },
+                { paddingBottom: insets.bottom + verticalScale(8) },
               ]}
-              refreshControl={refreshControl}
               showsVerticalScrollIndicator={false}
             >
               <Text style={styles.breakdownTitle}>Breakdown</Text>
 
-              {breakdown && (
+              {breakdownLoading ? (
+                <ActivityIndicator color="#BCA8F4" style={{ marginTop: verticalScale(24) }} />
+              ) : breakdownError ? (
+                <Text style={styles.errorText}>{breakdownError}</Text>
+              ) : breakdown ? (
                 <>
                   {renderTextSection('Quote', breakdown.quote)}
                   {renderTextSection('Your Chart', breakdown.personalitySnapshot)}
@@ -186,7 +233,7 @@ export default function BirthChartScreen() {
                   {renderTextSection('Unlock More', breakdown.teaser)}
                   {renderTextSection('Release', breakdown.release)}
                 </>
-              )}
+              ) : null}
             </ScrollView>
           </>
         )}
@@ -197,24 +244,25 @@ export default function BirthChartScreen() {
 
 const styles = StyleSheet.create({
   container:        { flex: 1, justifyContent: 'flex-start' },
-  content:          { flex: 1, width: '100%', paddingHorizontal: 12, paddingBottom: 12, gap: 4 },
-  topSection:       { flex: 2, overflow: 'hidden', borderRadius: 12 },
-  tabList:          { flexDirection: 'row', padding: 12 },
-  tab:              { flex: 1, padding: 12, alignItems: 'center' },
+  content:          { flex: 1, width: '100%', paddingHorizontal: scale(12), paddingBottom: verticalScale(12), gap: scale(4) },
+  topSection:       { flex: 1.5, overflow: 'hidden', borderRadius: scale(12) },
+  tabList:          { flexDirection: 'row', paddingHorizontal: scale(12), paddingVertical: verticalScale(12) },
+  tab:              { flex: 1, paddingHorizontal: scale(12), paddingVertical: verticalScale(12), alignItems: 'center' },
   activeTab:        { borderBottomWidth: 2, borderBottomColor: '#5BC0BE' },
   tabContent:       { flex: 1 },
 
-  breakdownScroll:  { flex: 1, borderRadius: 12 },
-  breakdownContent: { paddingHorizontal: 15, paddingTop: 12 },
-  breakdownTitle:   { color: '#fff', fontSize: 18, fontWeight: '600', marginBottom: 12 },
+  breakdownScroll:  { flex: 1.5, borderRadius: scale(12) },
+  breakdownContent: { paddingHorizontal: scale(15), paddingTop: verticalScale(12) },
+  breakdownTitle:   { color: '#fff', fontSize: moderateScale(18), fontWeight: '600', marginBottom: verticalScale(12) },
 
-  section:          { marginBottom: 20 },
-  sectionLabel:     { color: '#BCA8F4', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 },
-  sectionBody:      { color: '#E8E0FF', fontSize: 14, lineHeight: 22 },
+  section:          { marginBottom: verticalScale(12) },
+  sectionLabel:     { color: '#BCA8F4', fontSize: moderateScale(12), fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: verticalScale(6) },
+  sectionBody:      { color: '#E8E0FF', fontSize: moderateScale(14), lineHeight: moderateScale(22) },
 
-  card:             { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: 12, marginBottom: 10 },
-  cardTitle:        { color: '#BCA8F4', fontSize: 13, fontWeight: '600', marginBottom: 4 },
-  cardMeta:         { color: '#9D8EC4', fontSize: 12, marginBottom: 6 },
-  cardBody:         { color: '#E8E0FF', fontSize: 13, lineHeight: 20 },
-  locked:           { color: '#555', fontSize: 13, fontStyle: 'italic' },
+  card:             { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: scale(10), padding: scale(12), marginBottom: verticalScale(10) },
+  cardTitle:        { color: '#BCA8F4', fontSize: moderateScale(13), fontWeight: '600', marginBottom: verticalScale(4) },
+  cardMeta:         { color: '#9D8EC4', fontSize: moderateScale(12), marginBottom: verticalScale(6) },
+  cardBody:         { color: '#E8E0FF', fontSize: moderateScale(13), lineHeight: moderateScale(20) },
+  locked:           { color: '#555', fontSize: moderateScale(13), fontStyle: 'italic' },
+  errorText:        { color: 'rgba(255,100,100,0.8)', fontSize: moderateScale(13), marginTop: verticalScale(16), textAlign: 'center' },
 });

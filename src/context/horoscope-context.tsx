@@ -98,7 +98,6 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
   ) => {
     fetchBreakdown(uid)
       .then(({ result, pending }) => {
-        if (signal.cancelled) return;
         if (result) { setBreakdown(result); return; }
 
         setBreakdownGenerating(true);

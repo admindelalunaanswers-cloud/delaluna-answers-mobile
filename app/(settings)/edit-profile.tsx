@@ -323,6 +323,14 @@ export default function EditProfileScreen() {
     };
 
     if (originalValues && chartNeedsRecalculation(originalValues, next)) {
+      const changeCount = ud?.birthDetailsChangeCount ?? 0;
+      if (changeCount >= 3) {
+        Alert.alert(
+          'Change limit reached',
+          'Birth details can only be updated 3 times. Please contact support if you need further changes.',
+        );
+        return;
+      }
       setConfirmVisible(true);
     } else {
       void performSave(false);
@@ -364,6 +372,7 @@ export default function EditProfileScreen() {
           placeOfBirth:         isPlaceOfBirthUnknown ? null : placeOfBirth,
           isBirthTimeUnknown,
           isPlaceOfBirthUnknown,
+          ...(recalcChart ? { birthDetailsChangeCount: (ud?.birthDetailsChangeCount ?? 0) + 1 } : {}),
         } as any),
       } as any);
 
@@ -691,7 +700,8 @@ export default function EditProfileScreen() {
             <Text style={ss.confirmTitle}>Recalculate natal chart?</Text>
             <Text style={ss.confirmBody}>
               You've updated birth details that affect your natal chart. Saving will
-              recalculate your chart and regenerate all your readings.
+              recalculate your chart and regenerate all your readings.{'\n\n'}
+              {3 - (ud?.birthDetailsChangeCount ?? 0)} of 3 birth detail {3 - (ud?.birthDetailsChangeCount ?? 0) === 1 ? 'change' : 'changes'} remaining.
             </Text>
             <View style={ss.confirmActions}>
               <TouchableOpacity
