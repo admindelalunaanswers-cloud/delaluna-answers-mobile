@@ -1,10 +1,11 @@
-// src/components/home/tarot-card-image-view.tsx
+import React, { useState } from "react";
+
+import { Image, Linking, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+
+import { Ionicons } from "@expo/vector-icons";
 
 import { CARD_LINKS } from "@/src/constants/links";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
-import { Ionicons } from "@expo/vector-icons";
-import React, { useState } from "react";
-import { Image, Linking, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 interface TarotCardProps {
   cardNumber: number[];
