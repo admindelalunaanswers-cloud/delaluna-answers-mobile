@@ -1,22 +1,5 @@
-/**
- * InputScreen.tsx
- * Birth data entry. Two columns for lat/lon. Timezone picker.
- * Transit date picker. Dark cosmic aesthetic.
- */
-
-import { C, R, S } from '@/src/constants/theme';
-import { BirthData, calculateNatalChart, calculateTransits } from '@/src/services/astroEngine';
-import { TestingStore } from '@/src/stores/testing-store';
-import {
-  NominatimResult,
-  formatPlace,
-  searchNominatim,
-  detectTimezoneOffset,
-  formatUtcOffset,
-} from '@/src/utils/location';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { router } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+
 import {
   ActivityIndicator,
   Alert,
@@ -31,7 +14,22 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+
+import { router } from 'expo-router';
+
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import {
+  NominatimResult,
+  formatPlace,
+  searchNominatim,
+  detectTimezoneOffset,
+  formatUtcOffset,
+} from '@/src/utils/location';
+import { BirthData, calculateNatalChart, calculateTransits } from '@/src/services/astroEngine';
+import { C, R, S } from '@/src/constants/theme';
+import { TestingStore } from '@/src/stores/testing-store';
 
 // ─── Tiny reusable bits ───────────────────────────────────────────────────────
 
