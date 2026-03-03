@@ -3,12 +3,13 @@ import { ScrollView, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HeaderNav from '@/src/components/shared/header-nav';
-import SectionTitle from '@/src/components/shared/section-title.component';
 import HomeTextBox from '@/src/components/home/home-text-box.component';
+import SectionTitle from '@/src/components/shared/section-title.component';
 import { ThemedView } from '@/src/components/themed-view';
+import { scale as staticScale } from '@/src/utils/responsive';
 import { useHoroscope } from '@/src/context/horoscope-context';
-import { useResponsive } from '@/src/hooks/use-responsive';
 import { usePullToRefresh } from '@/src/hooks/use-pull-to-refresh';
+import { useResponsive } from '@/src/hooks/use-responsive';
 
 import LoadingScreen from '../(util)/loading-screen';
 
