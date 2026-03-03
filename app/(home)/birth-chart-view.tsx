@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { doc, getDoc } from 'firebase/firestore';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -10,104 +9,31 @@ import { ThemedView } from '@/src/components/themed-view';
 import HeaderNav from '@/src/components/shared/header-nav';
 import NatalWheelTab from '@/src/components/natalChart/natal-chart-wheel';
 import NatalTable from '@/src/components/natalChart/natal-chart-table';
-import { useUser } from '@/src/context/user-context';
-import { db } from '@/firebaseConfig';
+import { useHoroscope } from '@/src/context/horoscope-context';
 import { useResponsive } from '@/src/hooks/use-responsive';
 import { usePullToRefresh } from '@/src/hooks/use-pull-to-refresh';
-import {
-  fetchBreakdown,
-  requestBreakdown,
-  subscribeToBreakdown,
-} from '@/src/services/natal-chart-breakdown.service';
 import type { NatalChart } from '@/src/services/astroEngine';
-import type { NatalChartDetailsDoc } from '@/src/types/user.type';
 import type { NatalChartBreakdownResult } from '@/src/types/natal-chart-breakdown.types';
 
 import LoadingScreen from '../(util)/loading-screen';
 
 const NAV_BAR_HEIGHT = 44;
-// TODO: replace with authUser.uid once chart fetching is wired to the real user
-const CHART_UID = 'seed-user-001';
 
 export default function BirthChartScreen() {
-  const { userDoc } = useUser();
+  const {
+    chartDetails,
+    breakdown,
+    loading,
+    refresh,
+  } = useHoroscope();
+
   const [activeTab, setActiveTab] = useState<'Natal Wheel' | 'Natal Table'>('Natal Wheel');
-  const [chartDetails, setChartDetails] = useState<NatalChartDetailsDoc | null>(null);
-  const [chartLoading, setChartLoading] = useState(false);
-  const [breakdown, setBreakdown] = useState<NatalChartBreakdownResult | null>(null);
-  const [breakdownGenerating, setBreakdownGenerating] = useState(false);
 
   const insets = useSafeAreaInsets();
   const { scale } = useResponsive();
   const headerHeight = insets.top + scale(NAV_BAR_HEIGHT);
 
-  const unsubBreakdownRef = useRef<(() => void) | null>(null);
-
-  // ─── Chart fetch ────────────────────────────────────────────────────────────
-
-  const fetchChartDetails = useCallback(async () => {
-    try {
-      const snap = await getDoc(doc(db, 'users', CHART_UID, 'natalChart', 'details'));
-      setChartDetails(snap.exists() ? (snap.data() as NatalChartDetailsDoc) : null);
-    } catch {
-      setChartDetails(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    setChartLoading(true);
-    fetchChartDetails().finally(() => setChartLoading(false));
-  }, [fetchChartDetails]);
-
-  // ─── Breakdown fetch / generation ───────────────────────────────────────────
-
-  useEffect(() => {
-    if (!chartDetails) return;
-
-    let cancelled = false;
-    const tier = userDoc?.isPayingMember ? 'premium' : 'free';
-
-    fetchBreakdown(CHART_UID)
-      .then(({ result, pending }) => {
-        if (cancelled) return;
-
-        if (result) {
-          setBreakdown(result);
-          return;
-        }
-
-        setBreakdownGenerating(true);
-
-        const unsub = subscribeToBreakdown(CHART_UID, (r) => {
-          setBreakdown(r);
-          setBreakdownGenerating(false);
-          unsubBreakdownRef.current?.();
-          unsubBreakdownRef.current = null;
-        });
-        unsubBreakdownRef.current = unsub;
-
-        if (!pending) {
-          requestBreakdown(CHART_UID, chartDetails, tier).catch(console.error);
-        }
-      })
-      .catch(console.error);
-
-    return () => {
-      cancelled = true;
-      unsubBreakdownRef.current?.();
-      unsubBreakdownRef.current = null;
-    };
-  }, [chartDetails, userDoc?.isPayingMember]);
-
-  // ─── Pull-to-refresh ────────────────────────────────────────────────────────
-
-  const refreshAll = useCallback(async () => {
-    await fetchChartDetails();
-    const { result } = await fetchBreakdown(CHART_UID);
-    if (result) setBreakdown(result);
-  }, [fetchChartDetails]);
-
-  const { refreshControl } = usePullToRefresh(refreshAll);
+  const { refreshControl } = usePullToRefresh(refresh);
 
   // ─── Render helpers ─────────────────────────────────────────────────────────
 
@@ -193,7 +119,7 @@ export default function BirthChartScreen() {
       />
 
       <View style={[styles.content, { paddingTop: headerHeight }]}>
-        {chartLoading ? <LoadingScreen /> : (
+        {loading ? <LoadingScreen /> : (
           <>
             {/* Top Half — Wheel / Table tabs */}
             <ThemedView style={styles.topSection}>
@@ -244,13 +170,6 @@ export default function BirthChartScreen() {
             >
               <Text style={styles.breakdownTitle}>Breakdown</Text>
 
-              {breakdownGenerating && (
-                <View style={styles.generatingRow}>
-                  <ActivityIndicator size="small" color="#BCA8F4" />
-                  <Text style={styles.generatingText}>Generating your breakdown...</Text>
-                </View>
-              )}
-
               {breakdown && (
                 <>
                   {renderTextSection('Quote', breakdown.quote)}
@@ -278,19 +197,16 @@ export default function BirthChartScreen() {
 
 const styles = StyleSheet.create({
   container:        { flex: 1, justifyContent: 'flex-start' },
-  content:          { flex: 1, width: '100%' },
-  topSection:       { flex: 1 },
+  content:          { flex: 1, width: '100%', paddingHorizontal: 12, paddingBottom: 12, gap: 4 },
+  topSection:       { flex: 2, overflow: 'hidden', borderRadius: 12 },
   tabList:          { flexDirection: 'row', padding: 12 },
   tab:              { flex: 1, padding: 12, alignItems: 'center' },
   activeTab:        { borderBottomWidth: 2, borderBottomColor: '#5BC0BE' },
   tabContent:       { flex: 1 },
 
-  breakdownScroll:  { flex: 1 },
+  breakdownScroll:  { flex: 1, borderRadius: 12 },
   breakdownContent: { paddingHorizontal: 15, paddingTop: 12 },
   breakdownTitle:   { color: '#fff', fontSize: 18, fontWeight: '600', marginBottom: 12 },
-
-  generatingRow:    { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12 },
-  generatingText:   { color: '#BCA8F4', fontSize: 14 },
 
   section:          { marginBottom: 20 },
   sectionLabel:     { color: '#BCA8F4', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 },
