@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { deleteDoc, doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 
 import { db } from '@/firebaseConfig';
 import type { HoroscopeResult } from '@/src/types/horoscope.types';
@@ -214,6 +214,71 @@ export async function requestHoroscope(
       tarotDraw?.tomorrow.keywordString ?? '',
     ))
     .catch(console.error);
+}
+
+/**
+ * Day-rollover maintenance — call once when the app opens on a new day.
+ *
+ * 1. Deletes the doc for 2 days ago (no longer displayed).
+ * 2. If today's doc is missing (pre-generation failed), generates it (awaited).
+ * 3. If tomorrow's doc is missing, generates it in the background.
+ *
+ * Today's horoscope was expected to be pre-generated as "tomorrow" the
+ * previous day. If it's still pending (extension not finished), this leaves
+ * it alone so the existing listener can resolve it naturally.
+ */
+export async function rolloverHoroscope(
+  uid: string,
+  chart: NatalChartDetailsDoc,
+): Promise<void> {
+  const dateId     = getTodayDateId();
+  const twoDaysAgo = offsetDateId(dateId, -2);
+  const tomorrowId = offsetDateId(dateId, +1);
+  const natalChart = buildNatalChartSummary(chart);
+
+  // Remove the oldest doc — failure is harmless
+  deleteDoc(doc(db, 'users', uid, 'horoscope', twoDaysAgo)).catch(() => {});
+
+  // Check today and tomorrow in parallel
+  const [todaySnap, tomorrowSnap] = await Promise.all([
+    getDoc(doc(db, 'users', uid, 'horoscope', dateId)),
+    getDoc(doc(db, 'users', uid, 'horoscope', tomorrowId)),
+  ]);
+
+  const todayMissing    = !todaySnap.exists();
+  const tomorrowMissing = !tomorrowSnap.exists();
+
+  if (!todayMissing && !tomorrowMissing) return;
+
+  // Tarot draw is seeded by date — same cards every call for the same day
+  const tarotDraw = await getTarotCardDraw(uid, 3).catch(() => null);
+
+  // Generate today if missing — awaited so the user sees it immediately
+  if (todayMissing) {
+    try {
+      const t = await calculateTransits(new Date());
+      const retrogrades = t.planets.filter(p => p.isRetrograde).map(p => p.name);
+      await writeHoroscopeDoc(
+        uid, dateId, natalChart,
+        t.moon, retrogrades,
+        tarotDraw?.today.keywordString ?? '',
+      );
+    } catch (e) {
+      console.error('rolloverHoroscope: failed to generate today', e);
+    }
+  }
+
+  // Generate tomorrow if missing — fire and forget
+  if (tomorrowMissing) {
+    calculateTransits(dateIdToDate(tomorrowId))
+      .then(t => writeHoroscopeDoc(
+        uid, tomorrowId, natalChart,
+        t.moon,
+        t.planets.filter(p => p.isRetrograde).map(p => p.name),
+        tarotDraw?.tomorrow.keywordString ?? '',
+      ))
+      .catch(console.error);
+  }
 }
 
 /**
