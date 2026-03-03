@@ -171,7 +171,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
 
     setLoading(false);
 
-    const tier = userDoc?.isPayingMember ? 'premium' : 'free';
+    const tier = userDoc?.isPremiumMember ? 'premium' : 'free';
 
     // Kick off background prefetches — home screen doesn't need these
     if (chart) {
