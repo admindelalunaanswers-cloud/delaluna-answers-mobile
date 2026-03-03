@@ -57,9 +57,10 @@ export async function fetchBreakdown(uid: string): Promise<BreakdownFetchResult>
   const snap = await getDoc(doc(db, 'users', uid, 'natalChart', BREAKDOWN_DOC));
   if (!snap.exists()) return { result: null, pending: false };
   const data = snap.data();
-  if (data?.status?.state === 'complete') {
-    return { result: parseResult(data), pending: false };
-  }
+  // Try to parse the response regardless of status field
+  const result = parseResult(data);
+  if (result) return { result, pending: false };
+  // No result yet — pending if a prompt was already written
   if (!data?.prompt) return { result: null, pending: false };
   return { result: null, pending: true };
 }
@@ -78,7 +79,7 @@ export async function requestBreakdown(
 
   await setDoc(
     doc(db, 'users', uid, 'natalChart', BREAKDOWN_DOC),
-    { prompt, tier, natalChart, requestedAt: serverTimestamp() },
+    { prompt, tier, requestedAt: serverTimestamp() },
     { merge: true },
   );
 }
@@ -96,7 +97,6 @@ export function subscribeToBreakdown(
     (snap) => {
       if (!snap.exists()) return;
       const data = snap.data();
-      if (data?.status?.state !== 'complete') return;
       const result = parseResult(data);
       if (result) onResult(result);
     },

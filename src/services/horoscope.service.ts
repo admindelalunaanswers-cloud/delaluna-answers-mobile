@@ -100,7 +100,10 @@ function parseResult(data: Record<string, any>): HoroscopeResult | null {
   const raw = data?.response ?? data?.result ?? data?.output;
   if (!raw) return null;
   try {
-    return typeof raw === 'string' ? JSON.parse(raw) : (raw as HoroscopeResult);
+    const cleaned = typeof raw === 'string'
+      ? raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
+      : null;
+    return cleaned !== null ? JSON.parse(cleaned) : (raw as HoroscopeResult);
   } catch {
     return null;
   }
@@ -126,9 +129,10 @@ export async function fetchHoroscope(
   if (!snap.exists()) return { result: null, pending: false };
 
   const data = snap.data();
-  if (data?.status?.state === 'complete') {
-    return { result: parseResult(data), pending: false };
-  }
+  const result = parseResult(data);
+  if (result) return { result, pending: false };
+  // No result yet — pending if a prompt was already written
+  if (!data?.prompt) return { result: null, pending: false };
   return { result: null, pending: true };
 }
 
@@ -294,9 +298,7 @@ export function subscribeToHoroscope(
     doc(db, 'users', uid, 'horoscope', dateId),
     (snap) => {
       if (!snap.exists()) return;
-      const data = snap.data();
-      if (data?.status?.state !== 'complete') return;
-      const result = parseResult(data);
+      const result = parseResult(snap.data());
       if (result) onResult(result);
     },
   );

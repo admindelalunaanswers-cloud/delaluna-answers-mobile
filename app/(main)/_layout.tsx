@@ -48,13 +48,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol name={require('@/src/assets/tabs/chat.png')} size={28} color={color} />,
         }}
       />
-      <Tabs.Screen
-        name="test-screen"
-        options={{
-          title: 'Test',
-          tabBarIcon: ({ color }) => <IconSymbol name={"binoculars"} size={28} color={color} />,
-        }}
-      />
+     
     </Tabs>
     </UserProvider>
   );

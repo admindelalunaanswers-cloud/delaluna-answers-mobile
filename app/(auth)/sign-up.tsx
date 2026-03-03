@@ -20,6 +20,7 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 import { ThemeContext } from '@/src/context/theme-context';
 import { useUser } from '@/src/context/user-context';
+import { useHoroscope } from '@/src/context/horoscope-context';
 import { signUp, createUserDoc } from '@/src/services/user.service';
 import { FinalSignupPayload } from '@/src/types/signup.types';
 import { calculateNatalChart, calculateTransits, BirthData } from '@/src/services/astroEngine';
@@ -96,6 +97,7 @@ export default function SignUpChatScreen() {
   const router = useRouter();
   const { theme } = useContext(ThemeContext);
   const { authUser, loading: userLoading } = useUser();
+  const { horoscope } = useHoroscope();
 
   const [step, setStep] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -108,9 +110,9 @@ export default function SignUpChatScreen() {
   const { width } = useWindowDimensions();
   const modalCardWidth = width > 640 ? '55%' : width > 480 ? '70%' : '86%';
 
-  // Navigate once auth state is ready after signup
+  // Navigate once auth is ready AND the first horoscope has come back from the extension
   useEffect(() => {
-    if (isSigningUp && !userLoading && authUser) {
+    if (isSigningUp && !userLoading && authUser && horoscope) {
       setLoadingMessage('Welcome to your cosmic journey!');
       setTimeout(() => {
         setIsSigningUp(false);
@@ -118,7 +120,7 @@ export default function SignUpChatScreen() {
         router.replace('/(main)');
       }, 500);
     }
-  }, [isSigningUp, userLoading, authUser]);
+  }, [isSigningUp, userLoading, authUser, horoscope]);
 
   // Timeout safety net
   useEffect(() => {
@@ -218,6 +220,7 @@ export default function SignUpChatScreen() {
         moon: natalChart.moon,
         ascendant: natalChart.ascendant,
         midheaven: natalChart.midheaven,
+        tier: 'free', // ensures {{tier}} is always present if Extension fires on this write
       };
 
       await setDoc(doc(db, 'users', userCred.user.uid, 'natalChart', 'details'), chartPayload);
@@ -246,8 +249,8 @@ export default function SignUpChatScreen() {
         .catch(() => requestHoroscope(uid, dateId, chartDetailsDoc, natalChart.moon))
         .catch(console.error);
 
-      setLoadingMessage('Welcome to your cosmic journey!');
-      // Navigation handled by the useEffect watching authUser
+      setLoadingMessage('Reading the stars for you...');
+      // Navigation handled by the useEffect watching authUser + horoscope
 
     } catch (err: any) {
       Alert.alert('Sign Up Error', parseAuthError(err));
