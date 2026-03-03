@@ -15,6 +15,7 @@ module.exports = {
       newArchEnabled: true,
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
+        UIBackgroundModes: ["remote-notification"],
       },
     },
     android: {
@@ -24,6 +25,14 @@ module.exports = {
     },
     plugins: [
       "expo-router",
+      [
+        "expo-notifications",
+        {
+          icon: "./src/assets/dlla-branded/delaluna_app_icon.png",
+          color: "#0d0628",
+          sounds: [],
+        },
+      ],
       [
         "expo-splash-screen",
         {
