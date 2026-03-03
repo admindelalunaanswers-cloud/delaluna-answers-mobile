@@ -60,6 +60,7 @@ export async function fetchBreakdown(uid: string): Promise<BreakdownFetchResult>
   if (data?.status?.state === 'complete') {
     return { result: parseResult(data), pending: false };
   }
+  if (!data?.prompt) return { result: null, pending: false };
   return { result: null, pending: true };
 }
 
