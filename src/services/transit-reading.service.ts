@@ -4,6 +4,7 @@ import { db } from '@/firebaseConfig';
 import type { TransitReadingResult } from '@/src/types/transit-reading.types';
 import type { NatalChartDetailsDoc } from '@/src/types/user.type';
 import type { TransitData } from '@/src/services/astroEngine';
+import { TRANSITS_PROMPT_TEMPLATE } from '@/src/prompts/transits-prompt';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -57,8 +58,21 @@ function buildTransitsSummary(transits: TransitData): string {
   });
 }
 
+function renderPrompt(vars: {
+  tier: string;
+  natalChart: string;
+  currentTransits: string;
+  date: string;
+}): string {
+  return TRANSITS_PROMPT_TEMPLATE
+    .replace('{{tier}}', vars.tier)
+    .replace('{{natalChart}}', vars.natalChart)
+    .replace('{{currentTransits}}', vars.currentTransits)
+    .replace('{{date}}', vars.date);
+}
+
 function parseResult(data: Record<string, any>): TransitReadingResult | null {
-  const raw = data?.result ?? data?.output;
+  const raw = data?.response ?? data?.result ?? data?.output;
   if (!raw) return null;
   try {
     return typeof raw === 'string' ? JSON.parse(raw) : (raw as TransitReadingResult);
@@ -100,10 +114,17 @@ export async function requestTransitReading(
   transits: TransitData,
   tier: 'free' | 'premium',
 ): Promise<void> {
+  const natalChart = buildNatalChartSummary(chart);
+  const currentTransits = buildTransitsSummary(transits);
+  const date = formatDateLabel(dateId);
+
+  const prompt = renderPrompt({ tier, natalChart, currentTransits, date });
+
   await setDoc(doc(db, 'users', uid, 'transits', dateId), {
-    natalChart: buildNatalChartSummary(chart),
-    currentTransits: buildTransitsSummary(transits),
-    date: formatDateLabel(dateId),
+    prompt,
+    natalChart,
+    currentTransits,
+    date,
     tier,
     requestedAt: serverTimestamp(),
   });
