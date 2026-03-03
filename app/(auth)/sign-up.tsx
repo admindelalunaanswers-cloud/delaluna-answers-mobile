@@ -126,7 +126,7 @@ export default function SignUpChatScreen() {
     const timeout = setTimeout(() => {
       Alert.alert(
         'Loading Issue',
-        'Your account was created but some data is taking longer than expected. You can continue and remaining data will load in the background.',
+        'Your account was created but some data is taking longer than expected. You can continue and verify your email.',
         [{
           text: 'Continue',
           onPress: () => {

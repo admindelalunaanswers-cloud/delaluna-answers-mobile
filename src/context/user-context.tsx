@@ -21,16 +21,19 @@ interface UserContextValue {
   loading:   boolean;
   /** Re-fetch after profile or purchase update */
   refresh:   () => Promise<void>;
+  /** Reload Firebase Auth user (e.g. after emailVerified changes) */
+  reloadAuthUser: () => Promise<void>;
 }
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
 const UserContext = createContext<UserContextValue>({
-  authUser:  undefined,
-  userDoc:   undefined,
-  purchases: [],
-  loading:   true,
-  refresh:   async () => {},
+  authUser:       undefined,
+  userDoc:        undefined,
+  purchases:      [],
+  loading:        true,
+  refresh:        async () => {},
+  reloadAuthUser: async () => {},
 });
 
 // ─── Fetch helpers ────────────────────────────────────────────────────────────
@@ -71,6 +74,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
     if (authUser?.uid) await loadAll(authUser.uid);
   };
 
+  const reloadAuthUser = async () => {
+    if (auth.currentUser) {
+      await auth.currentUser.reload();
+      setAuthUser({ ...auth.currentUser });
+    }
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setAuthUser(user);
@@ -86,7 +96,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <UserContext.Provider value={{ authUser, userDoc, purchases, loading, refresh }}>
+    <UserContext.Provider value={{ authUser, userDoc, purchases, loading, refresh, reloadAuthUser }}>
       {children}
     </UserContext.Provider>
   );

@@ -23,8 +23,9 @@ export interface UserDoc {
   timezone:       number;          // UTC offset e.g. -5, +5.5
   birthTime:      string;          // "HH:MM" local time
 
-  isPayingMember: boolean;
-  createdAt:      Timestamp;
+  isPremiumMember: boolean;
+  createdAt:       Timestamp;
+  expoPushToken?:  string;
 }
 
 // ─── Subcollections ───────────────────────────────────────────────────────────
