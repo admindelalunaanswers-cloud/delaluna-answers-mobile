@@ -1,10 +1,26 @@
-import React, { useContext } from 'react';
-import { View, ImageBackground, StyleSheet, StatusBar } from 'react-native';
+import React, { useContext, useEffect, useRef, useState } from 'react';
+import { Animated, ImageBackground, StatusBar, StyleSheet, View } from 'react-native';
 import LottieView from 'lottie-react-native';
 
 import { ThemeContext } from '@/src/context/theme-context';
 import { ThemedText } from '@/src/components/themed-text';
 import { moderateScale, verticalScale } from '@/src/utils/responsive';
+
+const CYCLING_MESSAGES = [
+  'Reading the stars for you...',
+  'Consulting planetary alignments...',
+  'Mapping your celestial blueprint...',
+  'Decoding cosmic patterns...',
+  'Aligning houses and aspects...',
+  'Channeling the cosmos...',
+  'Calculating your natal placements...',
+  'The universe has a message for you...',
+  'Tracing the path of the planets...',
+  'Interpreting celestial wisdom...',
+];
+
+const MESSAGE_INTERVAL_MS = 3000;
+const FADE_DURATION_MS = 400;
 
 type LoadingScreenProps = {
   progress?: number; // 0 to 1
@@ -13,18 +29,45 @@ type LoadingScreenProps = {
 
 const LoadingScreen: React.FC<LoadingScreenProps> = ({ progress, message }) => {
   const { theme } = useContext(ThemeContext);
+  const [msgIndex, setMsgIndex] = useState(0);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (message) return; // static message — no cycling needed
+
+    const interval = setInterval(() => {
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: FADE_DURATION_MS,
+        useNativeDriver: true,
+      }).start(() => {
+        setMsgIndex(i => (i + 1) % CYCLING_MESSAGES.length);
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: FADE_DURATION_MS,
+          useNativeDriver: true,
+        }).start();
+      });
+    }, MESSAGE_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, [message, fadeAnim]);
+
+  const displayMessage = message ?? CYCLING_MESSAGES[msgIndex];
 
   return (
     <ImageBackground source={theme.backgroundImage} style={styles.background}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <View style={styles.centerContent}>
         <LottieView
-          source={require('@/src/assets/animations/galaxy.json')}
+          source={require('@/src/assets/animations/splash-animation.json')}
           autoPlay
           loop
           style={styles.animation}
         />
-        <ThemedText style={styles.message}>{message ?? 'Loading...'}</ThemedText>
+        <Animated.View style={{ opacity: message ? 1 : fadeAnim }}>
+          <ThemedText style={styles.message}>{displayMessage}</ThemedText>
+        </Animated.View>
         {progress !== undefined && (
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: `${Math.min(progress, 1) * 100}%` }]} />
@@ -47,8 +90,8 @@ const styles = StyleSheet.create({
     gap: verticalScale(12),
   },
   animation: {
-    width: moderateScale(160),
-    height: moderateScale(160),
+    width: moderateScale(220),
+    height: moderateScale(220),
   },
   message: {
     color: '#ffffff',
