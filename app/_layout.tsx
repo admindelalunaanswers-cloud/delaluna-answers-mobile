@@ -13,45 +13,56 @@ import { HoroscopeProvider, useHoroscope } from '@/src/context/horoscope-context
 import { UserProvider, useUser } from '@/src/context/user-context';
 import { useColorScheme } from '@/src/hooks/use-color-scheme';
 import { useTheme } from '@/src/hooks/use-theme';
-import { registerForPushNotifications, setupNotificationHandlers } from '@/src/services/notifications.service';
 import LoadingScreen from './(util)/loading-screen';
 
 function AuthGate({ children }: { children: ReactNode }) {
   const { authUser, loading: userLoading } = useUser();
-  const { loading: dataLoading } = useHoroscope();
+  const { loading: dataLoading, horoscope, horoscopeGenerating } = useHoroscope();
   const router = useRouter();
   const segments = useSegments();
+
+  const inAuth    = segments[0] === '(auth)';
+  const inStartup = segments[0] === '(startup)';
+
+  // Don't redirect from auth/startup → main until horoscope is available.
+  // This prevents the home screen rendering empty while the Extension generates.
+  const horoscopeReady = !!horoscope || (!dataLoading && !horoscopeGenerating);
 
   // Register push token once the user is signed in
   useEffect(() => {
     if (!authUser) return;
-    registerForPushNotifications(authUser.uid).catch(console.error);
+    import('@/src/services/notifications.service')
+      .then(({ registerForPushNotifications }) => registerForPushNotifications(authUser.uid))
+      .catch(console.error);
   }, [authUser?.uid]);
 
   useEffect(() => {
     if (userLoading) return;
-    const inAuth = segments[0] === '(auth)';
-    const inStartup = segments[0] === '(startup)';
 
     if (!authUser && !inAuth && !inStartup) {
       router.replace('/(startup)/welcome');
-    } else if (authUser && (inAuth || inStartup)) {
+    } else if (authUser && (inAuth || inStartup) && horoscopeReady) {
       router.replace('/(main)');
     }
-  }, [authUser, userLoading, segments]);
-
-  const inAuth = segments[0] === '(auth)';
-  const inStartup = segments[0] === '(startup)';
+  }, [authUser, userLoading, inAuth, inStartup, horoscopeReady]);
 
   const isRedirecting =
     !userLoading &&
     (
       (!authUser && !inAuth && !inStartup) ||
-      (!!authUser && (inAuth || inStartup))
+      (!!authUser && (inAuth || inStartup) && horoscopeReady)
     );
 
-  // Wait for auth + data (when signed in) before showing any screen
-  const showLoading = userLoading || (!!authUser && dataLoading) || isRedirecting;
+  // Show a global loading screen while:
+  // - auth state is resolving
+  // - initial data is loading for a non-auth screen (login → main)
+  // - a redirect is in-flight
+  // Do NOT hide auth screens while horoscope is generating — sign-up manages
+  // its own loading UI and 30-second safety-net timeout while on that screen.
+  const showLoading =
+    userLoading ||
+    (!!authUser && dataLoading && !inAuth && !inStartup) ||
+    (isRedirecting && !inAuth && !inStartup);
 
   if (showLoading) {
     return <LoadingScreen message="Loading..." />;
@@ -80,8 +91,11 @@ function ThemedRoot({ children }: { children: ReactNode }) {
 
 export default function RootLayout() {
   useEffect(() => {
-    const cleanup = setupNotificationHandlers();
-    return cleanup;
+    let cleanup = () => {};
+    import('@/src/services/notifications.service')
+      .then(({ setupNotificationHandlers }) => { cleanup = setupNotificationHandlers(); })
+      .catch(console.error);
+    return () => cleanup();
   }, []);
 
   return (
