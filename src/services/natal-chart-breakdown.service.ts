@@ -3,10 +3,11 @@ import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/fires
 import { db } from '@/firebaseConfig';
 import type { NatalChartBreakdownResult } from '@/src/types/natal-chart-breakdown.types';
 import type { NatalChartDetailsDoc } from '@/src/types/user.type';
-import { NATAL_CHART_PROMPT_TEMPLATE } from '@/src/prompts/natal-chart-prompt';
+import { buildFreeNatalChartPrompt, buildPremiumNatalChartPrompt } from '@/src/prompts/natal-chart-prompt';
 
-// The extension watches users/{uid}/natalChart/details
-const BREAKDOWN_DOC = 'details';
+// The extension watches documents in users/{uid}/natalChart/*
+const FREE_DOC    = 'details';
+const PREMIUM_DOC = 'premium';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -28,77 +29,104 @@ function buildNatalChartSummary(chart: NatalChartDetailsDoc): string {
   });
 }
 
-function renderPrompt(vars: { tier: string; natalChart: string }): string {
-  return NATAL_CHART_PROMPT_TEMPLATE
-    .replace('{{tier}}', vars.tier)
-    .replace('{{natalChart}}', vars.natalChart);
-}
-
 function parseResult(data: Record<string, any>): NatalChartBreakdownResult | null {
   const raw = data?.response ?? data?.result ?? data?.output;
   if (!raw) return null;
   try {
-    return typeof raw === 'string' ? JSON.parse(raw) : (raw as NatalChartBreakdownResult);
+    const cleaned = typeof raw === 'string'
+      ? raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
+      : raw;
+    return typeof cleaned === 'string'
+      ? JSON.parse(cleaned)
+      : (cleaned as NatalChartBreakdownResult);
   } catch {
     return null;
   }
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
+// ─── Public types ─────────────────────────────────────────────────────────────
 
 export interface BreakdownFetchResult {
   result: NatalChartBreakdownResult | null;
-  /** true when the document exists but generation hasn't completed yet */
+  premiumResult: NatalChartBreakdownResult | null;
   pending: boolean;
+  premiumPending: boolean;
 }
 
-/** One-time read of the breakdown document. */
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+/** One-time read of both breakdown documents. */
 export async function fetchBreakdown(uid: string): Promise<BreakdownFetchResult> {
-  const snap = await getDoc(doc(db, 'users', uid, 'natalChart', BREAKDOWN_DOC));
-  if (!snap.exists()) return { result: null, pending: false };
-  const data = snap.data();
-  // Try to parse the response regardless of status field
-  const result = parseResult(data);
-  if (result) return { result, pending: false };
-  // No result yet — pending if a prompt was already written
-  if (!data?.prompt) return { result: null, pending: false };
-  return { result: null, pending: true };
+  const [freeSnap, premiumSnap] = await Promise.all([
+    getDoc(doc(db, 'users', uid, 'natalChart', FREE_DOC)),
+    getDoc(doc(db, 'users', uid, 'natalChart', PREMIUM_DOC)),
+  ]);
+
+  const result        = freeSnap.exists()    ? parseResult(freeSnap.data())    : null;
+  const premiumResult = premiumSnap.exists() ? parseResult(premiumSnap.data()) : null;
+
+  const pending        = !result        && !!freeSnap.data()?.prompt;
+  const premiumPending = !premiumResult && !!premiumSnap.data()?.prompt;
+
+  return { result, premiumResult, pending, premiumPending };
 }
 
 /**
- * Merges prompt + tier into users/{uid}/natalChart/details.
- * Uses merge so the raw chart fields written during sign-up are preserved.
+ * Writes both free and premium prompts to Firestore so the extension
+ * generates both breakdowns simultaneously.
  */
 export async function requestBreakdown(
   uid: string,
   chart: NatalChartDetailsDoc,
-  tier: 'free' | 'premium',
 ): Promise<void> {
-  const natalChart = buildNatalChartSummary(chart);
-  const prompt = renderPrompt({ tier, natalChart });
+  const natalChart     = buildNatalChartSummary(chart);
+  const freePrompt     = buildFreeNatalChartPrompt(natalChart);
+  const premiumPrompt  = buildPremiumNatalChartPrompt(natalChart);
+  const requestedAt    = serverTimestamp();
 
-  await setDoc(
-    doc(db, 'users', uid, 'natalChart', BREAKDOWN_DOC),
-    { prompt, tier, requestedAt: serverTimestamp() },
-    { merge: true },
-  );
+  await Promise.all([
+    setDoc(
+      doc(db, 'users', uid, 'natalChart', FREE_DOC),
+      { prompt: freePrompt, requestedAt },
+      { merge: true },
+    ),
+    setDoc(
+      doc(db, 'users', uid, 'natalChart', PREMIUM_DOC),
+      { prompt: premiumPrompt, requestedAt },
+      { merge: true },
+    ),
+  ]);
 }
 
 /**
- * Real-time listener that resolves once the extension marks the document
- * complete. Returns an unsubscribe function.
+ * Real-time listener for both free and premium breakdowns.
+ * Returns an unsubscribe function that clears both listeners.
  */
 export function subscribeToBreakdown(
   uid: string,
-  onResult: (result: NatalChartBreakdownResult) => void,
+  onFreeResult: (result: NatalChartBreakdownResult) => void,
+  onPremiumResult: (result: NatalChartBreakdownResult) => void,
 ): () => void {
-  return onSnapshot(
-    doc(db, 'users', uid, 'natalChart', BREAKDOWN_DOC),
+  const unsubFree = onSnapshot(
+    doc(db, 'users', uid, 'natalChart', FREE_DOC),
     (snap) => {
       if (!snap.exists()) return;
-      const data = snap.data();
-      const result = parseResult(data);
-      if (result) onResult(result);
+      const result = parseResult(snap.data());
+      if (result) onFreeResult(result);
     },
   );
+
+  const unsubPremium = onSnapshot(
+    doc(db, 'users', uid, 'natalChart', PREMIUM_DOC),
+    (snap) => {
+      if (!snap.exists()) return;
+      const result = parseResult(snap.data());
+      if (result) onPremiumResult(result);
+    },
+  );
+
+  return () => {
+    unsubFree();
+    unsubPremium();
+  };
 }
