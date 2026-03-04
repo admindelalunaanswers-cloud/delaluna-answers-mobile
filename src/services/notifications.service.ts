@@ -41,6 +41,25 @@ export async function registerForPushNotifications(uid: string): Promise<void> {
 }
 
 /**
+ * Fires an immediate local notification telling the user their birth chart
+ * breakdown is ready. Safe to call on any platform.
+ */
+export async function scheduleBreakdownReadyNotification(): Promise<void> {
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Your Birth Chart is Ready ✨',
+        body: 'Your natal chart breakdown has been read. Tap to explore your cosmic blueprint.',
+        data: { screen: '/(home)/birth-chart-view' },
+      },
+      trigger: null, // deliver immediately
+    });
+  } catch {
+    // Notifications not available (simulator, permission denied, etc.) — skip silently
+  }
+}
+
+/**
  * Configures how notifications appear when the app is in the foreground.
  * Call once at app startup. Returns a cleanup function.
  */
