@@ -59,13 +59,11 @@ function buildTransitsSummary(transits: TransitData): string {
 }
 
 function renderPrompt(vars: {
-  tier: string;
   natalChart: string;
   currentTransits: string;
   date: string;
 }): string {
   return TRANSITS_PROMPT_TEMPLATE
-    .replace('{{tier}}', vars.tier)
     .replace('{{natalChart}}', vars.natalChart)
     .replace('{{currentTransits}}', vars.currentTransits)
     .replace('{{date}}', vars.date);
@@ -97,7 +95,8 @@ export async function fetchTransitReading(
   const snap = await getDoc(doc(db, 'users', uid, 'transits', dateId));
   if (!snap.exists()) return { result: null, pending: false };
   const data = snap.data();
-  if (data?.status?.state === 'complete') {
+  const state: string = (data?.status?.state ?? '').toLowerCase();
+  if (state === 'complete' || state === 'completed') {
     return { result: parseResult(data), pending: false };
   }
   return { result: null, pending: true };
@@ -112,20 +111,18 @@ export async function requestTransitReading(
   dateId: string,
   chart: NatalChartDetailsDoc,
   transits: TransitData,
-  tier: 'free' | 'premium',
 ): Promise<void> {
   const natalChart = buildNatalChartSummary(chart);
   const currentTransits = buildTransitsSummary(transits);
   const date = formatDateLabel(dateId);
 
-  const prompt = renderPrompt({ tier, natalChart, currentTransits, date });
+  const prompt = renderPrompt({ natalChart, currentTransits, date });
 
   await setDoc(doc(db, 'users', uid, 'transits', dateId), {
     prompt,
     natalChart,
     currentTransits,
     date,
-    tier,
     requestedAt: serverTimestamp(),
   });
 }
@@ -144,7 +141,8 @@ export function subscribeToTransitReading(
     (snap) => {
       if (!snap.exists()) return;
       const data = snap.data();
-      if (data?.status?.state !== 'complete') return;
+      const state: string = (data?.status?.state ?? '').toLowerCase();
+      if (state !== 'complete' && state !== 'completed') return;
       const result = parseResult(data);
       if (result) onResult(result);
     },

@@ -1,26 +1,23 @@
-export interface TransitPlanetReading {
-  planet: string;
+export interface TransitHouseTransit {
+  name: string;
   sign: string;
-  house?: string;
-  retrograde?: boolean;
-  interpretation: string;
+  degree: string;
 }
 
-/**
- * Unified result for both free and premium transit reading tiers.
- * Free:    quote, overview, themes, teaser, release
- * Premium: adds planets, advice, warning, affirmation, loveTransits, careerTransits
- */
+export interface TransitHouseReading {
+  house: string;
+  interpretation: string;
+  /** Computed client-side — not set by AI */
+  locked?: boolean;
+  natalDegree: string;
+  natalSign: string;
+  transits: TransitHouseTransit[];
+}
+
 export interface TransitReadingResult {
-  quote?: string;
   overview?: string;
-  themes?: string[];
-  planets?: TransitPlanetReading[];
-  advice?: string;
-  warning?: string;
-  affirmation?: string;
-  teaser?: string;
-  loveTransits?: string;
-  careerTransits?: string;
+  quote?: string;
   release?: string;
+  retrogradesActive?: string[];
+  houses?: TransitHouseReading[];
 }
