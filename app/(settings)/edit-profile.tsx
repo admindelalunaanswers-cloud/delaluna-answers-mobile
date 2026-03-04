@@ -403,6 +403,7 @@ export default function EditProfileScreen() {
           moon:      natalChart.moon,
           ascendant: natalChart.ascendant,
           midheaven: natalChart.midheaven,
+          tier: 'free', // ensures {{tier}} is present when the extension fires on this write
         };
 
         // Save to both locations — overwrite entirely (birth data changed)
@@ -426,7 +427,7 @@ export default function EditProfileScreen() {
         const birthdayChanged = originalValues !== null && originalValues.birthday !== birthday;
 
         // Breakdown always regenerates on any natal chart change
-        requestBreakdown(uid, chartDetailsDoc, 'free').catch(console.error);
+        requestBreakdown(uid, chartDetailsDoc).catch(console.error);
 
         calculateTransits(new Date(), bd.lat, bd.lon)
           .then(transits => {

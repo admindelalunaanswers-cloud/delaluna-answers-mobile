@@ -955,6 +955,9 @@ const styles = StyleSheet.create({
     color: '#6FFFE9',
     fontSize: moderateScale(20),
     fontWeight: '700',
+    lineHeight: moderateScale(15),
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   nextButton: {
     backgroundColor: 'rgba(111,255,233,0.12)',

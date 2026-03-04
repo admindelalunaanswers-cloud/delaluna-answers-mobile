@@ -24,18 +24,17 @@ import type { DailyCardPack } from '@/src/schemas/dailyCardPack.schema';
 import type { HoroscopeResult } from '@/src/types/horoscope.types';
 
 import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
-import LoadingScreen from '../(util)/loading-screen';
 import { router } from 'expo-router';
 
 const NAV_BAR_HEIGHT = 44;
 
 export default function HomeScreen() {
-  const { authUser, userDoc, loading: userLoading, refresh: refreshUser } = useUser();
+  const { authUser, userDoc, refresh: refreshUser } = useUser();
   const {
     chartDetails,
     horoscope,
     transitMoon,
-    loading: horoscopeLoading,
+    breakdown,
     refresh,
   } = useHoroscope();
 
@@ -127,8 +126,6 @@ export default function HomeScreen() {
 
   // ─── Derived values ─────────────────────────────────────────────────────────
 
-  const loading = userLoading || horoscopeLoading;
-
   const sunSign    = chartDetails?.planets.find(p => p.name === 'Sun')?.sign  ?? '—';
   const moonSign   = chartDetails?.planets.find(p => p.name === 'Moon')?.sign ?? '—';
   const risingSign = chartDetails?.ascendant.sign ?? '—';
@@ -156,98 +153,96 @@ export default function HomeScreen() {
         onRightPress={() => router.push('/profile')}
       />
 
-      {loading ? <LoadingScreen /> : (
-        <View style={[styles.content, { paddingTop: headerHeight }]}>
-          <HomeSignsDisplay
-            sun={sunSign}
-            moon={moonSign}
-            rising={risingSign}
-            showViewChart={true}
-            birthChartReady={!!chartDetails}
+      <View style={[styles.content, { paddingTop: headerHeight }]}>
+        <HomeSignsDisplay
+          sun={sunSign}
+          moon={moonSign}
+          rising={risingSign}
+          showViewChart={true}
+          birthChartReady={!!chartDetails && !!breakdown}
+        />
+        <DateSwitcher
+          value={selectedDate}
+          dates={dateSwitcherDates.length > 0 ? dateSwitcherDates : [todayDateId]}
+          onChange={setSelectedDate}
+        />
+
+        <PaygateOverlay
+          locked={isPaygated}
+          style={{ flex: 1 }}
+          unlockTitle="Unlock Past & Future Readings"
+          unlockMessage="Upgrade to Premium to view yesterday's and tomorrow's horoscope."
+          onUnlock={handleUnlock}
+        >
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + scale(20) }]}
+          refreshControl={refreshControl}
+          showsVerticalScrollIndicator={false}
+        >
+          <SectionTitle sectionName="quote" title="Quote" />
+          <HomeTextBox sectionName="quote" content={activeHoroscope?.quote} />
+
+          <SectionTitle sectionName="advice" title="Advice" />
+          <HomeTextBox sectionName="advice" content={activeHoroscope?.advice} />
+
+          <SectionTitle sectionName="dos" title="Do's" />
+          <HomeTextBox sectionName="dos" content={activeHoroscope?.do ?? []} />
+
+          <SectionTitle sectionName="donts" title="Don'ts" />
+          <HomeTextBox sectionName="donts" content={activeHoroscope?.dont ?? []} />
+
+          <SectionTitle sectionName="affirmation" title="Affirmation" />
+          <HomeTextBox sectionName="affirmation" content={activeHoroscope?.affirmation} />
+
+          <SectionTitle sectionName="tarot" title="Today's Cards" />
+          <HomeTextBox
+            sectionName="tarot"
+            content={activeHoroscope?.tarot}
+            cards={activeCards?.cards}
+            firstView={activeCards?.firstView}
+            onReveal={handleCardReveal}
           />
-          <DateSwitcher
-            value={selectedDate}
-            dates={dateSwitcherDates.length > 0 ? dateSwitcherDates : [todayDateId]}
-            onChange={setSelectedDate}
+
+          <SectionTitle sectionName="message" title="Message in a Bottle" />
+          <HomeTextBox sectionName="message" />
+
+          <SectionTitle sectionName="moon" title="Moon Phase" />
+          <HomeTextBox
+            sectionName="moon"
+            content={activeHoroscope?.moonPhaseDetails}
+            contentTwo={activeHoroscope?.moon}
+            moonData={activeMoonData}
           />
 
-          <PaygateOverlay
-            locked={isPaygated}
-            style={{ flex: 1 }}
-            unlockTitle="Unlock Past & Future Readings"
-            unlockMessage="Upgrade to Premium to view yesterday's and tomorrow's horoscope."
-            onUnlock={handleUnlock}
-          >
-          <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + scale(20) }]}
-            refreshControl={refreshControl}
-            showsVerticalScrollIndicator={false}
-          >
-            <SectionTitle sectionName="quote" title="Quote" />
-            <HomeTextBox sectionName="quote" content={activeHoroscope?.quote} />
+          <SectionTitle sectionName="retrograde" title="Planets in Retrograde" />
+          <HomeTextBox sectionName="retrograde" content={retrogrades} />
 
-            <SectionTitle sectionName="advice" title="Advice" />
-            <HomeTextBox sectionName="advice" content={activeHoroscope?.advice} />
+          <SectionTitle sectionName="newLove" title="New Love" />
+          <Text style={styles.sectionDefinition}>{HOME_STRINGS.newLove.definition}</Text>
+          <HomeTextBox sectionName="newLove" content={activeHoroscope?.newLove ?? []} />
+          <TouchableOpacity style={styles.questionButton} onPress={() => router.push('/(main)/chat')} activeOpacity={0.7}>
+            <Text style={styles.questionButtonText}>{HOME_STRINGS.newLove.questionFunnel}</Text>
+          </TouchableOpacity>
 
-            <SectionTitle sectionName="dos" title="Do's" />
-            <HomeTextBox sectionName="dos" content={activeHoroscope?.do ?? []} />
+          <SectionTitle sectionName="returns" title="Returns" />
+          <Text style={styles.sectionDefinition}>{HOME_STRINGS.returns.definition}</Text>
+          <HomeTextBox sectionName="returns" content={activeHoroscope?.returns ?? []} />
+          <TouchableOpacity style={styles.questionButton} onPress={() => router.push('/(main)/chat')} activeOpacity={0.7}>
+            <Text style={styles.questionButtonText}>{HOME_STRINGS.returns.questionFunnel1}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.questionButton, { marginTop: 8 }]} onPress={() => router.push('/(main)/chat')} activeOpacity={0.7}>
+            <Text style={styles.questionButtonText}>{HOME_STRINGS.returns.questionFunnel2}</Text>
+          </TouchableOpacity>
 
-            <SectionTitle sectionName="donts" title="Don'ts" />
-            <HomeTextBox sectionName="donts" content={activeHoroscope?.dont ?? []} />
+          <SectionTitle sectionName="luckyNumbers" title="Lucky Numbers" />
+          <HomeTextBox sectionName="luckyNumbers" content={activeHoroscope?.luckyNumbers ?? []} />
 
-            <SectionTitle sectionName="affirmation" title="Affirmation" />
-            <HomeTextBox sectionName="affirmation" content={activeHoroscope?.affirmation} />
-
-            <SectionTitle sectionName="tarot" title="Today's Cards" />
-            <HomeTextBox
-              sectionName="tarot"
-              content={activeHoroscope?.tarot}
-              cards={activeCards?.cards}
-              firstView={activeCards?.firstView}
-              onReveal={handleCardReveal}
-            />
-
-            <SectionTitle sectionName="message" title="Message in a Bottle" />
-            <HomeTextBox sectionName="message" />
-
-            <SectionTitle sectionName="moon" title="Moon Phase" />
-            <HomeTextBox
-              sectionName="moon"
-              content={activeHoroscope?.moonPhaseDetails}
-              contentTwo={activeHoroscope?.moon}
-              moonData={activeMoonData}
-            />
-
-            <SectionTitle sectionName="retrograde" title="Planets in Retrograde" />
-            <HomeTextBox sectionName="retrograde" content={retrogrades} />
-
-            <SectionTitle sectionName="newLove" title="New Love" />
-            <Text style={styles.sectionDefinition}>{HOME_STRINGS.newLove.definition}</Text>
-            <HomeTextBox sectionName="newLove" content={activeHoroscope?.newLove ?? []} />
-            <TouchableOpacity style={styles.questionButton} onPress={() => router.push('/(main)/chat')} activeOpacity={0.7}>
-              <Text style={styles.questionButtonText}>{HOME_STRINGS.newLove.questionFunnel}</Text>
-            </TouchableOpacity>
-
-            <SectionTitle sectionName="returns" title="Returns" />
-            <Text style={styles.sectionDefinition}>{HOME_STRINGS.returns.definition}</Text>
-            <HomeTextBox sectionName="returns" content={activeHoroscope?.returns ?? []} />
-            <TouchableOpacity style={styles.questionButton} onPress={() => router.push('/(main)/chat')} activeOpacity={0.7}>
-              <Text style={styles.questionButtonText}>{HOME_STRINGS.returns.questionFunnel1}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.questionButton, { marginTop: 8 }]} onPress={() => router.push('/(main)/chat')} activeOpacity={0.7}>
-              <Text style={styles.questionButtonText}>{HOME_STRINGS.returns.questionFunnel2}</Text>
-            </TouchableOpacity>
-
-            <SectionTitle sectionName="luckyNumbers" title="Lucky Numbers" />
-            <HomeTextBox sectionName="luckyNumbers" content={activeHoroscope?.luckyNumbers ?? []} />
-
-            <SectionTitle sectionName="warning" title="Warning" />
-            <HomeTextBox sectionName="warning" content={activeHoroscope?.warning} />
-          </ScrollView>
-          </PaygateOverlay>
-        </View>
-      )}
+          <SectionTitle sectionName="warning" title="Warning" />
+          <HomeTextBox sectionName="warning" content={activeHoroscope?.warning} />
+        </ScrollView>
+        </PaygateOverlay>
+      </View>
     </ThemedView>
   );
 }
