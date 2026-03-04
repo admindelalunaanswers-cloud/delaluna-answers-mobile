@@ -12,18 +12,19 @@ import NatalWheelTab from '@/src/components/natalChart/natal-chart-wheel';
 import NatalTable from '@/src/components/natalChart/natal-chart-table';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useUser } from '@/src/context/user-context';
+import { usePullToRefresh } from '@/src/hooks/use-pull-to-refresh';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
 import { db } from '@/firebaseConfig';
 import type { NatalChart } from '@/src/services/astroEngine';
 import type { NatalChartBreakdownResult } from '@/src/types/natal-chart-breakdown.types';
 
-import LoadingScreen from '../(util)/loading-screen';
 
 const NAV_BAR_HEIGHT = 44;
 
 export default function BirthChartScreen() {
-  const { chartDetails, loading } = useHoroscope();
-  const { authUser } = useUser();
+  const { chartDetails } = useHoroscope();
+  const { authUser, userDoc } = useUser();
+  const isPremium = (userDoc as any)?.isPremiumMember ?? false;
 
   const [breakdown, setBreakdown] = useState<NatalChartBreakdownResult | null>(null);
   const [breakdownLoading, setBreakdownLoading] = useState(true);
@@ -73,6 +74,10 @@ export default function BirthChartScreen() {
   }, [fetchBreakdown]);
 
   const [activeTab, setActiveTab] = useState<'Natal Wheel' | 'Natal Table'>('Natal Wheel');
+
+  const { refreshControl: breakdownRefreshControl } = usePullToRefresh(
+    async () => { if (!breakdown) await fetchBreakdown(); }
+  );
 
   const insets = useSafeAreaInsets();
   const headerHeight = insets.top + scale(NAV_BAR_HEIGHT);
@@ -161,7 +166,6 @@ export default function BirthChartScreen() {
       />
 
       <View style={[styles.content, { paddingTop: headerHeight }]}>
-        {loading ? <LoadingScreen /> : (
           <>
             {/* Top Half — Wheel / Table tabs */}
             <ThemedView style={styles.topSection}>
@@ -209,6 +213,7 @@ export default function BirthChartScreen() {
                 styles.breakdownContent,
                 { paddingBottom: insets.bottom + verticalScale(8) },
               ]}
+              refreshControl={breakdownRefreshControl}
               showsVerticalScrollIndicator={false}
             >
               <Text style={styles.breakdownTitle}>Breakdown</Text>
@@ -219,24 +224,27 @@ export default function BirthChartScreen() {
                 <Text style={styles.errorText}>{breakdownError}</Text>
               ) : breakdown ? (
                 <>
-                  {renderTextSection('Quote', breakdown.quote)}
                   {renderTextSection('Your Chart', breakdown.personalitySnapshot)}
                   {renderHouses(breakdown.houses)}
-                  {renderPlanets(breakdown.planets)}
-                  {renderAspects(breakdown.aspects)}
-                  {renderTextSection('Love', breakdown.loveRead)}
-                  {renderTextSection('Career', breakdown.careerRead)}
-                  {renderTextSection('Growth', breakdown.growthRead)}
-                  {renderTextSection('Advice', breakdown.advice)}
-                  {renderTextSection('Warning', breakdown.warning)}
-                  {renderTextSection('Affirmation', breakdown.affirmation)}
-                  {renderTextSection('Unlock More', breakdown.teaser)}
-                  {renderTextSection('Release', breakdown.release)}
+                  {isPremium ? (
+                    <>
+                      {renderPlanets(breakdown.planets)}
+                      {renderAspects(breakdown.aspects)}
+                      {renderTextSection('Love', breakdown.loveRead)}
+                      {renderTextSection('Career', breakdown.careerRead)}
+                      {renderTextSection('Growth', breakdown.growthRead)}
+                      {renderTextSection('Advice', breakdown.advice)}
+                      {renderTextSection('Warning', breakdown.warning)}
+                      {renderTextSection('Affirmation', breakdown.affirmation)}
+                      {renderTextSection('Release', breakdown.release)}
+                    </>
+                  ) : (
+                    renderTextSection('Unlock More', breakdown.teaser)
+                  )}
                 </>
               ) : null}
             </ScrollView>
           </>
-        )}
       </View>
     </ThemedView>
   );

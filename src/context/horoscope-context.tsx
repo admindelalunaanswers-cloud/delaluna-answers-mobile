@@ -23,6 +23,7 @@ import {
   requestBreakdown,
   subscribeToBreakdown,
 } from '@/src/services/natal-chart-breakdown.service';
+import { scheduleBreakdownReadyNotification } from '@/src/services/notifications.service';
 import {
   fetchTransitReading,
   requestTransitReading,
@@ -47,6 +48,8 @@ interface HoroscopeContextValue {
   transitReadingGenerating: boolean;
   breakdown: NatalChartBreakdownResult | null;
   breakdownGenerating: boolean;
+  premiumBreakdown: NatalChartBreakdownResult | null;
+  premiumBreakdownGenerating: boolean;
   /** true while the initial chart + horoscope fetch is in-flight */
   loading: boolean;
   refresh: () => Promise<void>;
@@ -64,6 +67,8 @@ const HoroscopeContext = createContext<HoroscopeContextValue>({
   transitReadingGenerating: false,
   breakdown: null,
   breakdownGenerating: false,
+  premiumBreakdown: null,
+  premiumBreakdownGenerating: false,
   loading: true,
   refresh: async () => {},
 });
@@ -82,6 +87,8 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
   const [transitReadingGenerating, setTransitReadingGenerating] = useState(false);
   const [breakdown, setBreakdown]                               = useState<NatalChartBreakdownResult | null>(null);
   const [breakdownGenerating, setBreakdownGenerating]           = useState(false);
+  const [premiumBreakdown, setPremiumBreakdown]                 = useState<NatalChartBreakdownResult | null>(null);
+  const [premiumBreakdownGenerating, setPremiumBreakdownGenerating] = useState(false);
   const [loading, setLoading]                                   = useState(true);
 
   const unsubHoroscopeRef = useRef<(() => void) | null>(null);
@@ -93,24 +100,39 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
   const loadBreakdown = (
     uid: string,
     chart: NatalChartDetailsDoc,
-    tier: 'free' | 'premium',
     signal: { cancelled: boolean },
   ) => {
     fetchBreakdown(uid)
-      .then(({ result, pending }) => {
-        if (result) { setBreakdown(result); return; }
+      .then(({ result, premiumResult, pending, premiumPending }) => {
+        if (result) setBreakdown(result);
+        if (premiumResult) setPremiumBreakdown(premiumResult);
 
-        setBreakdownGenerating(true);
-        const unsub = subscribeToBreakdown(uid, (r) => {
-          if (signal.cancelled) return;
-          setBreakdown(r);
-          setBreakdownGenerating(false);
-          unsubBreakdownRef.current?.();
-          unsubBreakdownRef.current = null;
-        });
-        unsubBreakdownRef.current = unsub;
+        const needsRequest = !result && !pending || !premiumResult && !premiumPending;
+        const needsFreeSubscribe    = !result;
+        const needsPremiumSubscribe = !premiumResult;
 
-        if (!pending) requestBreakdown(uid, chart, tier).catch(console.error);
+        if (needsFreeSubscribe || needsPremiumSubscribe) {
+          if (needsFreeSubscribe)    setBreakdownGenerating(true);
+          if (needsPremiumSubscribe) setPremiumBreakdownGenerating(true);
+
+          const unsub = subscribeToBreakdown(
+            uid,
+            (r) => {
+              if (signal.cancelled) return;
+              setBreakdown(r);
+              setBreakdownGenerating(false);
+              scheduleBreakdownReadyNotification().catch(console.error);
+            },
+            (r) => {
+              if (signal.cancelled) return;
+              setPremiumBreakdown(r);
+              setPremiumBreakdownGenerating(false);
+            },
+          );
+          unsubBreakdownRef.current = unsub;
+        }
+
+        if (needsRequest) requestBreakdown(uid, chart).catch(console.error);
       })
       .catch(console.error);
   };
@@ -120,7 +142,6 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     dateId: string,
     chart: NatalChartDetailsDoc,
     transits: TransitData,
-    tier: 'free' | 'premium',
     signal: { cancelled: boolean },
   ) => {
     fetchTransitReading(uid, dateId)
@@ -138,7 +159,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
         });
         unsubTransitRef.current = unsub;
 
-        if (!pending) requestTransitReading(uid, dateId, chart, transits, tier).catch(console.error);
+        if (!pending) requestTransitReading(uid, dateId, chart, transits).catch(console.error);
       })
       .catch(console.error);
   };
@@ -170,12 +191,10 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
 
     setLoading(false);
 
-    const tier = userDoc?.isPremiumMember ? 'premium' : 'free';
-
     // Kick off background prefetches — home screen doesn't need these
     if (chart) {
-      loadBreakdown(uid, chart, tier, signal);
-      if (transits) loadTransitReading(uid, dateId, chart, transits, tier, signal);
+      loadBreakdown(uid, chart, signal);
+      if (transits) loadTransitReading(uid, dateId, chart, transits, signal);
     }
 
     // Horoscope subscribe / request
@@ -212,7 +231,11 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
       setTransitReadingGenerating(false);
       setBreakdown(null);
       setBreakdownGenerating(false);
-      setLoading(false);
+      setPremiumBreakdown(null);
+      setPremiumBreakdownGenerating(false);
+      // Keep loading=true so AuthGate doesn't briefly clear between
+      // the null-auth reset and the next load() call (race condition).
+      setLoading(true);
       unsubHoroscopeRef.current?.(); unsubHoroscopeRef.current = null;
       unsubBreakdownRef.current?.(); unsubBreakdownRef.current = null;
       unsubTransitRef.current?.();   unsubTransitRef.current = null;
@@ -239,6 +262,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     unsubTransitRef.current?.();   unsubTransitRef.current = null;
     setHoroscope(null);
     setBreakdown(null);
+    setPremiumBreakdown(null);
     setTransitReading(null);
     const signal = { cancelled: false };
     await load(authUser.uid, signal);
@@ -255,6 +279,8 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
       transitReadingGenerating,
       breakdown,
       breakdownGenerating,
+      premiumBreakdown,
+      premiumBreakdownGenerating,
       loading,
       refresh,
     }}>
