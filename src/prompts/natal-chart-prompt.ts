@@ -32,13 +32,13 @@ OUTPUT RULES
 - Every field must be personalized to the user's natal chart.
 `;
 
-export function buildFreeNatalChartPrompt(natalChart: string): string {
+export function buildFreeNatalChartPrompt(): string {
   return `Generate a free-tier natal chart breakdown for the user.
 
 ====================================================
 NATAL CHART DATA
 ====================================================
-${natalChart}
+{{{natalChart}}}
 
 ====================================================
 INSTRUCTIONS
@@ -98,13 +98,13 @@ OUTPUT FORMAT
 `;
 }
 
-export function buildPremiumNatalChartPrompt(natalChart: string): string {
-  return `Generate a premium natal chart breakdown for the user.
+export function buildPremiumNatalChartPrompt(): string {
+  return `Generate a premium-tier natal chart breakdown for the user.
 
 ====================================================
 NATAL CHART DATA
 ====================================================
-${natalChart}
+{{{natalChart}}}
 
 ====================================================
 INSTRUCTIONS
@@ -194,5 +194,6 @@ OUTPUT FORMAT
   "affirmation": "",
   "release": ""
 }
+  
 `;
 }
