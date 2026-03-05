@@ -17,16 +17,18 @@ import LoadingScreen from './(util)/loading-screen';
 
 function AuthGate({ children }: { children: ReactNode }) {
   const { authUser, loading: userLoading } = useUser();
-  const { loading: dataLoading, horoscope, horoscopeGenerating } = useHoroscope();
+  const { loading: dataLoading, horoscope, horoscopeGenerating, transitReadingGenerating } = useHoroscope();
   const router = useRouter();
   const segments = useSegments();
 
   const inAuth    = segments[0] === '(auth)';
   const inStartup = segments[0] === '(startup)';
 
-  // Don't redirect from auth/startup → main until horoscope is available.
-  // This prevents the home screen rendering empty while the Extension generates.
-  const horoscopeReady = !!horoscope || (!dataLoading && !horoscopeGenerating);
+  // Don't redirect from auth/startup → main until horoscope and transit reading
+  // are available. This prevents screens rendering empty while extensions generate.
+  const horoscopeReady =
+    (!!horoscope || (!dataLoading && !horoscopeGenerating)) &&
+    !transitReadingGenerating;
 
   // Register push token once the user is signed in
   useEffect(() => {
