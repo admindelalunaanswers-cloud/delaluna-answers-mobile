@@ -14,6 +14,7 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import { router } from 'expo-router';
 import { calculateNatalChart, calculateSynastry, BirthData, Aspect, NatalChart } from '@/src/services/astroEngine';
 import { C, R, S } from '@/src/constants/theme';
+import { verticalScale } from '@/src/utils/responsive';
 import { TestingStore } from '@/src/stores/testing-store';
 
 type NominatimResult = {
@@ -615,7 +616,7 @@ const sc = StyleSheet.create({
   },
   locationInput: { flex: 1, marginBottom: 0 },
   locationDrop: {
-    maxHeight: 200, backgroundColor: C.deepSpace,
+    maxHeight: verticalScale(200), backgroundColor: C.deepSpace,
     borderRadius: R.md, borderWidth: 1, borderColor: C.starfield, marginBottom: S.sm,
   },
   locationRow: {

@@ -3,6 +3,8 @@ import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 
 import { BlurView } from 'expo-blur';
 
+import { scale } from '@/src/utils/responsive';
+
 import PremiumUnlock from './premium-unlock.component';
 
 interface PaygateOverlayProps {
@@ -64,6 +66,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: scale(24),
   },
 });

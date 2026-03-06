@@ -26,6 +26,8 @@ import type { HoroscopeResult } from '@/src/types/horoscope.types';
 import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
 import { router } from 'expo-router';
 
+import { ChatStore } from '@/src/stores/chat-store';
+
 const NAV_BAR_HEIGHT = 44;
 
 export default function HomeScreen() {
@@ -221,17 +223,29 @@ export default function HomeScreen() {
           <SectionTitle sectionName="newLove" title="New Love" />
           <Text style={styles.sectionDefinition}>{HOME_STRINGS.newLove.definition}</Text>
           <HomeTextBox sectionName="newLove" content={activeHoroscope?.newLove ?? []} />
-          <TouchableOpacity style={styles.questionButton} onPress={() => router.push('/(main)/chat')} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.questionButton}
+            onPress={() => { ChatStore.setInitialMessage(HOME_STRINGS.newLove.questionFunnel); router.push('/(main)/chat'); }}
+            activeOpacity={0.7}
+          >
             <Text style={styles.questionButtonText}>{HOME_STRINGS.newLove.questionFunnel}</Text>
           </TouchableOpacity>
 
           <SectionTitle sectionName="returns" title="Returns" />
           <Text style={styles.sectionDefinition}>{HOME_STRINGS.returns.definition}</Text>
           <HomeTextBox sectionName="returns" content={activeHoroscope?.returns ?? []} />
-          <TouchableOpacity style={styles.questionButton} onPress={() => router.push('/(main)/chat')} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.questionButton}
+            onPress={() => { ChatStore.setInitialMessage(HOME_STRINGS.returns.questionFunnel1); router.push('/(main)/chat'); }}
+            activeOpacity={0.7}
+          >
             <Text style={styles.questionButtonText}>{HOME_STRINGS.returns.questionFunnel1}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.questionButton, { marginTop: 8 }]} onPress={() => router.push('/(main)/chat')} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={[styles.questionButton, { marginTop: 8 }]}
+            onPress={() => { ChatStore.setInitialMessage(HOME_STRINGS.returns.questionFunnel2); router.push('/(main)/chat'); }}
+            activeOpacity={0.7}
+          >
             <Text style={styles.questionButtonText}>{HOME_STRINGS.returns.questionFunnel2}</Text>
           </TouchableOpacity>
 

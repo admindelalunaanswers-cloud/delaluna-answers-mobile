@@ -4,6 +4,7 @@ import React from "react";
 import { StyleSheet, View } from "react-native";
 
 import { getMoonPhaseImage } from "@/src/constants/moonPhaseImages";
+import { scale } from "@/src/utils/responsive";
 
 
 interface MoonPhaseProps {
@@ -18,7 +19,7 @@ export default function MoonPhaseImageFrame({
 
   return (
     <View style={styles.frame}>
-      <MoonSvg width={90} height={90} />
+      <MoonSvg width={scale(90)} height={scale(90)} />
     </View>
   );
 }
@@ -28,7 +29,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    gap: 12,
+    gap: scale(12),
     width: "100%",
   },
 });
