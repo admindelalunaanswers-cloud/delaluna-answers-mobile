@@ -86,6 +86,19 @@ function AuthGate({ children }: { children: ReactNode }) {
 function ThemedRoot({ children }: { children: ReactNode }) {
   const colorScheme = useColorScheme();
   const { theme } = useTheme();
+  const segments = useSegments();
+  const isStartup = segments[0] === '(startup)';
+
+  const inner = (
+    <NavThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      {children}
+      <StatusBar style="auto" />
+    </NavThemeProvider>
+  );
+
+  if (isStartup) {
+    return <>{inner}</>;
+  }
 
   return (
     <ImageBackground
@@ -93,10 +106,7 @@ function ThemedRoot({ children }: { children: ReactNode }) {
       style={{ flex: 1 }}
       resizeMode="cover"
     >
-      <NavThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        {children}
-        <StatusBar style="auto" />
-      </NavThemeProvider>
+      {inner}
     </ImageBackground>
   );
 }
