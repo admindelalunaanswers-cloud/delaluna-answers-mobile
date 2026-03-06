@@ -45,14 +45,16 @@
       "enabled": true,
       "host": "0.0.0.0"
     },
-    "singleProjectMode": true
+    "singleProjectMode": true,
+    "extensions": {}
   },
   "extensions": {
-    "firestore-genai-chatbot": "googlecloud/firestore-genai-chatbot@0.0.17",
-    "firestore-genai-chatbot-1rrn": "googlecloud/firestore-genai-chatbot@0.0.17",
-    "firestore-multimodal-genai": "googlecloud/firestore-multimodal-genai@1.0.3",
-    "firestore-transits-chatbot-cgl7": "googlecloud/firestore-genai-chatbot@0.0.17",
-    "horoscope-chatbot-b6wc": "googlecloud/firestore-genai-chatbot@0.0.17"
+    "firestore-genai-chatbot": "googlecloud/firestore-genai-chatbot@0.0.19",
+    "firestore-genai-chatbot-1rrn": "googlecloud/firestore-genai-chatbot@0.0.19",
+    "firestore-multimodal-genai": "googlecloud/firestore-multimodal-genai@1.0.5",
+    "firestore-transits-chatbot-cgl7": "googlecloud/firestore-genai-chatbot@0.0.19",
+    "horoscope-chatbot-b6wc": "googlecloud/firestore-genai-chatbot@0.0.19",
+    "firestore-natal-chart-chatbot-6ppy": "googlecloud/firestore-genai-chatbot@0.0.19"
   },
   "firestore": {
     "database": "(default)",
