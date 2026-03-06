@@ -32,7 +32,7 @@ export async function signUp(email: string, password: string) {
     return await createUserWithEmailAndPassword(auth, email, password);
   } catch (error: any) {
     console.error('❌ Error in signUp:', error);
-    throw new Error(error.message || 'Auth error');
+    throw error; // preserve original Firebase error so callers can read error.code
   }
 }
 
@@ -92,7 +92,6 @@ function sanitizeFirestoreData(obj: any, path: string = ''): any {
 export async function createNewUserDoc(userId: string): Promise<void> {
   try {
     const userDocRef = doc(db, 'users', userId);
-    console.log('Creating new user document for:', userId);
     const docSnap = await getDoc(userDocRef);
 
     if (!docSnap.exists()) {
@@ -100,7 +99,6 @@ export async function createNewUserDoc(userId: string): Promise<void> {
         createdAt: serverTimestamp(),
         lastUpdatedAt: serverTimestamp(),
       });
-      console.log('✅ New user document created successfully:', userId);
     }
   } catch (error) {
     console.error('❌ Error creating new user document:', error);
@@ -116,15 +114,14 @@ export async function createUserDoc(userId: string, userData: FinalSignupPayload
     const userDocRef = doc(db, 'users', userId);
     const sanitizedData = sanitizeFirestoreData({
       ...userData,
-      email: userData.email?.toLowerCase(),
+      ...(userData.email ? { email: userData.email.toLowerCase() } : {}),
       createdAt: serverTimestamp(),
       lastUpdatedAt: serverTimestamp(),
       isPremiumMember: false,
       isEmailVerified: false,
     });
 
-    await setDoc(userDocRef, sanitizedData);
-    console.log('✅ User document created successfully:', userId);
+    await setDoc(userDocRef, sanitizedData, { merge: true });
   } catch (error) {
     console.error('❌ Error creating user document:', error);
     throw new Error('Error creating user document');
@@ -195,12 +192,11 @@ export async function updateUserDoc(userId: string, userData: Partial<UserDoc>):
     const userDocRef = getUserDocRef(userId);
     const sanitizedData = sanitizeFirestoreData({
       ...userData,
-      email: userData.email ? userData.email.toLowerCase() : undefined,
+      ...(userData.email ? { email: userData.email.toLowerCase() } : {}),
       lastUpdatedAt: serverTimestamp(),
     });
 
     await setDoc(userDocRef, sanitizedData, { merge: true });
-    console.log('✅ User document updated successfully:', userId);
   } catch (error) {
     console.error('❌ Error updating user document:', error);
     throw new Error('Error updating user document');
@@ -241,7 +237,6 @@ export async function updateUserBirthData(
     });
 
     await setDoc(userDocRef, sanitizedData, { merge: true });
-    console.log('✅ User birth data updated successfully:', userId);
   } catch (error) {
     console.error('❌ Error updating user birth data:', error);
     throw new Error('Error updating user birth data');
