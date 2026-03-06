@@ -32,7 +32,6 @@ export async function clearTarotCache(userId: string) {
   try {
     const keys = [tarotDailyKey(userId), tarotHistoryKey(userId)];
     await AsyncStorage.multiRemove(keys);
-    console.log("⚠️ Cleared tarot cache for", userId);
   } catch (err) {
     console.warn("⚠️ Failed to clear tarot cache:", err);
   }
