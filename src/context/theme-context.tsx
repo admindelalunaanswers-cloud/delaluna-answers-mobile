@@ -9,13 +9,13 @@ try {
 }
 
 // ===== Images =====
-const defaultImg  = require('@/src/assets/themes-png/default-theme.png');
-const blueTheme   = require('@/src/assets/themes-png/blue-theme.png');
-const greenTheme  = require('@/src/assets/themes-png/green-theme.png');
-const orangeTheme = require('@/src/assets/themes-png/orange-theme.png');
-const redTheme    = require('@/src/assets/themes-png/red-theme.png');
-const yellowTheme = require('@/src/assets/themes-png/yellow-theme.png');
-const pinkTheme   = require('@/src/assets/themes-png/pink-theme.png');
+const defaultImg  = require('@/src/assets/themes-png/default-theme.jpg');
+const blueTheme   = require('@/src/assets/themes-png/blue-theme.jpg');
+const greenTheme  = require('@/src/assets/themes-png/green-theme.jpg');
+const orangeTheme = require('@/src/assets/themes-png/orange-theme.jpg');
+const redTheme    = require('@/src/assets/themes-png/red-theme.jpg');
+const yellowTheme = require('@/src/assets/themes-png/yellow-theme.jpg');
+const pinkTheme   = require('@/src/assets/themes-png/pink-theme.jpg');
 
 // ===== Types =====
 export interface ThemeColors {
