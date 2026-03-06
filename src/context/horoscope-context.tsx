@@ -16,18 +16,22 @@ import {
   fetchHoroscope,
   getTodayDateId,
   requestHoroscope,
+  rolloverHoroscope,
   subscribeToHoroscope,
 } from '@/src/services/horoscope.service';
 import {
   fetchBreakdown,
   requestBreakdown,
   subscribeToBreakdown,
+  type BreakdownFetchResult,
 } from '@/src/services/natal-chart-breakdown.service';
 import { scheduleBreakdownReadyNotification } from '@/src/services/notifications.service';
 import {
   fetchTransitReading,
+  getThisWeekDateId,
   requestTransitReading,
   subscribeToTransitReading,
+  type TransitFetchResult,
 } from '@/src/services/transit-reading.service';
 import type { HoroscopeResult } from '@/src/types/horoscope.types';
 import type { NatalChartBreakdownResult } from '@/src/types/natal-chart-breakdown.types';
@@ -35,6 +39,16 @@ import type { TransitReadingResult } from '@/src/types/transit-reading.types';
 import type { NatalChartDetailsDoc } from '@/src/types/user.type';
 
 import { useUser } from './user-context';
+
+// ─── Transit cache ────────────────────────────────────────────────────────────
+// Avoids re-running the native Swiss Ephemeris calculation across re-mounts
+// (e.g. sign-out → sign-in within the same session, or rapid re-renders).
+// Keyed by "YYYY-MM-DD:lat:lon" — invalidates automatically the next day.
+const _transitCache = new Map<string, TransitData>();
+
+function _transitKey(dateId: string, lat: number, lon: number) {
+  return `${dateId}:${lat.toFixed(4)}:${lon.toFixed(4)}`;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -95,89 +109,93 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
   const unsubBreakdownRef = useRef<(() => void) | null>(null);
   const unsubTransitRef   = useRef<(() => void) | null>(null);
 
-  // ─── Background prefetchers ─────────────────────────────────────────────────
+  // ─── Background subscribers (subscribe + request only, no re-fetch) ──────────
 
-  const loadBreakdown = (
+  const subscribeBreakdown = (
     uid: string,
     chart: NatalChartDetailsDoc,
     signal: { cancelled: boolean },
+    prefetched: BreakdownFetchResult,
   ) => {
-    fetchBreakdown(uid)
-      .then(({ result, premiumResult, pending, premiumPending }) => {
-        if (result) setBreakdown(result);
-        if (premiumResult) setPremiumBreakdown(premiumResult);
+    const { result, premiumResult, pending, premiumPending } = prefetched;
+    const needsFreeSubscribe    = !result;
+    const needsPremiumSubscribe = !premiumResult;
+    const needsRequest = (!result && !pending) || (!premiumResult && !premiumPending);
 
-        const needsRequest = !result && !pending || !premiumResult && !premiumPending;
-        const needsFreeSubscribe    = !result;
-        const needsPremiumSubscribe = !premiumResult;
+    if (!needsFreeSubscribe && !needsPremiumSubscribe) return;
 
-        if (needsFreeSubscribe || needsPremiumSubscribe) {
-          if (needsFreeSubscribe)    setBreakdownGenerating(true);
-          if (needsPremiumSubscribe) setPremiumBreakdownGenerating(true);
+    if (needsFreeSubscribe)    setBreakdownGenerating(true);
+    if (needsPremiumSubscribe) setPremiumBreakdownGenerating(true);
 
-          const unsub = subscribeToBreakdown(
-            uid,
-            (r) => {
-              if (signal.cancelled) return;
-              setBreakdown(r);
-              setBreakdownGenerating(false);
-              scheduleBreakdownReadyNotification().catch(console.error);
-            },
-            (r) => {
-              if (signal.cancelled) return;
-              setPremiumBreakdown(r);
-              setPremiumBreakdownGenerating(false);
-            },
-          );
-          unsubBreakdownRef.current = unsub;
-        }
+    const freeWasGenerating = needsFreeSubscribe;
+    const unsub = subscribeToBreakdown(
+      uid,
+      (r) => {
+        if (signal.cancelled) return;
+        setBreakdown(r);
+        setBreakdownGenerating(false);
+        if (freeWasGenerating) scheduleBreakdownReadyNotification().catch(console.error);
+      },
+      (r) => {
+        if (signal.cancelled) return;
+        setPremiumBreakdown(r);
+        setPremiumBreakdownGenerating(false);
+      },
+    );
+    unsubBreakdownRef.current = unsub;
 
-        if (needsRequest) requestBreakdown(uid, chart).catch(console.error);
-      })
-      .catch(console.error);
+    if (needsRequest) requestBreakdown(uid, chart).catch(console.error);
   };
 
-  const loadTransitReading = (
+  const subscribeTransitReading = (
     uid: string,
     dateId: string,
     chart: NatalChartDetailsDoc,
     transits: TransitData,
     signal: { cancelled: boolean },
+    prefetched: TransitFetchResult,
   ) => {
-    fetchTransitReading(uid, dateId)
-      .then(({ result, pending }) => {
-        if (signal.cancelled) return;
-        if (result) { setTransitReading(result); return; }
+    if (prefetched.result) return; // already set in state, nothing to do
 
-        setTransitReadingGenerating(true);
-        const unsub = subscribeToTransitReading(uid, dateId, (r) => {
-          if (signal.cancelled) return;
-          setTransitReading(r);
-          setTransitReadingGenerating(false);
-          unsubTransitRef.current?.();
-          unsubTransitRef.current = null;
-        });
-        unsubTransitRef.current = unsub;
+    setTransitReadingGenerating(true);
+    const unsub = subscribeToTransitReading(uid, dateId, (r) => {
+      if (signal.cancelled) return;
+      setTransitReading(r);
+      setTransitReadingGenerating(false);
+      unsubTransitRef.current?.();
+      unsubTransitRef.current = null;
+    });
+    unsubTransitRef.current = unsub;
 
-        if (!pending) requestTransitReading(uid, dateId, chart, transits).catch(console.error);
-      })
-      .catch(console.error);
+    if (!prefetched.pending) requestTransitReading(uid, dateId, chart, transits).catch(console.error);
   };
 
   // ─── Main load ──────────────────────────────────────────────────────────────
 
   const load = async (uid: string, signal: { cancelled: boolean }) => {
     setLoading(true);
-    const dateId = getTodayDateId();
+    const dateId     = getTodayDateId();
+    // Transit readings are keyed by the week's Sunday so they regenerate once
+    // per week. Every Sunday the key changes → a fresh reading is generated.
+    const weekDateId = getThisWeekDateId();
     const lat = userDoc?.birthLat ?? 0;
     const lon = userDoc?.birthLon ?? 0;
 
-    // All three fetches fire simultaneously — no waterfall
-    const [chartSnap, { result, pending }, transits] = await Promise.all([
+    // All fetches fire simultaneously — no waterfall.
+    // Breakdown and transit reading are included here so they're ready
+    // by the time loading=false, eliminating the secondary loading phase.
+    const transitKey = _transitKey(dateId, lat, lon);
+    const cachedTransit = _transitCache.get(transitKey);
+    const [chartSnap, horoscopeRes, transits, breakdownFetch, transitReadingFetch] = await Promise.all([
       getDoc(doc(db, 'users', uid, 'natalChart', 'details')),
       fetchHoroscope(uid, dateId),
-      calculateTransits(new Date(), lat, lon).catch(() => null),
+      cachedTransit
+        ? Promise.resolve(cachedTransit)
+        : calculateTransits(new Date(), lat, lon).catch(() => null),
+      fetchBreakdown(uid),
+      fetchTransitReading(uid, weekDateId),
     ]);
+    if (transits && !cachedTransit) _transitCache.set(transitKey, transits);
 
     if (signal.cancelled) return;
 
@@ -189,17 +207,50 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
       setTransitRetrogrades(transits.planets.filter(p => p.isRetrograde).map(p => p.name));
     }
 
+    // Set breakdown and transit reading immediately — no secondary loading phase
+    if (breakdownFetch.result) setBreakdown(breakdownFetch.result);
+    if (breakdownFetch.premiumResult) setPremiumBreakdown(breakdownFetch.premiumResult);
+    if (transitReadingFetch.result) setTransitReading(transitReadingFetch.result);
+
     setLoading(false);
 
-    // Kick off background prefetches — home screen doesn't need these
+    // Subscribe for data still being generated + background triggers
     if (chart) {
-      loadBreakdown(uid, chart, signal);
-      if (transits) loadTransitReading(uid, dateId, chart, transits, signal);
+      subscribeBreakdown(uid, chart, signal, breakdownFetch);
+      if (transits) subscribeTransitReading(uid, weekDateId, chart, transits, signal, transitReadingFetch);
+      // Pre-generate tomorrow's horoscope so it's ready when the day rolls over.
+      rolloverHoroscope(uid, chart).catch(console.error);
     }
+
+    const { result, pending } = horoscopeRes;
 
     // Horoscope subscribe / request
     if (result) { setHoroscope(result); return; }
-    if (!chart) return;
+    if (!chart) {
+      // New user: chart hasn't been written yet. Stay in generating state so
+      // AuthGate doesn't navigate early. Subscribe so we pick it up when
+      // sign-up writes the horoscope and transit reading to Firestore.
+      setHoroscopeGenerating(true);
+      const unsubHoro = subscribeToHoroscope(uid, dateId, (r) => {
+        if (signal.cancelled) return;
+        setHoroscope(r);
+        setHoroscopeGenerating(false);
+        unsubHoroscopeRef.current?.();
+        unsubHoroscopeRef.current = null;
+      });
+      unsubHoroscopeRef.current = unsubHoro;
+
+      setTransitReadingGenerating(true);
+      const unsubTransit = subscribeToTransitReading(uid, weekDateId, (r) => {
+        if (signal.cancelled) return;
+        setTransitReading(r);
+        setTransitReadingGenerating(false);
+        unsubTransitRef.current?.();
+        unsubTransitRef.current = null;
+      });
+      unsubTransitRef.current = unsubTransit;
+      return;
+    }
 
     setHoroscopeGenerating(true);
     const unsub = subscribeToHoroscope(uid, dateId, (r) => {

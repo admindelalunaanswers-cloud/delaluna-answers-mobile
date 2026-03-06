@@ -147,11 +147,7 @@ export default function TransitsScreen() {
           refreshControl={refreshControl}
           showsVerticalScrollIndicator={false}
         >
-          {/* Houses header */}
-          <View style={styles.housesHeader}>
-            <Ionicons name="home-outline" size={staticScale(20)} color="#f9f9f9ff" />
-            <Text style={styles.housesTitle}>Your Houses</Text>
-          </View>
+         
 
           {transitReadingGenerating && !transitReading && (
             <View style={styles.generatingRow}>

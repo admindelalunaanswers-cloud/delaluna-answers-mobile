@@ -16,6 +16,19 @@ export function getTodayDateId(): string {
   return `${y}-${m}-${day}`;
 }
 
+/**
+ * Returns the dateId (YYYY-MM-DD) for the most recent Sunday (or today if today is Sunday).
+ * Transit readings are keyed by week so they regenerate once per week.
+ */
+export function getThisWeekDateId(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - d.getDay()); // rewind to Sunday (d.getDay() === 0 on Sunday → no change)
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function formatDateLabel(dateId: string): string {
   const [y, m, d] = dateId.split('-').map(Number);
   return new Date(y, m - 1, d).toLocaleDateString('en-US', {
@@ -73,7 +86,12 @@ function parseResult(data: Record<string, any>): TransitReadingResult | null {
   const raw = data?.response ?? data?.result ?? data?.output;
   if (!raw) return null;
   try {
-    return typeof raw === 'string' ? JSON.parse(raw) : (raw as TransitReadingResult);
+    const cleaned = typeof raw === 'string'
+      ? raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
+      : raw;
+    return typeof cleaned === 'string'
+      ? JSON.parse(cleaned)
+      : (cleaned as TransitReadingResult);
   } catch {
     return null;
   }
