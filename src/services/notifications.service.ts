@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 
 import { db } from '@/firebaseConfig';
 
@@ -29,7 +29,9 @@ export async function registerForPushNotifications(uid: string): Promise<void> {
   let finalStatus = existingStatus;
 
   if (existingStatus !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
+    const { status } = await Notifications.requestPermissionsAsync({
+      ios: { allowAlert: true, allowBadge: true, allowSound: true },
+    });
     finalStatus = status;
   }
 
@@ -37,7 +39,7 @@ export async function registerForPushNotifications(uid: string): Promise<void> {
 
   const token = await Notifications.getExpoPushTokenAsync({ projectId: EXPO_PROJECT_ID });
 
-  await updateDoc(doc(db, 'users', uid), { expoPushToken: token.data });
+  await setDoc(doc(db, 'users', uid), { expoPushToken: token.data }, { merge: true });
 }
 
 /**
@@ -66,23 +68,12 @@ export async function scheduleBreakdownReadyNotification(): Promise<void> {
 export function setupNotificationHandlers(): () => void {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
       shouldShowBanner: true,
       shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
     }),
   });
 
-  const responseSub = Notifications.addNotificationResponseReceivedListener(response => {
-    // Deep-link data attached in the Cloud Function: { screen: '/(main)' }
-    const screen = response.notification.request.content.data?.screen;
-    if (screen) {
-      // Expo Router handles deep links automatically via the scheme in app.config.js,
-      // but if a manual push is needed the screen value is available here.
-      console.log('[Notifications] User tapped notification, target screen:', screen);
-    }
-  });
-
-  return () => responseSub.remove();
+  return () => {};
 }

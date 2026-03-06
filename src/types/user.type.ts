@@ -12,7 +12,7 @@ import { Timestamp } from 'firebase/firestore';
 export interface UserDoc {
   uid:            string;
   email:          string;
-  emailVerified:  boolean;
+  isEmailVerified?: boolean;
   name:           string;
 
   // Birth details

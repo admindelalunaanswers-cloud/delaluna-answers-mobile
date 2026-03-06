@@ -6,7 +6,7 @@ import type { NatalChartDetailsDoc } from '@/src/types/user.type';
 import { buildFreeNatalChartPrompt, buildPremiumNatalChartPrompt } from '@/src/prompts/natal-chart-prompt';
 
 // The extension watches documents in users/{uid}/natalChart/*
-const FREE_DOC    = 'details';
+const FREE_DOC    = 'free';
 const PREMIUM_DOC = 'premium';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -79,20 +79,20 @@ export async function requestBreakdown(
   uid: string,
   chart: NatalChartDetailsDoc,
 ): Promise<void> {
-  const natalChart     = buildNatalChartSummary(chart);
-  const freePrompt     = buildFreeNatalChartPrompt(natalChart);
-  const premiumPrompt  = buildPremiumNatalChartPrompt(natalChart);
-  const requestedAt    = serverTimestamp();
+  const natalChart    = buildNatalChartSummary(chart);
+  const freePrompt    = buildFreeNatalChartPrompt(natalChart);
+  const premiumPrompt = buildPremiumNatalChartPrompt(natalChart);
+  const requestedAt   = serverTimestamp();
 
   await Promise.all([
     setDoc(
       doc(db, 'users', uid, 'natalChart', FREE_DOC),
-      { prompt: freePrompt, requestedAt },
+      { prompt: freePrompt, tier: 'free', requestedAt },
       { merge: true },
     ),
     setDoc(
       doc(db, 'users', uid, 'natalChart', PREMIUM_DOC),
-      { prompt: premiumPrompt, requestedAt },
+      { prompt: premiumPrompt, tier: 'premium', requestedAt },
       { merge: true },
     ),
   ]);
