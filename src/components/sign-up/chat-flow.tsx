@@ -24,6 +24,8 @@ import {
 } from '@/src/utils/location';
 import { checkEmailExists } from '@/src/services/user.service';
 import PasswordInput from '@/src/components/shared/password-input';
+import PolicyModal from '@/src/components/sign-up/policy-modals';
+import { privacyPolicy, termsAndConditions } from '@/src/assets/legal/legal-texts';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -121,14 +123,28 @@ export default function ChatFlow({
   const [selectedLocation, setSelectedLocation] = useState<{ label: string; lat: number; lon: number; tz: number } | null>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [checkedPolicy, setCheckedPolicy] = useState(false);
+  const [checkedTerms, setCheckedTerms] = useState(false);
+  const [isPolicyModalVisible, setIsPolicyModalVisible] = useState(false);
+  const [policyModalContent, setPolicyModalContent] = useState<'Privacy Policy' | 'Terms & Conditions'>('Privacy Policy');
+
   const inputRef = useRef<TextInput>(null);
   const scrollRef = useRef<ScrollView>(null);
+  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Scroll to bottom whenever the step advances (new bubble appears)
+  const scheduleScroll = (delay: number) => {
+    if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+    scrollTimerRef.current = setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, delay);
+  };
+
+  // Scroll to bottom when keyboard shows/hides (gives layout time to settle)
   useEffect(() => {
-    const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
-    return () => clearTimeout(t);
-  }, [step]);
+    const onShow = Keyboard.addListener('keyboardDidShow', () => scheduleScroll(200));
+    const onHide = Keyboard.addListener('keyboardDidHide', () => scheduleScroll(150));
+    return () => { onShow.remove(); onHide.remove(); };
+  }, []);
 
   // Restore saved answer + auto-focus input whenever step changes (forward or back)
   useEffect(() => {
@@ -458,6 +474,7 @@ export default function ChatFlow({
   const question = QUESTIONS[currentStep.key]?.(answers) ?? '';
 
   return (
+    <>
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -468,7 +485,7 @@ export default function ChatFlow({
         ref={scrollRef}
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
-        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+        onContentSizeChange={() => scheduleScroll(100)}
       >
         {/* Completed Q&A pairs */}
         {steps.slice(0, step).map((s, i) => {
@@ -836,12 +853,53 @@ export default function ChatFlow({
 
         {/* Final step */}
         {inputType === 'final' && (
-          <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
-            <Text style={styles.nextButtonText}>Get Started ✨</Text>
-          </TouchableOpacity>
+          <View style={styles.finalArea}>
+            <View style={styles.policyRow}>
+              <TouchableOpacity onPress={() => setCheckedTerms(v => !v)}>
+                <View style={[styles.policyCheckbox, checkedTerms && styles.policyCheckboxChecked]}>
+                  {checkedTerms && <Text style={styles.policyCheckmark}>✓</Text>}
+                </View>
+              </TouchableOpacity>
+              <Text style={styles.policyText}>
+                I agree to the{' '}
+                <Text style={styles.policyLink} onPress={() => { setPolicyModalContent('Terms & Conditions'); setIsPolicyModalVisible(true); }}>
+                  Terms &amp; Conditions
+                </Text>
+              </Text>
+            </View>
+
+            <View style={styles.policyRow}>
+              <TouchableOpacity onPress={() => setCheckedPolicy(v => !v)}>
+                <View style={[styles.policyCheckbox, checkedPolicy && styles.policyCheckboxChecked]}>
+                  {checkedPolicy && <Text style={styles.policyCheckmark}>✓</Text>}
+                </View>
+              </TouchableOpacity>
+              <Text style={styles.policyText}>
+                I agree to the{' '}
+                <Text style={styles.policyLink} onPress={() => { setPolicyModalContent('Privacy Policy'); setIsPolicyModalVisible(true); }}>
+                  Privacy Policy
+                </Text>
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.nextButton, (!checkedPolicy || !checkedTerms) && styles.nextButtonDisabled]}
+              onPress={handleNext}
+              disabled={!checkedPolicy || !checkedTerms}
+            >
+              <Text style={styles.nextButtonText}>Get Started</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
     </KeyboardAvoidingView>
+    <PolicyModal
+      visible={isPolicyModalVisible}
+      onClose={() => setIsPolicyModalVisible(false)}
+      title={policyModalContent}
+      textContent={policyModalContent === 'Terms & Conditions' ? termsAndConditions : privacyPolicy}
+    />
+  </>
   );
 }
 
@@ -944,7 +1002,7 @@ const styles = StyleSheet.create({
     borderRadius: scale(22),
     backgroundColor: 'rgba(111,255,233,0.15)',
     borderWidth: 1,
-    borderColor: '#6FFFE9',
+    borderColor: '#b3bbba',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -955,7 +1013,7 @@ const styles = StyleSheet.create({
     color: '#6FFFE9',
     fontSize: moderateScale(20),
     fontWeight: '700',
-    lineHeight: moderateScale(15),
+    lineHeight: moderateScale(20),
     includeFontPadding: false,
     textAlignVertical: 'center',
   },
@@ -1024,5 +1082,45 @@ const styles = StyleSheet.create({
     paddingVertical: verticalScale(12),
     color: '#ffffff',
     fontSize: moderateScale(16),
+  },
+  finalArea: {
+    gap: verticalScale(12),
+    paddingVertical: verticalScale(8),
+  },
+  policyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(10),
+    paddingHorizontal: scale(4),
+  },
+  policyCheckbox: {
+    width: scale(22),
+    height: scale(22),
+    borderRadius: scale(4),
+    borderWidth: 2,
+    borderColor: '#6FFFE9',
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  policyCheckboxChecked: {
+    backgroundColor: '#6FFFE9',
+  },
+  policyCheckmark: {
+    color: '#0a0a0a',
+    fontWeight: 'bold',
+    fontSize: moderateScale(13),
+  },
+  policyText: {
+    color: '#ffffff',
+    fontSize: moderateScale(14),
+    flex: 1,
+  },
+  policyLink: {
+    color: '#6FFFE9',
+    textDecorationLine: 'underline',
+  },
+  nextButtonDisabled: {
+    opacity: 0.35,
   },
 });

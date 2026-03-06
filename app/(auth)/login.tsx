@@ -148,7 +148,7 @@ export default function Login() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
       >
         <ImageBackground
-          source={theme.backgroundImage}
+          source={require('@/src/assets/start-up/welcome-background.jpg')}
           style={StyleSheet.absoluteFill}
           resizeMode="cover"
         />
@@ -268,8 +268,8 @@ const styles = StyleSheet.create({
   logo: { width: '70%', height: '65%' },
   bodyContainer: {
     width: '100%',
-    marginTop: verticalScale(85),
-    marginBottom: verticalScale(20),
+    marginTop: verticalScale(45),
+    marginBottom: verticalScale(10),
     alignItems: 'center',
     flex: 1,
     justifyContent: 'space-between',
