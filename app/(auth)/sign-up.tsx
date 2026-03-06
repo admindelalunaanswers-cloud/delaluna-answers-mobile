@@ -33,8 +33,8 @@ import LoadingScreen from '../(util)/loading-screen';
 
 // ─── Fallback coordinates (Greenwich) ─────────────────────────────────────────
 
-const FALLBACK_LAT = 51.4779;
-const FALLBACK_LON = 0.0015;
+const FALLBACK_LAT = 0;
+const FALLBACK_LON = 0;
 
 // ─── Firebase auth error → user-friendly message ──────────────────────────────
 
@@ -58,37 +58,6 @@ function parseAuthError(err: any): string {
   }
 }
 
-// ─── Admin accounts for quick dev testing ─────────────────────────────────────
-
-const ADMIN_ACCOUNTS = [
-  { firstName: 'Delaluna', lastName: 'Answers', email: 'delalunaanswers@gmail.com', password: 'Password' },
-  { firstName: 'Jeanai', lastName: 'Dev', email: 'jeanaicode@gmail.com', password: 'Password' },
-];
-
-const generateRandomAdultBirthday = (): string => {
-  const age = Math.floor(Math.random() * 63) + 18;
-  const year = new Date().getFullYear() - age;
-  const month = String(Math.floor(Math.random() * 12) + 1).padStart(2, '0');
-  const day = String(Math.floor(Math.random() * 28) + 1).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const generateRandomBirthTime = (): string => {
-  const h = String(Math.floor(Math.random() * 24)).padStart(2, '0');
-  const m = String(Math.floor(Math.random() * 60)).padStart(2, '0');
-  return `${h}:${m}`;
-};
-
-const generateRandomLocation = () => {
-  const locations = [
-    { label: 'New York, NY, USA', lat: 40.7128, lon: -74.0060, tz: -5 },
-    { label: 'Los Angeles, CA, USA', lat: 34.0522, lon: -118.2437, tz: -8 },
-    { label: 'Chicago, IL, USA', lat: 41.8781, lon: -87.6298, tz: -6 },
-    { label: 'Miami, FL, USA', lat: 25.7617, lon: -80.1918, tz: -5 },
-  ];
-  return locations[Math.floor(Math.random() * locations.length)];
-};
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SignUpChatScreen() {
@@ -98,7 +67,6 @@ export default function SignUpChatScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Setting up your account...');
   const [isSigningUp, setIsSigningUp] = useState(false);
-  const [showAdminButtons, setShowAdminButtons] = useState(false);
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
 
@@ -152,9 +120,19 @@ export default function SignUpChatScreen() {
       try {
         userCred = await signUp(trimmedEmail, password);
       } catch (err: any) {
-        Alert.alert('Sign Up Failed', parseAuthError(err));
         setIsLoading(false);
         setIsSigningUp(false);
+        if (err?.code === 'auth/email-already-in-use') {
+          // Navigate back to email step — ChatFlow stays mounted so answers are preserved
+          const emailStepIdx = steps.findIndex(s => s.key === 'email');
+          if (emailStepIdx >= 0) setStep(emailStepIdx);
+          Alert.alert(
+            'Email Already Registered',
+            'That email is already in use. Please enter a different address or sign in.',
+          );
+        } else {
+          Alert.alert('Sign Up Failed', parseAuthError(err));
+        }
         return;
       }
 
@@ -175,7 +153,7 @@ export default function SignUpChatScreen() {
         isBirthTimeUnknown: answers.isBirthTimeUnknown ?? !answers.birthtime,
         isPlaceOfBirthUnknown: answers.isPlaceOfBirthUnknown ?? !answers.placeOfBirth,
         themeKey: 'default',
-        ...answers,
+        ...(() => { const { password: _pw, ...rest } = answers; return rest; })(),
       };
 
       await createUserDoc(userCred.user.uid, payload);
@@ -226,48 +204,21 @@ export default function SignUpChatScreen() {
       calculateTransits(new Date(), bd.lat, bd.lon)
         .then(transits => {
           const retrogrades = transits.planets.filter(p => p.isRetrograde).map(p => p.name);
-          requestTransitReading(uid, dateId, chartDetailsDoc, transits, 'free').catch(console.error);
+          requestTransitReading(uid, dateId, chartDetailsDoc, transits).catch(console.error);
           return requestHoroscope(uid, dateId, chartDetailsDoc, transits.moon, retrogrades);
         })
         .catch(() => requestHoroscope(uid, dateId, chartDetailsDoc, natalChart.moon))
         .catch(console.error);
 
-      setLoadingMessage('Reading the stars for you...');
-      // Navigation handled by the useEffect watching authUser + horoscope
+      // Navigate to email verification — user enters code while AI generation runs in background.
+      setIsLoading(false);
+      setIsSigningUp(false);
+      router.replace('/(auth)/verify-email');
 
     } catch (err: any) {
       Alert.alert('Sign Up Error', parseAuthError(err));
       setIsLoading(false);
       setIsSigningUp(false);
-    }
-  };
-
-  const createAdminAccount = async (index: number) => {
-    if (isLoading) return;
-    try {
-      const account = ADMIN_ACCOUNTS[index];
-      const location = generateRandomLocation();
-      const pronouns = ['She/Her', 'He/Him', 'They/Them', 'Non-Binary'][Math.floor(Math.random() * 4)];
-
-      setShowAdminButtons(false);
-      await handleComplete({
-        firstName: account.firstName,
-        lastName: account.lastName,
-        email: account.email,
-        password: account.password,
-        pronouns,
-        birthday: generateRandomAdultBirthday(),
-        birthtime: generateRandomBirthTime(),
-        birthTimezone: location.tz,
-        placeOfBirth: location.label,
-        birthLat: location.lat,
-        birthLon: location.lon,
-        isBirthTimeUnknown: false,
-        isPlaceOfBirthUnknown: false,
-      });
-    } catch {
-      Alert.alert('Error', 'Failed to create admin account');
-      setShowAdminButtons(true);
     }
   };
 
@@ -280,10 +231,6 @@ export default function SignUpChatScreen() {
     setConfirmVisible(false);
     router.replace('/(startup)/welcome');
   };
-
-  if (isLoading) {
-    return <LoadingScreen message={loadingMessage} />;
-  }
 
   const steps: StepConfig[] = [
     { key: 'firstName',    inputType: 'text',     placeholder: 'First name…' },
@@ -332,31 +279,13 @@ export default function SignUpChatScreen() {
             </View>
           </BlurView>
 
-          {/* Dev shortcuts — tap top-right corner to reveal */}
-          {step === 0 && (
-            <>
-              {!showAdminButtons && (
-                <TouchableOpacity
-                  style={styles.tapArea}
-                  onPress={() => setShowAdminButtons(true)}
-                  activeOpacity={1}
-                />
-              )}
-              {showAdminButtons && (
-                <View style={styles.devButtonContainer}>
-                  <TouchableOpacity style={styles.devButton} onPress={() => createAdminAccount(0)} disabled={isLoading}>
-                    <Text style={styles.devButtonText}>Admin: Delaluna</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.devButton} onPress={() => createAdminAccount(1)} disabled={isLoading}>
-                    <Text style={styles.devButtonText}>DEV: Jeanai</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.devButton, styles.closeButton]} onPress={() => setShowAdminButtons(false)}>
-                    <Text style={styles.devButtonText}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </>
+          {/* Loading overlay — keeps ChatFlow mounted so answers are preserved */}
+          {isLoading && (
+            <View style={StyleSheet.absoluteFillObject}>
+              <LoadingScreen message={loadingMessage || undefined} />
+            </View>
           )}
+
         </View>
       </TouchableWithoutFeedback>
 
@@ -399,25 +328,6 @@ const styles = StyleSheet.create({
   goBackText: { color: '#6FFFE9', fontSize: moderateScale(18), fontWeight: '500' },
   cancelText: { color: '#6FFFE9', fontSize: moderateScale(18), fontWeight: '500' },
   chatFlowWrapper: { flex: 1, width: '100%' },
-  tapArea: { position: 'absolute', top: 0, right: 0, width: scale(100), height: verticalScale(100), zIndex: 998 },
-  devButtonContainer: {
-    position: 'absolute',
-    top: verticalScale(Platform.OS === 'ios' ? 100 : 80),
-    right: scale(16),
-    flexDirection: 'column',
-    gap: scale(8),
-    zIndex: 999,
-  },
-  devButton: {
-    backgroundColor: 'rgba(111,255,233,0.15)',
-    borderWidth: 1,
-    borderColor: '#6FFFE9',
-    paddingHorizontal: scale(12),
-    paddingVertical: verticalScale(6),
-    borderRadius: scale(6),
-  },
-  closeButton: { alignItems: 'center' },
-  devButtonText: { color: '#6FFFE9', fontSize: scale(12), fontWeight: '600' },
   modalOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.45)',

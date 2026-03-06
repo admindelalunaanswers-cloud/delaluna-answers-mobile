@@ -8,8 +8,8 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  SafeAreaView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
@@ -21,6 +21,7 @@ import { ThemeContext } from '@/src/context/theme-context';
 import { ThemedText } from '@/src/components/themed-text';
 import { ThemedView } from '@/src/components/themed-view';
 import { useUser } from '@/src/context/user-context';
+import { useHoroscope } from '@/src/context/horoscope-context';
 import { signOut } from '@/src/services/user.service';
 import { app } from '@/firebaseConfig';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
@@ -33,16 +34,22 @@ const verifyCodeFn = httpsCallable(functions, 'verifyCode');
 const CODE_LENGTH = 6;
 
 export default function VerifyEmail() {
-  const { authUser, reloadAuthUser } = useUser();
+  const { authUser, reloadAuthUser, refresh } = useUser();
+  const { horoscope, transitReadingGenerating, loading: dataLoading, horoscopeGenerating } = useHoroscope();
   const { theme } = useContext(ThemeContext);
   const router = useRouter();
 
   const [digits, setDigits] = useState<string[]>(Array(CODE_LENGTH).fill(''));
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [verified, setVerified] = useState(false);
   const [codeSent, setCodeSent] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
+
+  const horoscopeReady =
+    (!!horoscope || (!dataLoading && !horoscopeGenerating)) &&
+    !transitReadingGenerating;
 
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
@@ -110,11 +117,11 @@ export default function VerifyEmail() {
     try {
       await verifyCodeFn({ code: finalCode });
       await reloadAuthUser();
-      router.replace('/(main)');
+      await refresh();   // reload userDoc so AuthGate sees isEmailVerified: true
+      setVerified(true);
     } catch (e: any) {
       const msg: string = e?.message ?? 'Verification failed.';
       Alert.alert('Incorrect code', msg);
-      // Clear digits on failure so user can retype
       setDigits(Array(CODE_LENGTH).fill(''));
       setTimeout(() => inputRefs.current[0]?.focus(), 100);
     } finally {
@@ -122,8 +129,16 @@ export default function VerifyEmail() {
     }
   };
 
-  if (verifying) {
-    return <LoadingScreen message="Verifying..." />;
+  // Navigate once verified AND AI content is ready
+  useEffect(() => {
+    if (verified && horoscopeReady) router.replace('/(main)');
+  }, [verified, horoscopeReady]);
+
+  if (verifying) return <LoadingScreen message="Verifying..." />;
+
+  // Still waiting for AI generation after verification
+  if (verified) {
+    return <LoadingScreen progress={horoscope ? 0.6 : 0.1} />;
   }
 
   const email = authUser?.email ?? '';
