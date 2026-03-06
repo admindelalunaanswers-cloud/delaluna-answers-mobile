@@ -126,7 +126,7 @@ export const functions = getFunctions(app, "us-central1");
 // Using LAN IP for real device testing
 export const USE_EMULATOR = __DEV__ && extra?.USE_EMULATOR === "true";
 if (USE_EMULATOR) {
-  const host = "192.168.1.143";
+  const host: string = extra?.EMULATOR_HOST ?? "localhost";
   connectAuthEmulator(auth, `http://${host}:9099`);
   connectFirestoreEmulator(db, host, 8080);
   connectFunctionsEmulator(functions, host, 5001);

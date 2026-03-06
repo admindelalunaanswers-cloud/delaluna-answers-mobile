@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
@@ -49,7 +50,7 @@ export const sendVerificationCode = onCall(
     const existing = await getOtpDocRef(uid).get();
     if (existing.exists) {
       const data = existing.data()!;
-      const sentAt: admin.firestore.Timestamp = data.sentAt;
+      const sentAt: Timestamp = data.sentAt;
       if (sentAt) {
         const secondsAgo = (Date.now() - sentAt.toMillis()) / 1000;
         if (secondsAgo < 60) {
@@ -62,13 +63,14 @@ export const sendVerificationCode = onCall(
     }
 
     const code = generateOtp();
-    const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000);
+    console.log(`[sendVerificationCode] OTP for ${email} (uid: ${uid}): ${code}`);
+    const expiresAt = Timestamp.fromMillis(Date.now() + 15 * 60 * 1000);
 
     await getOtpDocRef(uid).set({
       code,
       email,
       expiresAt,
-      sentAt: admin.firestore.FieldValue.serverTimestamp(),
+      sentAt: FieldValue.serverTimestamp(),
       attempts: 0,
     });
 
@@ -123,7 +125,7 @@ export const verifyCode = onCall(async (request) => {
   }
 
   const data = snap.data()!;
-  const expiresAt: admin.firestore.Timestamp = data.expiresAt;
+  const expiresAt: Timestamp = data.expiresAt;
   const attempts: number = data.attempts ?? 0;
 
   if (attempts >= 5) {
@@ -137,7 +139,7 @@ export const verifyCode = onCall(async (request) => {
   }
 
   if (data.code !== code) {
-    await otpRef.update({ attempts: admin.firestore.FieldValue.increment(1) });
+    await otpRef.update({ attempts: FieldValue.increment(1) });
     const remaining = 4 - attempts;
     throw new HttpsError(
       'invalid-argument',
