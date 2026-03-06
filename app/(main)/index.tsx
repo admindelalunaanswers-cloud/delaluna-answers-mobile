@@ -1,32 +1,31 @@
 import React, { useEffect, useState } from 'react';
 
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { doc, getFirestore, updateDoc } from 'firebase/firestore';
 
+import { router } from 'expo-router';
+
+import { doc, getFirestore, updateDoc } from 'firebase/firestore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import DateSwitcher from '@/src/components/home/date-switcher.component';
-import HomeTextBox from '@/src/components/home/home-text-box.component';
 import HeaderNav from '@/src/components/shared/header-nav';
 import HomeSignsDisplay from '@/src/components/shared/signs-display.component';
+import HomeTextBox from '@/src/components/home/home-text-box.component';
+import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
 import SectionTitle from '@/src/components/shared/section-title.component';
-import { ThemedView } from '@/src/components/themed-view';
-import { useHoroscope } from '@/src/context/horoscope-context';
-import { useResponsive } from '@/src/hooks/use-responsive';
-import { usePullToRefresh } from '@/src/hooks/use-pull-to-refresh';
-import { useUser } from '@/src/context/user-context';
-import { updateUserDoc } from '@/src/services/user.service';
-import { getTarotCardDraw } from '@/src/services/tarot-card.service';
-import { HOME_STRINGS } from '@/src/constants/strings';
-import { fetchHoroscope, getTodayDateId } from '@/src/services/horoscope.service';
-import { calculateTransits } from '@/src/services/astroEngine';
 import type { DailyCardPack } from '@/src/schemas/dailyCardPack.schema';
 import type { HoroscopeResult } from '@/src/types/horoscope.types';
-
-import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
-import { router } from 'expo-router';
-
 import { ChatStore } from '@/src/stores/chat-store';
+import { HOME_STRINGS } from '@/src/constants/strings';
+import { ThemedView } from '@/src/components/themed-view';
+import { calculateTransits } from '@/src/services/astroEngine';
+import { fetchHoroscope, getTodayDateId } from '@/src/services/horoscope.service';
+import { getTarotCardDraw } from '@/src/services/tarot-card.service';
+import { updateUserDoc } from '@/src/services/user.service';
+import { useHoroscope } from '@/src/context/horoscope-context';
+import { usePullToRefresh } from '@/src/hooks/use-pull-to-refresh';
+import { useResponsive } from '@/src/hooks/use-responsive';
+import { useUser } from '@/src/context/user-context';
 
 const NAV_BAR_HEIGHT = 44;
 
