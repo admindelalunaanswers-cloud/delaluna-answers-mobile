@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ThemeContext } from "@/src/context/theme-context";
 import { useUser } from "@/src/context/user-context";
+import { useHoroscope } from "@/src/context/horoscope-context";
 import { functions } from "@/firebaseConfig";
 import { verticalScale, scale, moderateScale } from "@/src/utils/responsive";
 import HeaderNav from "@/src/components/shared/header-nav";
@@ -213,6 +214,7 @@ function ConnectionsTimeOfBirthField({
 export default function SingleConnectionCreateScreen() {
   const { theme } = useContext(ThemeContext);
   const { authUser, userDoc } = useUser();
+  const { chartDetails } = useHoroscope();
   const insets = useSafeAreaInsets();
   const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
 
@@ -524,8 +526,12 @@ export default function SingleConnectionCreateScreen() {
                     <Text style={styles.meName}>
                       {toTitleCase(userFirstName)} {toTitleCase(userLastName)}
                     </Text>
-                    {/* TODO: load signs from natalChart/details subcollection */}
-                    <HomeSignsDisplay sun="" moon="" rising="" showViewChart={false} />
+                    <HomeSignsDisplay
+                      sun={chartDetails?.planets.find(p => p.name === 'Sun')?.sign ?? ''}
+                      moon={chartDetails?.moon.sign ?? ''}
+                      rising={chartDetails?.ascendant.sign ?? ''}
+                      showViewChart={false}
+                    />
                   </View>
                 ) : (
                   (() => {

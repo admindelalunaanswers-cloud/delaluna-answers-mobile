@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect } from 'react';
 
 import { ImageBackground } from 'react-native';
+import * as Notifications from 'expo-notifications';
 
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -16,7 +17,7 @@ import { useTheme } from '@/src/hooks/use-theme';
 import LoadingScreen from './(util)/loading-screen';
 
 function AuthGate({ children }: { children: ReactNode }) {
-  const { authUser, loading: userLoading } = useUser();
+  const { authUser, userDoc, loading: userLoading } = useUser();
   const { loading: dataLoading, horoscope, horoscopeGenerating, transitReadingGenerating } = useHoroscope();
   const router = useRouter();
   const segments = useSegments();
@@ -38,21 +39,30 @@ function AuthGate({ children }: { children: ReactNode }) {
       .catch(console.error);
   }, [authUser?.uid]);
 
+  // Navigate to the correct screen when a notification is tapped
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener(response => {
+      const screen = response.notification.request.content.data?.screen;
+      if (screen && authUser) router.push(screen as any);
+    });
+    return () => sub.remove();
+  }, [authUser?.uid]);
+
   useEffect(() => {
     if (userLoading) return;
 
     if (!authUser && !inAuth && !inStartup) {
       router.replace('/(startup)/welcome');
-    } else if (authUser && (inAuth || inStartup) && horoscopeReady) {
+    } else if (authUser && (inAuth || inStartup) && horoscopeReady && userDoc?.isEmailVerified !== false) {
       router.replace('/(main)');
     }
-  }, [authUser, userLoading, inAuth, inStartup, horoscopeReady]);
+  }, [authUser, userDoc, userLoading, inAuth, inStartup, horoscopeReady]);
 
   const isRedirecting =
     !userLoading &&
     (
       (!authUser && !inAuth && !inStartup) ||
-      (!!authUser && (inAuth || inStartup) && horoscopeReady)
+      (!!authUser && (inAuth || inStartup) && horoscopeReady && userDoc?.isEmailVerified !== false)
     );
 
   // Show a global loading screen while:
