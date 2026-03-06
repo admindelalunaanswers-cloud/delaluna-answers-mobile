@@ -24,7 +24,7 @@ import { FinalSignupPayload } from '@/src/types/signup.types';
 import { calculateNatalChart, calculateTransits, BirthData } from '@/src/services/astroEngine';
 import { requestBreakdown } from '@/src/services/natal-chart-breakdown.service';
 import { requestHoroscope, getTodayDateId } from '@/src/services/horoscope.service';
-import { requestTransitReading } from '@/src/services/transit-reading.service';
+import { requestTransitReading, getThisWeekDateId } from '@/src/services/transit-reading.service';
 import type { NatalChartDetailsDoc } from '@/src/types/user.type';
 import { db } from '@/firebaseConfig';
 import { verticalScale, scale, moderateScale } from '@/src/utils/responsive';
@@ -197,14 +197,15 @@ export default function SignUpChatScreen() {
         midheaven: natalChart.midheaven,
       };
       const uid = userCred.user.uid;
-      const dateId = getTodayDateId();
+      const dateId     = getTodayDateId();
+      const weekDateId = getThisWeekDateId();
 
       requestBreakdown(uid, chartDetailsDoc).catch(console.error);
 
       calculateTransits(new Date(), bd.lat, bd.lon)
         .then(transits => {
           const retrogrades = transits.planets.filter(p => p.isRetrograde).map(p => p.name);
-          requestTransitReading(uid, dateId, chartDetailsDoc, transits).catch(console.error);
+          requestTransitReading(uid, weekDateId, chartDetailsDoc, transits).catch(console.error);
           return requestHoroscope(uid, dateId, chartDetailsDoc, transits.moon, retrogrades);
         })
         .catch(() => requestHoroscope(uid, dateId, chartDetailsDoc, natalChart.moon))
