@@ -1,4 +1,5 @@
 import React, { useContext, useEffect, useRef, useState } from "react";
+
 import {
   View,
   Text,
@@ -15,20 +16,23 @@ import {
   Switch,
   Keyboard,
 } from "react-native";
+
 import { router } from "expo-router";
+
 import { httpsCallable } from "firebase/functions";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ThemeContext } from "@/src/context/theme-context";
-import { useUser } from "@/src/context/user-context";
-import { useHoroscope } from "@/src/context/horoscope-context";
-import { functions } from "@/firebaseConfig";
-import { verticalScale, scale, moderateScale } from "@/src/utils/responsive";
 import HeaderNav from "@/src/components/shared/header-nav";
 import HomeSignsDisplay from "@/src/components/shared/signs-display.component";
-import LoadingScreen from "../(util)/loading-screen";
 import { GlassButton } from "@/src/assets/buttons/glass-button";
+import { ThemeContext } from "@/src/context/theme-context";
 import { calculateNatalChart } from "@/src/services/astroEngine";
+import { functions } from "@/firebaseConfig";
+import { useHoroscope } from "@/src/context/horoscope-context";
+import { useUser } from "@/src/context/user-context";
+import { verticalScale, scale, moderateScale } from "@/src/utils/responsive";
+
+import LoadingScreen from "../(util)/loading-screen";
 
 const NAV_BAR_HEIGHT = 44;
 
