@@ -1,20 +1,20 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { doc, getDoc } from 'firebase/firestore';
 
 import { ThemedText } from '@/src/components/themed-text';
 import { ThemedView } from '@/src/components/themed-view';
 import HeaderNav from '@/src/components/shared/header-nav';
 import NatalWheelTab from '@/src/components/natalChart/natal-chart-wheel';
 import NatalTable from '@/src/components/natalChart/natal-chart-table';
+import PremiumUnlock from '@/src/components/shared/premium-unlock.component';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useUser } from '@/src/context/user-context';
 import { usePullToRefresh } from '@/src/hooks/use-pull-to-refresh';
+import { updateUserDoc } from '@/src/services/user.service';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
-import { db } from '@/firebaseConfig';
 import type { NatalChart } from '@/src/services/astroEngine';
 import type { NatalChartBreakdownResult } from '@/src/types/natal-chart-breakdown.types';
 
@@ -22,65 +22,42 @@ import type { NatalChartBreakdownResult } from '@/src/types/natal-chart-breakdow
 const NAV_BAR_HEIGHT = 44;
 
 export default function BirthChartScreen() {
-  const { chartDetails } = useHoroscope();
-  const { authUser, userDoc } = useUser();
+  const {
+    chartDetails,
+    breakdown,
+    premiumBreakdown,
+    breakdownGenerating,
+    premiumBreakdownGenerating,
+    refresh,
+  } = useHoroscope();
+
+  const { authUser, userDoc, refresh: refreshUser } = useUser();
   const isPremium = (userDoc as any)?.isPremiumMember ?? false;
 
-  const [breakdown, setBreakdown] = useState<NatalChartBreakdownResult | null>(null);
-  const [breakdownLoading, setBreakdownLoading] = useState(true);
-  const [breakdownError, setBreakdownError] = useState<string | null>(null);
-
-  const fetchBreakdown = useCallback(async () => {
-    const uid = authUser?.uid;
-    if (!uid) {
-      setBreakdownLoading(false);
-      return;
-    }
-    setBreakdownLoading(true);
-    setBreakdownError(null);
-    try {
-      const snap = await getDoc(doc(db, 'users', uid, 'natalChart', 'details'));
-      if (!snap.exists()) {
-        setBreakdownError('No breakdown available yet.');
-        return;
-      }
-      const data = snap.data();
-      const state: string | undefined = data?.status?.state;
-      if (state === 'ERROR') {
-        setBreakdownError('Breakdown generation failed. Please try again later.');
-        return;
-      }
-      const raw = data?.response ?? data?.result ?? data?.output;
-      if (!raw) {
-        setBreakdownError(state ? `Still generating… (${state})` : 'Breakdown not ready yet.');
-        return;
-      }
-      const cleaned = typeof raw === 'string'
-        ? raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
-        : null;
-      const parsed: NatalChartBreakdownResult =
-        cleaned !== null ? JSON.parse(cleaned) : raw;
-      setBreakdown(parsed);
-    } catch (err: any) {
-      console.error('[BirthChart] breakdown fetch error:', err);
-      setBreakdownError(err?.message ?? 'Could not load breakdown.');
-    } finally {
-      setBreakdownLoading(false);
-    }
-  }, [authUser?.uid]);
-
-  useEffect(() => {
-    fetchBreakdown();
-  }, [fetchBreakdown]);
-
   const [activeTab, setActiveTab] = useState<'Natal Wheel' | 'Natal Table'>('Natal Wheel');
+  const [unlocking, setUnlocking] = useState(false);
 
-  const { refreshControl: breakdownRefreshControl } = usePullToRefresh(
-    async () => { if (!breakdown) await fetchBreakdown(); }
-  );
+  const handleUnlock = async () => {
+    if (!authUser?.uid) return;
+    setUnlocking(true);
+    try {
+      await updateUserDoc(authUser.uid, { isPremiumMember: true });
+      await refreshUser();
+    } finally {
+      setUnlocking(false);
+    }
+  };
+
+  const { refreshControl } = usePullToRefresh(refresh);
 
   const insets = useSafeAreaInsets();
   const headerHeight = insets.top + scale(NAV_BAR_HEIGHT);
+
+  // For premium users prefer the full premium breakdown; fall back to free while it loads
+  const activeBreakdown = isPremium ? (premiumBreakdown ?? breakdown) : breakdown;
+  const isBreakdownLoading = isPremium
+    ? (!premiumBreakdown && premiumBreakdownGenerating)
+    : (!breakdown && breakdownGenerating);
 
   // ─── Render helpers ─────────────────────────────────────────────────────────
 
@@ -165,6 +142,15 @@ export default function BirthChartScreen() {
         onLeftPress={() => router.back()}
       />
 
+<ScrollView
+              style={styles.breakdownScroll}
+              contentContainerStyle={[
+                styles.breakdownContent,
+                { paddingBottom: insets.bottom + verticalScale(8) },
+              ]}
+              refreshControl={refreshControl}
+              showsVerticalScrollIndicator={false}
+            >
       <View style={[styles.content, { paddingTop: headerHeight }]}>
           <>
             {/* Top Half — Wheel / Table tabs */}
@@ -197,6 +183,7 @@ export default function BirthChartScreen() {
                       <NatalTable
                         planets={chartDetails.planets as unknown as NatalChart['planets']}
                         asc={chartDetails.ascendant}
+                        houses={chartDetails.houses}
                       />
                     </ScrollView>
                   ) : (
@@ -207,45 +194,47 @@ export default function BirthChartScreen() {
             </ThemedView>
 
             {/* Bottom Half — Breakdown */}
-            <ScrollView
-              style={styles.breakdownScroll}
-              contentContainerStyle={[
-                styles.breakdownContent,
-                { paddingBottom: insets.bottom + verticalScale(8) },
-              ]}
-              refreshControl={breakdownRefreshControl}
-              showsVerticalScrollIndicator={false}
-            >
+
               <Text style={styles.breakdownTitle}>Breakdown</Text>
 
-              {breakdownLoading ? (
+              {isBreakdownLoading ? (
                 <ActivityIndicator color="#BCA8F4" style={{ marginTop: verticalScale(24) }} />
-              ) : breakdownError ? (
-                <Text style={styles.errorText}>{breakdownError}</Text>
-              ) : breakdown ? (
+              ) : activeBreakdown ? (
                 <>
-                  {renderTextSection('Your Chart', breakdown.personalitySnapshot)}
-                  {renderHouses(breakdown.houses)}
+                  {renderTextSection('Your Chart', activeBreakdown.personalitySnapshot)}
+                  {renderHouses(activeBreakdown.houses)}
                   {isPremium ? (
                     <>
-                      {renderPlanets(breakdown.planets)}
-                      {renderAspects(breakdown.aspects)}
-                      {renderTextSection('Love', breakdown.loveRead)}
-                      {renderTextSection('Career', breakdown.careerRead)}
-                      {renderTextSection('Growth', breakdown.growthRead)}
-                      {renderTextSection('Advice', breakdown.advice)}
-                      {renderTextSection('Warning', breakdown.warning)}
-                      {renderTextSection('Affirmation', breakdown.affirmation)}
-                      {renderTextSection('Release', breakdown.release)}
+                      {renderPlanets(activeBreakdown.planets)}
+                      {renderAspects(activeBreakdown.aspects)}
+                      {renderTextSection('Love', activeBreakdown.loveRead)}
+                      {renderTextSection('Career', activeBreakdown.careerRead)}
+                      {renderTextSection('Growth', activeBreakdown.growthRead)}
+                      {renderTextSection('Advice', activeBreakdown.advice)}
+                      {renderTextSection('Warning', activeBreakdown.warning)}
+                      {renderTextSection('Affirmation', activeBreakdown.affirmation)}
+                      {renderTextSection('Release', activeBreakdown.release)}
                     </>
                   ) : (
-                    renderTextSection('Unlock More', breakdown.teaser)
+                    <View style={styles.unlockWrap}>
+                      {unlocking ? (
+                        <ActivityIndicator color="#BCA8F4" />
+                      ) : (
+                        <PremiumUnlock
+                          onUnlock={handleUnlock}
+                          title="Unlock Your Full Chart"
+                          message={activeBreakdown.teaser ?? 'Get your complete natal chart reading with planets, aspects, love, career, and more.'}
+                        />
+                      )}
+                    </View>
                   )}
                 </>
-              ) : null}
-            </ScrollView>
+              ) : (
+                <Text style={styles.errorText}>Breakdown not ready yet. Pull to refresh.</Text>
+              )}
           </>
       </View>
+      </ScrollView>
     </ThemedView>
   );
 }
@@ -273,4 +262,5 @@ const styles = StyleSheet.create({
   cardBody:         { color: '#E8E0FF', fontSize: moderateScale(13), lineHeight: moderateScale(20) },
   locked:           { color: '#555', fontSize: moderateScale(13), fontStyle: 'italic' },
   errorText:        { color: 'rgba(255,100,100,0.8)', fontSize: moderateScale(13), marginTop: verticalScale(16), textAlign: 'center' },
+  unlockWrap:       { marginTop: verticalScale(8), marginBottom: verticalScale(16) },
 });
