@@ -16,7 +16,7 @@ import { useColorScheme } from '@/src/hooks/use-color-scheme';
 import { useTheme } from '@/src/hooks/use-theme';
 import LoadingScreen from './(util)/loading-screen';
 
-function AuthGate({ children }: { children: ReactNode }) {
+function AuthGate() {
   const { authUser, userDoc, loading: userLoading } = useUser();
   const { loading: dataLoading, horoscope, horoscopeGenerating, transitReadingGenerating } = useHoroscope();
   const router = useRouter();
@@ -80,14 +80,18 @@ function AuthGate({ children }: { children: ReactNode }) {
     return <LoadingScreen message="Loading..." />;
   }
 
-  return <>{children}</>;
+  return (
+    <ThemedRoot>
+      <Slot />
+    </ThemedRoot>
+  );
 }
 
 function ThemedRoot({ children }: { children: ReactNode }) {
   const colorScheme = useColorScheme();
   const { theme } = useTheme();
   const segments = useSegments();
-  const isStartup = segments[0] === '(startup)';
+  const isMain = segments[0] === '(main)';
 
   const inner = (
     <NavThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
@@ -96,7 +100,7 @@ function ThemedRoot({ children }: { children: ReactNode }) {
     </NavThemeProvider>
   );
 
-  if (isStartup) {
+  if (!isMain) {
     return <>{inner}</>;
   }
 
@@ -124,13 +128,9 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <UserProvider>
         <ThemeProvider>
-          <ThemedRoot>
-            <HoroscopeProvider>
-              <AuthGate>
-                <Slot />
-              </AuthGate>
-            </HoroscopeProvider>
-          </ThemedRoot>
+          <HoroscopeProvider>
+            <AuthGate />
+          </HoroscopeProvider>
         </ThemeProvider>
       </UserProvider>
     </SafeAreaProvider>
