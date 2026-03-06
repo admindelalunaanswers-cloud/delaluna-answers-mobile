@@ -254,7 +254,7 @@ export default function InputScreen() {
   return (
     
     <SafeAreaView style={st.safe} edges={['top']}>
-      <ImageBackground source={require('@/src/assets/themes-png/default-theme.png')} style={{ flex: 1 }}>
+      <ImageBackground source={require('@/src/assets/themes-png/default-theme.jpg')} style={{ flex: 1 }}>
       <StatusBar barStyle="light-content" backgroundColor={C.cosmos} />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
