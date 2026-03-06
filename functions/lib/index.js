@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendMorningReminder = exports.verifyCode = exports.sendVerificationCode = void 0;
 const admin = require("firebase-admin");
+const firestore_1 = require("firebase-admin/firestore");
 const https_1 = require("firebase-functions/v2/https");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const params_1 = require("firebase-functions/params");
@@ -48,12 +49,13 @@ exports.sendVerificationCode = (0, https_1.onCall)({ secrets: [emailUser, emailP
         }
     }
     const code = generateOtp();
-    const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000);
+    console.log(`[sendVerificationCode] OTP for ${email} (uid: ${uid}): ${code}`);
+    const expiresAt = firestore_1.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000);
     await getOtpDocRef(uid).set({
         code,
         email,
         expiresAt,
-        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+        sentAt: firestore_1.FieldValue.serverTimestamp(),
         attempts: 0,
     });
     const transporter = buildTransporter(emailUser.value(), emailPass.value());
@@ -106,7 +108,7 @@ exports.verifyCode = (0, https_1.onCall)(async (request) => {
         throw new https_1.HttpsError('deadline-exceeded', 'Code has expired. Please request a new one.');
     }
     if (data.code !== code) {
-        await otpRef.update({ attempts: admin.firestore.FieldValue.increment(1) });
+        await otpRef.update({ attempts: firestore_1.FieldValue.increment(1) });
         const remaining = 4 - attempts;
         throw new https_1.HttpsError('invalid-argument', remaining > 0
             ? `Incorrect code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`
