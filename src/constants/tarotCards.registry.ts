@@ -1080,7 +1080,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "The goals someone once had have taken a new direction. The mutual desire that may have existed at some point has been broken.",
+    "meaningReversedOracle": "The goals someone once had have taken a new direction. The mutual desire that may have existed at some point has been broken."
   },
   {
     "id": 55,
@@ -1100,7 +1102,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Approached and handled correctly, there are great possibilities that can be manifested. Try amplifying the small details and practicing gratitude.",
+    "meaningReversedOracle": "Approached and handled correctly, there are great possibilities that can be manifested. Try amplifying the small details and practicing gratitude."
   },
   {
     "id": 56,
@@ -1120,7 +1124,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Sometimes we need to take a step back for a clear headspace. Not everything is resolved right away. Time and retreat need their process to make an effect.",
+    "meaningReversedOracle": "Sometimes we need to take a step back for a clear headspace. Not everything is resolved right away. Time and retreat need their process to make an effect."
   },
   {
     "id": 57,
@@ -1140,7 +1146,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "There are sacrifices and responsibilities taking place to fulfill this connection. After all, real love is shown when a person is consistent and mindful in their efforts. This is something that needs to be appreciated.",
+    "meaningReversedOracle": "There are sacrifices and responsibilities taking place to fulfill this connection. After all, real love is shown when a person is consistent and mindful in their efforts. This is something that needs to be appreciated."
   },
   {
     "id": 58,
@@ -1160,7 +1168,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Do not conform or adapt your beliefs to fit the other party. Stay true to yourself and personal core values. Don't let anyone overpower and manipulate you. You'll be proud of yourself in the future.",
+    "meaningReversedOracle": "Do not conform or adapt your beliefs to fit the other party. Stay true to yourself and personal core values. Don't let anyone overpower and manipulate you. You'll be proud of yourself in the future."
   },
   {
     "id": 59,
@@ -1180,7 +1190,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Someone is learning in order to gain a sense of maturity. The universe will keep teaching until the lesson is mastered.",
+    "meaningReversedOracle": "Someone is learning in order to gain a sense of maturity. The universe will keep teaching until the lesson is mastered."
   },
   {
     "id": 60,
@@ -1200,7 +1212,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "You both are feeling the same way. Don't doubt it, even if you can't see it.",
+    "meaningReversedOracle": "You both are feeling the same way. Don't doubt it, even if you can't see it."
   },
   {
     "id": 61,
@@ -1220,7 +1234,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Some things are worth fighting for. Do not doubt what is for the better. Someone has to put forth effort for the gain. Will it be you?",
+    "meaningReversedOracle": "Some things are worth fighting for. Do not doubt what is for the better. Someone has to put forth effort for the gain. Will it be you?"
   },
   {
     "id": 62,
@@ -1240,7 +1256,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "This meeting is bound to happen. What can we both gain from this connection? Let's both contribute and move forward together.",
+    "meaningReversedOracle": "This meeting is bound to happen. What can we both gain from this connection? Let's both contribute and move forward together."
   },
   {
     "id": 63,
@@ -1260,7 +1278,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "You can't stop something that is destined to happen. You can't waste your time overthinking it. It doesn't matter what actions you take; this will catch up to you because it is meant to be.",
+    "meaningReversedOracle": "You can't stop something that is destined to happen. You can't waste your time overthinking it. It doesn't matter what actions you take; this will catch up to you because it is meant to be."
   },
   {
     "id": 64,
@@ -1280,7 +1300,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Adaptations need to take place so that there can be an alignment. The same routine becomes tiring and prompts for change. On the contrary, perhaps things are too calm, and the energies need to be stirred.",
+    "meaningReversedOracle": "Adaptations need to take place so that there can be an alignment. The same routine becomes tiring and prompts for change. On the contrary, perhaps things are too calm, and the energies need to be stirred."
   },
   {
     "id": 65,
@@ -1300,7 +1322,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "You won't lose out on this. There is something to gain from all of this.",
+    "meaningReversedOracle": "You won't lose out on this. There is something to gain from all of this."
   },
   {
     "id": 66,
@@ -1320,7 +1344,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Sometimes we need to take a step back for a clear headspace. Not everything is resolved right away. Time and retreat need their process to make an effect.",
+    "meaningReversedOracle": "Sometimes we need to take a step back for a clear headspace. Not everything is resolved right away. Time and retreat need their process to make an effect."
   },
   {
     "id": 67,
@@ -1340,7 +1366,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "There is a push for an ending where one will feel justified. We have to make sense of everything to feel better. Will a discussion take place, or did the actions validate it for you?",
+    "meaningReversedOracle": "There is a push for an ending where one will feel justified. We have to make sense of everything to feel better. Will a discussion take place, or did the actions validate it for you?"
   },
   {
     "id": 68,
@@ -1360,7 +1388,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Someone has to be the bigger person and maybe set their ego aside. Adopting this approach will release a blockage.",
+    "meaningReversedOracle": "Someone has to be the bigger person and maybe set their ego aside. Adopting this approach will release a blockage."
   },
   {
     "id": 69,
@@ -1380,7 +1410,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Sweeping things under the carpet won't help this connection. Ignoring problems can only create a snowball of effects. There have been disappointments inflicted on this connection. Perhaps, someone has flaws they do not want to acknowledge. Regardless, the issue creates tension somehow, whether you want to see it or not.",
+    "meaningReversedOracle": "Sweeping things under the carpet won't help this connection. Ignoring problems can only create a snowball of effects. There have been disappointments inflicted on this connection. Perhaps, someone has flaws they do not want to acknowledge. Regardless, the issue creates tension somehow, whether you want to see it or not."
   },
   {
     "id": 70,
@@ -1400,7 +1432,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Stop projecting your own values and morals onto someone else. Not everyone vibrates at your frequency. Focus on the realities and logistics. Stop being misled by your emotions and creating a fake perception of someone. You are chasing false potential.",
+    "meaningReversedOracle": "Stop projecting your own values and morals onto someone else. Not everyone vibrates at your frequency. Focus on the realities and logistics. Stop being misled by your emotions and creating a fake perception of someone. You are chasing false potential."
   },
   {
     "id": 71,
@@ -1420,7 +1454,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Relationships go through their seasons. There are great times and bad times. There is strength and motivation to overcome the lows. Better days will come.",
+    "meaningReversedOracle": "Relationships go through their seasons. There are great times and bad times. There is strength and motivation to overcome the lows. Better days will come."
   },
   {
     "id": 72,
@@ -1440,7 +1476,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "There are issues in attaining clarity or an understanding. Information is being misconstrued, altered, or just not being revealed to its full extent. This is an obscurity.",
+    "meaningReversedOracle": "There are issues in attaining clarity or an understanding. Information is being misconstrued, altered, or just not being revealed to its full extent. This is an obscurity."
   },
   {
     "id": 73,
@@ -1460,7 +1498,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "You are the higher frequency. You possess the rightful qualities and values that are needed for success. Always do right by God and you will be rewarded.",
+    "meaningReversedOracle": "You are the higher frequency. You possess the rightful qualities and values that are needed for success. Always do right by God and you will be rewarded."
   },
   {
     "id": 74,
@@ -1480,7 +1520,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Someone is learning in order to gain a sense of maturity. The universe will keep teaching until the lesson is mastered.",
+    "meaningReversedOracle": "Someone is learning in order to gain a sense of maturity. The universe will keep teaching until the lesson is mastered."
   },
   {
     "id": 75,
@@ -1500,7 +1542,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "This connection will ultimately reap some kind of dedication, loyalty, and consistency.",
+    "meaningReversedOracle": "This connection will ultimately reap some kind of dedication, loyalty, and consistency."
   },
   {
     "id": 76,
@@ -1520,7 +1564,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Not everyone shows their character, especially in the beginning. Allow time, actions, and slip-ups to reveal their true intentions.",
+    "meaningReversedOracle": "Not everyone shows their character, especially in the beginning. Allow time, actions, and slip-ups to reveal their true intentions."
   },
   {
     "id": 77,
@@ -1540,7 +1586,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "You both are feeling the same way. Don't doubt it, even if you can't see it.",
+    "meaningReversedOracle": "You both are feeling the same way. Don't doubt it, even if you can't see it."
   },
   {
     "id": 78,
@@ -1560,7 +1608,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "There are values that are being challenged and suppressed, creating an uncomfortable situation. This is calling attention to your sense of worth, principles, and standards. Relationships require compromise from both sides to remain healthy.",
+    "meaningReversedOracle": "There are values that are being challenged and suppressed, creating an uncomfortable situation. This is calling attention to your sense of worth, principles, and standards. Relationships require compromise from both sides to remain healthy."
   },
   {
     "id": 79,
@@ -1580,7 +1630,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "One person is lacking in their self-fulfillment. This may be killing their enthusiasm toward the connection. No drive equals no passion.",
+    "meaningReversedOracle": "One person is lacking in their self-fulfillment. This may be killing their enthusiasm toward the connection. No drive equals no passion."
   },
   {
     "id": 80,
@@ -1600,7 +1652,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "The decisions or actions that took place were under hesitation and doubt, perhaps under haste or influence. There is uncertainty moving forward.",
+    "meaningReversedOracle": "The decisions or actions that took place were under hesitation and doubt, perhaps under haste or influence. There is uncertainty moving forward."
   },
   {
     "id": 81,
@@ -1620,7 +1674,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "They may not be showing it, but you are surely thought of. It may be a good idea to expect them to eventually seek you. How can they torment themselves for so long, reliving memories and what-ifs?!",
+    "meaningReversedOracle": "They may not be showing it, but you are surely thought of. It may be a good idea to expect them to eventually seek you. How can they torment themselves for so long, reliving memories and what-ifs?!"
   },
   {
     "id": 82,
@@ -1640,7 +1696,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Retreat is a possibility. There are too many viable choices to just concentrate on one person.",
+    "meaningReversedOracle": "Retreat is a possibility. There are too many viable choices to just concentrate on one person."
   },
   {
     "id": 83,
@@ -1660,7 +1718,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Someone needs to put the brakes on this connection. Will you take the initiative, or is the other person already doing so with their actions? For whatever reason, a connection looks to be coming to an end.",
+    "meaningReversedOracle": "Someone needs to put the brakes on this connection. Will you take the initiative, or is the other person already doing so with their actions? For whatever reason, a connection looks to be coming to an end."
   },
   {
     "id": 84,
@@ -1680,7 +1740,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Approached and handled correctly, there are great possibilities that can be manifested. Try amplifying the small details and practicing gratitude.",
+    "meaningReversedOracle": "Approached and handled correctly, there are great possibilities that can be manifested. Try amplifying the small details and practicing gratitude."
   },
   {
     "id": 85,
@@ -1700,7 +1762,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "This connection will ultimately reap some kind of dedication, loyalty, and consistency.",
+    "meaningReversedOracle": "This connection will ultimately reap some kind of dedication, loyalty, and consistency."
   },
   {
     "id": 86,
@@ -1720,7 +1784,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "This connection is not over, as someone will be making contact again. Should you shift the energy dynamics in your favor and be the one to initiate contact first? Regardless, the energies between the two parties are lingering.",
+    "meaningReversedOracle": "This connection is not over, as someone will be making contact again. Should you shift the energy dynamics in your favor and be the one to initiate contact first? Regardless, the energies between the two parties are lingering."
   },
   {
     "id": 87,
@@ -1740,7 +1806,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "The goals someone once had have taken a new direction. The mutual desire that may have existed at some point has been broken.",
+    "meaningReversedOracle": "The goals someone once had have taken a new direction. The mutual desire that may have existed at some point has been broken."
   },
   {
     "id": 88,
@@ -1760,7 +1828,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "This connection will ultimately reap some kind of dedication, loyalty, and consistency.",
+    "meaningReversedOracle": "This connection will ultimately reap some kind of dedication, loyalty, and consistency."
   },
   {
     "id": 89,
@@ -1780,7 +1850,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Someone is learning in order to gain a sense of maturity. The universe will keep teaching until the lesson is mastered.",
+    "meaningReversedOracle": "Someone is learning in order to gain a sense of maturity. The universe will keep teaching until the lesson is mastered."
   },
   {
     "id": 90,
@@ -1800,7 +1872,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "You are the higher frequency. You possess the rightful qualities and values that are needed for success. Always do right by God and you will be rewarded.",
+    "meaningReversedOracle": "You are the higher frequency. You possess the rightful qualities and values that are needed for success. Always do right by God and you will be rewarded."
   },
   {
     "id": 91,
@@ -1820,7 +1894,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Do not conform or adapt your beliefs to fit the other party. Stay true to yourself and personal core values. Don't let anyone overpower and manipulate you. You'll be proud of yourself in the future.",
+    "meaningReversedOracle": "Do not conform or adapt your beliefs to fit the other party. Stay true to yourself and personal core values. Don't let anyone overpower and manipulate you. You'll be proud of yourself in the future."
   },
   {
     "id": 92,
@@ -1840,7 +1916,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "There is something that is causing a reaction because someone is sensitive. It can be a trauma response, insecurities, or even a twin flame mirror effect. It is something that needs to be corrected to reduce the reaction. Awareness of this sensitivity can lead to a better understanding of oneself.",
+    "meaningReversedOracle": "There is something that is causing a reaction because someone is sensitive. It can be a trauma response, insecurities, or even a twin flame mirror effect. It is something that needs to be corrected to reduce the reaction. Awareness of this sensitivity can lead to a better understanding of oneself."
   },
   {
     "id": 93,
@@ -1861,7 +1939,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Someone needs to put the brakes on this connection. Will you take the initiative, or is the other person already doing so with their actions? For whatever reason, a connection looks to be coming to an end.",
+    "meaningReversedOracle": "Someone needs to put the brakes on this connection. Will you take the initiative, or is the other person already doing so with their actions? For whatever reason, a connection looks to be coming to an end."
   },
   {
     "id": 94,
@@ -1882,7 +1962,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "There are issues in attaining clarity or an understanding. Information is being misconstrued, altered, or just not being revealed to its full extent. This is an obscurity.",
+    "meaningReversedOracle": "There are issues in attaining clarity or an understanding. Information is being misconstrued, altered, or just not being revealed to its full extent. This is an obscurity."
   },
   {
     "id": 95,
@@ -1902,7 +1984,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "There is something that is causing a reaction because someone is sensitive. It can be a trauma response, insecurities, or even a twin flame mirror effect. It is something that needs to be corrected to reduce the reaction. Awareness of this sensitivity can lead to a better understanding of oneself.",
+    "meaningReversedOracle": "There is something that is causing a reaction because someone is sensitive. It can be a trauma response, insecurities, or even a twin flame mirror effect. It is something that needs to be corrected to reduce the reaction. Awareness of this sensitivity can lead to a better understanding of oneself."
   },
   {
     "id": 96,
@@ -1922,7 +2006,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "There are sacrifices and responsibilities taking place to fulfill this connection. After all, real love is shown when a person is consistent and mindful in their efforts. This is something that needs to be appreciated.",
+    "meaningReversedOracle": "There are sacrifices and responsibilities taking place to fulfill this connection. After all, real love is shown when a person is consistent and mindful in their efforts. This is something that needs to be appreciated."
   },
   {
     "id": 97,
@@ -1942,7 +2028,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Someone is learning in order to gain a sense of maturity. The universe will keep teaching until the lesson is mastered.",
+    "meaningReversedOracle": "Someone is learning in order to gain a sense of maturity. The universe will keep teaching until the lesson is mastered."
   },
   {
     "id": 98,
@@ -1962,7 +2050,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Someone is learning in order to gain a sense of maturity. The universe will keep teaching until the lesson is mastered.",
+    "meaningReversedOracle": "Someone is learning in order to gain a sense of maturity. The universe will keep teaching until the lesson is mastered."
   },
   {
     "id": 99,
@@ -1982,7 +2072,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Someone has to be the bigger person and maybe set their ego aside. Adopting this approach will release a blockage.",
+    "meaningReversedOracle": "Someone has to be the bigger person and maybe set their ego aside. Adopting this approach will release a blockage."
   },
   {
     "id": 100,
@@ -2002,7 +2094,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "You can't stop something that is destined to happen. You can't waste your time overthinking it. It doesn't matter what actions you take; this will catch up to you because it is meant to be.",
+    "meaningReversedOracle": "You can't stop something that is destined to happen. You can't waste your time overthinking it. It doesn't matter what actions you take; this will catch up to you because it is meant to be."
   },
   {
     "id": 101,
@@ -2022,7 +2116,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Approached and handled correctly, there are great possibilities that can be manifested. Try amplifying the small details and practicing gratitude.",
+    "meaningReversedOracle": "Approached and handled correctly, there are great possibilities that can be manifested. Try amplifying the small details and practicing gratitude."
   },
   {
     "id": 102,
@@ -2042,7 +2138,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "There is something that is causing a reaction because someone is sensitive. It can be a trauma response, insecurities, or even a twin flame mirror effect. It is something that needs to be corrected to reduce the reaction. Awareness of this sensitivity can lead to a better understanding of oneself.",
+    "meaningReversedOracle": "There is something that is causing a reaction because someone is sensitive. It can be a trauma response, insecurities, or even a twin flame mirror effect. It is something that needs to be corrected to reduce the reaction. Awareness of this sensitivity can lead to a better understanding of oneself."
   },
   {
     "id": 103,
@@ -2062,7 +2160,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Relationships go through their seasons. There are great times and bad times. There is strength and motivation to overcome the lows. Better days will come.",
+    "meaningReversedOracle": "Relationships go through their seasons. There are great times and bad times. There is strength and motivation to overcome the lows. Better days will come."
   },
   {
     "id": 104,
@@ -2082,7 +2182,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Adaptations need to take place so that there can be an alignment. The same routine becomes tiring and prompts for change. On the contrary, perhaps things are too calm, and the energies need to be stirred.",
+    "meaningReversedOracle": "Adaptations need to take place so that there can be an alignment. The same routine becomes tiring and prompts for change. On the contrary, perhaps things are too calm, and the energies need to be stirred."
   },
   {
     "id": 105,
@@ -2103,7 +2205,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "The healing process tends to warp our actions and thought patterns. You may be vulnerable to urges and misled by your emotions. What you may think is a good choice now may make you feel stupid later. Consider allowing more time to make sense of things. Remember, not all emotions require an action. Allow feelings to just pass through.",
+    "meaningReversedOracle": "The healing process tends to warp our actions and thought patterns. You may be vulnerable to urges and misled by your emotions. What you may think is a good choice now may make you feel stupid later. Consider allowing more time to make sense of things. Remember, not all emotions require an action. Allow feelings to just pass through."
   },
   {
     "id": 106,
@@ -2123,7 +2227,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Some things are worth fighting for. Do not doubt what is for the better. Someone has to put forth effort for the gain. Will it be you?",
+    "meaningReversedOracle": "Some things are worth fighting for. Do not doubt what is for the better. Someone has to put forth effort for the gain. Will it be you?"
   },
   {
     "id": 107,
@@ -2144,7 +2250,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Unfortunately, some people have hidden motives. What you may be experiencing is not in its true essence. Are you gaslighting yourself? Pretending everything is peachy masks the real issues.",
+    "meaningReversedOracle": "Unfortunately, some people have hidden motives. What you may be experiencing is not in its true essence. Are you gaslighting yourself? Pretending everything is peachy masks the real issues."
   },
   {
     "id": 108,
@@ -2164,7 +2272,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Our struggle for power, stubbornness, and ego is the only thing in the way. If only one person could lift that issue for the two of us.",
+    "meaningReversedOracle": "Our struggle for power, stubbornness, and ego is the only thing in the way. If only one person could lift that issue for the two of us."
   },
   {
     "id": 109,
@@ -2185,7 +2295,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Our struggle for power, stubbornness, and ego is the only thing in the way. If only one person could lift that issue for the two of us.",
+    "meaningReversedOracle": "Our struggle for power, stubbornness, and ego is the only thing in the way. If only one person could lift that issue for the two of us."
   },
   {
     "id": 110,
@@ -2205,7 +2317,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Approached and handled correctly, there are great possibilities that be manifested. Try amplifying the small details and practicing gratitude.",
+    "meaningReversedOracle": "Approached and handled correctly, there are great possibilities that can be manifested. Try amplifying the small details and practicing gratitude."
   },
   {
     "id": 111,
@@ -2225,7 +2339,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Some things are worth fighting for. Do not doubt what is for the better. Someone has to put forth effort for the gain. Will it be you?",
+    "meaningReversedOracle": "Some things are worth fighting for. Do not doubt what is for the better. Someone has to put forth effort for the gain. Will it be you?"
   },
   {
     "id": 112,
@@ -2245,7 +2361,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "The goals someone once had have taken a new direction. The mutual desire that may have existed at some point has been broken.",
+    "meaningReversedOracle": "The goals someone once had have taken a new direction. The mutual desire that may have existed at some point has been broken."
   },
   {
     "id": 113,
@@ -2266,7 +2384,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "This connection has the incapacity to reach some sense of finalization spiritually. There is a constant pull to reconnect and find resolutions in order to thrive together.",
+    "meaningReversedOracle": "This connection has the incapacity to reach some sense of finalization spiritually. There is a constant pull to reconnect and find resolutions in order to thrive together."
   },
   {
     "id": 114,
@@ -2287,7 +2407,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Someone needs to put the brakes on this connection. Will you take the initiative, or is the other person already doing so with their actions? For whatever reason, a connection looks to be coming to an end.",
+    "meaningReversedOracle": "Someone needs to put the brakes on this connection. Will you take the initiative, or is the other person already doing so with their actions? For whatever reason, a connection looks to be coming to an end."
   },
   {
     "id": 115,
@@ -2308,7 +2430,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "The healing process tends to warp our actions and thought patterns. You may be vulnerable to urges and misled by your emotions. What you may think is a good choice now may make you feel stupid later. Consider allowing more time to make sense of things. Remember, not all emotions require an action. Allow feelings to just pass through.",
+    "meaningReversedOracle": "The healing process tends to warp our actions and thought patterns. You may be vulnerable to urges and misled by your emotions. What you may think is a good choice now may make you feel stupid later. Consider allowing more time to make sense of things. Remember, not all emotions require an action. Allow feelings to just pass through."
   },
   {
     "id": 116,
@@ -2329,7 +2453,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Retreat is a possibility. There are too many viable choices to just concentrate on one person.",
+    "meaningReversedOracle": "Retreat is a possibility. There are too many viable choices to just concentrate on one person."
   },
   {
     "id": 117,
@@ -2350,7 +2476,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Unfortunately, some people have hidden motives. What you may be experiencing is not in its true essence. Are you gaslighting yourself? Pretending everything is peachy masks the real issues.",
+    "meaningReversedOracle": "Unfortunately, some people have hidden motives. What you may be experiencing is not in its true essence. Are you gaslighting yourself? Pretending everything is peachy masks the real issues."
   },
   {
     "id": 118,
@@ -2371,7 +2499,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "At some point, people have to evolve and transition to the next chapter of their lives. Not everyone is here to stay. Some people are just an experience and lesson in time. Just because it worked out at one time doesn't mean it will work out again. People who were once compatible change in their ways. The pieces of the puzzle just don't fit anymore.",
+    "meaningReversedOracle": "At some point, people have to evolve and transition to the next chapter of their lives. Not everyone is here to stay. Some people are just an experience and lesson in time. Just because it worked out at one time doesn't mean it will work out again. People who were once compatible change in their ways. The pieces of the puzzle just don't fit anymore."
   },
   {
     "id": 119,
@@ -2392,7 +2522,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Sometimes we need to take a step back for a clear headspace. Not everything is resolved right away. Time and retreat need their process to make an effect.",
+    "meaningReversedOracle": "Sometimes we need to take a step back for a clear headspace. Not everything is resolved right away. Time and retreat need their process to make an effect."
   },
   {
     "id": 120,
@@ -2413,7 +2545,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "The healing process tends to warp our actions and thought patterns. You may be vulnerable to urges and misled by your emotions. What you may think is a good choice now may make you feel stupid later. Consider allowing more time to make sense of things. Remember, not all emotions require an action. Allow feelings to just pass through.",
+    "meaningReversedOracle": "The healing process tends to warp our actions and thought patterns. You may be vulnerable to urges and misled by your emotions. What you may think is a good choice now may make you feel stupid later. Consider allowing more time to make sense of things. Remember, not all emotions require an action. Allow feelings to just pass through."
   },
   {
     "id": 121,
@@ -2434,7 +2568,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "The healing process tends to warp our actions and thought patterns. You may be vulnerable to urges and misled by your emotions. What you may think is a good choice now may make you feel stupid later. Consider allowing more time to make sense of things. Remember, not all emotions require an action. Allow feelings to just pass through.",
+    "meaningReversedOracle": "The healing process tends to warp our actions and thought patterns. You may be vulnerable to urges and misled by your emotions. What you may think is a good choice now may make you feel stupid later. Consider allowing more time to make sense of things. Remember, not all emotions require an action. Allow feelings to just pass through."
   },
   {
     "id": 122,
@@ -2455,7 +2591,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "At any point, someone has the opportunity to switch their direction and take up a different option. There may be someone or something that is enabling this.",
+    "meaningReversedOracle": "At any point, someone has the opportunity to switch their direction and take up a different option. There may be someone or something that is enabling this."
   },
   {
     "id": 123,
@@ -2475,7 +2613,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "The goals someone once had have taken a new direction. The mutual desire that may have existed at some point has been broken.",
+    "meaningReversedOracle": "The goals someone once had have taken a new direction. The mutual desire that may have existed at some point has been broken."
   },
   {
     "id": 124,
@@ -2495,7 +2635,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Where do you come into play in this scenario? Are you first in line or taking second place? Can you reason with this position? Nevertheless, it seems like there are other factors that are coming into play. One will have to settle or challenge these factors. What are your priorities?",
+    "meaningReversedOracle": "Where do you come into play in this scenario? Are you first in line or taking second place? Can you reason with this position? Nevertheless, it seems like there are other factors that are coming into play. One will have to settle or challenge these factors. What are your priorities?"
   },
   {
     "id": 125,
@@ -2515,7 +2657,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "This connection will ultimately reap some kind of dedication, loyalty, and consistency.",
+    "meaningReversedOracle": "This connection will ultimately reap some kind of dedication, loyalty, and consistency."
   },
   {
     "id": 126,
@@ -2535,7 +2679,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Someone is making sacrifices in hopes of sustaining peace and stability. This can either create settling in a relationship or a reason to leave.",
+    "meaningReversedOracle": "Someone is making sacrifices in hopes of sustaining peace and stability. This can either create settling in a relationship or a reason to leave."
   },
   {
     "id": 127,
@@ -2555,7 +2701,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "You can't stop something that is destined to happen. You can't waste your time overthinking it. It doesn't matter what actions you take; this will catch up to you because it is meant to be.",
+    "meaningReversedOracle": "You can't stop something that is destined to happen. You can't waste your time overthinking it. It doesn't matter what actions you take; this will catch up to you because it is meant to be."
   },
   {
     "id": 128,
@@ -2575,7 +2723,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "There are sacrifices and responsibilities taking place to fulfill this connection. After all, real love is shown when a person is consistent and mindful in their efforts. This is something that needs to be appreciated.",
+    "meaningReversedOracle": "There are sacrifices and responsibilities taking place to fulfill this connection. After all, real love is shown when a person is consistent and mindful in their efforts. This is something that needs to be appreciated."
   },
   {
     "id": 129,
@@ -2595,7 +2745,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "There are values that are being challenged and suppressed, creating an uncomfortable situation. This is calling attention to your sense of worth, principles, and standards. Relationships require compromise from both sides to remain healthy.",
+    "meaningReversedOracle": "There are values that are being challenged and suppressed, creating an uncomfortable situation. This is calling attention to your sense of worth, principles, and standards. Relationships require compromise from both sides to remain healthy."
   },
   {
     "id": 130,
@@ -2615,7 +2767,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "One person is lacking in their self-fulfillment. This may be killing their enthusiasm toward the connection. No drive equals no passion.",
+    "meaningReversedOracle": "One person is lacking in their self-fulfillment. This may be killing their enthusiasm toward the connection. No drive equals no passion."
   },
   {
     "id": 131,
@@ -2635,7 +2789,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Do not conform or adapt your beliefs to fit the other party. Stay true to yourself and personal core values. Don't let anyone overpower and manipulate you. You'll be proud of yourself in the future.",
+    "meaningReversedOracle": "Do not conform or adapt your beliefs to fit the other party. Stay true to yourself and personal core values. Don't let anyone overpower and manipulate you. You'll be proud of yourself in the future."
   },
   {
     "id": 132,
@@ -2655,7 +2811,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Someone is learning in order to gain a sense of maturity. The universe will keep teaching until the lesson is mastered.",
+    "meaningReversedOracle": "Someone is learning in order to gain a sense of maturity. The universe will keep teaching until the lesson is mastered."
   },
   {
     "id": 133,
@@ -2675,7 +2833,9 @@ export const TAROT_CARDS = [
     "reversalProbability": 0.35,
     "allowedSpreads": [
       ""
-    ]
+    ],
+    "meaningUprightOracle": "Where do you come into play in this scenario? Are you first in line or taking second place? Can you reason with this position? Nevertheless, it seems like there are other factors that are coming into play. One will have to settle or challenge these factors. What are your priorities?",
+    "meaningReversedOracle": "Where do you come into play in this scenario? Are you first in line or taking second place? Can you reason with this position? Nevertheless, it seems like there are other factors that are coming into play. One will have to settle or challenge these factors. What are your priorities?"
   }
 ];
 

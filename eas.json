@@ -4,17 +4,6 @@
     "appVersionSource": "remote"
   },
   "build": {
-    "development-simulator": {
-      "developmentClient": true,
-      "distribution": "internal",
-      "android": {
-        "buildType": "apk"
-      },
-      "ios": {
-        "simulator": true
-      },
-      "channel": "development-simulator"
-    },
     "development-device": {
       "developmentClient": true,
       "distribution": "internal",
@@ -24,7 +13,13 @@
       "ios": {
         "simulator": false
       },
-      "channel": "development-device"
+      "channel": "development-device",
+      "environment": "development",
+      "env": {
+        "APP_ENV": "development",
+        "EAS_UPDATE_CHANNEL": "development-device",
+        "USE_EMULATOR": "true"
+      }
     },
     "preview-device": {
       "developmentClient": false,
@@ -35,18 +30,28 @@
       "ios": {
         "simulator": false
       },
-      "channel": "preview-device"
+      "channel": "preview-device",
+      "environment": "preview",
+      "env": {
+        "APP_ENV": "preview-device",
+        "EAS_UPDATE_CHANNEL": "preview-device"
+      }
     },
-    "preview-simulator": {
+    "preview": {
       "developmentClient": false,
       "distribution": "internal",
       "android": {
         "buildType": "apk"
       },
       "ios": {
-        "simulator": true
+        "simulator": false
       },
-      "channel": "preview-simulator"
+      "channel": "preview",
+      "environment": "preview",
+      "env": {
+        "APP_ENV": "preview",
+        "EAS_UPDATE_CHANNEL": "preview-device"
+      }
     },
     "production": {
       "developmentClient": false,
@@ -58,7 +63,12 @@
       "ios": {
         "simulator": false
       },
-      "channel": "production"
+      "channel": "production",
+      "environment": "production",
+      "env": {
+        "APP_ENV": "production",
+        "EAS_UPDATE_CHANNEL": "production"
+      }
     }
   },
   "submit": {

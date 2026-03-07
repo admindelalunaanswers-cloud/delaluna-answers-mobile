@@ -2,14 +2,15 @@ import { Tabs } from 'expo-router';
 
 import { IconSymbol } from '@/src/components/ui/icon-symbol';
 import { useTheme } from '@/src/hooks/use-theme';
+import { UserProvider } from '@/src/context/user-context';
 
 export default function TabLayout() {
   const { theme: { colors: C } } = useTheme();
 
   return (
+    <UserProvider>
     <Tabs
       screenOptions={{
-        
         tabBarActiveTintColor: C.activeTab,
         tabBarInactiveTintColor: C.inactiveTabs,
         headerShown: false,
@@ -20,7 +21,7 @@ export default function TabLayout() {
           },
       }}>
       <Tabs.Screen
-        name="home"
+        name="index"
         options={{
           title: 'Home',
           tabBarIcon: ({ color }) => <IconSymbol name={require('@/src/assets/tabs/home.png')} size={28} color={color} />,
@@ -47,13 +48,8 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol name={require('@/src/assets/tabs/chat.png')} size={28} color={color} />,
         }}
       />
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Test',
-          tabBarIcon: ({ color }) => <IconSymbol name={"binoculars"} size={28} color={color} />,
-        }}
-      />
+     
     </Tabs>
+    </UserProvider>
   );
 }

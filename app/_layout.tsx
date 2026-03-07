@@ -1,17 +1,108 @@
-import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
-import { Slot } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import { type ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
+
 import { ImageBackground } from 'react-native';
-import 'react-native-reanimated';
+import * as Notifications from 'expo-notifications';
+
+import { Slot, useRouter, useSegments } from 'expo-router';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
+import { StatusBar } from 'expo-status-bar';
 
 import ThemeProvider from '@/src/context/theme-context';
-import { useTheme } from '@/src/hooks/use-theme';
+import { HoroscopeProvider, useHoroscope } from '@/src/context/horoscope-context';
+import { UserProvider, useUser } from '@/src/context/user-context';
 import { useColorScheme } from '@/src/hooks/use-color-scheme';
+import { useTheme } from '@/src/hooks/use-theme';
+import LoadingScreen from './(util)/loading-screen';
+
+function AuthGate() {
+  const { authUser, userDoc, loading: userLoading } = useUser();
+  const { loading: dataLoading, horoscope, horoscopeGenerating, transitReadingGenerating } = useHoroscope();
+  const router = useRouter();
+  const segments = useSegments();
+
+  const inAuth    = segments[0] === '(auth)';
+  const inStartup = segments[0] === '(startup)';
+
+  // Don't redirect from auth/startup → main until horoscope and transit reading
+  // are available. This prevents screens rendering empty while extensions generate.
+  const horoscopeReady =
+    (!!horoscope || (!dataLoading && !horoscopeGenerating)) &&
+    !transitReadingGenerating;
+
+  // Register push token once the user is signed in
+  useEffect(() => {
+    if (!authUser) return;
+    import('@/src/services/notifications.service')
+      .then(({ registerForPushNotifications }) => registerForPushNotifications(authUser.uid))
+      .catch(console.error);
+  }, [authUser?.uid]);
+
+  // Navigate to the correct screen when a notification is tapped
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener(response => {
+      const screen = response.notification.request.content.data?.screen;
+      if (screen && authUser) router.push(screen as any);
+    });
+    return () => sub.remove();
+  }, [authUser?.uid]);
+
+  useEffect(() => {
+    if (userLoading) return;
+
+    if (!authUser && !inAuth && !inStartup) {
+      router.replace('/(startup)/welcome');
+    } else if (authUser && (inAuth || inStartup) && horoscopeReady && userDoc?.isEmailVerified !== false) {
+      router.replace('/(main)');
+    }
+  }, [authUser, userDoc, userLoading, inAuth, inStartup, horoscopeReady]);
+
+  const isRedirecting =
+    !userLoading &&
+    (
+      (!authUser && !inAuth && !inStartup) ||
+      (!!authUser && (inAuth || inStartup) && horoscopeReady && userDoc?.isEmailVerified !== false)
+    );
+
+  // Show a global loading screen while:
+  // - auth state is resolving
+  // - initial data is loading for a non-auth screen (login → main)
+  // - a redirect is in-flight
+  // Do NOT hide auth screens while horoscope is generating — sign-up manages
+  // its own loading UI and 30-second safety-net timeout while on that screen.
+  const showLoading =
+    userLoading ||
+    (!!authUser && dataLoading && !inAuth && !inStartup) ||
+    (isRedirecting && !inAuth && !inStartup);
+
+  if (showLoading) {
+    return <LoadingScreen message="Loading..." />;
+  }
+
+  return (
+    <ThemedRoot>
+      <Slot />
+    </ThemedRoot>
+  );
+}
 
 function ThemedRoot({ children }: { children: ReactNode }) {
   const colorScheme = useColorScheme();
   const { theme } = useTheme();
+  const segments = useSegments();
+  const isMain = segments[0] !== '(auth)' && segments[0] !== '(startup)';
+
+  const inner = (
+    <NavThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      {children}
+      <StatusBar style="auto" />
+    </NavThemeProvider>
+  );
+
+  if (!isMain) {
+    return <>{inner}</>;
+  }
 
   return (
     <ImageBackground
@@ -19,20 +110,29 @@ function ThemedRoot({ children }: { children: ReactNode }) {
       style={{ flex: 1 }}
       resizeMode="cover"
     >
-      <NavThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        {children}
-        <StatusBar style="auto" />
-      </NavThemeProvider>
+      {inner}
     </ImageBackground>
   );
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    let cleanup = () => {};
+    import('@/src/services/notifications.service')
+      .then(({ setupNotificationHandlers }) => { cleanup = setupNotificationHandlers(); })
+      .catch(console.error);
+    return () => cleanup();
+  }, []);
+
   return (
-    <ThemeProvider>
-      <ThemedRoot>
-        <Slot />
-      </ThemedRoot>
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <UserProvider>
+        <ThemeProvider>
+          <HoroscopeProvider>
+            <AuthGate />
+          </HoroscopeProvider>
+        </ThemeProvider>
+      </UserProvider>
+    </SafeAreaProvider>
   );
 }

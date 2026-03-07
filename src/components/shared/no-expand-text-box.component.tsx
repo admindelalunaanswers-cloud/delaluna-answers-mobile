@@ -4,14 +4,13 @@ import { View, Text, StyleSheet, ViewStyle } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
 import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
-
+import { DrawnTarotCard } from "@/src/types/tarot-cards.type";
 
 import { BulletList } from "../typography/bullet-list-text";
-import MessageInABottleComponent from "../home/message-in-a-bottle.component";
-import TarotCardImageFrame from "../home/tarot-card-image-view.component";
 import DelalunaContainer from "./delaluna-container.component";
-import MoonView from "./moon-view.component";
-import { DrawnTarotCard } from "@/src/types/tarot-cards.type";
+import MessageInABottleComponent from "../home/message-in-a-bottle.component";
+import MoonView from "../home/moon-view.component";
+import TarotCardImageFrame from "../home/tarot-card-image-view.component";
 
 
 export type SectionName =
