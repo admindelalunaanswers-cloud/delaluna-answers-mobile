@@ -1,0 +1,13 @@
+# Firebase Cloud Functions — not needed for mobile builds
+functions/node_modules/
+functions/lib/
+
+# Local env overrides (never upload)
+.env.local
+.env*.local
+
+# macOS
+.DS_Store
+
+# Claude local config
+.claude/
