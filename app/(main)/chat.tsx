@@ -24,7 +24,7 @@ import { C, R, S } from '@/src/constants/theme';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useUser } from '@/src/context/user-context';
 import { useResponsive } from '@/src/hooks/use-responsive';
-import { buildHistory, clearChatHistory, sendChatMessage, subscribeToChatHistory } from '@/src/services/chat.service';
+import { buildHistory, clearChatHistory, retryChatMessage, sendChatMessage, subscribeToChatHistory } from '@/src/services/chat.service';
 import type { ChatMessageDoc } from '@/src/services/chat.service';
 import { ChatStore } from '@/src/stores/chat-store';
 import { HOME_STRINGS } from '@/src/constants/strings';
@@ -81,7 +81,10 @@ function TypingDots() {
   );
 }
 
-function MessageBubble({ msg }: { msg: ChatMessageDoc }) {
+function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: ChatMessageDoc) => void }) {
+  const isStuck = msg.isPending && (Date.now() - msg.createdAt.getTime()) > 60_000;
+  const showRetry = msg.isError || isStuck;
+
   return (
     <View style={styles.messageGroup}>
       <View style={styles.userBubbleRow}>
@@ -92,9 +95,9 @@ function MessageBubble({ msg }: { msg: ChatMessageDoc }) {
 
       <View style={styles.aiBubbleRow}>
         <View style={styles.aiBubble}>
-          {msg.isPending ? (
+          {msg.isPending && !isStuck ? (
             <TypingDots />
-          ) : msg.isError ? (
+          ) : msg.isError || isStuck ? (
             <Text style={[styles.aiBubbleText, { color: C.retro }]}>
               Something went wrong. Try again.
             </Text>
@@ -102,6 +105,11 @@ function MessageBubble({ msg }: { msg: ChatMessageDoc }) {
             <Text style={styles.aiBubbleText}>{msg.response}</Text>
           )}
         </View>
+        {showRetry && (
+          <TouchableOpacity onPress={() => onRetry(msg)} style={styles.retryButton}>
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -190,6 +198,17 @@ export default function ChatScreen() {
       setIsSending(false);
     }
   }, [inputText, authUser, isSending, messages, chartDetails]);
+
+  // ─── Retry ─────────────────────────────────────────────────────────────────
+
+  const handleRetry = useCallback(async (msg: ChatMessageDoc) => {
+    if (!authUser) return;
+    try {
+      await retryChatMessage(authUser.uid, msg.id, msg.prompt, msg.userMessage);
+    } catch (e) {
+      console.error('chat retry error', e);
+    }
+  }, [authUser]);
 
   // ─── New chat ──────────────────────────────────────────────────────────────
 
@@ -281,7 +300,7 @@ export default function ChatScreen() {
               style={styles.flex}
               data={messages}
               keyExtractor={item => item.id}
-              renderItem={({ item }) => <MessageBubble msg={item} />}
+              renderItem={({ item }) => <MessageBubble msg={item} onRetry={handleRetry} />}
               contentContainerStyle={[
                 styles.messageList,
                 { paddingBottom: insets.bottom + S.md },
@@ -418,6 +437,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  retryButton: {
+    marginTop: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: R.pill,
+    borderWidth: 1,
+    borderColor: C.retro,
+    alignSelf: 'flex-start',
+  },
+  retryText: {
+    color: C.retro,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
   typingRow: {
     flexDirection: 'row',
     alignItems: 'center',
