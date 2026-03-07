@@ -31,6 +31,21 @@
       },
       "channel": "preview-device",
       "env": {
+        "APP_ENV": "preview-device",
+        "EAS_UPDATE_CHANNEL": "preview-device"
+      }
+    },
+    "preview": {
+      "developmentClient": false,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": false
+      },
+      "channel": "preview",
+      "env": {
         "APP_ENV": "preview",
         "EAS_UPDATE_CHANNEL": "preview-device"
       }
