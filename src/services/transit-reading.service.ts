@@ -75,11 +75,13 @@ function renderPrompt(vars: {
   natalChart: string;
   currentTransits: string;
   date: string;
+  pronouns: string;
 }): string {
   return TRANSITS_PROMPT_TEMPLATE
     .replace('{{natalChart}}', vars.natalChart)
     .replace('{{currentTransits}}', vars.currentTransits)
-    .replace('{{date}}', vars.date);
+    .replace('{{date}}', vars.date)
+    .replace(/\{\{pronouns\}\}/g, vars.pronouns);
 }
 
 function parseResult(data: Record<string, any>): TransitReadingResult | null {
@@ -129,12 +131,13 @@ export async function requestTransitReading(
   dateId: string,
   chart: NatalChartDetailsDoc,
   transits: TransitData,
+  pronouns = 'they/them',
 ): Promise<void> {
   const natalChart = buildNatalChartSummary(chart);
   const currentTransits = buildTransitsSummary(transits);
   const date = formatDateLabel(dateId);
 
-  const prompt = renderPrompt({ natalChart, currentTransits, date });
+  const prompt = renderPrompt({ natalChart, currentTransits, date, pronouns });
 
   await setDoc(doc(db, 'users', uid, 'transits', dateId), {
     prompt,

@@ -99,12 +99,13 @@ export async function sendChatMessage(
   userMessage: string,
   history: { role: 'user' | 'assistant'; content: string }[],
   chart: NatalChartDetailsDoc | null,
+  pronouns = 'they/them',
 ): Promise<void> {
   const natalChartSummary = chart
     ? buildNatalChartSummary(chart)
     : 'No natal chart available.';
 
-  const prompt = buildChatPrompt(natalChartSummary, history, userMessage);
+  const prompt = buildChatPrompt(natalChartSummary, history, userMessage, pronouns);
 
   await addDoc(collection(db, 'users', uid, 'chat'), {
     userMessage,

@@ -78,10 +78,11 @@ export async function fetchBreakdown(uid: string): Promise<BreakdownFetchResult>
 export async function requestBreakdown(
   uid: string,
   chart: NatalChartDetailsDoc,
+  pronouns = 'they/them',
 ): Promise<void> {
   const natalChart    = buildNatalChartSummary(chart);
-  const freePrompt    = buildFreeNatalChartPrompt(natalChart);
-  const premiumPrompt = buildPremiumNatalChartPrompt(natalChart);
+  const freePrompt    = buildFreeNatalChartPrompt(natalChart, pronouns);
+  const premiumPrompt = buildPremiumNatalChartPrompt(natalChart, pronouns);
   const requestedAt   = serverTimestamp();
 
   await Promise.all([

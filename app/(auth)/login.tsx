@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
+  ScrollView,
   Alert,
 } from 'react-native';
 
@@ -142,120 +143,124 @@ export default function Login() {
     <>
       <StatusBar style="light" translucent backgroundColor="transparent" />
 
-      <KeyboardAvoidingView
+      <ImageBackground
+        source={require('@/src/assets/start-up/welcome-background.jpg')}
         style={{ flex: 1 }}
-        behavior={kbVisible && Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
+        resizeMode="cover"
       >
-        <ImageBackground
-          source={require('@/src/assets/start-up/welcome-background.jpg')}
-          style={StyleSheet.absoluteFill}
-          resizeMode="cover"
-        />
-
-        <ThemedView style={{ flex: 1 }}>
-          <ThemedView style={styles.logoContainer}>
-            <Image
-              source={require('@/src/assets/dlla-branded/delaluna_logo.png')}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-          </ThemedView>
-
-          <BlurView
-            intensity={90}
-            tint="dark"
-            style={[
-              styles.card,
-              kbVisible ? { flexGrow: 2 } : { flexGrow: 1 },
-            ]}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <ScrollView
+            contentContainerStyle={{ flexGrow: 1 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            bounces={false}
           >
-            <LinearGradient
-              colors={[
-                'rgba(255,255,255,0.05)',
-                'rgba(128,128,128,0.05)',
-                'rgba(0,0,0,0.05)',
-              ]}
-              locations={[0, 0.49, 1]}
-              style={StyleSheet.absoluteFillObject}
-            >
-              <ThemedView style={styles.bodyContainer}>
-                <ThemedView style={styles.form}>
-                  {/* EMAIL */}
-                  <TextInput
-                    placeholder="Email"
-                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                    style={styles.textField}
-                    value={email}
-                    onChangeText={setEmail}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    keyboardType="email-address"
-                    returnKeyType="next"
-                    blurOnSubmit={false}
-                    onSubmitEditing={() => passwordRef.current?.focus()}
-                  />
+            {!kbVisible && (
+              <ThemedView style={styles.logoContainer}>
+                <Image
+                  source={require('@/src/assets/dlla-branded/delaluna_logo.png')}
+                  style={styles.logo}
+                  resizeMode="contain"
+                />
+              </ThemedView>
+            )}
 
-                  {/* PASSWORD */}
-                  <ThemedView style={styles.passwordWrapper}>
+            <BlurView
+              intensity={90}
+              tint="dark"
+              style={styles.card}
+            >
+              <LinearGradient
+                colors={[
+                  'rgba(255,255,255,0.05)',
+                  'rgba(128,128,128,0.05)',
+                  'rgba(0,0,0,0.05)',
+                ]}
+                locations={[0, 0.49, 1]}
+                style={StyleSheet.absoluteFillObject}
+              >
+                <ThemedView style={styles.bodyContainer}>
+                  <ThemedView style={styles.form}>
+                    {/* EMAIL */}
                     <TextInput
-                      ref={passwordRef}
-                      placeholder="Password"
+                      placeholder="Email"
                       placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                      style={[styles.textField, styles.passwordField]}
-                      value={password}
-                      onChangeText={setPassword}
-                      secureTextEntry={!showPassword}
-                      returnKeyType="done"
+                      style={styles.textField}
+                      value={email}
+                      onChangeText={setEmail}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType="email-address"
+                      returnKeyType="next"
                       blurOnSubmit={false}
-                      onSubmitEditing={handleLogin}
+                      onSubmitEditing={() => passwordRef.current?.focus()}
                     />
-                    <TouchableOpacity
-                      style={styles.eyeButton}
-                      onPress={() => setShowPassword(v => !v)}
-                    >
-                      <Ionicons
-                        name={showPassword ? 'eye-off' : 'eye'}
-                        size={moderateScale(20)}
-                        color="rgba(255,255,255,0.6)"
+
+                    {/* PASSWORD */}
+                    <ThemedView style={styles.passwordWrapper}>
+                      <TextInput
+                        ref={passwordRef}
+                        placeholder="Password"
+                        placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                        style={[styles.textField, styles.passwordField]}
+                        value={password}
+                        onChangeText={setPassword}
+                        secureTextEntry={!showPassword}
+                        returnKeyType="done"
+                        blurOnSubmit={false}
+                        onSubmitEditing={handleLogin}
                       />
+                      <TouchableOpacity
+                        style={styles.eyeButton}
+                        onPress={() => setShowPassword(v => !v)}
+                      >
+                        <Ionicons
+                          name={showPassword ? 'eye-off' : 'eye'}
+                          size={moderateScale(20)}
+                          color="rgba(255,255,255,0.6)"
+                        />
+                      </TouchableOpacity>
+                    </ThemedView>
+
+                    <TouchableOpacity
+                      style={styles.forgotPasswordButton}
+                      onPress={() => router.replace('/(auth)/forgot-password' as any)}
+                    >
+                      <ThemedText style={styles.forgotPassword}>Forgot Password?</ThemedText>
                     </TouchableOpacity>
                   </ThemedView>
 
                   <TouchableOpacity
-                    style={styles.forgotPasswordButton}
-                    onPress={() => router.replace('/(auth)/forgot-password' as any)}
+                    style={[styles.loginButton, loading && { opacity: 0.6 }]}
+                    onPress={handleLogin}
+                    disabled={loading}
                   >
-                    <ThemedText style={styles.forgotPassword}>Forgot Password?</ThemedText>
+                    <ThemedText style={styles.loginButtonText}>
+                      {loading ? 'Signing in…' : 'Login'}
+                    </ThemedText>
                   </TouchableOpacity>
+
+                  <SecondaryButton
+                    title="Not a member? "
+                    linkString="Sign up"
+                    onPress={() => router.replace('/(auth)/sign-up')}
+                  />
                 </ThemedView>
-
-                <TouchableOpacity
-                  style={[styles.loginButton, loading && { opacity: 0.6 }]}
-                  onPress={handleLogin}
-                  disabled={loading}
-                >
-                  <ThemedText style={styles.loginButtonText}>
-                    {loading ? 'Signing in…' : 'Login'}
-                  </ThemedText>
-                </TouchableOpacity>
-
-                <SecondaryButton
-                  title="Not a member? "
-                  linkString="Sign up"
-                  onPress={() => router.replace('/(auth)/sign-up')}
-                />
-              </ThemedView>
-            </LinearGradient>
-          </BlurView>
-        </ThemedView>
-      </KeyboardAvoidingView>
+              </LinearGradient>
+            </BlurView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </ImageBackground>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  logoContainer: { flex: 1, width: '100%', height: '60%', alignItems: 'center', justifyContent: 'flex-end' },
+  logoContainer: { width: '100%', height: verticalScale(250), alignItems: 'center', justifyContent: 'flex-end' },
+
   card: {
     width: '100%',
     flexGrow: 1,

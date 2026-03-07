@@ -87,13 +87,15 @@ function renderPrompt(vars: {
   date: string;
   todaysMoon: string;
   retrogradeplanets: string;
+  pronouns: string;
 }): string {
   return HOROSCOPE_PROMPT_TEMPLATE
     .replace('{{tarotKeywords}}', vars.tarotKeywords)
     .replace('{{natalChart}}', vars.natalChart)
     .replace('{{date}}', vars.date)
     .replace('{{todaysMoon}}', vars.todaysMoon)
-    .replace('{{retrogradeplanets}}', vars.retrogradeplanets);
+    .replace('{{retrogradeplanets}}', vars.retrogradeplanets)
+    .replace(/\{\{pronouns\}\}/g, vars.pronouns);
 }
 
 function parseResult(data: Record<string, any>): HoroscopeResult | null {
@@ -143,6 +145,7 @@ async function writeHoroscopeDoc(
   moon: MoonSummary,
   retrogrades: string[],
   tarotKeywords: string,
+  pronouns = 'they/them',
 ): Promise<void> {
   const date = formatDateLabel(dateId);
   const todaysMoonStr = formatMoonSummary(moon);
@@ -154,6 +157,7 @@ async function writeHoroscopeDoc(
     date,
     todaysMoon: todaysMoonStr,
     retrogradeplanets: retrogradeStr,
+    pronouns,
   });
 
   await setDoc(doc(db, 'users', uid, 'horoscope', dateId), {
@@ -180,6 +184,7 @@ export async function requestHoroscope(
   chart: NatalChartDetailsDoc,
   todaysMoon: MoonSummary,
   retrogradeplanets: string[] = [],
+  pronouns = 'they/them',
   options?: { skipTarotDraw?: boolean },
 ): Promise<void> {
   const natalChart = buildNatalChartSummary(chart);
@@ -195,6 +200,7 @@ export async function requestHoroscope(
     todaysMoon,
     retrogradeplanets,
     tarotDraw?.today.keywordString ?? '',
+    pronouns,
   );
 
   // Yesterday and tomorrow are prefetched in the background.
@@ -207,6 +213,7 @@ export async function requestHoroscope(
       t.moon,
       t.planets.filter(p => p.isRetrograde).map(p => p.name),
       tarotDraw?.yesterday.keywordString ?? '',
+      pronouns,
     ))
     .catch(console.error);
 
@@ -216,6 +223,7 @@ export async function requestHoroscope(
       t.moon,
       t.planets.filter(p => p.isRetrograde).map(p => p.name),
       tarotDraw?.tomorrow.keywordString ?? '',
+      pronouns,
     ))
     .catch(console.error);
 }
@@ -234,6 +242,7 @@ export async function requestHoroscope(
 export async function rolloverHoroscope(
   uid: string,
   chart: NatalChartDetailsDoc,
+  pronouns = 'they/them',
 ): Promise<void> {
   const dateId     = getTodayDateId();
   const twoDaysAgo = offsetDateId(dateId, -2);
@@ -266,6 +275,7 @@ export async function rolloverHoroscope(
         uid, dateId, natalChart,
         t.moon, retrogrades,
         tarotDraw?.today.keywordString ?? '',
+        pronouns,
       );
     } catch (e) {
       console.error('rolloverHoroscope: failed to generate today', e);
@@ -280,6 +290,7 @@ export async function rolloverHoroscope(
         t.moon,
         t.planets.filter(p => p.isRetrograde).map(p => p.name),
         tarotDraw?.tomorrow.keywordString ?? '',
+        pronouns,
       ))
       .catch(console.error);
   }

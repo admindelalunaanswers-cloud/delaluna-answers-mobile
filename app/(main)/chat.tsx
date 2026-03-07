@@ -118,7 +118,7 @@ function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: C
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function ChatScreen() {
-  const { authUser } = useUser();
+  const { authUser, userDoc } = useUser();
   const { chartDetails } = useHoroscope();
   const insets = useSafeAreaInsets();
   const { scale } = useResponsive();
@@ -191,7 +191,7 @@ export default function ChatScreen() {
     setIsSending(true);
     try {
       const history = buildHistory(messages.filter(m => !m.isPending));
-      await sendChatMessage(authUser.uid, msg, history, chartDetails);
+      await sendChatMessage(authUser.uid, msg, history, chartDetails, userDoc?.pronouns);
     } catch (e) {
       console.error('chat send error', e);
     } finally {
