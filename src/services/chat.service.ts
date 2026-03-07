@@ -8,6 +8,7 @@ import type { NatalChartDetailsDoc } from '@/src/types/user.type';
 
 export interface ChatMessageDoc {
   id: string;
+  prompt: string;
   userMessage: string;
   response: string | null;
   /** true while the extension hasn't written a response yet */
@@ -68,6 +69,7 @@ export function subscribeToChatHistory(
         const response = parseResponse(data);
         return {
           id: docSnap.id,
+          prompt: data.prompt ?? '',
           userMessage: data.userMessage ?? '',
           response,
           isPending: !response && state !== 'ERROR',
@@ -104,6 +106,24 @@ export async function sendChatMessage(
 
   const prompt = buildChatPrompt(natalChartSummary, history, userMessage);
 
+  await addDoc(collection(db, 'users', uid, 'chat'), {
+    userMessage,
+    prompt,
+    createdAt: Timestamp.now(),
+    requestedAt: Timestamp.now(),
+  });
+}
+
+/**
+ * Deletes a stuck/errored message doc and re-submits it to re-trigger the extension.
+ */
+export async function retryChatMessage(
+  uid: string,
+  docId: string,
+  prompt: string,
+  userMessage: string,
+): Promise<void> {
+  await deleteDoc(doc(db, 'users', uid, 'chat', docId));
   await addDoc(collection(db, 'users', uid, 'chat'), {
     userMessage,
     prompt,
