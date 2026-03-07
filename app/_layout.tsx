@@ -91,7 +91,7 @@ function ThemedRoot({ children }: { children: ReactNode }) {
   const colorScheme = useColorScheme();
   const { theme } = useTheme();
   const segments = useSegments();
-  const isMain = segments[0] === '(main)';
+  const isMain = segments[0] !== '(auth)' && segments[0] !== '(startup)';
 
   const inner = (
     <NavThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
