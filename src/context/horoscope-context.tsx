@@ -116,6 +116,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     chart: NatalChartDetailsDoc,
     signal: { cancelled: boolean },
     prefetched: BreakdownFetchResult,
+    pronouns: string,
   ) => {
     const { result, premiumResult, pending, premiumPending } = prefetched;
     const needsFreeSubscribe    = !result;
@@ -144,7 +145,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     );
     unsubBreakdownRef.current = unsub;
 
-    if (needsRequest) requestBreakdown(uid, chart).catch(console.error);
+    if (needsRequest) requestBreakdown(uid, chart, pronouns).catch(console.error);
   };
 
   const subscribeTransitReading = (
@@ -154,6 +155,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     transits: TransitData,
     signal: { cancelled: boolean },
     prefetched: TransitFetchResult,
+    pronouns: string,
   ) => {
     if (prefetched.result) return; // already set in state, nothing to do
 
@@ -167,7 +169,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     });
     unsubTransitRef.current = unsub;
 
-    if (!prefetched.pending) requestTransitReading(uid, dateId, chart, transits).catch(console.error);
+    if (!prefetched.pending) requestTransitReading(uid, dateId, chart, transits, pronouns).catch(console.error);
   };
 
   // ─── Main load ──────────────────────────────────────────────────────────────
@@ -191,8 +193,9 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     ]);
 
     const userData = userSnap.exists() ? userSnap.data() : null;
-    const lat = typeof userData?.birthLat === 'number' ? userData.birthLat : 0;
-    const lon = typeof userData?.birthLon === 'number' ? userData.birthLon : 0;
+    const lat      = typeof userData?.birthLat === 'number' ? userData.birthLat : 0;
+    const lon      = typeof userData?.birthLon === 'number' ? userData.birthLon : 0;
+    const pronouns: string = userData?.pronouns ?? 'they/them';
 
     const transitKey = _transitKey(dateId, lat, lon);
     const cachedTransit = _transitCache.get(transitKey);
@@ -220,10 +223,10 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
 
     // Subscribe for data still being generated + background triggers
     if (chart) {
-      subscribeBreakdown(uid, chart, signal, breakdownFetch);
-      if (transits) subscribeTransitReading(uid, weekDateId, chart, transits, signal, transitReadingFetch);
+      subscribeBreakdown(uid, chart, signal, breakdownFetch, pronouns);
+      if (transits) subscribeTransitReading(uid, weekDateId, chart, transits, signal, transitReadingFetch, pronouns);
       // Pre-generate tomorrow's horoscope so it's ready when the day rolls over.
-      rolloverHoroscope(uid, chart).catch(console.error);
+      rolloverHoroscope(uid, chart, pronouns).catch(console.error);
     }
 
     const { result, pending } = horoscopeRes;
@@ -278,7 +281,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     if (!pending) {
       const moon        = transits?.moon ?? chart.moon;
       const retrogrades = transits?.planets.filter(p => p.isRetrograde).map(p => p.name) ?? [];
-      requestHoroscope(uid, dateId, chart, moon, retrogrades).catch(console.error);
+      requestHoroscope(uid, dateId, chart, moon, retrogrades, pronouns).catch(console.error);
     }
   };
 

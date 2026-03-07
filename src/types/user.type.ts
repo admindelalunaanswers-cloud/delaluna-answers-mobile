@@ -23,6 +23,7 @@ export interface UserDoc {
   timezone:       number;          // UTC offset e.g. -5, +5.5
   birthTime:      string;          // "HH:MM" local time
 
+  pronouns?:               string;  // e.g. "She/Her", "He/Him", "They/Them", "Non Binary"
   isPremiumMember:         boolean;
   createdAt:               Timestamp;
   expoPushToken?:          string;
