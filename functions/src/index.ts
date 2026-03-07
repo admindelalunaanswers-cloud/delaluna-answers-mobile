@@ -33,7 +33,7 @@ function buildTransporter(user: string, pass: string) {
 // ─── sendVerificationCode ─────────────────────────────────────────────────────
 
 export const sendVerificationCode = onCall(
-  { secrets: [emailUser, emailPass] },
+  { secrets: [emailUser, emailPass], invoker: 'public' },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be signed in.');
@@ -63,6 +63,7 @@ export const sendVerificationCode = onCall(
     }
 
     const code = generateOtp();
+    console.log(`[sendVerificationCode] OTP for ${email} (uid: ${uid}): ${code}`);
     const expiresAt = Timestamp.fromMillis(Date.now() + 15 * 60 * 1000);
 
     await getOtpDocRef(uid).set({
@@ -173,6 +174,29 @@ interface ExpoPushMessage {
  * Runs every day at 8:00 AM UTC.
  * Queries all users with a saved Expo push token and sends a morning reminder.
  */
+/**
+ * Runs every day at midnight UTC.
+ * Deletes all chat messages older than 24 hours across all users.
+ */
+export const clearDailyChatHistory = onSchedule('every day 00:00', async () => {
+  const cutoff = admin.firestore.Timestamp.fromMillis(Date.now() - 24 * 60 * 60 * 1000);
+
+  const snap = await db.collectionGroup('chat')
+    .where('createdAt', '<', cutoff)
+    .get();
+
+  if (snap.empty) return;
+
+  const BATCH_SIZE = 500;
+  for (let i = 0; i < snap.docs.length; i += BATCH_SIZE) {
+    const batch = db.batch();
+    snap.docs.slice(i, i + BATCH_SIZE).forEach(d => batch.delete(d.ref));
+    await batch.commit();
+  }
+
+  console.log(`[clearDailyChatHistory] Deleted ${snap.docs.length} chat messages.`);
+});
+
 export const sendMorningReminder = onSchedule('every day 08:00', async () => {
   const snap = await db.collection('users')
     .where('expoPushToken', '!=', null)
