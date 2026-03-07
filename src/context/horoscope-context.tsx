@@ -237,6 +237,15 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
         setHoroscopeGenerating(false);
         unsubHoroscopeRef.current?.();
         unsubHoroscopeRef.current = null;
+        // The Firebase Extension requires natalChart/details to exist before it
+        // can generate the horoscope, so the chart is guaranteed to be written
+        // by the time this fires. Re-fetch it so chartDetails (and the 3 signs)
+        // are populated on the home screen.
+        getDoc(doc(db, 'users', uid, 'natalChart', 'details')).then(snap => {
+          if (!signal.cancelled && snap.exists()) {
+            setChartDetails(snap.data() as NatalChartDetailsDoc);
+          }
+        }).catch(console.error);
       });
       unsubHoroscopeRef.current = unsubHoro;
 

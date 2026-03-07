@@ -1,8 +1,6 @@
 import React, { useContext, useEffect, useRef, useState } from "react";
 
 import {
-  View,
-  Text,
   StyleSheet,
   Animated,
   Easing,
@@ -23,6 +21,7 @@ import { httpsCallable } from "firebase/functions";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import HeaderNav from "@/src/components/shared/header-nav";
+import { ThemedView } from "@/src/components/themed-view";
 import HomeSignsDisplay from "@/src/components/shared/signs-display.component";
 import { GlassButton } from "@/src/assets/buttons/glass-button";
 import { ThemeContext } from "@/src/context/theme-context";
@@ -33,6 +32,8 @@ import { useUser } from "@/src/context/user-context";
 import { verticalScale, scale, moderateScale } from "@/src/utils/responsive";
 
 import LoadingScreen from "../(util)/loading-screen";
+import { ThemedText } from "@/src/components/themed-text";
+import { C } from "@/src/constants/theme";
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -105,10 +106,10 @@ function DelalunaToggle({
   label, value, onToggle,
 }: { label: string; value: boolean; onToggle: (v: boolean) => void }) {
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-      <Text style={{ color: "#FFFFFF", fontSize: moderateScale(14) }}>{label}</Text>
+    <ThemedView style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+      <ThemedText style={{ color: "#FFFFFF", fontSize: moderateScale(14) }}>{label}</ThemedText>
       <Switch value={value} onValueChange={onToggle} />
-    </View>
+    </ThemedView>
   );
 }
 
@@ -118,10 +119,10 @@ function DelalunaInputRow({
   return (
     <>
       {fields.map((field) => (
-        <View key={field.label} style={{ marginBottom: verticalScale(8) }}>
-          <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: moderateScale(11), marginBottom: 4 }}>
+        <ThemedView key={field.label} style={{ marginBottom: verticalScale(8) }}>
+          <ThemedText style={{ color: "rgba(255,255,255,0.6)", fontSize: moderateScale(11), marginBottom: 4 }}>
             {field.label.toUpperCase()}
-          </Text>
+          </ThemedText>
           <TextInput
             ref={field.inputRef}
             style={{
@@ -140,7 +141,7 @@ function DelalunaInputRow({
             onSubmitEditing={field.onSubmitEditing}
             onChangeText={(text) => onChange({ [field.label]: text } as PersonBirthUpdate)}
           />
-        </View>
+        </ThemedView>
       ))}
     </>
   );
@@ -163,10 +164,10 @@ const ConnectionsPlaceOfBirthField = React.forwardRef<
     focus: () => inputRef.current?.focus(),
   }));
   return (
-    <View style={{ marginBottom: verticalScale(8) }}>
-      <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: moderateScale(11), marginBottom: 4 }}>
+    <ThemedView style={{ marginBottom: verticalScale(8) }}>
+      <ThemedText style={{ color: "rgba(255,255,255,0.6)", fontSize: moderateScale(11), marginBottom: 4 }}>
         PLACE OF BIRTH
-      </Text>
+      </ThemedText>
       <TextInput
         ref={inputRef}
         style={{
@@ -184,7 +185,7 @@ const ConnectionsPlaceOfBirthField = React.forwardRef<
         onSubmitEditing={onSubmitEditing}
         onChangeText={(text) => onChange({ "Place of Birth": text })}
       />
-    </View>
+    </ThemedView>
   );
 });
 
@@ -192,10 +193,10 @@ function ConnectionsTimeOfBirthField({
   value, onChange,
 }: { value: string; onChange: (vals: PersonBirthUpdate) => void; onRequestDismiss?: () => void }) {
   return (
-    <View style={{ marginBottom: verticalScale(8) }}>
-      <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: moderateScale(11), marginBottom: 4 }}>
+    <ThemedView style={{ marginBottom: verticalScale(8) }}>
+      <ThemedText style={{ color: "rgba(255,255,255,0.6)", fontSize: moderateScale(11), marginBottom: 4 }}>
         TIME OF BIRTH
-      </Text>
+      </ThemedText>
       <TextInput
         style={{
           color: "#FFFFFF",
@@ -209,7 +210,7 @@ function ConnectionsTimeOfBirthField({
         value={value}
         onChangeText={(text) => onChange({ "Time of Birth": text })}
       />
-    </View>
+    </ThemedView>
   );
 }
 
@@ -499,7 +500,7 @@ export default function SingleConnectionCreateScreen() {
   }
 
   return (
-    <>
+    <ThemedView style={{ flex: 1 }}>
       <HeaderNav
         title="New Connection"
         rightLabel="Cancel"
@@ -517,26 +518,26 @@ export default function SingleConnectionCreateScreen() {
             contentContainerStyle={{ paddingTop: verticalScale(5), paddingBottom: verticalScale(20) }}
             keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => (
-              <View style={styles.section}>
-                <View style={styles.userRow}>
-                  <Text style={styles.titleText}>{item.title}</Text>
+              <ThemedView style={styles.section}>
+                <ThemedView style={styles.userRow}>
+                  <ThemedText style={styles.titleText}>{item.title}</ThemedText>
                   {item.toggle && <DelalunaToggle label="Me" value={isMe} onToggle={setIsMe} />}
-                </View>
+                </ThemedView>
 
-                <View style={styles.divider} />
+                <ThemedView style={styles.divider} />
 
                 {item.key === "first" && isMe ? (
-                  <View style={styles.meCard}>
-                    <Text style={styles.meName}>
-                      {toTitleCase(userFirstName)} {toTitleCase(userLastName)}
-                    </Text>
+                  <ThemedView style={styles.meCard}>
+                    <ThemedText style={styles.meName}>
+                      {userFirstName} {userLastName}
+                    </ThemedText>
                     <HomeSignsDisplay
                       sun={chartDetails?.planets.find(p => p.name === 'Sun')?.sign ?? ''}
                       moon={chartDetails?.moon.sign ?? ''}
                       rising={chartDetails?.ascendant.sign ?? ''}
                       showViewChart={false}
                     />
-                  </View>
+                  </ThemedView>
                 ) : (
                   (() => {
                     const personKey = item.key as PersonKey;
@@ -594,7 +595,7 @@ export default function SingleConnectionCreateScreen() {
                 )}
 
                 {item.key === "second" && (
-                  <View style={styles.relationshipRow}>
+                  <ThemedView style={styles.relationshipRow}>
                     {relationshipOptions.map((option) => {
                       const key = option.toLowerCase();
                       const iconSource =
@@ -619,19 +620,19 @@ export default function SingleConnectionCreateScreen() {
                         </TouchableOpacity>
                       );
                     })}
-                  </View>
+                  </ThemedView>
                 )}
-              </View>
+              </ThemedView>
             )}
             ListFooterComponent={
-              <View style={styles.footerSections}>
+              <ThemedView style={styles.footerSections}>
                 <GlassButton title="Thassit" onPress={handleSaveConnection} />
-              </View>
+              </ThemedView>
             }
           />
         </KeyboardAvoidingView>
       </Animated.View>
-    </>
+    </ThemedView>
   );
 }
 
@@ -675,8 +676,8 @@ const styles = StyleSheet.create({
     padding: scale(15),
   },
   meName: {
-    color: "#FFFFFF",
-    fontSize: moderateScale(18),
+    color: C.white,
+    fontSize: moderateScale(20),
     fontWeight: "700",
   },
   relationshipRow: {

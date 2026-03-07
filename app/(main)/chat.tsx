@@ -1,41 +1,82 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
-  ActivityIndicator,
+  Animated,
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HeaderNav from '@/src/components/shared/header-nav';
+import PremiumUnlock from '@/src/components/shared/premium-unlock.component';
 import { ThemedView } from '@/src/components/themed-view';
 import { C, R, S } from '@/src/constants/theme';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useUser } from '@/src/context/user-context';
-import { buildHistory, sendChatMessage, subscribeToChatHistory } from '@/src/services/chat.service';
+import { useResponsive } from '@/src/hooks/use-responsive';
+import { buildHistory, clearChatHistory, sendChatMessage, subscribeToChatHistory } from '@/src/services/chat.service';
 import type { ChatMessageDoc } from '@/src/services/chat.service';
 import { ChatStore } from '@/src/stores/chat-store';
 import { HOME_STRINGS } from '@/src/constants/strings';
+
+const FREE_QUESTION_LIMIT = 5;
+const UNLOCK_BONUS = 5;
 
 const SUGGESTIONS = [
   HOME_STRINGS.newLove.questionFunnel,
   HOME_STRINGS.returns.questionFunnel1,
   HOME_STRINGS.returns.questionFunnel2,
+  'What does my birth chart say about my love life?',
+  'What energies are influencing me right now?',
+  'What should I focus on this week?',
+  'How can I better understand my emotions?',
+  'What does my rising sign reveal about me?',
 ];
+
+const VISIBLE_SUGGESTIONS = 5;
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
 function TypingDots() {
+  const dots = [useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current];
+
+  useEffect(() => {
+    const anims = dots.map((dot, i) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(i * 150),
+          Animated.timing(dot, { toValue: -6, duration: 300, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 0, duration: 300, useNativeDriver: true }),
+          Animated.delay((dots.length - i - 1) * 150),
+        ])
+      )
+    );
+    anims.forEach(a => a.start());
+    return () => anims.forEach(a => a.stop());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <View style={styles.typingRow}>
-      <ActivityIndicator size="small" color={C.purpleLight} />
-      <Text style={styles.typingText}>Delaluna is thinking…</Text>
+      {dots.map((dot, i) => (
+        <Animated.View key={i} style={[styles.typingDot, { transform: [{ translateY: dot }] }]} />
+      ))}
     </View>
   );
 }
@@ -72,19 +113,31 @@ export default function ChatScreen() {
   const { authUser } = useUser();
   const { chartDetails } = useHoroscope();
   const insets = useSafeAreaInsets();
+  const { scale } = useResponsive();
+  const headerHeight = insets.top + scale(44);
 
   const [messages, setMessages] = useState<ChatMessageDoc[]>([]);
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [chatUnlocked, setChatUnlocked] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+
+  const questionLimit = FREE_QUESTION_LIMIT + (chatUnlocked ? UNLOCK_BONUS : 0);
+  const questionsUsed = messages.length;
+  const questionsRemaining = Math.max(0, questionLimit - questionsUsed);
+  const chatLocked = questionsUsed >= questionLimit;
 
   const flatListRef = useRef<FlatList>(null);
+  const chatStarted = useRef(false);
+  const [suggestionOffset, setSuggestionOffset] = useState(0);
 
   // ─── Subscribe to chat history ─────────────────────────────────────────────
 
   useEffect(() => {
     if (!authUser) return;
     const unsub = subscribeToChatHistory(authUser.uid, (msgs) => {
+      if (msgs.length > 0) chatStarted.current = true;
       setMessages(msgs);
       setHistoryLoaded(true);
     });
@@ -102,6 +155,15 @@ export default function ChatScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [historyLoaded]);
 
+  // ─── Rotate suggestions ────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setSuggestionOffset(i => (i + VISIBLE_SUGGESTIONS) % SUGGESTIONS.length);
+    }, 7000);
+    return () => clearInterval(id);
+  }, []);
+
   // ─── Auto-scroll on new messages ──────────────────────────────────────────
 
   useEffect(() => {
@@ -114,8 +176,9 @@ export default function ChatScreen() {
 
   const handleSend = useCallback(async (text?: string) => {
     const msg = (text ?? inputText).trim();
-    if (!msg || !authUser || isSending) return;
+    if (!msg || !authUser || isSending || chatLocked) return;
 
+    chatStarted.current = true;
     setInputText('');
     setIsSending(true);
     try {
@@ -128,27 +191,80 @@ export default function ChatScreen() {
     }
   }, [inputText, authUser, isSending, messages, chartDetails]);
 
+  // ─── New chat ──────────────────────────────────────────────────────────────
+
+  const handleNewChat = useCallback(async () => {
+    if (!authUser) return;
+    chatStarted.current = false;
+    await clearChatHistory(authUser.uid);
+  }, [authUser]);
+
   // ─── Derived ───────────────────────────────────────────────────────────────
 
-  const showSuggestions = historyLoaded && messages.length === 0 && !isSending;
+  const showSuggestions = historyLoaded && messages.length === 0;
   const hasPending = messages.some(m => m.isPending);
   const sendDisabled = isSending || hasPending || !inputText.trim();
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const historyMessages = messages.filter(m => m.createdAt >= cutoff && !m.isPending && !m.isError);
+
   return (
     <ThemedView style={styles.container}>
-      <HeaderNav title="Chat" />
+      <HeaderNav
+        title="Chat"
+        leftIconName={__DEV__ ? 'time-outline' : undefined}
+        onLeftPress={__DEV__ ? () => setShowHistory(true) : undefined}
+        rightIconName="add"
+        onRightPress={handleNewChat}
+      />
+
+      {/* ── History modal ── */}
+      <Modal visible={showHistory} animationType="slide" onRequestClose={() => setShowHistory(false)}>
+        <View style={[styles.historyModal, { paddingTop: insets.top }]}>
+          <View style={styles.historyHeader}>
+            <Text style={styles.historyTitle}>Today's History</Text>
+            <TouchableOpacity onPress={() => setShowHistory(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close" size={24} color={C.white} />
+            </TouchableOpacity>
+          </View>
+
+          {historyMessages.length === 0 ? (
+            <View style={styles.historyEmpty}>
+              <Text style={styles.historyEmptyText}>No conversation yet today.</Text>
+            </View>
+          ) : (
+            <ScrollView contentContainerStyle={styles.historyList} showsVerticalScrollIndicator={false}>
+              {historyMessages.map(m => (
+                <View key={m.id} style={styles.historyEntry}>
+                  <Text style={styles.historyTimestamp}>{formatTime(m.createdAt)}</Text>
+                  <View style={[styles.userBubble, { alignSelf: 'flex-end' }]}>
+                    <Text style={styles.userBubbleText}>{m.userMessage}</Text>
+                  </View>
+                  {m.response ? (
+                    <View style={[styles.aiBubble, { alignSelf: 'flex-start' }]}>
+                      <Text style={styles.aiBubbleText}>{m.response}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      </Modal>
 
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={[styles.flex, { paddingTop: 88 }]}>
+        <View style={[styles.flex, { paddingTop: headerHeight }]}>
           {showSuggestions ? (
             <View style={styles.suggestionsContainer}>
               <Text style={styles.suggestionsLabel}>What's on your mind?</Text>
-              {SUGGESTIONS.map((q) => (
+              {Array.from({ length: VISIBLE_SUGGESTIONS }, (_, i) =>
+                SUGGESTIONS[(suggestionOffset + i) % SUGGESTIONS.length]
+              ).map((q) => (
                 <TouchableOpacity
                   key={q}
                   style={styles.suggestionChip}
@@ -162,6 +278,7 @@ export default function ChatScreen() {
           ) : (
             <FlatList
               ref={flatListRef}
+              style={styles.flex}
               data={messages}
               keyExtractor={item => item.id}
               renderItem={({ item }) => <MessageBubble msg={item} />}
@@ -173,32 +290,54 @@ export default function ChatScreen() {
             />
           )}
 
-          <View style={[styles.inputBar, { paddingBottom: insets.bottom + S.sm }]}>
-            <TextInput
-              style={styles.textInput}
-              value={inputText}
-              onChangeText={setInputText}
-              placeholder="Ask Delaluna anything…"
-              placeholderTextColor={C.muted}
-              multiline
-              maxLength={500}
-              returnKeyType="send"
-              onSubmitEditing={() => handleSend()}
-              blurOnSubmit
-            />
-            <TouchableOpacity
-              style={[styles.sendButton, sendDisabled && styles.sendButtonDisabled]}
-              onPress={() => handleSend()}
-              disabled={sendDisabled}
-              activeOpacity={0.7}
-            >
-              {isSending ? (
-                <ActivityIndicator size="small" color={C.white} />
-              ) : (
-                <Text style={styles.sendButtonText}>↑</Text>
+          {chatLocked ? (
+            <View style={[styles.paygateContainer, { paddingBottom: insets.bottom}]}>
+              <PremiumUnlock
+                title="You've used all your free questions"
+                message={chatUnlocked
+                  ? 'Upgrade to Premium for unlimited cosmic guidance.'
+                  : 'Unlock 5 more questions to keep the conversation going.'}
+                onUnlock={() => setChatUnlocked(true)}
+              />
+            </View>
+          ) : (
+            <>
+              
+              <View style={[styles.inputBar, { paddingBottom: S.sm }]}>
+                <TextInput
+                  style={styles.textInput}
+                  value={inputText}
+                  onChangeText={setInputText}
+                  placeholder="Ask Delaluna anything…"
+                  placeholderTextColor={C.muted}
+                  multiline
+                  maxLength={500}
+                  returnKeyType="send"
+                  onSubmitEditing={() => handleSend()}
+                  blurOnSubmit
+                />
+                <TouchableOpacity
+                  style={[styles.sendButton, sendDisabled && styles.sendButtonDisabled]}
+                  onPress={() => handleSend()}
+                  disabled={sendDisabled}
+                  activeOpacity={0.7}
+                >
+                  {isSending ? (
+                    <ActivityIndicator size="small" color={C.white} />
+                  ) : (
+                    <Text style={styles.sendButtonText}>→</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+              {questionsUsed > 0 && (
+                <View style={styles.counterBar}>
+                  <Text style={styles.counterText}>
+                    {questionsRemaining} {chatUnlocked ? '' : 'free '}question{questionsRemaining !== 1 ? 's' : ''} remaining
+                  </Text>
+                </View>
               )}
-            </TouchableOpacity>
-          </View>
+            </>
+          )}
         </View>
       </KeyboardAvoidingView>
     </ThemedView>
@@ -282,17 +421,19 @@ const styles = StyleSheet.create({
   typingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: S.xs,
+    gap: 5,
+    paddingVertical: 3,
   },
-  typingText: {
-    color: C.muted,
-    fontSize: 13,
+  typingDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: C.purpleLight,
   },
-
   inputBar: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: S.md,
+    alignItems: 'center',
+    paddingHorizontal: S.sm,
     paddingTop: S.sm,
     gap: S.sm,
     borderTopWidth: 1,
@@ -310,6 +451,7 @@ const styles = StyleSheet.create({
     color: C.white,
     fontSize: 14,
     lineHeight: 20,
+    
   },
   sendButton: {
     width: 40,
@@ -327,5 +469,64 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     lineHeight: 22,
+  },
+
+  paygateContainer: {
+    paddingHorizontal: S.md,
+    paddingTop: S.md,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(0,0,0,0.2)',
+  },
+  counterBar: {
+    alignItems: 'center',
+    paddingVertical: S.xs,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+  },
+  counterText: {
+    color: C.muted,
+    fontSize: 12,
+  },
+
+  historyModal: {
+    flex: 1,
+    backgroundColor: '#0d0d1a',
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: S.md,
+    paddingVertical: S.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  historyTitle: {
+    color: C.white,
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  historyEmpty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  historyEmptyText: {
+    color: C.muted,
+    fontSize: 14,
+  },
+  historyList: {
+    paddingHorizontal: S.md,
+    paddingVertical: S.md,
+    gap: S.md,
+  },
+  historyEntry: {
+    gap: S.xs,
+  },
+  historyTimestamp: {
+    color: C.muted,
+    fontSize: 11,
+    textAlign: 'center',
+    marginBottom: S.xs,
   },
 });
