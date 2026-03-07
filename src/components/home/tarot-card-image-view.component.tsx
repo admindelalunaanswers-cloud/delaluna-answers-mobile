@@ -1,10 +1,11 @@
-// src/components/home/tarot-card-image-view.tsx
-
 import React, { useState } from "react";
-import { StyleSheet, View, Image, Text, TouchableOpacity, Linking } from "react-native";
+
+import { Image, Linking, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+
 import { Ionicons } from "@expo/vector-icons";
+
 import { CARD_LINKS } from "@/src/constants/links";
-import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
+import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 
 interface TarotCardProps {
   cardNumber: number[];
@@ -53,9 +54,9 @@ export default function TarotCardImageFrame({
 
   const determineCardBack = (cardNumber: number) => {
     if (cardNumber <= 53) {
-      return require('@/assets/card_backs/ORACLE_CARD_BACK.png');
+      return require('@/src/assets/card_backs/ORACLE_CARD_BACK.png');
     } else if (cardNumber >= 54) {
-      return require('@/assets/card_backs/TAROT_CARD_BACK.png');
+      return require('@/src/assets/card_backs/TAROT_CARD_BACK.png');
     } else {
       return "Unknown Card";
     }

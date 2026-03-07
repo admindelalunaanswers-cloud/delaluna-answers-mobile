@@ -1,0 +1,17 @@
+{
+  "projects": {
+    "default": "delaluna-answers"
+  },
+  "targets": {},
+  "etags": {
+    "delaluna-answers": {
+      "extensionInstances": {
+        "firestore-genai-chatbot": "5c05a1d8b87e1be950f2153aa4ed05f9241ae4a14474d6735f7c10e9197b0f57",
+        "firestore-genai-chatbot-1rrn": "3a9240772026e90c46f72154f122bc9f82b9f26b4eebe2abd4474217091d0720",
+        "firestore-natal-chart-chatbot-6ppy": "ef74b49c6fd2dd47ad8775370471d321394734cf93e0ce2d03222531ebd1ab15",
+        "firestore-transits-chatbot-cgl7": "edd3e6ed43f493e98cb3b0a3ef992662ca449b473529e03fc39f9a4572d980eb",
+        "horoscope-chatbot-b6wc": "4a46086728fb79c296d99ceabd475b4ded6ecc2b14df1b75cc93f6d40ca9b5dc"
+      }
+    }
+  }
+}
