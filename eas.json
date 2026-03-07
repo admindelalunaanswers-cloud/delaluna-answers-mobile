@@ -14,6 +14,7 @@
         "simulator": false
       },
       "channel": "development-device",
+      "environment": "development",
       "env": {
         "APP_ENV": "development",
         "EAS_UPDATE_CHANNEL": "development-device",
@@ -30,6 +31,7 @@
         "simulator": false
       },
       "channel": "preview-device",
+      "environment": "preview",
       "env": {
         "APP_ENV": "preview-device",
         "EAS_UPDATE_CHANNEL": "preview-device"
@@ -45,6 +47,7 @@
         "simulator": false
       },
       "channel": "preview",
+      "environment": "preview",
       "env": {
         "APP_ENV": "preview",
         "EAS_UPDATE_CHANNEL": "preview-device"
@@ -61,6 +64,7 @@
         "simulator": false
       },
       "channel": "production",
+      "environment": "production",
       "env": {
         "APP_ENV": "production",
         "EAS_UPDATE_CHANNEL": "production"
