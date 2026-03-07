@@ -63,7 +63,6 @@ export const sendVerificationCode = onCall(
     }
 
     const code = generateOtp();
-    console.log(`[sendVerificationCode] OTP for ${email} (uid: ${uid}): ${code}`);
     const expiresAt = Timestamp.fromMillis(Date.now() + 15 * 60 * 1000);
 
     await getOtpDocRef(uid).set({
