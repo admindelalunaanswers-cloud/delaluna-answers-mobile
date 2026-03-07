@@ -23,7 +23,7 @@ import { ThemedView } from '@/src/components/themed-view';
 import { useUser } from '@/src/context/user-context';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { signOut } from '@/src/services/user.service';
-import { app } from '@/firebaseConfig';
+import { app, auth } from '@/firebaseConfig';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
 import LoadingScreen from '../(util)/loading-screen';
 
@@ -46,6 +46,7 @@ export default function VerifyEmail() {
   const [codeSent, setCodeSent] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [reloading, setReloading] = useState(false);
 
   const horoscopeReady =
     (!!horoscope || (!dataLoading && !horoscopeGenerating)) &&
@@ -67,9 +68,14 @@ export default function VerifyEmail() {
 
   const handleSendCode = async () => {
     if (sending || resendCooldown > 0) return;
+    if (!auth.currentUser) {
+      setSendError('Not signed in. Please sign up or log in first.');
+      return;
+    }
     setSending(true);
     setSendError(null);
     try {
+      await auth.currentUser.getIdToken(true); // ensure a fresh token is attached
       await sendVerificationCode({});
       setCodeSent(true);
       setResendCooldown(60);
@@ -78,6 +84,17 @@ export default function VerifyEmail() {
       setSendError(msg);
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleReload = async () => {
+    setReloading(true);
+    try {
+      await reloadAuthUser();
+      await refresh();
+      if (auth.currentUser?.emailVerified) setVerified(true);
+    } catch { /* ignore */ } finally {
+      setReloading(false);
     }
   };
 
@@ -237,6 +254,17 @@ export default function VerifyEmail() {
                       : sending
                       ? 'Sending…'
                       : 'Resend code'}
+                  </ThemedText>
+                </TouchableOpacity>
+
+                {/* Reload */}
+                <TouchableOpacity
+                  onPress={handleReload}
+                  disabled={reloading}
+                  style={styles.signOutButton}
+                >
+                  <ThemedText style={[styles.signOutText, reloading && { opacity: 0.45 }]}>
+                    {reloading ? 'Reloading…' : 'Already verified? Reload'}
                   </ThemedText>
                 </TouchableOpacity>
 
