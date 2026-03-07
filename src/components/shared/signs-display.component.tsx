@@ -20,7 +20,7 @@ export default function HomeSignsDisplay({ sun, moon, rising, showViewChart = tr
   const goToBirthchart = () => router.push('/(home)/birth-chart-view');
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={[styles.container, !showViewChart && { justifyContent: 'center' }]}>
 
       <ThemedView style={{ flexDirection: "row", gap: scale(4), alignItems: "flex-start" }}>
         <ThemedView style={styles.signItem}>
