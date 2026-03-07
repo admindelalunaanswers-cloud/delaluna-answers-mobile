@@ -90,7 +90,7 @@ const HoroscopeContext = createContext<HoroscopeContextValue>({
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function HoroscopeProvider({ children }: { children: ReactNode }) {
-  const { authUser, userDoc } = useUser();
+  const { authUser } = useUser();
 
   const [chartDetails, setChartDetails]                         = useState<NatalChartDetailsDoc | null>(null);
   const [horoscope, setHoroscope]                               = useState<HoroscopeResult | null>(null);
@@ -178,23 +178,27 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     // Transit readings are keyed by the week's Sunday so they regenerate once
     // per week. Every Sunday the key changes → a fresh reading is generated.
     const weekDateId = getThisWeekDateId();
-    const lat = userDoc?.birthLat ?? 0;
-    const lon = userDoc?.birthLon ?? 0;
 
-    // All fetches fire simultaneously — no waterfall.
-    // Breakdown and transit reading are included here so they're ready
-    // by the time loading=false, eliminating the secondary loading phase.
-    const transitKey = _transitKey(dateId, lat, lon);
-    const cachedTransit = _transitCache.get(transitKey);
-    const [chartSnap, horoscopeRes, transits, breakdownFetch, transitReadingFetch] = await Promise.all([
+    // Fetch user doc alongside other data so birth coordinates come from
+    // Firestore — not from userDoc state — and are always correct on first load,
+    // even before user-context has finished resolving its own fetch.
+    const [userSnap, chartSnap, horoscopeRes, breakdownFetch, transitReadingFetch] = await Promise.all([
+      getDoc(doc(db, 'users', uid)),
       getDoc(doc(db, 'users', uid, 'natalChart', 'details')),
       fetchHoroscope(uid, dateId),
-      cachedTransit
-        ? Promise.resolve(cachedTransit)
-        : calculateTransits(new Date(), lat, lon).catch(() => null),
       fetchBreakdown(uid),
       fetchTransitReading(uid, weekDateId),
     ]);
+
+    const userData = userSnap.exists() ? userSnap.data() : null;
+    const lat = typeof userData?.birthLat === 'number' ? userData.birthLat : 0;
+    const lon = typeof userData?.birthLon === 'number' ? userData.birthLon : 0;
+
+    const transitKey = _transitKey(dateId, lat, lon);
+    const cachedTransit = _transitCache.get(transitKey);
+    const transits = cachedTransit
+      ? cachedTransit
+      : await calculateTransits(new Date(), lat, lon).catch(() => null);
     if (transits && !cachedTransit) _transitCache.set(transitKey, transits);
 
     if (signal.cancelled) return;
