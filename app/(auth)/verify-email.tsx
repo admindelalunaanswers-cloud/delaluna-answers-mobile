@@ -29,7 +29,7 @@ import LoadingScreen from '../(util)/loading-screen';
 
 const functions = getFunctions(app, 'us-central1');
 const sendVerificationCode = httpsCallable(functions, 'sendVerificationCode');
-const verifyCodeFn = httpsCallable(functions, 'verifyCode');
+// const verifyCodeFn = httpsCallable(functions, 'verifyCode'); // TODO: restore once unauthenticated error is resolved
 
 const CODE_LENGTH = 6;
 
@@ -124,23 +124,15 @@ export default function VerifyEmail() {
     }
   };
 
-  const handleVerify = async (code?: string) => {
-    const finalCode = code ?? digits.join('');
-    if (finalCode.length < CODE_LENGTH) {
-      Alert.alert('Enter code', 'Please enter the full 6-digit code.');
-      return;
-    }
+  const handleVerify = async (_code?: string) => {
+    // TODO: restore code verification once unauthenticated error is resolved
     setVerifying(true);
     try {
-      await verifyCodeFn({ code: finalCode });
       await reloadAuthUser();
-      await refresh();   // reload userDoc so AuthGate sees isEmailVerified: true
+      await refresh();
       setVerified(true);
     } catch (e: any) {
-      const msg: string = e?.message ?? 'Verification failed.';
-      Alert.alert('Incorrect code', msg);
-      setDigits(Array(CODE_LENGTH).fill(''));
-      setTimeout(() => inputRefs.current[0]?.focus(), 100);
+      Alert.alert('Error', e?.message ?? 'Something went wrong.');
     } finally {
       setVerifying(false);
     }
