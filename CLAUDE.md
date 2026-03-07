@@ -8,6 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Start dev server (Expo Go / dev client)
 npx expo start
 
+# Start dev server + Firebase emulators together
+npm run dev
+
 # Run on device/simulator
 npx expo run:ios
 npx expo run:android
@@ -17,6 +20,12 @@ npx expo lint
 
 # Install a new package (always use expo install to get SDK-compatible versions)
 npx expo install <package-name>
+
+# Full rebuild for preview-device (required when native code or eas.json changes)
+npm run build:preview
+
+# OTA update — JS/UI changes only, no rebuild needed (must match runtimeVersion of installed build)
+npm run update:preview "your message here"
 ```
 
 There are no automated tests in this project.
@@ -31,20 +40,31 @@ There are no automated tests in this project.
 
 ```
 app/
-  _layout.tsx          # Root layout — wraps all routes in ThemeProvider + ImageBackground
-  (main)/              # Tab navigator (5 tabs: home, connections, transits, chat, index)
-    _layout.tsx        # Tabs.Screen definitions — tab name must match filename exactly
+  _layout.tsx             # Root layout — wraps all routes in ThemeProvider + ImageBackground
+  (main)/                 # Tab navigator (4 tabs: home, connections, transits, chat)
+    _layout.tsx           # Tabs.Screen definitions — tab name must match filename exactly
     home.tsx
     connections.tsx
     transits.tsx
     chat.tsx
-    index.tsx          # "Test" tab — birth data input screen (InputScreen)
+    index.tsx             # Birth data input screen
   (testing)/
-    ResultsScreen.tsx  # Natal chart / transits results (4+ tabs)
-  (auth)/              # login.tsx, sign-up.tsx
-  (startup)/           # splash.tsx, loading.tsx, welcome.tsx
+    ResultsScreen.tsx     # Natal chart / transits results (4+ tabs)
+  (auth)/
+    login.tsx
+    sign-up.tsx
+    verify-email.tsx      # OTP email verification screen
+  (startup)/
+    splash.tsx
+    welcome.tsx
   (home)/
-    birth-chart/birth-chart-view.tsx
+    birth-chart-view.tsx  # Full-screen birth chart viewer
+  (settings)/
+    profile.tsx
+    edit-profile.tsx
+  (util)/
+    loading-screen.tsx
+    test-screen.tsx
   connection/
     SynastryScreen.tsx
     new.tsx
@@ -65,6 +85,55 @@ TestingStore.setSynastry({ chartA: natalChart, nameA: name });
 router.push('/connection/SynastryScreen');
 ```
 
+### Contexts
+
+- **`UserContext`** (`src/context/user-context.tsx`) — Firebase Auth user + Firestore user doc. Exposes `authUser`, `userDoc`, `reloadAuthUser`, `refresh`.
+- **`HoroscopeContext`** (`src/context/horoscope-context.tsx`) — daily horoscope, transit reading, chart details, tarot. Exposes `horoscope`, `chartDetails`, `transitReading`, `horoscopeReady`.
+- **`ThemeContext`** (`src/context/theme-context.tsx`) — 7 named themes with AsyncStorage persistence.
+
+### Auth flow
+
+Sign-up → `(auth)/verify-email.tsx` → OTP sent via `sendVerificationCode` Cloud Function → user enters 6-digit code → `verifyCode` Cloud Function marks `emailVerified: true` in Auth + Firestore → redirect to `(main)`.
+
+### Services (`src/services/`)
+
+- `astroEngine.ts` — Swiss Ephemeris wrapper (natal chart, transits, synastry, aspects)
+- `user.service.ts` — Firestore user doc CRUD, auth helpers
+- `horoscope.service.ts` — daily horoscope read/write
+- `natal-chart-breakdown.service.ts` — AI natal chart interpretation (Firebase Extension)
+- `transit-reading.service.ts` — AI transit reading (Firebase Extension)
+- `chat.service.ts` — chat message send/subscribe/retry/clear
+- `tarot-card.service.ts` / `tarotCache.service.ts` — tarot draw and caching
+- `notifications.service.ts` — Expo push token registration
+
+### Cloud Functions (`functions/src/index.ts`)
+
+- `sendVerificationCode` — generates OTP, stores in `emailVerification/{uid}`, emails via Gmail/nodemailer. Secrets: `EMAIL_USER`, `EMAIL_PASS`.
+- `verifyCode` — validates OTP, sets `emailVerified: true` in Auth + Firestore user doc.
+- `clearDailyChatHistory` — scheduled daily at midnight UTC, deletes chat messages older than 24h.
+- `sendMorningReminder` — scheduled daily at 8:00 AM UTC, sends Expo push notifications.
+
+Both callable functions require `invoker: 'public'` on `sendVerificationCode`. The Firebase emulator does not enforce IAM so dev works regardless.
+
+Deploy: `firebase deploy --only functions`
+
+### Chat retry
+
+A chat message doc written to `users/{uid}/chat` triggers a Firebase Extension which writes back `response` and sets `status.state`. If the extension gets stuck (`isPending` for >60s) or errors, the UI shows a Retry button. Retry deletes the stuck doc and writes a new one to re-trigger the extension (`retryChatMessage` in `chat.service.ts`).
+
+### EAS build configuration
+
+Build profiles in `eas.json` each have an `"environment"` key linking to EAS cloud secret vaults (set via `eas env:create`). This is how Firebase credentials get baked into builds — they are NOT in the repo.
+
+| Profile | Environment | Channel | Dev client |
+|---|---|---|---|
+| `development-device` | `development` | `development-device` | yes |
+| `preview-device` | `preview` | `preview-device` | no |
+| `preview` | `preview` | `preview` | no |
+| `production` | `production` | `production` | no |
+
+`runtimeVersion` policy is `appVersion` — OTA updates only work on builds with a matching app version. Simulator profiles have been removed; all builds target real devices only.
+
 ### Astrology engine (`src/services/astroEngine.ts`)
 
 The core calculation layer wraps `react-native-swisseph` (Moshier ephemeris, ~1 arc-second accuracy). Key exports:
@@ -80,7 +149,7 @@ The core calculation layer wraps `react-native-swisseph` (Moshier ephemeris, ~1 
 
 Two separate systems coexist:
 
-1. **`ThemeContext`** (`src/context/theme-context.tsx`) — 7 named themes (default, blue, green, orange, red, yellow, pink), each with a background PNG image and color palette. Persisted in AsyncStorage. Used by non-testing screens.
+1. **`ThemeContext`** (`src/context/theme-context.tsx`) — 7 named themes (default, blue, green, orange, red, yellow, pink), each with a background JPG image and color palette. Persisted in AsyncStorage. Used by non-testing screens.
 
 2. **Dark Cosmic design tokens** (`src/constants/theme.ts`) — exported as `C` (colors), `S` (spacing: xs=4, sm=8, md=16, lg=24, xl=32, xxl=48), `R` (radii: sm=6, md=12, lg=18, xl=24, pill=999). Used by all testing/chart screens.
 
@@ -105,7 +174,7 @@ Both use `BASE_WIDTH = 375` (iPhone SE baseline) with `moderateScale(size, facto
 
 ### Asset paths
 
-- Theme background images: `src/assets/themes-png/<name>-theme.png`
+- Theme background images: `src/assets/themes-jpg/<name>-theme.jpg`
 - Zodiac/planet icons: `src/assets/main/*.png`
 - Tab icons: `src/assets/tabs/<name>.png`
 - App icon / splash: `src/assets/dlla-branded/`
