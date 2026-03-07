@@ -1,4 +1,4 @@
-import { addDoc, collection, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore';
 
 import { db } from '@/firebaseConfig';
 import { buildChatPrompt } from '@/src/prompts/chat-prompt';
@@ -21,8 +21,19 @@ export interface ChatMessageDoc {
 function parseResponse(data: Record<string, any>): string | null {
   const raw = data?.response ?? data?.result ?? data?.output;
   if (!raw) return null;
-  const str = typeof raw === 'string' ? raw : String(raw);
-  return str.replace(/^```(?:json|text)?\s*/i, '').replace(/```\s*$/, '').trim() || null;
+  const str = (typeof raw === 'string' ? raw : String(raw))
+    .replace(/^```(?:json|text)?\s*/i, '').replace(/```\s*$/, '').trim();
+  if (!str) return null;
+  try {
+    const parsed = JSON.parse(str);
+    if (parsed && typeof parsed === 'object') {
+      const val = Object.values(parsed)[0];
+      if (typeof val === 'string') return val;
+    }
+  } catch {
+    // not JSON — fall through and return as-is
+  }
+  return str;
 }
 
 function buildNatalChartSummary(chart: NatalChartDetailsDoc): string {
@@ -67,6 +78,14 @@ export function subscribeToChatHistory(
       onMessages(messages);
     },
   );
+}
+
+/**
+ * Deletes all messages in the user's chat collection.
+ */
+export async function clearChatHistory(uid: string): Promise<void> {
+  const snap = await getDocs(collection(db, 'users', uid, 'chat'));
+  await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'users', uid, 'chat', d.id))));
 }
 
 /**
