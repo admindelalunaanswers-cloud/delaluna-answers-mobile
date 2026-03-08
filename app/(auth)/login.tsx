@@ -146,7 +146,7 @@ export default function Login() {
       <ImageBackground
         source={require('@/src/assets/start-up/welcome-background.jpg')}
         style={{ flex: 1 }}
-        resizeMode="cover"
+        resizeMode="stretch"
       >
         <KeyboardAvoidingView
           style={{ flex: 1 }}
@@ -158,15 +158,13 @@ export default function Login() {
             showsVerticalScrollIndicator={false}
             bounces={false}
           >
-            {!kbVisible && (
-              <ThemedView style={styles.logoContainer}>
+            <ThemedView style={[styles.logoContainer, kbVisible && styles.logoContainerCompact]}>
                 <Image
                   source={require('@/src/assets/dlla-branded/delaluna_logo.png')}
                   style={styles.logo}
                   resizeMode="contain"
                 />
               </ThemedView>
-            )}
 
             <BlurView
               intensity={90}
@@ -227,7 +225,7 @@ export default function Login() {
 
                     <TouchableOpacity
                       style={styles.forgotPasswordButton}
-                      onPress={() => router.replace('/(auth)/forgot-password' as any)}
+                      onPress={() => router.replace('/(auth)/forgot-password')}
                     >
                       <ThemedText style={styles.forgotPassword}>Forgot Password?</ThemedText>
                     </TouchableOpacity>
@@ -259,7 +257,8 @@ export default function Login() {
 }
 
 const styles = StyleSheet.create({
-  logoContainer: { width: '100%', height: verticalScale(250), alignItems: 'center', justifyContent: 'flex-end' },
+  logoContainer: { width: '100%', height: '50%', alignItems: 'center', justifyContent: 'flex-end' },
+  logoContainerCompact: { height: '35%' },
 
   card: {
     width: '100%',
@@ -273,8 +272,8 @@ const styles = StyleSheet.create({
   logo: { width: '70%', height: '65%' },
   bodyContainer: {
     width: '100%',
-    marginTop: verticalScale(45),
-    marginBottom: verticalScale(10),
+    marginTop: verticalScale(5),
+    marginBottom: verticalScale(20),
     alignItems: 'center',
     flex: 1,
     justifyContent: 'space-between',
@@ -284,7 +283,7 @@ const styles = StyleSheet.create({
     width: '90%',
     justifyContent: 'center',
     gap: scale(5),
-    marginTop: verticalScale(15),
+    marginTop: verticalScale(25),
   },
   textField: {
     backgroundColor: 'rgba(255,255,255,0.1)',
@@ -325,7 +324,7 @@ const styles = StyleSheet.create({
     paddingVertical: verticalScale(15),
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: verticalScale(Platform.OS === 'ios' ? 45 : 40),
+    marginTop: verticalScale(Platform.OS === 'ios' ? 5 : 15),
   },
   loginButtonText: {
     color: 'white',
