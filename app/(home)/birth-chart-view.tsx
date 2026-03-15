@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,11 +9,11 @@ import { ThemedView } from '@/src/components/themed-view';
 import HeaderNav from '@/src/components/shared/header-nav';
 import NatalWheelTab from '@/src/components/natalChart/natal-chart-wheel';
 import NatalTable from '@/src/components/natalChart/natal-chart-table';
-import PremiumUnlock from '@/src/components/shared/premium-unlock.component';
+// import PremiumUnlock from '@/src/components/shared/premium-unlock.component';
 import { useHoroscope } from '@/src/context/horoscope-context';
-import { useUser } from '@/src/context/user-context';
+// import { useUser } from '@/src/context/user-context';
 import { usePullToRefresh } from '@/src/hooks/use-pull-to-refresh';
-import { updateUserDoc } from '@/src/services/user.service';
+// import { updateUserDoc } from '@/src/services/user.service';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
 import type { NatalChart } from '@/src/services/astroEngine';
 import type { NatalChartBreakdownResult } from '@/src/types/natal-chart-breakdown.types';
@@ -31,22 +31,16 @@ export default function BirthChartScreen() {
     refresh,
   } = useHoroscope();
 
-  const { authUser, userDoc, refresh: refreshUser } = useUser();
-  const isPremium = (userDoc as any)?.isPremiumMember ?? false;
-
   const [activeTab, setActiveTab] = useState<'Natal Wheel' | 'Natal Table'>('Natal Wheel');
-  const [unlocking, setUnlocking] = useState(false);
 
-  const handleUnlock = async () => {
-    if (!authUser?.uid) return;
-    setUnlocking(true);
-    try {
-      await updateUserDoc(authUser.uid, { isPremiumMember: true });
-      await refreshUser();
-    } finally {
-      setUnlocking(false);
-    }
-  };
+  // DEV: toggle to simulate free vs premium breakdown
+  const [isPremium, setIsPremium] = useState(true);
+
+  // const handleUnlock = async () => {
+  //   if (!authUser?.uid) return;
+  //   await updateUserDoc(authUser.uid, { isPremiumMember: true });
+  //   await refreshUser();
+  // };
 
   const { refreshControl } = usePullToRefresh(refresh);
 
@@ -195,7 +189,15 @@ export default function BirthChartScreen() {
 
             {/* Bottom Half — Breakdown */}
 
-              <Text style={styles.breakdownTitle}>Breakdown</Text>
+              <View style={styles.breakdownHeader}>
+                <Text style={styles.breakdownTitle}>Breakdown</Text>
+                {/* DEV: free/premium toggle */}
+                <View style={styles.devToggle}>
+                  <Text style={styles.devToggleLabel}>Free</Text>
+                  <Switch value={isPremium} onValueChange={setIsPremium} />
+                  <Text style={styles.devToggleLabel}>Premium</Text>
+                </View>
+              </View>
 
               {isBreakdownLoading ? (
                 <ActivityIndicator color="#BCA8F4" style={{ marginTop: verticalScale(24) }} />
@@ -215,19 +217,10 @@ export default function BirthChartScreen() {
                       {renderTextSection('Affirmation', activeBreakdown.affirmation)}
                       {renderTextSection('Release', activeBreakdown.release)}
                     </>
-                  ) : (
-                    <View style={styles.unlockWrap}>
-                      {unlocking ? (
-                        <ActivityIndicator color="#BCA8F4" />
-                      ) : (
-                        <PremiumUnlock
-                          onUnlock={handleUnlock}
-                          title="Unlock Your Full Chart"
-                          message={activeBreakdown.teaser ?? 'Get your complete natal chart reading with planets, aspects, love, career, and more.'}
-                        />
-                      )}
-                    </View>
-                  )}
+                  ) : null}
+                  {/* DEV: free/premium toggle */}
+                  {/* <PremiumUnlock onUnlock={handleUnlock} title="Unlock Your Full Chart"
+                    message={activeBreakdown?.teaser ?? ''} /> */}
                 </>
               ) : (
                 <Text style={styles.errorText}>Breakdown not ready yet. Pull to refresh.</Text>
@@ -250,7 +243,7 @@ const styles = StyleSheet.create({
 
   breakdownScroll:  { flex: 1.5, borderRadius: scale(12) },
   breakdownContent: { paddingHorizontal: scale(15), paddingTop: verticalScale(12) },
-  breakdownTitle:   { color: '#fff', fontSize: moderateScale(18), fontWeight: '600', marginBottom: verticalScale(12) },
+  breakdownTitle:   { color: '#fff', fontSize: moderateScale(18), fontWeight: '600' },
 
   section:          { marginBottom: verticalScale(12) },
   sectionLabel:     { color: '#BCA8F4', fontSize: moderateScale(12), fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: verticalScale(6) },
@@ -263,4 +256,7 @@ const styles = StyleSheet.create({
   locked:           { color: '#555', fontSize: moderateScale(13), fontStyle: 'italic' },
   errorText:        { color: 'rgba(255,100,100,0.8)', fontSize: moderateScale(13), marginTop: verticalScale(16), textAlign: 'center' },
   unlockWrap:       { marginTop: verticalScale(8), marginBottom: verticalScale(16) },
+  breakdownHeader:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: verticalScale(12) },
+  devToggle:        { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  devToggleLabel:   { color: 'rgba(255,255,255,0.5)', fontSize: moderateScale(11) },
 });
