@@ -259,7 +259,6 @@ export default function Login() {
 const styles = StyleSheet.create({
   logoContainer: { width: '100%', height: '50%', alignItems: 'center', justifyContent: 'flex-end' },
   logoContainerCompact: { height: '35%' },
-
   card: {
     width: '100%',
     flexGrow: 1,
@@ -269,7 +268,7 @@ const styles = StyleSheet.create({
     paddingVertical: verticalScale(10),
     justifyContent: 'space-between',
   },
-  logo: { width: '70%', height: '65%' },
+  logo: { width: '80%', height: '85%' },
   bodyContainer: {
     width: '100%',
     marginTop: verticalScale(5),

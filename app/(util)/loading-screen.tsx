@@ -60,7 +60,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ progress, message }) => {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <View style={styles.centerContent}>
         <LottieView
-          source={require('@/src/assets/animations/splash-animation.json')}
+          source={require('@/src/assets/animations/splash-loop.json')}
           autoPlay
           loop
           style={styles.animation}
@@ -90,8 +90,8 @@ const styles = StyleSheet.create({
     gap: verticalScale(12),
   },
   animation: {
-    width: moderateScale(220),
-    height: moderateScale(220),
+    width: moderateScale(450),
+    height: moderateScale(450),
   },
   message: {
     color: '#ffffff',
