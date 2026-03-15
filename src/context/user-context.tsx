@@ -57,14 +57,17 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [loading,   setLoading]   = useState(true);
 
   const loadAll = async (uid: string) => {
+    console.log('[UserContext] loadAll uid:', uid);
     try {
       const [uDoc, purcs] = await Promise.all([
         fetchUserDoc(uid),
         fetchPurchases(uid),
       ]);
+      console.log('[UserContext] userDoc:', uDoc);
       setUserDoc(uDoc);
       setPurchases(purcs);
-    } catch {
+    } catch (err) {
+      console.error('[UserContext] loadAll error:', err);
       setUserDoc(null);
       setPurchases([]);
     }

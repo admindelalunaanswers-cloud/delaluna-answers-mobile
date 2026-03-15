@@ -11,20 +11,20 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
-import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
-import { ThemeContext } from '@/src/context/theme-context';
+import { app, auth } from '@/firebaseConfig';
 import { ThemedText } from '@/src/components/themed-text';
 import { ThemedView } from '@/src/components/themed-view';
-import { useUser } from '@/src/context/user-context';
 import { useHoroscope } from '@/src/context/horoscope-context';
+import { ThemeContext } from '@/src/context/theme-context';
+import { useUser } from '@/src/context/user-context';
 import { signOut } from '@/src/services/user.service';
-import { app, auth } from '@/firebaseConfig';
-import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
+import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
 import LoadingScreen from '../(util)/loading-screen';
 
 const functions = getFunctions(app, 'us-central1');
@@ -67,6 +67,7 @@ export default function VerifyEmail() {
   }, [resendCooldown]);
 
   const handleSendCode = async () => {
+    console.log("Auth: ", auth.currentUser);
     if (sending || resendCooldown > 0) return;
     if (!auth.currentUser) {
       setSendError('Not signed in. Please sign up or log in first.');
@@ -75,7 +76,10 @@ export default function VerifyEmail() {
     setSending(true);
     setSendError(null);
     try {
+      console.log("Auth: ", auth);
       await auth.currentUser.getIdToken(true); // ensure a fresh token is attached
+      console.log("Auth.currentUser: ", auth.currentUser);
+
       await sendVerificationCode({});
       setCodeSent(true);
       setResendCooldown(60);
@@ -214,11 +218,10 @@ export default function VerifyEmail() {
                       onChangeText={text => handleDigitChange(text, i)}
                       onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, i)}
                       keyboardType="number-pad"
-                      maxLength={2}
+                      maxLength={6}
                       selectTextOnFocus
                       caretHidden
                       textAlign="center"
-                      returnKeyType="done"
                     />
                   ))}
                 </View>
