@@ -51,11 +51,11 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const ud = userDoc as any;
   const isPremium = ud?.isPremiumMember ?? false;
-
-  const isBirthTimeUnknown  = ud?.isBirthTimeUnknown ?? !ud?.birthtime;
-  const isPlaceOfBirthUnknown = ud?.isPlaceOfBirthUnknown ?? !ud?.placeOfBirth;
-  const placeOfBirth = ud?.placeOfBirth ?? ud?.birthplace ?? null;
-  const birthtime    = ud?.birthtime ?? ud?.birthTime ?? '';
+  const isEmailVerified = ud?.isEmailVerified ?? false;
+  const isBirthTimeUnknown  = ud?.isBirthTimeUnknown;
+  const isPlaceOfBirthUnknown = ud?.isPlaceOfBirthUnknown;
+  const placeOfBirth = ud?.placeOfBirth ?? null;
+  const birthtime    = ud?.birthtime ?? '';
 
   const togglePremium = async () => {
     if (!authUser?.uid) return;
@@ -137,6 +137,7 @@ export default function ProfileScreen() {
         {/* Name / email */}
         <Text style={styles.name}>{ud?.name ?? '—'}</Text>
         <Text style={styles.email}>{ud?.email ?? authUser?.email ?? '—'}</Text>
+        <Text style={styles.sectionLabel}>{isEmailVerified}</Text>
 
         {/* Membership badge */}
         <View style={[styles.badge, isPremium ? styles.badgePremium : styles.badgeFree]}>
@@ -160,9 +161,19 @@ export default function ProfileScreen() {
           <Text style={[styles.editButtonText, styles.editButtonTextDisabled]}>Edit Profile</Text>
         </TouchableOpacity>
 
+        <TouchableOpacity
+  style={styles.editButton}
+  onPress={() => router.push('/(settings)/update-theme.screen')}
+  activeOpacity={0.8}
+>
+  <Ionicons name="color-palette-outline" size={scale(15)} color="#6FFFE9" />
+  <Text style={styles.editButtonText}>Change Theme</Text>
+</TouchableOpacity>
+
         {/* ── Account info ── */}
         <View style={styles.detailsCard}>
           <Text style={styles.sectionLabel}>ACCOUNT</Text>
+          
 
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>First name</Text>
