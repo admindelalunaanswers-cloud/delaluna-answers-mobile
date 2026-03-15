@@ -15,7 +15,7 @@
 
 import { NatalChart, calculateAspects } from '@/src/services/astroEngine';
 import React, { useMemo } from 'react';
-import Svg, { Circle, Line, Text as SvgText, G } from 'react-native-svg';
+import Svg, { Circle, G, Line, Text as SvgText } from 'react-native-svg';
 
 
 // ─── Palette — all white / light grey for dark background ─────────────────────
@@ -23,7 +23,7 @@ import Svg, { Circle, Line, Text as SvgText, G } from 'react-native-svg';
 const RING          = 'rgba(255,255,255,0.18)';  // outer + inner boundary circles
 const SIGN_DIV      = 'rgba(255,255,255,0.12)';  // radial sign dividers
 const SIGN_TXT      = '#c0c0d8';                 // floating sign names
-const HOUSE_LINE    = 'rgba(255,255,255,0.07)';  // faint house grid
+const HOUSE_LINE    = 'rgba(99, 97, 97, 0.95)';  // faint house grid
 const AXIS_LINE     = 'rgba(255,255,255,0.30)';  // ASC/DSC/MC/IC structural lines
 const PLANET_TXT    = '#e8e8f8';                 // planet glyphs (uniform near-white)
 const RETRO_TXT     = '#8888a8';                 // retrograde marker
