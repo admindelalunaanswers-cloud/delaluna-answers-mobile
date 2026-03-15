@@ -65,8 +65,8 @@ export async function fetchBreakdown(uid: string): Promise<BreakdownFetchResult>
   const result        = freeSnap.exists()    ? parseResult(freeSnap.data())    : null;
   const premiumResult = premiumSnap.exists() ? parseResult(premiumSnap.data()) : null;
 
-  const pending        = !result        && !!freeSnap.data()?.prompt;
-  const premiumPending = !premiumResult && !!premiumSnap.data()?.prompt;
+  const pending        = !result        && freeSnap.exists();
+  const premiumPending = !premiumResult && premiumSnap.exists();
 
   return { result, premiumResult, pending, premiumPending };
 }
@@ -88,12 +88,12 @@ export async function requestBreakdown(
   await Promise.all([
     setDoc(
       doc(db, 'users', uid, 'natalChart', FREE_DOC),
-      { prompt: freePrompt, tier: 'free', requestedAt },
+      { natalChart, tier: 'free', requestedAt },
       { merge: true },
     ),
     setDoc(
       doc(db, 'users', uid, 'natalChart', PREMIUM_DOC),
-      { prompt: premiumPrompt, tier: 'premium', requestedAt },
+      { natalChart, tier: 'premium', requestedAt },
       { merge: true },
     ),
   ]);
