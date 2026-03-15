@@ -117,7 +117,7 @@ export async function createUserDoc(userId: string, userData: FinalSignupPayload
       ...(userData.email ? { email: userData.email.toLowerCase() } : {}),
       createdAt: serverTimestamp(),
       lastUpdatedAt: serverTimestamp(),
-      isPremiumMember: false,
+      isPremiumMember: true,
       isEmailVerified: false,
     });
 

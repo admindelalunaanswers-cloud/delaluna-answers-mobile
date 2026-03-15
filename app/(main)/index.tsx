@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 
 import { router } from 'expo-router';
 
@@ -11,7 +11,7 @@ import DateSwitcher from '@/src/components/home/date-switcher.component';
 import HeaderNav from '@/src/components/shared/header-nav';
 import HomeSignsDisplay from '@/src/components/shared/signs-display.component';
 import HomeTextBox from '@/src/components/home/home-text-box.component';
-import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
+// import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
 import SectionTitle from '@/src/components/shared/section-title.component';
 import type { DailyCardPack } from '@/src/schemas/dailyCardPack.schema';
 import type { HoroscopeResult } from '@/src/types/horoscope.types';
@@ -21,7 +21,7 @@ import { ThemedView } from '@/src/components/themed-view';
 import { calculateTransits } from '@/src/services/astroEngine';
 import { fetchHoroscope, getTodayDateId } from '@/src/services/horoscope.service';
 import { getTarotCardDraw } from '@/src/services/tarot-card.service';
-import { updateUserDoc } from '@/src/services/user.service';
+// import { updateUserDoc } from '@/src/services/user.service';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { usePullToRefresh } from '@/src/hooks/use-pull-to-refresh';
 import { useResponsive } from '@/src/hooks/use-responsive';
@@ -30,7 +30,7 @@ import { useUser } from '@/src/context/user-context';
 const NAV_BAR_HEIGHT = 44;
 
 export default function HomeScreen() {
-  const { authUser, userDoc, refresh: refreshUser } = useUser();
+  const { authUser, userDoc } = useUser();
   const {
     chartDetails,
     horoscope,
@@ -136,13 +136,16 @@ export default function HomeScreen() {
   const retrogrades = (activeHoroscope?.planetsRetrograde ?? []).filter(p => p.toLowerCase() !== 'none');
 
   const dateSwitcherDates = Object.keys(cardDraw).sort();
-  const isPaygated = selectedDate !== todayDateId && !(userDoc?.isPremiumMember ?? false);
 
-  const handleUnlock = async () => {
-    if (!authUser?.uid) return;
-    await updateUserDoc(authUser.uid, { isPremiumMember: true });
-    await refreshUser();
-  };
+  // DEV: toggle to simulate free vs premium reading
+  const [devPremium, setDevPremium] = useState(true);
+  // const isPaygated = selectedDate !== todayDateId && !devPremium;
+
+  // const handleUnlock = async () => {
+  //   if (!authUser?.uid) return;
+  //   await updateUserDoc(authUser.uid, { isPremiumMember: true });
+  //   await refreshUser();
+  // };
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
@@ -168,13 +171,19 @@ export default function HomeScreen() {
           onChange={setSelectedDate}
         />
 
-        <PaygateOverlay
+        {/* DEV: free/premium toggle */}
+        <View style={styles.devToggle}>
+          <Text style={styles.devToggleLabel}>Free</Text>
+          <Switch value={devPremium} onValueChange={setDevPremium} />
+          <Text style={styles.devToggleLabel}>Premium</Text>
+        </View>
+
+        {/* <PaygateOverlay
           locked={isPaygated}
           style={{ flex: 1 }}
           unlockTitle="Unlock Past & Future Readings"
           unlockMessage="Upgrade to Premium to view yesterday's and tomorrow's horoscope."
-          onUnlock={handleUnlock}
-        >
+        > */}
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + scale(20) }]}
@@ -254,7 +263,7 @@ export default function HomeScreen() {
           <SectionTitle sectionName="warning" title="Warning" />
           <HomeTextBox sectionName="warning" content={activeHoroscope?.warning} />
         </ScrollView>
-        </PaygateOverlay>
+        {/* </PaygateOverlay> */}
       </View>
     </ThemedView>
   );
@@ -310,5 +319,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     textAlign: 'center',
+  },
+  devToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 6,
+  },
+  devToggleLabel: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12,
   },
 });
