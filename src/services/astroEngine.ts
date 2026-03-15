@@ -50,6 +50,7 @@ const PLANET_SYMBOLS: Record<string, string> = {
   Neptune:  '♆',
   Pluto:    'P',
   'N. Node':'☊',
+  'S. Node':'☋',
   Chiron:   '⚷',
 };
 
@@ -355,6 +356,25 @@ async function calcHouses(jd: number, lat: number, lon: number): Promise<HouseDa
 }
 
 /**
+ * Derive South Node from North Node (always exactly 180° opposite).
+ */
+function deriveSouthNode(nNode: PlanetPosition, cusps: number[]): PlanetPosition {
+  const lon  = normLon(nNode.longitude + 180);
+  const sign = lonToSign(lon);
+  const house = cusps.length > 1 ? getHouse(lon, cusps) : 1;
+  return {
+    name:        'S. Node',
+    symbol:      PLANET_SYMBOLS['S. Node'],
+    color:       '#ffffff',
+    longitude:   lon,
+    ...sign,
+    speed:       nNode.speed,
+    isRetrograde: nNode.isRetrograde,
+    house,
+  };
+}
+
+/**
  * Build MoonData from planet positions (requires Sun and Moon already calculated).
  */
 function buildMoonData(moon: PlanetPosition, sunLon: number): MoonData {
@@ -390,7 +410,10 @@ export async function calculateNatalChart(birth: BirthData): Promise<NatalChart>
 
   const sunPlanet  = planets.find(p => p.name === 'Sun')!;
   const moonPlanet = planets.find(p => p.name === 'Moon')!;
+  const nNode      = planets.find(p => p.name === 'N. Node')!;
   const moon       = buildMoonData(moonPlanet, sunPlanet.longitude);
+
+  planets.push(deriveSouthNode(nNode, houses.cusps));
 
   const asc = lonToSign(houses.ascendant);
   const mc  = lonToSign(houses.mc);
@@ -422,7 +445,10 @@ export async function calculateTransits(
 
   const sunPlanet  = planets.find(p => p.name === 'Sun')!;
   const moonPlanet = planets.find(p => p.name === 'Moon')!;
+  const nNode      = planets.find(p => p.name === 'N. Node')!;
   const moon       = buildMoonData(moonPlanet, sunPlanet.longitude);
+
+  planets.push(deriveSouthNode(nNode, houses.cusps));
 
   return { planets, moon, date };
 }
