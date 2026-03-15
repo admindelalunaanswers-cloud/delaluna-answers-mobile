@@ -13,6 +13,9 @@ const emailPass = defineSecret('EMAIL_PASS');
 admin.initializeApp();
 const db = admin.firestore();
 
+const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true';
+console.log(`[functions] Running in ${isEmulator ? 'EMULATOR (dev)' : 'PRODUCTION'} mode`);
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function generateOtp(): string {
@@ -33,14 +36,19 @@ function buildTransporter(user: string, pass: string) {
 // ─── sendVerificationCode ─────────────────────────────────────────────────────
 
 export const sendVerificationCode = onCall(
-  { secrets: [emailUser, emailPass], invoker: 'public' },
+  { secrets: [emailUser, emailPass]},
+  
   async (request) => {
     if (!request.auth) {
+      console.log(request.auth)
       throw new HttpsError('unauthenticated', 'Must be signed in.');
     }
 
+    
+    
     const uid = request.auth.uid;
     const email = request.auth.token.email;
+    console.log("Auth: ", request.auth);
 
     if (!email) {
       throw new HttpsError('invalid-argument', 'No email on account.');
