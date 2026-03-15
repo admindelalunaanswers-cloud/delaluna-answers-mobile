@@ -72,7 +72,7 @@ function AuthGate() {
   // Do NOT hide auth screens while horoscope is generating — sign-up manages
   // its own loading UI and 30-second safety-net timeout while on that screen.
   const showLoading =
-    userLoading ||
+    (userLoading && !inAuth && !inStartup) ||
     (!!authUser && dataLoading && !inAuth && !inStartup) ||
     (isRedirecting && !inAuth && !inStartup);
 
