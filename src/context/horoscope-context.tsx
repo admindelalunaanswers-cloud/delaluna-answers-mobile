@@ -12,6 +12,11 @@ import { doc, getDoc } from 'firebase/firestore';
 
 import { db } from '@/firebaseConfig';
 import { calculateTransits, type MoonData, type TransitData } from '@/src/services/astroEngine';
+
+const RETROGRADE_PLANETS = new Set([
+  'Mercury', 'Venus', 'Mars',
+  'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto',
+]);
 import {
   fetchHoroscope,
   getTodayDateId,
@@ -211,7 +216,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
 
     if (transits) {
       setTransitMoon(transits.moon);
-      setTransitRetrogrades(transits.planets.filter(p => p.isRetrograde).map(p => p.name));
+      setTransitRetrogrades(transits.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name));
     }
 
     // Set breakdown and transit reading immediately — no secondary loading phase
