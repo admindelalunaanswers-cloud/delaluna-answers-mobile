@@ -12,16 +12,20 @@ import { Timestamp } from 'firebase/firestore';
 export interface UserDoc {
   uid:            string;
   email:          string;
-  isEmailVerified?: boolean;
-  name:           string;
+  isEmailVerified: boolean;
+  fullName:           string;
+  firstName:           string;
+  lastName:           string;
 
   // Birth details
   birthday:       Timestamp;       // midnight UTC of birth date
   birthplace:     string;          // human-readable city/country
+  isBirthPlaceUnknown: boolean;
   birthLat:       number;
   birthLon:       number;
   timezone:       number;          // UTC offset e.g. -5, +5.5
   birthTime:      string;          // "HH:MM" local time
+  isBirthTimeUnknown: boolean;
 
   pronouns?:               string;  // e.g. "She/Her", "He/Him", "They/Them", "Non Binary"
   isPremiumMember:         boolean;
