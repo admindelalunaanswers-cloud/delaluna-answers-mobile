@@ -1,4 +1,4 @@
-// components/natal-chart/natal-table.tsx
+// components/natal-chart/natal-table.tab.tsx
 
 import { StyleSheet, Text, View } from 'react-native';
 

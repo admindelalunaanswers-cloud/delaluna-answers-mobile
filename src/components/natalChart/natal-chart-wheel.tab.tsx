@@ -2,7 +2,7 @@
 
 import { useWindowDimensions, View } from 'react-native';
 
-import BirthChartWheel from '@/src/components/natalChart/BirthChartWheel';
+import BirthChartWheel from '@/src/components/natalChart/natal-chart-wheel.draw';
 import { S } from '@/src/constants/theme';
 import type { NatalChart } from '@/src/services/astroEngine';
 
