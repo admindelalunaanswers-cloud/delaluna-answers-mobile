@@ -4,7 +4,7 @@
  * Dark cosmic — gold on void.
  */
 
-import BirthChartWheel from '@/src/components/natalChart/BirthChartWheel';
+import BirthChartWheel from '@/src/components/natalChart/natal-chart-wheel.draw';
 import { C, R, S } from '@/src/constants/theme';
 import { Aspect, calculateAspects, MoonData, PlanetPosition } from '@/src/services/astroEngine';
 import { TestingStore } from '@/src/stores/testing-store';
