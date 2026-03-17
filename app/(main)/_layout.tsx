@@ -63,6 +63,10 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol name="shield" size={ionIconSize} color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="prompt-editor"
+        options={{ href: null }}
+      />
     </Tabs>
     </UserProvider>
   );

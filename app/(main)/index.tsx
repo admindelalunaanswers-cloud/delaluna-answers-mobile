@@ -173,7 +173,7 @@ export default function HomeScreen() {
   return (
     <ThemedView style={styles.container}>
       <HeaderNav
-        title={userDoc?.name ?? 'Home'}
+        title={userDoc?.fullName ?? 'Home'}
         rightIconName="person-circle-outline"
         onRightPress={() => router.push('/profile')}
       />

@@ -13,6 +13,8 @@ import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firesto
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { db } from '@/firebaseConfig';
+import { router } from 'expo-router';
+
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useUser } from '@/src/context/user-context';
 import { useTheme } from '@/src/hooks/use-theme';
@@ -250,6 +252,15 @@ export default function AdminScreen() {
       <ActionButton label="Re-send Birth Chart"     status={resendBreakdown} onPress={resendBreakdownPrompt} />
       <ActionButton label="Re-send Transit Reading" status={resendTransit}   onPress={resendTransitPrompt}   />
 
+      {/* ── Prompt Editor ── */}
+      <Text style={styles.sectionTitle}>Prompt Templates</Text>
+      <ActionButton label="View / Edit Prompts" status="idle" onPress={() => router.push('/(main)/prompt-editor')} />
+
+      {/* ── Test Screens ── */}
+      <Text style={styles.sectionTitle}>Test Screens</Text>
+      <ActionButton label="Open Test Input Screen"   status="idle" onPress={() => router.push('/(testing)/test-screen')} />
+      <ActionButton label="Open Results Screen"      status="idle" onPress={() => router.push('/(testing)/ResultsScreen')} />
+
       {/* ── User Admin Management ── */}
       <Text style={styles.sectionTitle}>User Admin Access</Text>
       {KNOWN_EMAILS.map((email) => {
@@ -266,7 +277,7 @@ export default function AdminScreen() {
                   value={state.isAdmin}
                   onValueChange={() => toggleAdmin(email)}
                   disabled={state.toggling || !state.uid}
-                  trackColor={{ false: C.inactiveTabs, true: C.activeTab }}
+                  trackColor={{ false: C.inactiveTabs, true: "#5BC0BE" }}
                   thumbColor={C.headerText as string}
                 />
               </>
