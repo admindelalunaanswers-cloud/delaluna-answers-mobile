@@ -63,9 +63,7 @@ module.exports = {
       USE_EMULATOR:                process.env.USE_EMULATOR ?? 'false',
       EMULATOR_HOST:               process.env.EMULATOR_HOST ?? 'localhost',
     },
-    runtimeVersion: {
-      policy: "appVersion",
-    },
+    runtimeVersion: "1.0.0",
     updates: {
       url: "https://u.expo.dev/a267fc5e-e587-4e94-b9ab-1cddd6decb94",
     },
