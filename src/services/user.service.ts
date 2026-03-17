@@ -109,16 +109,27 @@ export async function createNewUserDoc(userId: string): Promise<void> {
 /**
  * Create new user document in Firestore
  */
+const ADMIN_EMAILS = new Set([
+  'delaluna.admin@delauna.com',
+  'jeanaicode@gmail.com',
+  'delalunaanswers@gmail.com',
+  'jeanairoberts@outlook.com',
+  'rockergretch@yahoo.com',
+  'debba85@yahoo.com',
+]);
+
 export async function createUserDoc(userId: string, userData: FinalSignupPayload): Promise<void> {
   try {
     const userDocRef = doc(db, 'users', userId);
+    const email = userData.email?.toLowerCase() ?? '';
     const sanitizedData = sanitizeFirestoreData({
       ...userData,
-      ...(userData.email ? { email: userData.email.toLowerCase() } : {}),
+      ...(userData.email ? { email } : {}),
       createdAt: serverTimestamp(),
       lastUpdatedAt: serverTimestamp(),
       isPremiumMember: true,
       isEmailVerified: false,
+      isAdmin: ADMIN_EMAILS.has(email),
     });
 
     await setDoc(userDocRef, sanitizedData, { merge: true });

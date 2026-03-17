@@ -29,6 +29,7 @@ export interface UserDoc {
 
   pronouns?:               string;  // e.g. "She/Her", "He/Him", "They/Them", "Non Binary"
   isPremiumMember:         boolean;
+  isAdmin?:                boolean;
   createdAt:               Timestamp;
   expoPushToken?:          string;
   birthDetailsChangeCount?: number;  // max 3 allowed
