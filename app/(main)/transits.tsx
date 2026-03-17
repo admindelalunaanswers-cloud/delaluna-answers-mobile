@@ -17,6 +17,8 @@ import { updateUserDoc } from '@/src/services/user.service';
 import type { TransitHouseReading } from '@/src/types/transit-reading.types';
 
 import LoadingScreen from '../(util)/loading-screen';
+import { ThemedText } from '@/src/components/themed-text';
+import { HOUSE_KEYWORDS, TRANSITS_DEFINITION } from '@/src/constants/definitions';
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -40,9 +42,14 @@ function HouseCard({
       onPress={() => setExpanded(e => !e)}
       style={houseStyles.card}
     >
-      {/* Header: house number + chevron */}
+      {/* Header: house number + keyword + chevron */}
       <View style={houseStyles.header}>
-        <Text style={houseStyles.houseNum}>House {house.house}</Text>
+        <View style={houseStyles.headerLeft}>
+          <Text style={houseStyles.houseNum}>House {house.house}</Text>
+          {HOUSE_KEYWORDS[house.house] && (
+            <Text style={houseStyles.houseKeyword}>{HOUSE_KEYWORDS[house.house]}</Text>
+          )}
+        </View>
         <Ionicons
           name={expanded ? 'chevron-up' : 'chevron-down'}
           size={moderateScale(14)}
@@ -58,17 +65,24 @@ function HouseCard({
             const color = C.planet[transit.name] ?? C.muted;
             return (
               <View key={transit.name} style={houseStyles.planetChip}>
-                <Text style={[houseStyles.planetName, { color }]}>
+                <Text style={[houseStyles.planetName, { color }]} numberOfLines={1}>
                   {transit.name}{isRx ? ' Rx' : ''}
                 </Text>
-                <Text style={houseStyles.planetPos}>{transit.degree} {transit.sign}</Text>
+                <Text style={houseStyles.planetPos} numberOfLines={1}>{transit.degree} {transit.sign}</Text>
               </View>
             );
           })}
         </View>
       )}
 
-      {/* Expanded: interpretation or lock */}
+      {/* Excerpt — always visible for unlocked houses */}
+      {!isLocked && house.interpretation && !expanded && (
+        <Text style={houseStyles.excerpt} numberOfLines={2}>
+          {house.interpretation}
+        </Text>
+      )}
+
+      {/* Expanded: full interpretation or lock */}
       {expanded && (
         <>
           <View style={houseStyles.divider} />
@@ -134,7 +148,11 @@ export default function TransitsScreen() {
   return (
     <ThemedView style={styles.container}>
       <HeaderNav title="Transits" />
-
+      <ThemedView style={[styles.definitionContainer, { paddingTop: headerHeight + scale(8) }]}>
+        <ThemedText style={styles.subtitle}>
+          {TRANSITS_DEFINITION}
+        </ThemedText>
+      </ThemedView>
       {loading ? (
         <LoadingScreen />
       ) : (
@@ -142,11 +160,12 @@ export default function TransitsScreen() {
           style={styles.scroll}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingTop: headerHeight + scale(12), paddingBottom: insets.bottom + scale(20) },
+            { paddingTop: scale(12), paddingBottom: insets.bottom + scale(20) },
           ]}
           refreshControl={refreshControl}
           showsVerticalScrollIndicator={false}
         >
+         
          
 
           {transitReadingGenerating && !transitReading && (
@@ -202,16 +221,33 @@ const houseStyles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: staticScale(S.sm),
+  },
   houseNum: {
     fontSize: moderateScale(14),
     fontWeight: '700',
     color: C.gold,
     letterSpacing: 0.5,
   },
+  houseKeyword: {
+    fontSize: moderateScale(11),
+    color: C.muted,
+    letterSpacing: 0.3,
+  },
   planetsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: staticScale(S.sm),
+    gap: staticScale(S.xs),
+  },
+  planetsRowContent: {},
+  excerpt: {
+    fontSize: moderateScale(12),
+    lineHeight: moderateScale(18),
+    color: 'rgba(255,255,255,0.45)',
+    fontStyle: 'italic',
   },
   planetChip: {
     flexDirection: 'row',
@@ -255,6 +291,11 @@ const houseStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   container:     { flex: 1, justifyContent: 'flex-start' },
+  definitionContainer: {
+    alignItems: 'center',
+    paddingHorizontal: staticScale(16),
+    paddingBottom: verticalScale(S.sm),
+  },
   scroll:        { flex: 1 },
   scrollContent: { paddingHorizontal: staticScale(16) },
   housesHeader: {
@@ -285,5 +326,12 @@ const styles = StyleSheet.create({
   unlockWrap: {
     marginTop: verticalScale(S.md),
     marginBottom: verticalScale(S.sm),
+  },
+  subtitle: {
+    marginTop: verticalScale(16),
+    fontSize: moderateScale(14),
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+    marginBottom: verticalScale(16),
   },
 });
