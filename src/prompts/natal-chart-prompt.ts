@@ -34,14 +34,16 @@ OUTPUT RULES
 - Every field must be personalized to the user's natal chart.
 `;
 
-export function buildFreeNatalChartPrompt(natalChart: string, pronouns = 'they/them'): string {
-  return `Generate a free-tier natal chart breakdown for the user.
+// ─── Template constants ───────────────────────────────────────────────────────
+// Use {{natalChart}} and {{pronouns}} as substitution markers.
+
+export const FREE_NATAL_CHART_PROMPT_TEMPLATE = `Generate a free-tier natal chart breakdown for the user.
 
 ====================================================
 NATAL CHART DATA
 ====================================================
-${natalChart}
-User Pronouns: ${pronouns}
+{{natalChart}}
+User Pronouns: {{pronouns}}
 
 ====================================================
 INSTRUCTIONS
@@ -99,16 +101,14 @@ OUTPUT FORMAT
   "release": ""
 }
 `;
-}
 
-export function buildPremiumNatalChartPrompt(natalChart: string, pronouns = 'they/them'): string {
-  return `Generate a premium-tier natal chart breakdown for the user.
+export const PREMIUM_NATAL_CHART_PROMPT_TEMPLATE = `Generate a premium-tier natal chart breakdown for the user.
 
 ====================================================
 NATAL CHART DATA
 ====================================================
-${natalChart}
-User Pronouns: ${pronouns}
+{{natalChart}}
+User Pronouns: {{pronouns}}
 
 ====================================================
 INSTRUCTIONS
@@ -198,6 +198,27 @@ OUTPUT FORMAT
   "affirmation": "",
   "release": ""
 }
-  
+
 `;
+
+// ─── Build functions ──────────────────────────────────────────────────────────
+
+export function buildFreeNatalChartPrompt(
+  natalChart: string,
+  pronouns = 'they/them',
+  template = FREE_NATAL_CHART_PROMPT_TEMPLATE,
+): string {
+  return template
+    .replace('{{natalChart}}', natalChart)
+    .replace(/\{\{pronouns\}\}/g, pronouns);
+}
+
+export function buildPremiumNatalChartPrompt(
+  natalChart: string,
+  pronouns = 'they/them',
+  template = PREMIUM_NATAL_CHART_PROMPT_TEMPLATE,
+): string {
+  return template
+    .replace('{{natalChart}}', natalChart)
+    .replace(/\{\{pronouns\}\}/g, pronouns);
 }
