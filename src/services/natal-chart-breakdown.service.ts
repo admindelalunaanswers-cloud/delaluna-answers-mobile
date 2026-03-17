@@ -88,12 +88,12 @@ export async function requestBreakdown(
   await Promise.all([
     setDoc(
       doc(db, 'users', uid, 'natalChart', FREE_DOC),
-      { natalChart, tier: 'free', requestedAt },
+      { prompt: freePrompt, natalChart, tier: 'free', requestedAt },
       { merge: true },
     ),
     setDoc(
       doc(db, 'users', uid, 'natalChart', PREMIUM_DOC),
-      { natalChart, tier: 'premium', requestedAt },
+      { prompt: premiumPrompt, natalChart, tier: 'premium', requestedAt },
       { merge: true },
     ),
   ]);
