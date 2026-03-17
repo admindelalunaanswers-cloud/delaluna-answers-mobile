@@ -11,7 +11,7 @@
     "ios": "expo run:ios",
     "lint": "expo lint",
     "build:preview": "eas build --profile preview-device --platform all",
-    "update:preview": "eas update --channel preview-device --message"
+    "update:preview": "eas update --channel preview-device --environment preview --message"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
