@@ -27,3 +27,19 @@ export const NEW_LOVE_DEFINITION = "A new love interest can bring excitement and
 
 export const RETURNS_DEFINITION = "Interferences can create obstacles in your current situation, potentially leading to misunderstandings or delays. It's essential to assess the nature of these interferences and how they impact your goals and relationships.";
 
+export const TRANSITS_DEFINITION = "Planets are always moving and visiting different areas of your chart. As a result, they are constantly bringing new energy and events to your life. This is your 'cosmic weather report,' showing which areas of your life are seeing sunshine or storms this week.";
+
+export const HOUSE_KEYWORDS: Record<string, string> = {
+  '1':  'Body & Style',
+  '2':  'Money',
+  '3':  'Communication, Social Life & Trips',
+  '4':  'Home, Family & Emotional Security',
+  '5':  'Fun, Dating & Children',
+  '6':  'Health, Habits & Work',
+  '7':  'Marriage, Partners & Enemies',
+  '8':  'Sex, Secrets & Dark Side',
+  '9':  'Travel, Education & Big Ideas',
+  '10': 'Career, Fame & Reputation',
+  '11': 'Friends & Dreams',
+  '12': 'Past Lives, Twin Flames & Karma',
+};
