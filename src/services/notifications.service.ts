@@ -62,6 +62,25 @@ export async function scheduleBreakdownReadyNotification(): Promise<void> {
 }
 
 /**
+ * Fires an immediate local notification telling the user today's horoscope is ready.
+ * Safe to call on any platform.
+ */
+export async function scheduleHoroscopeReadyNotification(): Promise<void> {
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "Today's Horoscope is Ready",
+        body: 'Your daily cosmic reading is available. Tap to explore.',
+        data: { screen: '/(main)' },
+      },
+      trigger: Platform.OS === 'android' ? { channelId: 'default' } : null,
+    });
+  } catch {
+    // Notifications not available (simulator, permission denied, etc.) — skip silently
+  }
+}
+
+/**
  * Fires an immediate local notification telling the user their weekly transit
  * reading is ready. Safe to call on any platform.
  */
