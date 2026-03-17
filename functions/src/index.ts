@@ -174,6 +174,7 @@ interface ExpoPushMessage {
   sound: 'default';
   title: string;
   body: string;
+  channelId?: string;
   data?: Record<string, string>;
 }
 
@@ -219,6 +220,7 @@ export const sendMorningReminder = onSchedule('every day 08:00', async () => {
       sound: 'default' as const,
       title: '🌙 Your Daily Reading',
       body: 'Your horoscope and cards for today are ready.',
+      channelId: 'default',
       data: { screen: '/(main)' },
     }));
 

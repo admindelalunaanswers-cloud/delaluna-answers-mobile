@@ -54,7 +54,26 @@ export async function scheduleBreakdownReadyNotification(): Promise<void> {
         body: 'Your natal chart breakdown has been read. Tap to explore your cosmic blueprint.',
         data: { screen: '/(home)/birth-chart-view' },
       },
-      trigger: null, // deliver immediately
+      trigger: Platform.OS === 'android' ? { channelId: 'default' } : null,
+    });
+  } catch {
+    // Notifications not available (simulator, permission denied, etc.) — skip silently
+  }
+}
+
+/**
+ * Fires an immediate local notification telling the user their weekly transit
+ * reading is ready. Safe to call on any platform.
+ */
+export async function scheduleTransitReadyNotification(): Promise<void> {
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Your Weekly Transit Reading is Ready',
+        body: 'See how the planets are influencing your week. Tap to explore.',
+        data: { screen: '/(main)/transits' },
+      },
+      trigger: Platform.OS === 'android' ? { channelId: 'default' } : null,
     });
   } catch {
     // Notifications not available (simulator, permission denied, etc.) — skip silently

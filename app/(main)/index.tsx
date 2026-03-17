@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 
 import { router } from 'expo-router';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doc, getFirestore, updateDoc } from 'firebase/firestore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -20,6 +21,7 @@ import { HOME_STRINGS } from '@/src/constants/strings';
 import { ThemedView } from '@/src/components/themed-view';
 import { calculateTransits } from '@/src/services/astroEngine';
 import { fetchHoroscope, getTodayDateId } from '@/src/services/horoscope.service';
+import { scheduleBreakdownReadyNotification } from '@/src/services/notifications.service';
 import { getTarotCardDraw } from '@/src/services/tarot-card.service';
 // import { updateUserDoc } from '@/src/services/user.service';
 import { useHoroscope } from '@/src/context/horoscope-context';
@@ -38,6 +40,25 @@ export default function HomeScreen() {
     breakdown,
     refresh,
   } = useHoroscope();
+
+  const breakdownNotifiedRef = useRef(false);
+
+  // Fire "birth chart ready" notification once per user, as soon as breakdown
+  // is available on this screen — whether it arrived from prefetch or subscription.
+  useEffect(() => {
+    if (!breakdown || !authUser?.uid) return;
+    if (breakdownNotifiedRef.current) return;
+
+    const key = `@delaluna/breakdown_notified_${authUser.uid}`;
+    AsyncStorage.getItem(key)
+      .then(sent => {
+        if (sent === 'true') { breakdownNotifiedRef.current = true; return; }
+        breakdownNotifiedRef.current = true;
+        AsyncStorage.setItem(key, 'true').catch(console.error);
+        scheduleBreakdownReadyNotification().catch(console.error);
+      })
+      .catch(console.error);
+  }, [breakdown, authUser?.uid]);
 
   const todayDateId = getTodayDateId();
   const [selectedDate, setSelectedDate] = useState(todayDateId);

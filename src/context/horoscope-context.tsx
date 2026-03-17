@@ -30,7 +30,7 @@ import {
   subscribeToBreakdown,
   type BreakdownFetchResult,
 } from '@/src/services/natal-chart-breakdown.service';
-import { scheduleBreakdownReadyNotification } from '@/src/services/notifications.service';
+import { scheduleTransitReadyNotification } from '@/src/services/notifications.service';
 import {
   fetchTransitReading,
   getThisWeekDateId,
@@ -110,9 +110,10 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
   const [premiumBreakdownGenerating, setPremiumBreakdownGenerating] = useState(false);
   const [loading, setLoading]                                   = useState(true);
 
-  const unsubHoroscopeRef = useRef<(() => void) | null>(null);
-  const unsubBreakdownRef = useRef<(() => void) | null>(null);
-  const unsubTransitRef   = useRef<(() => void) | null>(null);
+  const unsubHoroscopeRef          = useRef<(() => void) | null>(null);
+  const unsubBreakdownRef          = useRef<(() => void) | null>(null);
+  const unsubTransitRef            = useRef<(() => void) | null>(null);
+  const transitNotificationSent = useRef(false);
 
   // ─── Background subscribers (subscribe + request only, no re-fetch) ──────────
 
@@ -133,14 +134,12 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     if (needsFreeSubscribe)    setBreakdownGenerating(true);
     if (needsPremiumSubscribe) setPremiumBreakdownGenerating(true);
 
-    const freeWasGenerating = needsFreeSubscribe;
     const unsub = subscribeToBreakdown(
       uid,
       (r) => {
         if (signal.cancelled) return;
         setBreakdown(r);
         setBreakdownGenerating(false);
-        if (freeWasGenerating) scheduleBreakdownReadyNotification().catch(console.error);
       },
       (r) => {
         if (signal.cancelled) return;
@@ -171,6 +170,10 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
       setTransitReadingGenerating(false);
       unsubTransitRef.current?.();
       unsubTransitRef.current = null;
+      if (!transitNotificationSent.current) {
+        transitNotificationSent.current = true;
+        scheduleTransitReadyNotification().catch(console.error);
+      }
     });
     unsubTransitRef.current = unsub;
 
