@@ -11,6 +11,8 @@ export default function TabLayout() {
   const { userDoc } = useUser();
   // Scale icon size from base 28 on 375px width, clamped between 22–36
   const iconSize = Math.round(Math.min(Math.max((width / 375) * 28, 22), 36));
+  // Ionicons font glyphs render visually larger than PNG images at the same size
+  const ionIconSize = Math.round(iconSize * 0.82);
 
   return (
     <UserProvider>
@@ -58,7 +60,7 @@ export default function TabLayout() {
         options={{
           title: 'Admin',
           href: userDoc?.isAdmin ? undefined : null,
-          tabBarIcon: ({ color }) => <IconSymbol name="shield" size={iconSize} color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol name="shield" size={ionIconSize} color={color} />,
         }}
       />
     </Tabs>
