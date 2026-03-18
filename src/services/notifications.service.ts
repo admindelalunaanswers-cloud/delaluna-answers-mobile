@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { doc, setDoc } from 'firebase/firestore';
@@ -7,6 +8,30 @@ import { doc, setDoc } from 'firebase/firestore';
 import { db } from '@/firebaseConfig';
 
 const EXPO_PROJECT_ID = 'a267fc5e-e587-4e94-b9ab-1cddd6decb94';
+
+// ─── Deduplication ────────────────────────────────────────────────────────────
+// Module-level Set is the synchronous first-check — prevents concurrent calls
+// (e.g. React Strict Mode double-invoke) from both passing before AsyncStorage
+// is written. AsyncStorage handles cross-session persistence across app restarts.
+const _sent = new Set<string>();
+
+/**
+ * Fires `scheduleFn` at most once per `key` per app session and per device.
+ * Safe to call concurrently — the synchronous Set guard prevents races.
+ */
+export function notifyOnce(key: string, scheduleFn: () => Promise<void>): void {
+  if (_sent.has(key)) return;
+  _sent.add(key); // synchronous guard — blocks any concurrent call immediately
+
+  AsyncStorage.getItem(key)
+    .then(sent => {
+      if (sent === 'true') return;
+      return AsyncStorage.setItem(key, 'true').then(() => scheduleFn());
+    })
+    .catch(console.error);
+}
+
+// ─── Registration ─────────────────────────────────────────────────────────────
 
 /**
  * Requests permission and saves the Expo push token to the user's Firestore doc.
@@ -42,10 +67,8 @@ export async function registerForPushNotifications(uid: string): Promise<void> {
   await setDoc(doc(db, 'users', uid), { expoPushToken: token.data }, { merge: true });
 }
 
-/**
- * Fires an immediate local notification telling the user their birth chart
- * breakdown is ready. Safe to call on any platform.
- */
+// ─── Schedule helpers ─────────────────────────────────────────────────────────
+
 export async function scheduleBreakdownReadyNotification(): Promise<void> {
   try {
     await Notifications.scheduleNotificationAsync({
@@ -61,10 +84,6 @@ export async function scheduleBreakdownReadyNotification(): Promise<void> {
   }
 }
 
-/**
- * Fires an immediate local notification telling the user today's horoscope is ready.
- * Safe to call on any platform.
- */
 export async function scheduleHoroscopeReadyNotification(): Promise<void> {
   try {
     await Notifications.scheduleNotificationAsync({
@@ -80,10 +99,6 @@ export async function scheduleHoroscopeReadyNotification(): Promise<void> {
   }
 }
 
-/**
- * Fires an immediate local notification telling the user their weekly transit
- * reading is ready. Safe to call on any platform.
- */
 export async function scheduleTransitReadyNotification(): Promise<void> {
   try {
     await Notifications.scheduleNotificationAsync({
@@ -98,6 +113,8 @@ export async function scheduleTransitReadyNotification(): Promise<void> {
     // Notifications not available (simulator, permission denied, etc.) — skip silently
   }
 }
+
+// ─── Foreground handler ───────────────────────────────────────────────────────
 
 /**
  * Configures how notifications appear when the app is in the foreground.
