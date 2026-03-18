@@ -22,6 +22,7 @@ module.exports = {
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
       package: "com.delalunaanswers.mobile",
+      googleServicesFile: "./google-services.json",
     },
     plugins: [
       "expo-router",
