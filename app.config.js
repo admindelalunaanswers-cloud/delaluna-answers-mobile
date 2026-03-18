@@ -13,6 +13,7 @@ module.exports = {
       supportsTablet: false,
       bundleIdentifier: "com.delalunaanswers.mobile",
       newArchEnabled: true,
+      googleServicesFile: "./GoogleService-Info.plist",
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         UIBackgroundModes: ["remote-notification"],
