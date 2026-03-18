@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   ScrollView,
   StyleSheet,
   Switch,
@@ -69,6 +70,9 @@ export default function AdminScreen() {
   const [resendBreakdown, setResendBreakdown] = useState<ActionStatus>('idle');
   const [resendTransit,   setResendTransit]   = useState<ActionStatus>('idle');
 
+  // Blocking overlay — shown while any async operation is in-flight
+  const [runningLabel, setRunningLabel] = useState<string | null>(null);
+
   // Per-user admin state — keyed by email
   const [userAdminStates, setUserAdminStates] = useState<Record<string, UserAdminState>>(
     Object.fromEntries(
@@ -99,15 +103,18 @@ export default function AdminScreen() {
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-  const run = async (setter: (s: ActionStatus) => void, fn: () => Promise<void>) => {
+  const run = async (label: string, setter: (s: ActionStatus) => void, fn: () => Promise<void>) => {
+    setRunningLabel(label);
     setter('loading');
     try {
       await fn();
       setter('success');
+      setRunningLabel(null);
       setTimeout(() => setter('idle'), 3000);
     } catch (e) {
       console.error('[AdminScreen]', e);
       setter('error');
+      setRunningLabel(null);
       setTimeout(() => setter('idle'), 4000);
     }
   };
@@ -132,18 +139,18 @@ export default function AdminScreen() {
   // ─── Push notification tests ──────────────────────────────────────────────
 
   const testHoroscopeNotif = () =>
-    run(setNotifHoroscope, () => scheduleHoroscopeReadyNotification());
+    run('Sending horoscope notification…', setNotifHoroscope, () => scheduleHoroscopeReadyNotification());
 
   const testBreakdownNotif = () =>
-    run(setNotifBreakdown, () => scheduleBreakdownReadyNotification());
+    run('Sending birth chart notification…', setNotifBreakdown, () => scheduleBreakdownReadyNotification());
 
   const testTransitNotif = () =>
-    run(setNotifTransit, () => scheduleTransitReadyNotification());
+    run('Sending transit notification…', setNotifTransit, () => scheduleTransitReadyNotification());
 
   // ─── Re-send prompts ──────────────────────────────────────────────────────
 
   const resendHoroscopePrompt = () =>
-    run(setResendHoroscope, async () => {
+    run('Re-sending horoscope…', setResendHoroscope, async () => {
       if (!authUser?.uid || !chartDetails) throw new Error('Missing user or chart data');
       const pronouns    = userDoc?.pronouns ?? 'they/them';
       const moon        = transitMoon ?? chartDetails.moon;
@@ -152,13 +159,13 @@ export default function AdminScreen() {
     });
 
   const resendBreakdownPrompt = () =>
-    run(setResendBreakdown, async () => {
+    run('Re-sending birth chart…', setResendBreakdown, async () => {
       if (!authUser?.uid || !chartDetails) throw new Error('Missing user or chart data');
       await requestBreakdown(authUser.uid, chartDetails, userDoc?.pronouns ?? 'they/them');
     });
 
   const resendTransitPrompt = () =>
-    run(setResendTransit, async () => {
+    run('Re-sending transit reading…', setResendTransit, async () => {
       if (!authUser?.uid || !chartDetails) throw new Error('Missing user or chart data');
       const transits = await calculateTransits(new Date(), userDoc?.birthLat ?? 0, userDoc?.birthLon ?? 0);
       await requestTransitReading(authUser.uid, getThisWeekDateId(), chartDetails, transits, userDoc?.pronouns ?? 'they/them');
@@ -201,6 +208,22 @@ export default function AdminScreen() {
     },
     userEmail: { color: C.text, fontSize: ms(13), flex: 1, marginRight: ms(8) },
     userAdminLabel: { color: C.text, fontSize: ms(12), opacity: 0.6, marginRight: ms(8) },
+    overlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    overlayCard: {
+      backgroundColor: C.headerBg,
+      borderRadius: ms(16),
+      paddingVertical: ms(28),
+      paddingHorizontal: ms(32),
+      alignItems: 'center',
+      gap: ms(14),
+      minWidth: ms(200),
+    },
+    overlayText: { color: C.text, fontSize: ms(14), textAlign: 'center' },
   });
 
   // ─── Sub-components ───────────────────────────────────────────────────────
@@ -231,6 +254,7 @@ export default function AdminScreen() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
+    <>
     <ScrollView
       style={styles.container}
       contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + ms(24) }]}
@@ -286,5 +310,15 @@ export default function AdminScreen() {
         );
       })}
     </ScrollView>
+
+    <Modal visible={runningLabel !== null} transparent animationType="fade">
+      <View style={styles.overlay}>
+        <View style={styles.overlayCard}>
+          <ActivityIndicator color={C.activeTab} size="large" />
+          <Text style={styles.overlayText}>{runningLabel}</Text>
+        </View>
+      </View>
+    </Modal>
+    </>
   );
 }
