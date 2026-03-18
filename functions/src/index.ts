@@ -212,10 +212,14 @@ export const sendMorningReminder = onSchedule('every day 08:00', async () => {
 
   if (snap.empty) return;
 
-  const messages: ExpoPushMessage[] = snap.docs
-    .map(d => d.data().expoPushToken as string | undefined)
-    .filter((token): token is string => !!token)
-    .map(to => ({
+  // Deduplicate tokens — same device may appear in multiple user docs (dev/test accounts)
+  const uniqueTokens = [...new Set(
+    snap.docs
+      .map(d => d.data().expoPushToken as string | undefined)
+      .filter((token): token is string => !!token)
+  )];
+
+  const messages: ExpoPushMessage[] = uniqueTokens.map(to => ({
       to,
       sound: 'default' as const,
       title: '🌙 Your Daily Reading',

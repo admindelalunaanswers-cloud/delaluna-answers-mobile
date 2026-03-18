@@ -8,7 +8,6 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doc, getDoc } from 'firebase/firestore';
 
 import { db } from '@/firebaseConfig';
@@ -31,7 +30,8 @@ import {
   subscribeToBreakdown,
   type BreakdownFetchResult,
 } from '@/src/services/natal-chart-breakdown.service';
-import { scheduleHoroscopeReadyNotification, scheduleTransitReadyNotification } from '@/src/services/notifications.service';
+import { notifyOnce, scheduleHoroscopeReadyNotification, scheduleTransitReadyNotification } from '@/src/services/notifications.service';
+
 import {
   fetchTransitReading,
   getThisWeekDateId,
@@ -114,31 +114,6 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
   const unsubHoroscopeRef          = useRef<(() => void) | null>(null);
   const unsubBreakdownRef          = useRef<(() => void) | null>(null);
   const unsubTransitRef            = useRef<(() => void) | null>(null);
-  // Fires the horoscope notification at most once per day per user.
-  // dateId in the key resets automatically each day.
-  const maybeNotifyHoroscope = (uid: string, dateId: string) => {
-    const key = `@delaluna/horoscope_notified_${uid}_${dateId}`;
-    AsyncStorage.getItem(key)
-      .then(sent => {
-        if (sent === 'true') return;
-        AsyncStorage.setItem(key, 'true').catch(console.error);
-        scheduleHoroscopeReadyNotification().catch(console.error);
-      })
-      .catch(console.error);
-  };
-
-  // Fires the transit notification at most once per week per user.
-  // weekDateId in the key resets automatically each Sunday.
-  const maybeNotifyTransit = (uid: string, weekDateId: string) => {
-    const key = `@delaluna/transit_notified_${uid}_${weekDateId}`;
-    AsyncStorage.getItem(key)
-      .then(sent => {
-        if (sent === 'true') return;
-        AsyncStorage.setItem(key, 'true').catch(console.error);
-        scheduleTransitReadyNotification().catch(console.error);
-      })
-      .catch(console.error);
-  };
 
   // ─── Background subscribers (subscribe + request only, no re-fetch) ──────────
 
@@ -195,7 +170,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
       setTransitReadingGenerating(false);
       unsubTransitRef.current?.();
       unsubTransitRef.current = null;
-      maybeNotifyTransit(uid, dateId);
+      notifyOnce(`@delaluna/transit_notified_${uid}_${dateId}`, scheduleTransitReadyNotification);
     });
     unsubTransitRef.current = unsub;
 
@@ -249,7 +224,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     if (breakdownFetch.premiumResult) setPremiumBreakdown(breakdownFetch.premiumResult);
     if (transitReadingFetch.result) {
       setTransitReading(transitReadingFetch.result);
-      maybeNotifyTransit(uid, weekDateId);
+      notifyOnce(`@delaluna/transit_notified_${uid}_${weekDateId}`, scheduleTransitReadyNotification);
     }
 
     setLoading(false);
@@ -265,7 +240,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     const { result, pending } = horoscopeRes;
 
     // Horoscope subscribe / request
-    if (result) { setHoroscope(result); maybeNotifyHoroscope(uid, dateId); return; }
+    if (result) { setHoroscope(result); notifyOnce(`@delaluna/horoscope_notified_${uid}_${dateId}`, scheduleHoroscopeReadyNotification); return; }
     if (!chart) {
       // New user: chart hasn't been written yet. Stay in generating state so
       // AuthGate doesn't navigate early. Subscribe so we pick it up when
@@ -277,7 +252,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
         setHoroscopeGenerating(false);
         unsubHoroscopeRef.current?.();
         unsubHoroscopeRef.current = null;
-        maybeNotifyHoroscope(uid, dateId);
+        notifyOnce(`@delaluna/horoscope_notified_${uid}_${dateId}`, scheduleHoroscopeReadyNotification);
         // The Firebase Extension requires natalChart/details to exist before it
         // can generate the horoscope, so the chart is guaranteed to be written
         // by the time this fires. Re-fetch it so chartDetails (and the 3 signs)
@@ -309,7 +284,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
       setHoroscopeGenerating(false);
       unsubHoroscopeRef.current?.();
       unsubHoroscopeRef.current = null;
-      maybeNotifyHoroscope(uid, dateId);
+      notifyOnce(`@delaluna/horoscope_notified_${uid}_${dateId}`, scheduleHoroscopeReadyNotification);
     });
     unsubHoroscopeRef.current = unsub;
 
