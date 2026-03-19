@@ -16,6 +16,13 @@ import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
 
 const NAV_BAR_HEIGHT = 44;
 
+const AVATAR_ICONS: { id: 1 | 2 | 3 | 4; name: string }[] = [
+  { id: 1, name: 'person-circle' },
+  { id: 2, name: 'moon'          },
+  { id: 3, name: 'planet'        },
+  { id: 4, name: 'star'          },
+];
+
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
@@ -47,6 +54,18 @@ export default function ProfileScreen() {
   const { authUser, userDoc, refresh: refreshUser } = useUser();
   const { refresh: refreshHoroscope } = useHoroscope();
   const [busy, setBusy] = useState(false);
+  const [avatarId, setAvatarId] = useState<1 | 2 | 3 | 4>((userDoc as any)?.avatarIconId ?? 1);
+
+  const handleAvatarSelect = async (id: 1 | 2 | 3 | 4) => {
+    if (!authUser?.uid || id === avatarId) return;
+    setAvatarId(id);
+    try {
+      await updateUserDoc(authUser.uid, { avatarIconId: id });
+    } catch {
+      setAvatarId(avatarId);
+      Alert.alert('Error', 'Could not save icon. Please try again.');
+    }
+  };
 
   const insets = useSafeAreaInsets();
   const ud = userDoc as any;
@@ -131,8 +150,24 @@ export default function ProfileScreen() {
         contentContainerStyle={[styles.content, { paddingTop: insets.top + scale(NAV_BAR_HEIGHT) + scale(24) }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Avatar */}
-        <Ionicons name="person-circle-outline" size={scale(80)} color="#BCA8F4" />
+        {/* Avatar — selected icon large, picker row below */}
+        <Ionicons
+          name={AVATAR_ICONS.find(a => a.id === avatarId)!.name as any}
+          size={scale(80)}
+          color="#BCA8F4"
+        />
+        <View style={styles.avatarPicker}>
+          {AVATAR_ICONS.map(a => (
+            <TouchableOpacity
+              key={a.id}
+              onPress={() => handleAvatarSelect(a.id)}
+              activeOpacity={0.7}
+              style={[styles.avatarOption, a.id === avatarId && styles.avatarOptionActive]}
+            >
+              <Ionicons name={a.name as any} size={scale(28)} color={a.id === avatarId ? '#BCA8F4' : 'rgba(255,255,255,0.35)'} />
+            </TouchableOpacity>
+          ))}
+        </View>
 
         {/* Name / email */}
         <Text style={styles.name}>{ud?.name ?? '—'}</Text>
@@ -337,6 +372,10 @@ const styles = StyleSheet.create({
   buttonDowngrade:{ backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' },
   buttonDisabled: { opacity: 0.5 },
   buttonText:     { color: '#fff', fontSize: moderateScale(14), fontWeight: '700' },
+
+  avatarPicker:       { flexDirection: 'row', gap: scale(12), marginTop: verticalScale(6) },
+  avatarOption:       { padding: scale(8), borderRadius: scale(12), borderWidth: 1, borderColor: 'transparent' },
+  avatarOptionActive: { borderColor: '#BCA8F4', backgroundColor: 'rgba(188,168,244,0.12)' },
 
   hint: { color: 'rgba(255,255,255,0.3)', fontSize: moderateScale(11), textAlign: 'center', marginTop: verticalScale(8), paddingHorizontal: scale(16), lineHeight: moderateScale(17) },
 
