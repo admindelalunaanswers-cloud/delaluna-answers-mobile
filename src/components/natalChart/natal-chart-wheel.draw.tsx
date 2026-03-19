@@ -43,10 +43,11 @@ const ASPECT_STYLE: Record<string, { color: string; dash?: string; width: number
 
 const MAJOR_ASPECTS = new Set(['Conjunction', 'Opposition', 'Square', 'Trine', 'Sextile']);
 
-// Main 10 planets only — no Chiron / N.Node
+// 10 main planets + lunar nodes
 const MAIN_PLANETS = new Set([
   'Sun', 'Moon', 'Mercury', 'Venus', 'Mars',
   'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto',
+  'N. Node', 'S. Node',
 ]);
 
 
@@ -299,7 +300,7 @@ export default function BirthChartWheel({ natalChart, size }: Props) {
             >
               {p.symbol}
             </SvgText>
-            {p.isRetrograde && (
+            {p.isRetrograde && p.name !== 'N. Node' && p.name !== 'S. Node' && (
               <SvgText
                 x={x + fsPlanet * 0.58}
                 y={y - fsPlanet * 0.48}
