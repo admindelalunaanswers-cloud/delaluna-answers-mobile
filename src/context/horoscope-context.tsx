@@ -290,7 +290,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
 
     if (!pending) {
       const moon        = transits?.moon ?? chart.moon;
-      const retrogrades = transits?.planets.filter(p => p.isRetrograde).map(p => p.name) ?? [];
+      const retrogrades = transits?.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name) ?? [];
       requestHoroscope(uid, dateId, chart, moon, retrogrades, pronouns).catch(console.error);
     }
   };

@@ -7,6 +7,11 @@ import { calculateTransits } from '@/src/services/astroEngine';
 import { getTarotCardDraw } from '@/src/services/tarot-card.service';
 import { HOROSCOPE_PROMPT_TEMPLATE } from '@/src/prompts/horoscope-prompt';
 
+const RETROGRADE_PLANETS = new Set([
+  'Mercury', 'Venus', 'Mars',
+  'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto',
+]);
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Returns today's date as YYYY-MM-DD (local time). */
@@ -211,7 +216,7 @@ export async function requestHoroscope(
     .then(t => writeHoroscopeDoc(
       uid, yesterdayId, natalChart,
       t.moon,
-      t.planets.filter(p => p.isRetrograde).map(p => p.name),
+      t.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name),
       tarotDraw?.yesterday.keywordString ?? '',
       pronouns,
     ))
@@ -221,7 +226,7 @@ export async function requestHoroscope(
     .then(t => writeHoroscopeDoc(
       uid, tomorrowId, natalChart,
       t.moon,
-      t.planets.filter(p => p.isRetrograde).map(p => p.name),
+      t.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name),
       tarotDraw?.tomorrow.keywordString ?? '',
       pronouns,
     ))
@@ -270,7 +275,7 @@ export async function rolloverHoroscope(
   if (todayMissing) {
     try {
       const t = await calculateTransits(new Date());
-      const retrogrades = t.planets.filter(p => p.isRetrograde).map(p => p.name);
+      const retrogrades = t.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name);
       await writeHoroscopeDoc(
         uid, dateId, natalChart,
         t.moon, retrogrades,
@@ -288,7 +293,7 @@ export async function rolloverHoroscope(
       .then(t => writeHoroscopeDoc(
         uid, tomorrowId, natalChart,
         t.moon,
-        t.planets.filter(p => p.isRetrograde).map(p => p.name),
+        t.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name),
         tarotDraw?.tomorrow.keywordString ?? '',
         pronouns,
       ))
