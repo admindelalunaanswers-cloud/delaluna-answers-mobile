@@ -13,6 +13,7 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { StatusBar } from 'expo-status-bar';
 import { updateProfile } from 'firebase/auth';
@@ -71,6 +72,7 @@ export default function SignUpChatScreen() {
   const [headerHeight, setHeaderHeight] = useState(0);
 
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const modalCardWidth = width > 640 ? '55%' : width > 480 ? '70%' : '86%';
 
   // Timeout safety net
@@ -252,7 +254,7 @@ export default function SignUpChatScreen() {
         <View style={{ flex: 1 }}>
           <StatusBar style="light" translucent backgroundColor="transparent" />
 
-          <BlurView intensity={10} tint="dark" style={styles.overlay}>
+          <BlurView intensity={10} tint="dark" style={[styles.overlay, Platform.OS === 'android' && { paddingTop: insets.top + verticalScale(12) }]}>
             <View
               style={styles.header}
               onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
