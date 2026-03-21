@@ -3,7 +3,7 @@ import { useWindowDimensions } from 'react-native';
 
 import { IconSymbol } from '@/src/components/ui/icon-symbol';
 import { useTheme } from '@/src/hooks/use-theme';
-import { UserProvider, useUser } from '@/src/context/user-context';
+import { useUser } from '@/src/context/user-context';
 
 export default function TabLayout() {
   const { theme: { colors: C } } = useTheme();
@@ -15,7 +15,6 @@ export default function TabLayout() {
   const ionIconSize = Math.round(iconSize * 0.82);
 
   return (
-    <UserProvider>
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: C.activeTab,
@@ -68,6 +67,5 @@ export default function TabLayout() {
         options={{ href: null }}
       />
     </Tabs>
-    </UserProvider>
   );
 }
