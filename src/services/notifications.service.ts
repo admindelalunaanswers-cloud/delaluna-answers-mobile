@@ -51,6 +51,7 @@ export async function registerForPushNotifications(uid: string): Promise<void> {
   }
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  console.log('[push] existing permission status:', existingStatus);
   let finalStatus = existingStatus;
 
   if (existingStatus !== 'granted') {
@@ -60,11 +61,14 @@ export async function registerForPushNotifications(uid: string): Promise<void> {
     finalStatus = status;
   }
 
+  console.log('[push] final permission status:', finalStatus);
   if (finalStatus !== 'granted') return; // User declined — skip silently
 
   const token = await Notifications.getExpoPushTokenAsync({ projectId: EXPO_PROJECT_ID });
+  console.log('[push] token:', token.data);
 
   await setDoc(doc(db, 'users', uid), { expoPushToken: token.data }, { merge: true });
+  console.log('[push] token saved to Firestore');
 }
 
 // ─── Schedule helpers ─────────────────────────────────────────────────────────
