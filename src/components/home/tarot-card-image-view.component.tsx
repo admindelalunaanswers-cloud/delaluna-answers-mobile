@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    gap: scale(12),
+    gap: scale(2),
     width: "100%",
   },
   image: {
