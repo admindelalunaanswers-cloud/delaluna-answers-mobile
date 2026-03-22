@@ -28,7 +28,7 @@ export interface UserDoc {
   isBirthTimeUnknown: boolean;
 
   pronouns?:               string;  // e.g. "She/Her", "He/Him", "They/Them", "Non Binary"
-  avatarIconId?:           1 | 2 | 3 | 4;  // profile icon selection, missing = default 1
+  avatarIconId?:           string;  // Ionicons name, e.g. 'person-circle', 'moon', 'planet', 'star'
   isPremiumMember:         boolean;
   isAdmin?:                boolean;
   createdAt:               Timestamp;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native';
 
 import { router } from 'expo-router';
@@ -17,10 +17,10 @@ import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
 const NAV_BAR_HEIGHT = 44;
 
 const AVATAR_ICONS: { id: 1 | 2 | 3 | 4; name: string }[] = [
-  { id: 1, name: 'person-circle' },
-  { id: 2, name: 'moon'          },
-  { id: 3, name: 'planet'        },
-  { id: 4, name: 'star'          },
+  { id: 1, name: 'person-circle'},
+  { id: 2, name: 'person'},
+  { id: 3, name: 'person-circle-outline'},
+  { id: 4, name: 'person-outline'},
 ];
 
 const MONTHS = [
@@ -54,16 +54,57 @@ export default function ProfileScreen() {
   const { authUser, userDoc, refresh: refreshUser } = useUser();
   const { refresh: refreshHoroscope } = useHoroscope();
   const [busy, setBusy] = useState(false);
-  const [avatarId, setAvatarId] = useState<1 | 2 | 3 | 4>((userDoc as any)?.avatarIconId ?? 1);
+  const [avatarName, setAvatarName] = useState<string>((userDoc as any)?.avatarIconId ?? 'person-circle');
+  const [savedAvatarName, setSavedAvatarName] = useState<string>((userDoc as any)?.avatarIconId ?? 'person-circle');
 
-  const handleAvatarSelect = async (id: 1 | 2 | 3 | 4) => {
-    if (!authUser?.uid || id === avatarId) return;
-    setAvatarId(id);
+  // Sync when userDoc arrives or refreshes
+  useEffect(() => {
+    const name: string = (userDoc as any)?.avatarIconId ?? 'person-circle';
+    setAvatarName(name);
+    setSavedAvatarName(name);
+  }, [userDoc]);
+
+  const handleAvatarSelect = (name: string) => {
+    if (name === avatarName) return;
+    setAvatarName(name);
+  };
+
+  const saveAvatarIcon = async (name: string): Promise<boolean> => {
+    if (!authUser?.uid) return false;
     try {
-      await updateUserDoc(authUser.uid, { avatarIconId: id });
+      await updateUserDoc(authUser.uid, { avatarIconId: name });
+      setSavedAvatarName(name);
+      await refreshUser();
+      return true;
     } catch {
-      setAvatarId(avatarId);
       Alert.alert('Error', 'Could not save icon. Please try again.');
+      return false;
+    }
+  };
+
+  const handleBack = () => {
+    if (avatarName !== savedAvatarName) {
+      Alert.alert(
+        'Save profile icon?',
+        'You selected a new profile icon. Would you like to save it?',
+        [
+          {
+            text: 'Discard',
+            style: 'destructive',
+            onPress: () => router.back(),
+          },
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Save',
+            onPress: async () => {
+              const ok = await saveAvatarIcon(avatarName);
+              if (ok) router.back();
+            },
+          },
+        ]
+      );
+    } else {
+      router.back();
     }
   };
 
@@ -142,7 +183,7 @@ export default function ProfileScreen() {
       <HeaderNav
         title="Profile"
         leftIconName="chevron-back-outline"
-        onLeftPress={() => router.back()}
+        onLeftPress={handleBack}
       />
 
       <ScrollView
@@ -152,19 +193,19 @@ export default function ProfileScreen() {
       >
         {/* Avatar — selected icon large, picker row below */}
         <Ionicons
-          name={AVATAR_ICONS.find(a => a.id === avatarId)!.name as any}
+          name={avatarName as any}
           size={scale(80)}
           color="#BCA8F4"
         />
         <View style={styles.avatarPicker}>
           {AVATAR_ICONS.map(a => (
             <TouchableOpacity
-              key={a.id}
-              onPress={() => handleAvatarSelect(a.id)}
+              key={a.name}
+              onPress={() => handleAvatarSelect(a.name)}
               activeOpacity={0.7}
-              style={[styles.avatarOption, a.id === avatarId && styles.avatarOptionActive]}
+              style={[styles.avatarOption, a.name === avatarName && styles.avatarOptionActive]}
             >
-              <Ionicons name={a.name as any} size={scale(28)} color={a.id === avatarId ? '#BCA8F4' : 'rgba(255,255,255,0.35)'} />
+              <Ionicons name={a.name as any} size={scale(28)} color={a.name === avatarName ? '#BCA8F4' : 'rgba(255,255,255,0.35)'} />
             </TouchableOpacity>
           ))}
         </View>
