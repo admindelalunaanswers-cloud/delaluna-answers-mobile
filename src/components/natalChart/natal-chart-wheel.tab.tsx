@@ -13,7 +13,7 @@ interface NatalWheelTabProps {
 export default function NatalWheelTab({ natalChart }: NatalWheelTabProps) {
   const { width, height } = useWindowDimensions();
   // Cap by both width and ~28% of screen height so the wheel fits the smaller container
-  const wheelSize = Math.min(width - S.xl * 2, height * 0.33);
+  const wheelSize = Math.min(width - S.xs * 2, height * 0.28);
 
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>

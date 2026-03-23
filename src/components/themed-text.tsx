@@ -7,7 +7,7 @@ import { C } from '../constants/theme';
 export type ThemedTextProps = TextProps & {
   lightColor?: string;
   darkColor?: string;
-  type?: 'default' | 'title' | 'defaultSemiBold' | 'subtitle' | 'link';
+  type?: 'default' | 'title' | 'defaultSemiBold' | 'subtitle' | 'link' | 'table';
 };
 
 export function ThemedText({
@@ -30,6 +30,8 @@ export function ThemedText({
         return { fontSize: moderateScale(16), lineHeight: moderateScale(24), color: C.white, fontWeight: '600' as const };
       case 'link':
         return { fontSize: moderateScale(16), lineHeight: moderateScale(30), color: '#0a7ea4' };
+      case 'table':
+        return { fontSize: moderateScale(16), lineHeight: moderateScale(14) };
       default:
         return { fontSize: moderateScale(16), lineHeight: moderateScale(24) };
     }
