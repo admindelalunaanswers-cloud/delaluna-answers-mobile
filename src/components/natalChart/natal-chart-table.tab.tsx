@@ -3,155 +3,103 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { C, S } from '@/src/constants/theme';
-import type { PlanetPosition } from '@/src/services/astroEngine';
+import type { SerializedPlanet } from '@/src/types/user.type';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
-
-const ZODIAC_SIGNS = [
-  'Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo',
-  'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces',
-];
-
-function signFromLon(lon: number): string {
-  return ZODIAC_SIGNS[Math.floor(((lon % 360) + 360) % 360 / 30)];
-}
+import { ThemedView } from '../themed-view';
+import { ThemedText } from '../themed-text';
 
 interface NatalTableProps {
-  planets: PlanetPosition[];
+  planets: SerializedPlanet[];
   asc: { sign: string; signSymbol: string; degree: number; minutes: number };
-  houses: { cusps: number[] };
 }
 
-type Row = {
-  sign: string; symbol: string; name: string;
-  house: number; retrograde: boolean; color: string;
-};
+type Entry = { name: string; symbol: string; sign: string; retrograde: boolean };
 
-type HouseGroup = {
-  house: number;
-  cuspSign: string;
-  rows: Row[];
-};
+export default function NatalTable({ planets, asc }: NatalTableProps) {
+  // Build house groups 1–12 (all 12 always rendered)
+  const byHouse = new Map<number, Entry[]>();
+  for (let h = 1; h <= 12; h++) byHouse.set(h, []);
 
-export default function NatalTable({ planets, asc, houses }: NatalTableProps) {
-  // Map house number → planets in that house
-  const planetsByHouse = new Map<number, Row[]>();
+  // ASC first in house 1
+  byHouse.get(1)!.push({ name: 'Ascendant', symbol: '↑', sign: asc.sign, retrograde: false, });
+
   for (const p of planets) {
-    const row: Row = {
-      sign: p.sign, symbol: p.symbol, name: p.name.toUpperCase(),
-      house: p.house, retrograde: p.isRetrograde, color: C.planet[p.name] ?? C.muted,
-    };
-    const existing = planetsByHouse.get(p.house) ?? [];
-    existing.push(row);
-    planetsByHouse.set(p.house, existing);
+    byHouse.get(p.house)?.push({ name: p.name, symbol: p.symbol, sign: p.sign, retrograde: p.isRetrograde, });
   }
 
-  // Prepend ASC row to house 1
-  const ascRow: Row = {
-    sign: asc.sign, symbol: '↑', name: 'ASCENDANT',
-    house: 1, retrograde: false, color: C.goldBright,
-  };
-  planetsByHouse.set(1, [ascRow, ...(planetsByHouse.get(1) ?? [])]);
-
-  // Build all 12 house groups — empty houses are included with just the cusp sign
-  const groups: HouseGroup[] = Array.from({ length: 12 }, (_, i) => {
-    const h = i + 1;
-    return {
-      house: h,
-      cuspSign: signFromLon(houses.cusps[h] ?? 0),
-      rows: planetsByHouse.get(h) ?? [],
-    };
-  });
-
   return (
-    <View style={et.wrap}>
-      {/* Header — mirrors group layout so columns align */}
-      <View style={et.group}>
-        <View style={et.leftCols}>
-          <View style={et.innerRow}>
-            <View style={et.signCol}><Text style={et.hdr}>SIGNS</Text></View>
-            <View style={et.planetCol}><Text style={et.hdr}>PLANETS</Text></View>
-          </View>
-        </View>
-        <View style={[et.houseCol, et.headerHouseCol]}>
-          <Text style={et.hdr}>HOUSES</Text>
-        </View>
-      </View>
+    <ThemedView style={et.wrap}>
+      {/* Header */}
+      <ThemedView style={et.group}>
+        <ThemedView style={et.leftCols}>
+          <ThemedView style={et.innerRow}>
+            <ThemedView style={et.signCol}><ThemedText type="table" style={et.hdr}>SIGN</ThemedText></ThemedView>
+            <ThemedView style={et.planetCol}><ThemedText type="table" style={et.hdr}>PLANET</ThemedText></ThemedView>
+          </ThemedView>
+        </ThemedView>
+        <ThemedView style={[et.houseCol, et.headerHouseCol]}>
+          <ThemedText type="table" style={et.hdr}>HOUSE</ThemedText>
+        </ThemedView>
+      </ThemedView>
 
-      {/* House groups — all 12 rendered */}
-      {groups.map(({ house, cuspSign, rows }) => (
-        <View key={house} style={[et.group, et.groupBorder]}>
-          <View style={et.leftCols}>
-            {rows.length === 0 ? (
-              // Empty house — show cusp sign and a dash
-              <View style={et.innerRow}>
-                <View style={et.signCol}>
-                  <Text style={et.signName}>{cuspSign}</Text>
-                </View>
-                <View style={et.planetCol}>
-                  <Text style={et.emptyText}>—</Text>
-                </View>
-              </View>
-            ) : (
-              rows.map((row, ri) => {
-                const showSign = ri === 0 || rows[ri - 1].sign !== row.sign;
-                return (
-                  <View
-                    key={ri}
-                    style={[et.innerRow, ri < rows.length - 1 && et.innerRowDivider]}
-                  >
-                    <View style={et.signCol}>
-                      {showSign && <Text style={et.signName}>{row.sign}</Text>}
-                    </View>
-                    <View style={et.planetCol}>
-                      <Text style={[et.pSym, { color: row.color }]}>{row.symbol}</Text>
-                      <Text style={[et.pName, row.retrograde && { color: C.retro }]}>
-                        {row.name}{row.retrograde ? '  ℞' : ''}
-                      </Text>
-                    </View>
-                  </View>
-                );
-              })
-            )}
-          </View>
+      {Array.from({ length: 12 }, (_, i) => i + 1)
+        .filter(h => (byHouse.get(h)?.length ?? 0) > 0)
+        .map(h => {
+        const entries = byHouse.get(h)!;
 
-          {/* Single merged house cell spanning all rows in group */}
-          <View style={et.houseCol}>
-            <Text style={et.houseNum}>{house}</Text>
-          </View>
-        </View>
-      ))}
-    </View>
+        return (
+          <ThemedView key={h} style={[et.group, et.groupBorder]}>
+            <ThemedView style={et.leftCols}>
+              {entries.map((entry, ri) => {
+                  const showSign = ri === 0 || entries[ri - 1].sign !== entry.sign;
+                  return (
+                    <ThemedView
+                      key={ri}
+                      style={[et.innerRow, ri < entries.length - 1 && et.innerRowDivider]}
+                    >
+                      <ThemedView style={et.signCol}>
+                        {showSign && <ThemedText type="table" style={et.signName}>{entry.sign}</ThemedText>}
+                      </ThemedView>
+                      <ThemedView style={et.planetCol}>
+                        <ThemedText type="table" style={et.pSym}>{entry.symbol}</ThemedText>
+                        <ThemedText type="table" style={et.pName}>
+                          {entry.name}
+                        </ThemedText>
+                      </ThemedView>
+                    </ThemedView>
+                  );
+                })
+            }
+            </ThemedView>
+
+            {/* House number — merged cell spanning all rows in this group */}
+            <ThemedView style={et.houseCol}>
+              <ThemedText type="table" style={et.houseNum}>{h}</ThemedText>
+            </ThemedView>
+          </ThemedView>
+        );
+      })}
+    </ThemedView>
   );
 }
 
 const et = StyleSheet.create({
   wrap: { overflow: 'hidden' },
 
-  // Outer row for each house group (and header)
-  group: {
-    flexDirection: 'row',
-  },
-  groupBorder: {
-    borderTopWidth: 1,
-    borderTopColor: C.starfield,
-  },
+  group:       { flexDirection: 'row' },
+  groupBorder: { borderTopWidth: 1, borderTopColor: C.starfield },
 
-  // Left side holds sign + planet columns
-  leftCols: {
-    flex: 2,
-  },
+  leftCols: { flex: 2 },
 
-  // One planet row inside leftCols
   innerRow: {
     flexDirection: 'row',
-    paddingVertical: verticalScale(6),
+    paddingVertical: verticalScale(2),
   },
   innerRowDivider: {
     borderBottomWidth: 1,
     borderBottomColor: `${C.starfield}55`,
   },
 
-  // Columns — each flex:1 inside its container
   signCol: {
     flex: 1,
     paddingHorizontal: S.xs,
@@ -176,40 +124,37 @@ const et = StyleSheet.create({
     borderLeftColor: C.starfield,
   },
   headerHouseCol: {
-    paddingVertical: S.xs,
+    paddingVertical: verticalScale(2),
     borderBottomWidth: 1,
     borderBottomColor: C.starfield,
   },
 
   hdr: {
     color: C.white,
-    fontSize: moderateScale(12),
+    fontSize: moderateScale(10),
     fontWeight: '800',
-    letterSpacing: 2.5,
+    letterSpacing: 2,
     textAlign: 'center',
   },
   signName: {
     color: C.white,
-    fontSize: moderateScale(15),
+    fontSize: moderateScale(12),
     fontWeight: '400',
     fontFamily: 'serif',
     letterSpacing: 0.2,
+    textAlign: 'center',
   },
-  emptyText: {
-    color: C.muted,
-    fontSize: moderateScale(14),
-  },
-  pSym: { fontSize: moderateScale(15) },
+  pSym: { fontSize: moderateScale(12), color: C.white },
   pName: {
-    color: C.white,
-    fontSize: moderateScale(12),
+    fontSize: moderateScale(10),
     fontWeight: '800',
-    letterSpacing: 1.2,
+    letterSpacing: 1,
+    color: C.white,
   },
   houseNum: {
-    color: C.goldBright,
-    fontSize: moderateScale(18),
+    color: C.white,
+    fontSize: moderateScale(14),
     fontWeight: '700',
-    lineHeight: moderateScale(20),
   },
+
 });
