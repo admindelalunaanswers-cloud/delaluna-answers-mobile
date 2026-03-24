@@ -118,6 +118,11 @@ const ADMIN_EMAILS = new Set([
   'debba85@yahoo.com',
 ]);
 
+/** Returns true if the given email belongs to an admin. */
+export function isAdminEmail(email: string): boolean {
+  return ADMIN_EMAILS.has(email.toLowerCase());
+}
+
 export async function createUserDoc(userId: string, userData: FinalSignupPayload): Promise<void> {
   try {
     const userDocRef = doc(db, 'users', userId);
@@ -129,7 +134,7 @@ export async function createUserDoc(userId: string, userData: FinalSignupPayload
       lastUpdatedAt: serverTimestamp(),
       isPremiumMember: true,
       isEmailVerified: false,
-      isAdmin: ADMIN_EMAILS.has(email),
+      isAdmin: ADMIN_EMAILS.has(email.toLowerCase()),
     });
 
     await setDoc(userDocRef, sanitizedData, { merge: true });
@@ -201,9 +206,10 @@ export async function getUserHoroscopes(
 export async function updateUserDoc(userId: string, userData: Partial<UserDoc>): Promise<void> {
   try {
     const userDocRef = getUserDocRef(userId);
+    const normalizedEmail = userData.email ? userData.email.toLowerCase() : undefined;
     const sanitizedData = sanitizeFirestoreData({
       ...userData,
-      ...(userData.email ? { email: userData.email.toLowerCase() } : {}),
+      ...(normalizedEmail ? { email: normalizedEmail, isAdmin: ADMIN_EMAILS.has(normalizedEmail) } : {}),
       lastUpdatedAt: serverTimestamp(),
     });
 

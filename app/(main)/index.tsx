@@ -13,6 +13,7 @@ import HeaderNav from '@/src/components/shared/header-nav';
 import HomeSignsDisplay from '@/src/components/shared/signs-display.component';
 import HomeTextBox from '@/src/components/home/home-text-box.component';
 // import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
+import AdBanner from '@/src/components/shared/ad-banner.component';
 import SectionTitle from '@/src/components/shared/section-title.component';
 import type { DailyCardPack } from '@/src/schemas/dailyCardPack.schema';
 import type { HoroscopeResult } from '@/src/types/horoscope.types';
@@ -284,6 +285,14 @@ export default function HomeScreen() {
           <SectionTitle sectionName="warning" title="Warning" />
           <HomeTextBox sectionName="warning" content={activeHoroscope?.warning} />
         </ScrollView>
+        {!devPremium && (
+          <AdBanner
+            icon="sparkles"
+            title="Unlock Your Full Birth Chart"
+            subtitle="Premium readings, ad-free."
+            ctaLabel="Upgrade"
+          />
+        )}
         {/* </PaygateOverlay> */}
       </View>
     </ThemedView>
