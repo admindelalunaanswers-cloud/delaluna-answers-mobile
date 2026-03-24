@@ -30,6 +30,7 @@ import { ThemedText } from '@/src/components/themed-text';
 import { ThemedView } from '@/src/components/themed-view';
 import { auth, db } from '@/firebaseConfig';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
+import { updateUserDoc, isAdminEmail } from '@/src/services/user.service';
 import { useUser } from '@/src/context/user-context';
 
 import LoadingScreen from '../(util)/loading-screen';
@@ -118,6 +119,10 @@ export default function Login() {
       setSkipAutoRedirect(true);
 
       const cred = await signInWithEmailAndPassword(auth, email.trim(), password.trim());
+
+      // Sync isAdmin on every login — catches promotions/removals since last sign-up
+      updateUserDoc(cred.user.uid, { isAdmin: isAdminEmail(email.trim().toLowerCase()) }).catch(console.error);
+
       const key = await resolveThemeBeforeNavigate(cred.user.uid);
       await Promise.resolve(setThemeKey(key));
 
