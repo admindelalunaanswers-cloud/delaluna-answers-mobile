@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import DateSwitcher from '@/src/components/home/date-switcher.component';
 import HeaderNav from '@/src/components/shared/header-nav';
+import { getProfileImageSource } from '@/app/(settings)/select-avatar';
 import HomeSignsDisplay from '@/src/components/shared/signs-display.component';
 import HomeTextBox from '@/src/components/home/home-text-box.component';
 // import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
@@ -176,8 +177,8 @@ export default function HomeScreen() {
   return (
     <ThemedView style={styles.container}>
       <HeaderNav
-        title={userDoc?.fullName ?? 'Home'}
-        rightIconName={((userDoc as any)?.avatarIconId ?? 'person-circle-outline') as any}
+        title={userDoc?.fullName ?? ([userDoc?.firstName, userDoc?.lastName].filter(Boolean).join(' ') || 'Home')}
+        rightAvatarSource={getProfileImageSource((userDoc as any)?.profileImageId) ?? getProfileImageSource('profile9')!}
         onRightPress={() => router.push('/profile')}
       />
 
