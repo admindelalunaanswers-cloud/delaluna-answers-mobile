@@ -146,6 +146,7 @@ export default function SignUpChatScreen() {
       const payload: FinalSignupPayload = {
         email: trimmedEmail,
         name: displayName,
+        fullName: displayName,
         birthday: normalizeBirthday(answers.birthday),
         birthtime: answers.birthtime ?? null,
         birthTimezone: typeof answers.birthTimezone === 'number' ? answers.birthTimezone : 0,
@@ -155,6 +156,7 @@ export default function SignUpChatScreen() {
         isBirthTimeUnknown: answers.isBirthTimeUnknown ?? !answers.birthtime,
         isPlaceOfBirthUnknown: answers.isPlaceOfBirthUnknown ?? !answers.placeOfBirth,
         themeKey: 'default',
+        profileImageId: 'profile9',
         ...(() => { const { password: _pw, ...rest } = answers; return rest; })(),
       };
 
