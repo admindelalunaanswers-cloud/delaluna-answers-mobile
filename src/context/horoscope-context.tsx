@@ -259,7 +259,15 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
         // are populated on the home screen.
         getDoc(doc(db, 'users', uid, 'natalChart', 'details')).then(snap => {
           if (!signal.cancelled && snap.exists()) {
-            setChartDetails(snap.data() as NatalChartDetailsDoc);
+            const newChart = snap.data() as NatalChartDetailsDoc;
+            setChartDetails(newChart);
+            // Start breakdown subscription now that the chart exists.
+            // (subscribeBreakdown was skipped in load() because chart was null
+            // at fetch time — Android timing: calculateNatalChart finishes after
+            // load()'s Promise.all already completed with chart=null.)
+            if (!unsubBreakdownRef.current) {
+              subscribeBreakdown(uid, newChart, signal, breakdownFetch, pronouns);
+            }
           }
         }).catch(console.error);
       });
