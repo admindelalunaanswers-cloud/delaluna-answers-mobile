@@ -19,18 +19,19 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { StatusBar } from 'expo-status-bar';
+import { updateEmail } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 
 import { ThemeContext } from '@/src/context/theme-context';
 import { useUser } from '@/src/context/user-context';
-import { updateUserDoc } from '@/src/services/user.service';
+import { updateUserDoc, isAdminEmail } from '@/src/services/user.service';
 import { calculateNatalChart, calculateTransits, BirthData } from '@/src/services/astroEngine';
 import { requestBreakdown } from '@/src/services/natal-chart-breakdown.service';
 import { requestHoroscope, getTodayDateId } from '@/src/services/horoscope.service';
 import { requestTransitReading } from '@/src/services/transit-reading.service';
 import type { NatalChartDetailsDoc } from '@/src/types/user.type';
-import { db } from '@/firebaseConfig';
+import { auth, db } from '@/firebaseConfig';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
 import {
   NominatimResult,
@@ -121,6 +122,7 @@ export default function EditProfileScreen() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName]   = useState('');
   const [pronouns, setPronouns]   = useState('');
+  const [email, setEmail]         = useState('');
 
   // Birth fields
   const [birthday, setBirthday]                         = useState('');
@@ -160,6 +162,7 @@ export default function EditProfileScreen() {
     setFirstName(fn);
     setLastName(ln);
     setPronouns(ud.pronouns ?? '');
+    setEmail(ud.email ?? authUser?.email ?? '');
 
     const bd = normalizeBirthday(ud.birthday);
     setBirthday(bd);
@@ -303,6 +306,10 @@ export default function EditProfileScreen() {
       Alert.alert('Name required', 'Please enter your first name.');
       return;
     }
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      Alert.alert('Invalid email', 'Please enter a valid email address.');
+      return;
+    }
     if (!birthday) {
       Alert.alert('Birthday required', 'Please enter your birthday.');
       return;
@@ -355,19 +362,41 @@ export default function EditProfileScreen() {
     const effectiveTime = isBirthTimeUnknown ? null : (birthtime || null);
 
     try {
-      const displayName = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ');
+      const displayName  = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ');
+      const trimmedEmail = email.trim().toLowerCase();
+      const currentEmail = (ud?.email ?? authUser?.email ?? '').toLowerCase();
+      const emailChanged = trimmedEmail !== currentEmail;
+
+      // Update Firebase Auth email if changed
+      if (emailChanged && auth.currentUser) {
+        try {
+          await updateEmail(auth.currentUser, trimmedEmail);
+        } catch (err: any) {
+          if (err?.code === 'auth/requires-recent-login') {
+            Alert.alert('Re-authentication required', 'Please log out and log back in to change your email.');
+          } else if (err?.code === 'auth/email-already-in-use') {
+            Alert.alert('Email in use', 'That email is already registered to another account.');
+          } else {
+            Alert.alert('Email update failed', err?.message ?? 'Could not update email.');
+          }
+          setIsLoading(false);
+          return;
+        }
+      }
 
       await updateUserDoc(uid, {
         name:                  displayName,
+        fullName:              displayName,
         birthday:              birthday,
         birthtime:             effectiveTime ?? '12:00',
         birthLat:              effectiveLat,
         birthLon:              effectiveLon,
-        // Extra fields not in UserDoc type but persisted via spread at sign-up
         ...({
           firstName:            firstName.trim(),
           lastName:             lastName.trim(),
           pronouns,
+          email:                trimmedEmail,
+          isAdmin:              isAdminEmail(trimmedEmail),
           birthTimezone:        effectiveTz,
           placeOfBirth:         isPlaceOfBirthUnknown ? null : placeOfBirth,
           isBirthTimeUnknown,
@@ -536,6 +565,18 @@ export default function EditProfileScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+
+              <Text style={ss.fieldLabel}>Email</Text>
+              <TextInput
+                style={ss.input}
+                value={email}
+                onChangeText={setEmail}
+                placeholder="Email address"
+                placeholderTextColor="rgba(255,255,255,0.35)"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+              />
 
               {/* ── Birth Details ── */}
               <Text style={[ss.sectionTitle, { marginTop: verticalScale(28) }]}>Birth Details</Text>
