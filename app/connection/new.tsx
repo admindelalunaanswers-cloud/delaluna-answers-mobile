@@ -443,10 +443,10 @@ export default function SingleConnectionCreateScreen() {
 
       let enrichedFirst: any;
       if (isMe) {
-        const nameParts = (userDoc?.name ?? "").split(" ");
+        const docName: string = (userDoc as any)?.name ?? "";
         enrichedFirst = {
-          "First Name": nameParts[0] ?? "",
-          "Last Name": nameParts.slice(1).join(" ") ?? "",
+          "First Name": userDoc?.firstName ?? docName.split(" ")[0] ?? "",
+          "Last Name": userDoc?.lastName ?? docName.split(" ").slice(1).join(" ") ?? "",
           Pronouns: "",
           // TODO: load sun/moon/rising from natalChart/details subcollection
           "Sun Sign": "", "Moon Sign": "", "Rising Sign": "",
@@ -491,9 +491,9 @@ export default function SingleConnectionCreateScreen() {
     setLoading(false);
   };
 
-  const nameParts = (userDoc?.name ?? "").split(" ");
-  const userFirstName = nameParts[0] ?? "";
-  const userLastName = nameParts.slice(1).join(" ") ?? "";
+  const docName: string = (userDoc as any)?.name ?? "";
+  const userFirstName = userDoc?.firstName;
+  const userLastName = userDoc?.lastName ?? docName.split(" ").slice(1).join(" ") ?? "";
 
   if (loading) {
     return <LoadingScreen progress={0} message={loadingMessage} />;
@@ -699,8 +699,8 @@ const styles = StyleSheet.create({
     borderColor: "#FFFFFF",
   },
   relationshipIcon: {
-    width: scale(65),
-    height: scale(65),
+    width: Math.round(scale(65)),
+    height: Math.round(scale(65)),
     opacity: 0.8,
     tintColor: "rgba(255,255,255,0.85)",
   },
