@@ -82,6 +82,7 @@ Write like Delaluna:
 - moon MUST BE 5-7 sentences No shorter or Longer.
 - planetsRetrograde is derived ONLY from {{retrogradeplanets}}. Pass through the names exactly
   as provided. Do NOT infer, add, or remove any planets. If the value is "none", return ["none"].
+- If {{retrogradeplanets}} is "none", include one funny witty statement about no retrogrades being active in the "transits" field.
 - new love should be zodiacs that the user has a higher likelihood of vibing
   with or feeling attraction toward the user today.
 - return is zodiac signs have a higher likelihood of seeking for closure,
