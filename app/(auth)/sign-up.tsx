@@ -185,10 +185,10 @@ export default function SignUpChatScreen() {
         moon: natalChart.moon,
         ascendant: natalChart.ascendant,
         midheaven: natalChart.midheaven,
-        tier: 'free', // ensures {{tier}} is always present if Extension fires on this write
+        tier: 'free',
       };
 
-      await setDoc(doc(db, 'users', userCred.user.uid, 'natalChart', 'details'), chartPayload);
+      await setDoc(doc(db, 'users', userCred.user.uid, 'chartData', 'details'), chartPayload);
       await setDoc(doc(db, 'users', userCred.user.uid, 'birthChart', 'data'), chartPayload);
 
       // Step 5 — Trigger AI generation (fire and forget — backend extension handles these)
@@ -204,8 +204,6 @@ export default function SignUpChatScreen() {
       const dateId     = getTodayDateId();
       const weekDateId = getThisWeekDateId();
 
-      requestBreakdown(uid, chartDetailsDoc).catch(console.error);
-
       calculateTransits(new Date(), bd.lat, bd.lon)
         .then(transits => {
           const retrogrades = transits.planets.filter(p => p.isRetrograde).map(p => p.name);
@@ -213,6 +211,7 @@ export default function SignUpChatScreen() {
           return requestHoroscope(uid, dateId, chartDetailsDoc, transits.moon, retrogrades);
         })
         .catch(() => requestHoroscope(uid, dateId, chartDetailsDoc, natalChart.moon))
+        .then(() => requestBreakdown(uid, chartDetailsDoc))
         .catch(console.error);
 
       // Navigate to email verification — user enters code while AI generation runs in background.
