@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch} from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet } from 'react-native';
 
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,8 +11,9 @@ import { ThemedView } from '@/src/components/themed-view';
 import HeaderNav from '@/src/components/shared/header-nav';
 import NatalWheelTab from '@/src/components/natalChart/natal-chart-wheel.tab';
 import NatalTable from '@/src/components/natalChart/natal-chart-table.tab';
-import PremiumUnlock from '@/src/components/shared/premium-unlock.component';
 import { useHoroscope } from '@/src/context/horoscope-context';
+import { useUser } from '@/src/context/user-context';
+import PremiumUnlock from '@/src/components/shared/premium-unlock.component';
 import { usePullToRefresh } from '@/src/hooks/use-pull-to-refresh';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
 import type { NatalChart } from '@/src/services/astroEngine';
@@ -40,12 +41,20 @@ export default function BirthChartScreen() {
   const [chartTab, setChartTab]         = useState<ChartTab>('Natal Wheel');
   const [breakdownTab, setBreakdownTab] = useState<BreakdownTab>('Insights');
 
-  // DEV: toggle to simulate free vs premium
-  const [isPremium, setIsPremium] = useState(true);
+  const { userDoc } = useUser();
+  const isPremium = !!userDoc?.isPremiumMember;
 
   const { refreshControl } = usePullToRefresh(refresh);
   const insets       = useSafeAreaInsets();
   const headerHeight = insets.top + scale(NAV_BAR_HEIGHT);
+
+  // Houses the free user can read: house 1 (Rising) + Sun's house + Moon's house
+  const freeUnlockedHouses = new Set<string>(['1']);
+  if (chartDetails) {
+    for (const p of chartDetails.planets) {
+      if (p.name === 'Sun' || p.name === 'Moon') freeUnlockedHouses.add(String(p.house));
+    }
+  }
 
   const activeBreakdown    = isPremium ? (premiumBreakdown ?? breakdown) : breakdown;
   const isBreakdownLoading = isPremium
@@ -92,7 +101,10 @@ export default function BirthChartScreen() {
 
   function renderHouses(houses: NatalChartBreakdownResult['houses']) {
     if (!houses?.length) return <ThemedText style={styles.emptyText}>No house data.</ThemedText>;
-    return houses.map((h) => (
+    const displayHouses = isPremium
+      ? houses
+      : houses.map(h => ({ ...h, locked: !freeUnlockedHouses.has(h.house) }));
+    return displayHouses.map((h) => (
       <ThemedView key={h.house} style={styles.card}>
         <ThemedView style={styles.cardHeader}>
           <ThemedText style={styles.cardTitle}>
@@ -162,7 +174,6 @@ export default function BirthChartScreen() {
         />
       );
     }
-
     switch (breakdownTab) {
       case 'Insights': return renderInsights(activeBreakdown);
       case 'Houses':   return renderHouses(activeBreakdown.houses);
@@ -215,18 +226,6 @@ export default function BirthChartScreen() {
         </ThemedView>
 
         {/* ── Breakdown (Insights / Houses / Planets / Aspects) ─── */}
-
-        {/* DEV: free/premium toggle */}
-        <ThemedView style={styles.devToggle}>
-          <ThemedText style={styles.devLabel}>Free</ThemedText>
-          <Switch
-            value={isPremium}
-            onValueChange={setIsPremium}
-            trackColor={{ true: '#5BC0BE' }}
-            thumbColor="#fff"
-          />
-          <ThemedText style={styles.devLabel}>Premium</ThemedText>
-        </ThemedView>
 
         <ThemedView style={styles.breakdownSection}>
 
