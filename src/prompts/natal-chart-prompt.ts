@@ -34,75 +34,10 @@ OUTPUT RULES
 - Every field must be personalized to the user's natal chart.
 `;
 
-// ─── Template constants ───────────────────────────────────────────────────────
+// ─── Template constant ────────────────────────────────────────────────────────
 // Use {{natalChart}} and {{pronouns}} as substitution markers.
 
-export const FREE_NATAL_CHART_PROMPT_TEMPLATE = `Generate a free-tier natal chart breakdown for the user.
-
-====================================================
-NATAL CHART DATA
-====================================================
-{{natalChart}}
-User Pronouns: {{pronouns}}
-
-====================================================
-INSTRUCTIONS
-====================================================
-- Only FULLY interpret houses where the Big 3 (Sun, Moon, Rising/1st house) fall.
-- For all other houses show the sign, degree, and any planets present,
-  but set interpretation to "Unlock with Premium" and locked to true.
-- Do NOT include the "planets" array.
-- Do NOT include the "aspects" array.
-- Do NOT include "loveRead", "careerRead", "growthRead", "advice", "warning", "affirmation".
-- DO include "personalitySnapshot" (4-6 sentences) and "teaser" (2-3 sentences).
-- Tease 1-2 placements (Venus, Mars, etc.) WITHOUT interpreting them.
-- "teaser" should feel like a cliffhanger that makes the user want premium.
-- Nothing generic. If it could apply to anyone, rewrite it.
-${STYLE}
-====================================================
-FIELD RULES
-====================================================
-
-HOUSES:
-- "houses" is an array of 12 objects, one per house.
-- Each house object MUST contain:
-  - "house": house number as a string ("1" through "12")
-  - "sign": the sign on the cusp
-  - "degree": degree of the cusp as a string (e.g. "14°")
-  - "planets": array of objects for each planet in this house:
-    - "name": planet name
-    - "sign": sign the planet is in
-    - "degree": degree as a string (e.g. "22°")
-  - "interpretation": 4-6 sentences for Big 3 houses, "Unlock with Premium" for others
-  - "locked": false for Big 3 houses, true for all others
-
-OTHER:
-- "quote": empowerment/relationship/self-respect quote — no metaphors or innuendos
-- "release": short spiritual phrase for comfort and recalibration
-${OUTPUT_RULES}
-====================================================
-OUTPUT FORMAT
-====================================================
-
-{
-  "quote": "",
-  "houses": [
-    {
-      "house": "1",
-      "sign": "",
-      "degree": "",
-      "planets": [{ "name": "", "sign": "", "degree": "" }],
-      "interpretation": "",
-      "locked": false
-    }
-  ],
-  "personalitySnapshot": "",
-  "teaser": "",
-  "release": ""
-}
-`;
-
-export const PREMIUM_NATAL_CHART_PROMPT_TEMPLATE = `Generate a premium-tier natal chart breakdown for the user.
+export const NATAL_CHART_PROMPT_TEMPLATE = `Generate a natal chart breakdown for the user.
 
 ====================================================
 NATAL CHART DATA
@@ -201,22 +136,12 @@ OUTPUT FORMAT
 
 `;
 
-// ─── Build functions ──────────────────────────────────────────────────────────
+// ─── Build function ───────────────────────────────────────────────────────────
 
-export function buildFreeNatalChartPrompt(
+export function buildNatalChartPrompt(
   natalChart: string,
   pronouns = 'they/them',
-  template = FREE_NATAL_CHART_PROMPT_TEMPLATE,
-): string {
-  return template
-    .replace('{{natalChart}}', natalChart)
-    .replace(/\{\{pronouns\}\}/g, pronouns);
-}
-
-export function buildPremiumNatalChartPrompt(
-  natalChart: string,
-  pronouns = 'they/them',
-  template = PREMIUM_NATAL_CHART_PROMPT_TEMPLATE,
+  template = NATAL_CHART_PROMPT_TEMPLATE,
 ): string {
   return template
     .replace('{{natalChart}}', natalChart)
