@@ -107,9 +107,11 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
   const [transitReadingGenerating, setTransitReadingGenerating] = useState(false);
   const [breakdown, setBreakdown]                               = useState<NatalChartBreakdownResult | null>(null);
   const [breakdownGenerating, setBreakdownGenerating]           = useState(false);
-  const [premiumBreakdown, setPremiumBreakdown]                 = useState<NatalChartBreakdownResult | null>(null);
-  const [premiumBreakdownGenerating, setPremiumBreakdownGenerating] = useState(false);
   const [loading, setLoading]                                   = useState(true);
+
+  // premiumBreakdown mirrors breakdown — both come from the same single doc now
+  const premiumBreakdown            = breakdown;
+  const premiumBreakdownGenerating  = breakdownGenerating;
 
   const unsubHoroscopeRef          = useRef<(() => void) | null>(null);
   const unsubBreakdownRef          = useRef<(() => void) | null>(null);
@@ -124,32 +126,20 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     prefetched: BreakdownFetchResult,
     pronouns: string,
   ) => {
-    const { result, premiumResult, pending, premiumPending } = prefetched;
-    const needsFreeSubscribe    = !result;
-    const needsPremiumSubscribe = !premiumResult;
-    const needsRequest = (!result && !pending) || (!premiumResult && !premiumPending);
+    const { result, pending } = prefetched;
 
-    if (!needsFreeSubscribe && !needsPremiumSubscribe) return;
+    if (result) return;
 
-    if (needsFreeSubscribe)    setBreakdownGenerating(true);
-    if (needsPremiumSubscribe) setPremiumBreakdownGenerating(true);
+    setBreakdownGenerating(true);
 
-    const unsub = subscribeToBreakdown(
-      uid,
-      (r) => {
-        if (signal.cancelled) return;
-        setBreakdown(r);
-        setBreakdownGenerating(false);
-      },
-      (r) => {
-        if (signal.cancelled) return;
-        setPremiumBreakdown(r);
-        setPremiumBreakdownGenerating(false);
-      },
-    );
+    const unsub = subscribeToBreakdown(uid, (r) => {
+      if (signal.cancelled) return;
+      setBreakdown(r);
+      setBreakdownGenerating(false);
+    });
     unsubBreakdownRef.current = unsub;
 
-    if (needsRequest) requestBreakdown(uid, chart, pronouns).catch(console.error);
+    if (!pending) requestBreakdown(uid, chart, pronouns).catch(console.error);
   };
 
   const subscribeTransitReading = (
@@ -221,7 +211,6 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
 
     // Set breakdown and transit reading immediately — no secondary loading phase
     if (breakdownFetch.result) setBreakdown(breakdownFetch.result);
-    if (breakdownFetch.premiumResult) setPremiumBreakdown(breakdownFetch.premiumResult);
     if (transitReadingFetch.result) {
       setTransitReading(transitReadingFetch.result);
       notifyOnce(`@delaluna/transit_notified_${uid}_${weekDateId}`, scheduleTransitReadyNotification);
@@ -316,8 +305,6 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
       setTransitReadingGenerating(false);
       setBreakdown(null);
       setBreakdownGenerating(false);
-      setPremiumBreakdown(null);
-      setPremiumBreakdownGenerating(false);
       // Keep loading=true so AuthGate doesn't briefly clear between
       // the null-auth reset and the next load() call (race condition).
       setLoading(true);
@@ -347,7 +334,6 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     unsubTransitRef.current?.();   unsubTransitRef.current = null;
     setHoroscope(null);
     setBreakdown(null);
-    setPremiumBreakdown(null);
     setTransitReading(null);
     const signal = { cancelled: false };
     await load(authUser.uid, signal);
