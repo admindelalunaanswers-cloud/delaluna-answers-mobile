@@ -191,7 +191,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     // even before user-context has finished resolving its own fetch.
     const [userSnap, chartSnap, horoscopeRes, breakdownFetch, transitReadingFetch] = await Promise.all([
       getDoc(doc(db, 'users', uid)),
-      getDoc(doc(db, 'users', uid, 'natalChart', 'details')),
+      getDoc(doc(db, 'users', uid, 'chartData', 'details')),
       fetchHoroscope(uid, dateId),
       fetchBreakdown(uid),
       fetchTransitReading(uid, weekDateId),
@@ -257,7 +257,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
         // can generate the horoscope, so the chart is guaranteed to be written
         // by the time this fires. Re-fetch it so chartDetails (and the 3 signs)
         // are populated on the home screen.
-        getDoc(doc(db, 'users', uid, 'natalChart', 'details')).then(snap => {
+        getDoc(doc(db, 'users', uid, 'chartData', 'details')).then(snap => {
           if (!signal.cancelled && snap.exists()) {
             const newChart = snap.data() as NatalChartDetailsDoc;
             setChartDetails(newChart);
