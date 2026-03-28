@@ -432,11 +432,11 @@ export default function EditProfileScreen() {
           moon:      natalChart.moon,
           ascendant: natalChart.ascendant,
           midheaven: natalChart.midheaven,
-          tier: 'free', // ensures {{tier}} is present when the extension fires on this write
+          tier: 'free',
         };
 
         // Save to both locations — overwrite entirely (birth data changed)
-        await setDoc(doc(db, 'users', uid, 'natalChart', 'details'), chartPayload);
+        await setDoc(doc(db, 'users', uid, 'chartData', 'details'), chartPayload);
         await setDoc(doc(db, 'users', uid, 'birthChart', 'data'), chartPayload);
 
         setLoadingMessage('Regenerating your readings...');
