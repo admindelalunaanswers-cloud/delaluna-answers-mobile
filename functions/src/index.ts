@@ -253,8 +253,8 @@ export const createConnection = onCall(async (request) => {
     userId: string;
     isMe: boolean;
     relationshipType: string;
-    firstPerson: Record<string, string>;
-    secondPerson: Record<string, string>;
+    firstPerson: Record<string, any>;
+    secondPerson: Record<string, any>;
     prompt?: string;
   };
 
@@ -262,13 +262,21 @@ export const createConnection = onCall(async (request) => {
     throw new HttpsError('invalid-argument', 'Missing required fields.');
   }
 
-  const mapPerson = (p: Record<string, string>) => ({
+  const mapPerson = (p: Record<string, any>) => ({
     firstName: p['First Name'] ?? '',
     lastName: p['Last Name'] ?? '',
     pronouns: p['Pronouns'] ?? '',
     sun: p['Sun Sign'] ?? '',
     moon: p['Moon Sign'] ?? '',
     rising: p['Rising Sign'] ?? '',
+    birthday: p['Birthday'] ?? '',
+    timeOfBirth: p['Time of Birth'] ?? '',
+    placeOfBirth: p['Place of Birth'] ?? '',
+    birthLat: typeof p.birthLat === 'number' ? p.birthLat : null,
+    birthLon: typeof p.birthLon === 'number' ? p.birthLon : null,
+    birthTimezone: typeof p.birthTimezone === 'number' ? p.birthTimezone : null,
+    isBirthTimeUnknown: !!p.isBirthTimeUnknown,
+    isPlaceOfBirthUnknown: !!p.isPlaceOfBirthUnknown,
   });
 
   let mappedFirst = mapPerson(firstPerson);

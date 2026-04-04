@@ -24,6 +24,8 @@ import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
 import { useUser } from "@/src/context/user-context";
 import HeaderNav from "@/src/components/shared/header-nav";
 import { COMPATIBILITY_DEFINITIONS } from "@/src/constants/definitions";
+import { calculateNatalChart } from "@/src/services/astroEngine";
+import { TestingStore } from "@/src/stores/testing-store";
 
 const NAV_BAR_HEIGHT = 44;
 const BAR_MAX_WIDTH = Dimensions.get("window").width - scale(18) * 2;
@@ -45,6 +47,14 @@ interface PersonInfo {
   moon?: string;
   rising?: string;
   pronouns?: string;
+  birthday?: string;
+  timeOfBirth?: string;
+  placeOfBirth?: string;
+  birthLat?: number;
+  birthLon?: number;
+  birthTimezone?: number;
+  isBirthTimeUnknown?: boolean;
+  isPlaceOfBirthUnknown?: boolean;
 }
 
 interface CompatibilityScores {
@@ -241,9 +251,60 @@ export default function ConnectionViewScreen() {
     }
   })();
 
+  const [computingSynastry, setComputingSynastry] = useState(false);
+
+  const parseBirthParams = (p: PersonInfo) => {
+    const [month, day, year] = (p.birthday ?? '').split('/').map(Number);
+    let hour = 0, min = 0;
+    const match = (p.timeOfBirth ?? '').trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (match) {
+      let h = Number(match[1]);
+      min = Number(match[2]);
+      const period = match[3].toUpperCase();
+      if (period === 'PM' && h !== 12) h += 12;
+      if (period === 'AM' && h === 12) h = 0;
+      hour = h;
+    } else {
+      const parts = (p.timeOfBirth ?? '').split(':');
+      hour = Number(parts[0]) || 0;
+      min = Number(parts[1]) || 0;
+    }
+    return {
+      year, month, day, hour, minute: min,
+      lat: p.birthLat ?? 0,
+      lon: p.birthLon ?? 0,
+      timezone: p.birthTimezone ?? 0,
+    };
+  };
+
+  const handleCompareBirthCharts = async () => {
+    const fp = connection?.firstPerson;
+    const sp = connection?.secondPerson;
+
+    if (!fp?.birthday || !sp?.birthday) return;
+
+    setComputingSynastry(true);
+    try {
+      const chartA = await calculateNatalChart(parseBirthParams(fp));
+      const chartB = await calculateNatalChart(parseBirthParams(sp));
+
+      TestingStore.setSynastryAnalysis({
+        chartA,
+        chartB,
+        nameA: `${fp.firstName ?? ''} ${fp.lastName ?? ''}`.trim(),
+        nameB: `${sp.firstName ?? ''} ${sp.lastName ?? ''}`.trim(),
+      });
+      router.push(`/connection/${connectionId}/synastry`);
+    } catch (e) {
+      console.error("Error calculating synastry:", e);
+    } finally {
+      setComputingSynastry(false);
+    }
+  };
+
   const report = connection?.compatibility;
-  const firstName = connection?.firstPerson?.firstName || "Person 1";
-  const secondName = connection?.secondPerson?.firstName || "Person 2";
+  const firstName = connection?.firstPerson?.firstName + " " + connection?.firstPerson?.lastName || "Person 1";
+  const secondName = connection?.secondPerson?.firstName + " " + connection?.secondPerson?.lastName || "Person 2";
 
   // ─── Loading / Error states ─────────────────────────────────────────────────
 
@@ -285,10 +346,10 @@ export default function ConnectionViewScreen() {
         title="Compatibility"
         leftIconName="arrow-back"
         onLeftPress={() => router.replace("/(main)/connections")}
-        rightIconName="create-outline"
-        onRightPress={() =>
+        rightIconName={report ? "create-outline" : undefined}
+        onRightPress={report ? () =>
           router.push({ pathname: "/connection/[id]/edit", params: { id: connectionId } })
-        }
+        : undefined}
       />
 
       <View style={[styles.mainContent, { marginTop: headerHeight }]}>
@@ -333,6 +394,20 @@ export default function ConnectionViewScreen() {
                   <SignRow icon={SIGN_ICONS.rising} value={connection?.secondPerson?.rising} />
                 </View>
               </View>
+              {connection?.firstPerson?.birthday && connection?.secondPerson?.birthday && (
+                <TouchableOpacity
+                  style={styles.compareBirthChartsBtn}
+                  onPress={handleCompareBirthCharts}
+                  activeOpacity={0.75}
+                  disabled={computingSynastry}
+                >
+                  {computingSynastry ? (
+                    <ActivityIndicator size="small" color="#B8A3FF" />
+                  ) : (
+                    <Text style={styles.compareBirthChartsBtnText}>Compare Birth Charts</Text>
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
@@ -388,11 +463,11 @@ export default function ConnectionViewScreen() {
               <Text style={styles.sectionLabel}>Love Language</Text>
               <Text style={styles.reportSummary}>{report.loveLanguage}</Text>
               
-              <Text style={styles.sectionLabel}>Warning: </Text>
-              <Text style={{ color: "#FF6B6B" }}> {report.warning}</Text>
+              <Text style={styles.sectionLabel}>Warning</Text>
+              <Text style={{ ...styles.reportSummary, color: "#FF6B6B" }}> {report.warning}</Text>
 
-              <Text style={styles.sectionLabel}> Closing</Text>
-              <Text style={styles.closing}>{report.closing}</Text>
+              <Text style={styles.sectionLabel}>Final Thoughts</Text>
+              <Text style={styles.reportSummary}>{report.closing}</Text>
               
             </>
           )}
@@ -569,5 +644,19 @@ const styles = StyleSheet.create({
     color: "#FF6B6B",
     fontSize: moderateScale(14),
     textAlign: "center",
+  },
+  compareBirthChartsBtn: {
+    borderWidth: 1,
+    borderColor: "rgba(184,163,255,0.4)",
+    borderRadius: scale(10),
+    paddingVertical: verticalScale(10),
+    alignItems: "center",
+    marginTop: verticalScale(14),
+  },
+  compareBirthChartsBtnText: {
+    color: "#B8A3FF",
+    fontSize: moderateScale(13),
+    fontWeight: "600",
+    letterSpacing: 0.5,
   },
 });
