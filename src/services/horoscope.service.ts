@@ -177,11 +177,9 @@ async function writeHoroscopeDoc(
 }
 
 /**
- * Writes trigger documents for yesterday, today, and tomorrow.
- * Today uses the already-computed moon/retrogrades passed in by the caller.
- * Yesterday and tomorrow call calculateTransits for their respective dates
- * (lat/lon default to 0 — moon sign and retrograde status are ecliptic values
- * unaffected by geographic location).
+ * Writes the trigger document for today's horoscope only.
+ * Call requestSurroundingHoroscopes separately (after transits + breakdown)
+ * so the extension prioritises today's reading.
  */
 export async function requestHoroscope(
   uid: string,
@@ -199,7 +197,6 @@ export async function requestHoroscope(
     ? null
     : await getTarotCardDraw(uid, 3).catch(() => null);
 
-  // Today is what the user sees first — await it.
   await writeHoroscopeDoc(
     uid, dateId, natalChart,
     todaysMoon,
@@ -207,8 +204,20 @@ export async function requestHoroscope(
     tarotDraw?.today.keywordString ?? '',
     pronouns,
   );
+}
 
-  // Yesterday and tomorrow are prefetched in the background.
+/**
+ * Writes trigger documents for yesterday and tomorrow in the background.
+ * Call this after today's horoscope, transit reading, and breakdown have been requested.
+ */
+export async function requestSurroundingHoroscopes(
+  uid: string,
+  dateId: string,
+  chart: NatalChartDetailsDoc,
+  pronouns = 'they/them',
+): Promise<void> {
+  const natalChart  = buildNatalChartSummary(chart);
+  const tarotDraw   = await getTarotCardDraw(uid, 3).catch(() => null);
   const yesterdayId = offsetDateId(dateId, -1);
   const tomorrowId  = offsetDateId(dateId, +1);
 
