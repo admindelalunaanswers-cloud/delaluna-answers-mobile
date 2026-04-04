@@ -93,12 +93,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     marginTop: verticalScale(2),
+    alignSelf: 'stretch',
   },
   message: {
     color: 'rgba(255,255,255,0.6)',
     fontSize: moderateScale(13),
     textAlign: 'center',
     lineHeight: moderateScale(20),
+    alignSelf: 'stretch',
   },
   button: {
     marginTop: verticalScale(8),
