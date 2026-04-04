@@ -436,7 +436,6 @@ export default function EditProfileScreen() {
         };
 
         // Save to both locations — overwrite entirely (birth data changed)
-        await setDoc(doc(db, 'users', uid, 'chartData', 'details'), chartPayload);
         await setDoc(doc(db, 'users', uid, 'birthChart', 'data'), chartPayload);
 
         setLoadingMessage('Regenerating your readings...');
@@ -466,13 +465,13 @@ export default function EditProfileScreen() {
             // Horoscopes only regenerate when the birthday itself changed;
             // tarot cards are preserved (skipTarotDraw: true)
             if (birthdayChanged) {
-              requestHoroscope(uid, dateId, chartDetailsDoc, transits.moon, retrogrades, { skipTarotDraw: true })
+              requestHoroscope(uid, dateId, chartDetailsDoc, transits.moon, retrogrades)
                 .catch(console.error);
             }
           })
           .catch(() => {
             if (birthdayChanged) {
-              requestHoroscope(uid, dateId, chartDetailsDoc, natalChart.moon, [], { skipTarotDraw: true })
+              requestHoroscope(uid, dateId, chartDetailsDoc, natalChart.moon, [],)
                 .catch(console.error);
             }
           });
