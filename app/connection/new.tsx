@@ -1029,7 +1029,7 @@ export default function SingleConnectionCreateScreen() {
             )}
             ListFooterComponent={
               <ThemedView style={styles.footerSections}>
-                <GlassButton title="Thassit" onPress={handleSaveConnection} />
+                <GlassButton title="View Connection" onPress={handleSaveConnection} />
               </ThemedView>
             }
           />
