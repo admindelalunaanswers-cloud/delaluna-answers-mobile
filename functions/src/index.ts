@@ -1,6 +1,7 @@
 import * as admin from 'firebase-admin';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
 import * as nodemailer from 'nodemailer';
@@ -240,3 +241,108 @@ export const sendMorningReminder = onSchedule('every day 08:00', async () => {
     });
   }
 });
+
+// ─── createConnection ─────────────────────────────────────────────────────────
+
+export const createConnection = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Must be signed in.');
+  }
+
+  const { userId, isMe, relationshipType, firstPerson, secondPerson, prompt: clientPrompt } = request.data as {
+    userId: string;
+    isMe: boolean;
+    relationshipType: string;
+    firstPerson: Record<string, string>;
+    secondPerson: Record<string, string>;
+    prompt?: string;
+  };
+
+  if (!userId || !relationshipType || !firstPerson || !secondPerson) {
+    throw new HttpsError('invalid-argument', 'Missing required fields.');
+  }
+
+  const mapPerson = (p: Record<string, string>) => ({
+    firstName: p['First Name'] ?? '',
+    lastName: p['Last Name'] ?? '',
+    pronouns: p['Pronouns'] ?? '',
+    sun: p['Sun Sign'] ?? '',
+    moon: p['Moon Sign'] ?? '',
+    rising: p['Rising Sign'] ?? '',
+  });
+
+  let mappedFirst = mapPerson(firstPerson);
+
+  if (isMe) {
+    const chartSnap = await db
+      .collection('users').doc(userId)
+      .collection('natalChart').doc('details')
+      .get();
+    if (chartSnap.exists) {
+      const chart = chartSnap.data()!;
+      const sunPlanet = (chart.planets as any[])?.find((p: any) => p.name === 'Sun');
+      mappedFirst = {
+        ...mappedFirst,
+        sun: sunPlanet?.sign ?? mappedFirst.sun,
+        moon: chart.moon?.sign ?? mappedFirst.moon,
+        rising: chart.ascendant?.sign ?? mappedFirst.rising,
+      };
+    }
+  }
+
+  const mappedSecond = mapPerson(secondPerson);
+
+  const prompt = clientPrompt ?? '';
+
+  const firstSlug = `${mappedFirst.firstName.toLowerCase()}_${mappedFirst.lastName.toLowerCase()}`;
+  const secondSlug = `${mappedSecond.firstName.toLowerCase()}_${mappedSecond.lastName.toLowerCase()}`;
+  const connectionId = `${firstSlug}-${secondSlug}`;
+
+  const connectionRef = db
+    .collection('users')
+    .doc(userId)
+    .collection('connections')
+    .doc(connectionId);
+
+  await connectionRef.set({
+    connectionId,
+    relationshipType,
+    firstPerson: mappedFirst,
+    secondPerson: mappedSecond,
+    status: { state: 'pending' },
+    prompt,
+    createTime: FieldValue.serverTimestamp(),
+  });
+
+  return { connectionId };
+});
+
+// ─── parseConnectionCompatibility ────────────────────────────────────────────
+
+export const parseConnectionCompatibility = onDocumentUpdated(
+  'users/{userId}/connections/{connectionId}',
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+
+    if (!after?.response) return;
+    if (before?.response === after.response) return;
+    if (after?.compatibility) return;
+
+    try {
+      const raw = after.response as string;
+      const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+      const parsed = JSON.parse(clean);
+
+      await event.data!.after.ref.update({
+        compatibility: parsed,
+        'status.state': 'complete',
+      });
+    } catch (err) {
+      console.error('[parseConnectionCompatibility] Parse error:', err);
+      await event.data!.after.ref.update({
+        'status.state': 'error',
+      });
+    }
+  }
+);
