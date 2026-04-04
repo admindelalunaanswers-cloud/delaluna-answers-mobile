@@ -23,6 +23,7 @@ import { db } from "@/firebaseConfig";
 import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
 import { useUser } from "@/src/context/user-context";
 import HeaderNav from "@/src/components/shared/header-nav";
+import { COMPATIBILITY_DEFINITIONS } from "@/src/constants/definitions";
 
 const NAV_BAR_HEIGHT = 44;
 const BAR_MAX_WIDTH = Dimensions.get("window").width - scale(18) * 2;
@@ -47,21 +48,36 @@ interface PersonInfo {
 }
 
 interface CompatibilityScores {
-  interest?: number;
+  accountability?: number;
+  adaptability?: number;
+  attraction?: number;
   communication?: number;
+  desire?: number;
+  ego: number;
+  empathy?: number;
+  hostility?: number;
+  interest?: number;
+  loyalty?: number;
+  persuasion?: number;
+  reasoning?: number;
   resonation?: number;
-  trust?: number;
-  longevity?: number;
-  sexAndChemistry?: number;
+  responsibility?: number;
+  sacrifice?: number;
+  stubbornness?: number;  
   [key: string]: number | undefined;
 }
 
 interface CompatibilityReport {
-  title: string;
-  summary: string;
+  advice: string;
   closing: string;
+  conflictStyle: string;
+  longevity: string;
+  loveLanguage: string;
   overallCompatibility: number | null;
   scores: CompatibilityScores;
+  summary: string;
+  title: string;
+  warning: string; 
 }
 
 interface ConnectionDoc {
@@ -87,17 +103,22 @@ const LOADING_SAYINGS = [
 ];
 
 const KEYWORD_DEFINITIONS: Record<string, string> = {
-  interest: "How naturally your attention and curiosity gravitate toward each other.",
-  communication: "How clearly you exchange thoughts, emotions, and ideas.",
-  resonation: "The level of emotional frequency and energy alignment.",
-  reasoning: "Your shared logic, perspective, and problem-solving flow.",
-  loyalty: "Consistency, dependability, and commitment to the bond.",
-  attraction: "Physical and magnetic chemistry that draws you together.",
-  stubbornness: "Your ability (or inability) to compromise when differences arise.",
-  sacrifice: "How much each person is willing to give for the relationship.",
-  trust: "The foundation of reliability and emotional safety between you.",
-  longevity: "The long-term potential and staying power of the bond.",
-  sexandchemistry: "Physical intimacy and magnetic pull.",
+  interest: COMPATIBILITY_DEFINITIONS.INTEREST,
+  communication: COMPATIBILITY_DEFINITIONS.COMMUNICATION,
+  resonation: COMPATIBILITY_DEFINITIONS.RESONATION,
+  reasoning: COMPATIBILITY_DEFINITIONS.REASONING,
+  loyalty: COMPATIBILITY_DEFINITIONS.LOYALTY,
+  attraction: COMPATIBILITY_DEFINITIONS.ATTRACTION,
+  stubbornness: COMPATIBILITY_DEFINITIONS.STUBBORNNESS,
+  sacrifice: COMPATIBILITY_DEFINITIONS.SACRIFICE,
+  accountability: COMPATIBILITY_DEFINITIONS.ACCOUNTABILITY,
+  adaptability: COMPATIBILITY_DEFINITIONS.ADAPTABILITY,
+  desire: COMPATIBILITY_DEFINITIONS.DESIRE,
+  ego: COMPATIBILITY_DEFINITIONS.EGO,
+  empathy: COMPATIBILITY_DEFINITIONS.EMPATHY,
+  hostility: COMPATIBILITY_DEFINITIONS.HOSTILITY,
+  persuasion: COMPATIBILITY_DEFINITIONS.PERSUASION,
+  responsibility: COMPATIBILITY_DEFINITIONS.RESPONSIBILITY,
 };
 
 const getBarColor = (value: number) => {
@@ -213,10 +234,10 @@ export default function ConnectionViewScreen() {
   const statusLabel = (() => {
     const state = connection?.status?.state;
     switch (state) {
-      case "pending":    return "Preparing your compatibility reading...";
+      case "pending": return "Preparing your compatibility reading...";
       case "processing": return "Channeling the stars... almost there";
-      case "error":      return "We ran into an issue generating this reading.";
-      default:           return loadingMessage;
+      case "error": return "We ran into an issue generating this reading.";
+      default: return loadingMessage;
     }
   })();
 
@@ -278,8 +299,7 @@ export default function ConnectionViewScreen() {
           {/* Names + relationship type */}
           <Text style={styles.namesText}>{firstName} & {secondName}</Text>
           {connection?.relationshipType && (
-            <Text style={styles.relationshipBadge}>
-              {connection.relationshipType.toUpperCase()}
+            <Text style={styles.relationshipBadge}> STATUS: {connection.relationshipType.toUpperCase()}
             </Text>
           )}
 
@@ -344,19 +364,36 @@ export default function ConnectionViewScreen() {
                       <View style={styles.row}>
                         <Text style={styles.keyword}>{label}</Text>
                         <Text style={styles.valueText}>{Math.round(value)}%</Text>
+
                       </View>
-                      <ScoreBar value={value} color={barColor} delay={index * 80} />
                     </TouchableOpacity>
                     {expandedKeyword === keyword && definition && (
                       <Text style={styles.definition}>{definition}</Text>
                     )}
+                    <ScoreBar value={value} color={barColor} delay={index * 80} />
+
                   </View>
                 );
               })}
+              
+              <Text style={styles.sectionLabel}>Advice:</Text>
+              <Text style={styles.reportSummary}>{report.advice}</Text>
+              
+              <Text style={styles.sectionLabel}>Conflict Style</Text>
+              <Text style={styles.reportSummary}>{report.conflictStyle}</Text>
+              
+              <Text style={styles.sectionLabel}>Longevity</Text>
+              <Text style={styles.reportSummary}>{report.longevity}</Text>
+              
+              <Text style={styles.sectionLabel}>Love Language</Text>
+              <Text style={styles.reportSummary}>{report.loveLanguage}</Text>
+              
+              <Text style={styles.sectionLabel}>Warning: </Text>
+              <Text style={{ color: "#FF6B6B" }}> {report.warning}</Text>
 
-              {report.closing && (
-                <Text style={styles.closing}>{report.closing}</Text>
-              )}
+              <Text style={styles.sectionLabel}> Closing</Text>
+              <Text style={styles.closing}>{report.closing}</Text>
+              
             </>
           )}
         </ScrollView>
@@ -430,16 +467,21 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(20),
   },
   sectionLabel: {
-    color: "rgba(255,255,255,0.4)",
-    fontSize: moderateScale(10),
+    color: "#FFFFFF",
+    fontSize: moderateScale(15),
+    fontWeight: "600",
     letterSpacing: 1.5,
     marginBottom: verticalScale(10),
+    textAlign: "center",
   },
   signsRow: {
     flexDirection: "row",
+    justifyContent: "center",
   },
   signsCol: {
-    flex: 1,
+    flex: 0,
+    minWidth: scale(120),
+    alignItems: "center",
     gap: verticalScale(6),
   },
   signsDivider: {
@@ -452,6 +494,7 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(12),
     fontWeight: "600",
     marginBottom: verticalScale(4),
+    textAlign: "center",
   },
   signRow: {
     flexDirection: "row",

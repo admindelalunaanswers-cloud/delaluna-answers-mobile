@@ -4,28 +4,15 @@ export const COMPATIBILITY_PROMPT_TEMPLATE = `Generate a compatibility report be
 The depth and detail of this report is determined by the user's
 account tier.
 
-====================================================
-TIER: {{tier}}
-====================================================
-
-IF tier = "free":
-- Include "title", "summary", "overallCompatibility", "closing"
-- "summary" MUST BE 3-4 sentences. No shorter or longer.
-- "scores" should ONLY include: interest, communication, attraction, loyalty
-- All other scores set to null
-- Do NOT include "loveLanguage", "conflictStyle", "longevity"
-- Do NOT include "advice", "warning"
-- DO include "teaser"
 - "teaser" should make the user want the full premium breakdown
-
-IF tier = "premium":
 - Include ALL fields
 - "summary" MUST BE 5-7 sentences. No shorter or longer.
 - "scores" should include ALL 16 fields
 - Include "loveLanguage", "conflictStyle", "longevity"
 - Include "advice", "warning"
 - Do NOT include "teaser"
-- Nothing generic. If it could apply to any couple, rewrite it.
+- Nothing generic. If it could apply to any couple, rewrite it. 
+- Personalize it to this specific pairing. Use the charts as the foundation, but blend in the relationship type and vibe to make it unique.
 
 ====================================================
 COMPATIBILITY REPORT
@@ -64,6 +51,7 @@ Write like Delaluna:
 - be petty
 - keeps it real
 - gives loving but honest advice
+- tough love, not coddling
 - never generic or cliche
 - does not use more than 1 metaphor per field
 - limits expressive language and innuendos
@@ -86,30 +74,23 @@ FIELD RULES
 ====================================================
 
 TITLE:
-- "title" (both tiers): short and catchy.
-  Format like "Fire Meets Water: Leo × Pisces" using the user's
-  and partner's Sun signs.
+- "title" : short and catchy.
+  Format like "Fire Meets Water: Leo × Pisces" using the user's and partner's Sun signs.
 
 SUMMARY:
-- "summary" (both tiers):
-  - FREE: MUST BE 3-4 sentences. Blend astrological insight with
+- "summary" :
+  - MUST BE 5-7 sentences. Deeper read on the dynamic
+    between both charts. 
+  - Blend astrological insight with
     the relationship's vibe and energy.
-  - PREMIUM: MUST BE 5-7 sentences. Deeper read on the dynamic
-    between both charts.
 
 OVERALL COMPATIBILITY:
-- "overallCompatibility" (both tiers): single score 0-100 reflecting
+- "overallCompatibility" : single score 0-100 reflecting
   general harmony. Must be a number, not a string.
 
 SCORES:
-- "scores" (both tiers): object with numeric fields (0-100).
-  - FREE: Only include these 4:
-    - "interest"
-    - "communication"
-    - "attraction"
-    - "loyalty"
-    All other 12 fields set to null.
-  - PREMIUM: All 16 fields must have values:
+- "scores" : object with numeric fields (0-100).
+  - All 16 fields must have values:
     - "interest"
     - "communication"
     - "resonation"
@@ -127,7 +108,7 @@ SCORES:
     - "accountability"
     - "hostility"
 
-SUMMARY READS (premium only):
+SUMMARY READS:
 - "loveLanguage" MUST BE 5-7 sentences. How these two express and
   receive love based on their Venus and Moon placements. What works
   and what causes disconnect.
@@ -143,13 +124,13 @@ TEASER (free only):
   Tease the locked scores and reads. Should feel like a cliffhanger.
 
 OTHER:
-- "closing" (both tiers): empowering one-liner. Not a cliché.
+- "closing" : empowering one-liner. Not a cliché.
   Should land like a quote graphic on Instagram.
-- "advice" (premium only): MUST BE 3-5 sentences. Personalized to the
+- "advice": MUST BE 3-5 sentences. Personalized to the
   pairing. Can not reference astrological placements.
-- "warning" (premium only): MUST BE 2-3 sentences. Based on challenging
+- "warning": MUST BE 2-3 sentences. Based on challenging
   dynamics between the two charts.
-- "release" (both tiers): a short phrase that stems from spirituality,
+- "release" : a short phrase that stems from spirituality,
   recalibration and comforting words.
 
 ====================================================
@@ -157,45 +138,12 @@ OUTPUT RULES
 ====================================================
 - Return JSON ONLY. No markdown. No commentary. No code blocks.
 - All values must be strings, numbers, objects, or null as specified.
-- Only include fields allowed for the current tier.
-- Do NOT include premium-only fields when tier = "free".
-- Do NOT include "teaser" when tier = "premium".
-- Every field must be personalized to BOTH charts.
-- Scores with null values must explicitly be null, not 0.
+- Every field must be personalized.
+- Scores with null values must explicitly be 0.
+
 
 ====================================================
-OUTPUT FORMAT — FREE
-====================================================
-
-{
-  "title": "",
-  "summary": "",
-  "overallCompatibility": 0,
-  "scores": {
-    "interest": 0,
-    "communication": 0,
-    "attraction": 0,
-    "loyalty": 0,
-    "resonation": null,
-    "empathy": null,
-    "reasoning": null,
-    "persuasion": null,
-    "stubbornness": null,
-    "ego": null,
-    "sacrifice": null,
-    "desire": null,
-    "adaptability": null,
-    "responsibility": null,
-    "accountability": null,
-    "hostility": null
-  },
-  "closing": "",
-  "teaser": "",
-  "release": ""
-}
-
-====================================================
-OUTPUT FORMAT — PREMIUM
+OUTPUT FORMAT
 ====================================================
 
 {
@@ -226,6 +174,14 @@ OUTPUT FORMAT — PREMIUM
   "closing": "",
   "advice": "",
   "warning": "",
-  "release": ""
 }
 `;
+
+export function buildCompatibilityPrompt(userNatalChart: string, partnerNatalChart: string, userPronouns: string, partnerPronouns: string, relationshipType: string) {
+  return COMPATIBILITY_PROMPT_TEMPLATE
+    .replace("{{userNatalChart}}", userNatalChart)
+    .replace("{{partnerNatalChart}}", partnerNatalChart)
+    .replace("{{userPronouns}}", userPronouns)
+    .replace("{{partnerPronouns}}", partnerPronouns)
+    .replace("{{relationshipType}}", relationshipType)
+}
