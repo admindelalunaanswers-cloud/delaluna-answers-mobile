@@ -21,6 +21,7 @@ import {
   fetchHoroscope,
   getTodayDateId,
   requestHoroscope,
+  requestSurroundingHoroscopes,
   rolloverHoroscope,
   subscribeToHoroscope,
 } from '@/src/services/horoscope.service';
@@ -218,18 +219,24 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
 
     setLoading(false);
 
-    // Subscribe for data still being generated + background triggers
-    if (chart) {
-      subscribeBreakdown(uid, chart, signal, breakdownFetch, pronouns);
-      if (transits) subscribeTransitReading(uid, weekDateId, chart, transits, signal, transitReadingFetch, pronouns);
-      // Pre-generate tomorrow's horoscope so it's ready when the day rolls over.
-      rolloverHoroscope(uid, chart, pronouns).catch(console.error);
-    }
+    // Pre-generate tomorrow's horoscope so it's ready when the day rolls over.
+    if (chart) rolloverHoroscope(uid, chart, pronouns).catch(console.error);
 
     const { result, pending } = horoscopeRes;
 
     // Horoscope subscribe / request
-    if (result) { setHoroscope(result); notifyOnce(`@delaluna/horoscope_notified_${uid}_${dateId}`, scheduleHoroscopeReadyNotification); return; }
+    if (result) {
+      setHoroscope(result);
+      notifyOnce(`@delaluna/horoscope_notified_${uid}_${dateId}`, scheduleHoroscopeReadyNotification);
+      // Horoscope already done — subscribe transit + breakdown, then surrounding days.
+      if (chart) {
+        subscribeBreakdown(uid, chart, signal, breakdownFetch, pronouns);
+        if (transits) subscribeTransitReading(uid, weekDateId, chart, transits, signal, transitReadingFetch, pronouns);
+        requestSurroundingHoroscopes(uid, dateId, chart, pronouns).catch(console.error);
+      }
+      return;
+    }
+
     if (!chart) {
       // New user: chart hasn't been written yet. Stay in generating state so
       // AuthGate doesn't navigate early. Subscribe so we pick it up when
@@ -286,9 +293,22 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     unsubHoroscopeRef.current = unsub;
 
     if (!pending) {
+      // Generation order: today horoscope → transit reading → breakdown → surrounding days.
+      // Each write arrives at the extension in sequence so today's horoscope is processed first.
       const moon        = transits?.moon ?? chart.moon;
       const retrogrades = transits?.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name) ?? [];
-      requestHoroscope(uid, dateId, chart, moon, retrogrades, pronouns).catch(console.error);
+      requestHoroscope(uid, dateId, chart, moon, retrogrades, pronouns)
+        .then(() => {
+          subscribeBreakdown(uid, chart, signal, breakdownFetch, pronouns);
+          if (transits) subscribeTransitReading(uid, weekDateId, chart, transits, signal, transitReadingFetch, pronouns);
+          requestSurroundingHoroscopes(uid, dateId, chart, pronouns).catch(console.error);
+        })
+        .catch(console.error);
+    } else {
+      // Horoscope already in-flight — subscribe transit + breakdown now, then surrounding.
+      subscribeBreakdown(uid, chart, signal, breakdownFetch, pronouns);
+      if (transits) subscribeTransitReading(uid, weekDateId, chart, transits, signal, transitReadingFetch, pronouns);
+      requestSurroundingHoroscopes(uid, dateId, chart, pronouns).catch(console.error);
     }
   };
 
