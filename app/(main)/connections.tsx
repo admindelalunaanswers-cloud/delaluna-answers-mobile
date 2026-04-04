@@ -29,6 +29,7 @@ import { useUser } from "@/src/context/user-context";
 import HeaderNav from "@/src/components/shared/header-nav";
 import DelalunaContainer from "@/src/components/shared/delaluna-container.component";
 import { ThemedView } from "@/src/components/themed-view";
+import { ConnectionsCache, connectionDisplayName } from "@/src/services/connections-cache.service";
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -67,17 +68,25 @@ const AnimatedConnectionItem = memo(
     return (
       <Animated.View style={animStyle}>
         <ReanimatedSwipeable renderRightActions={renderRightActions} overshootRight={false}>
-          <TouchableOpacity onPress={() => onOpen(connection.id)} style={styles.connectionItem}>
-            <Text style={styles.connectionName}>{connection.name ?? connection.id}</Text>
+          <ThemedView style={styles.connectionItem}>
+            <TouchableOpacity onPress={() => onOpen(connection.id)} style={styles.connectionItem}>
+            <Text style={styles.connectionName}>{connection.firstPerson?.firstName} {connection.firstPerson?.lastName} </Text>
+            <Ionicons name="heart" size={moderateScale(22)} color="#fff" />
+            <Text style={styles.connectionName}> {connection.secondPerson?.firstName} {connection.secondPerson?.lastName}</Text>
           </TouchableOpacity>
+          </ThemedView>
+          
         </ReanimatedSwipeable>
       </Animated.View>
     );
   }
 );
 
+const FREE_CONNECTION_LIMIT = 3;
+const PREMIUM_CONNECTION_LIMIT = 10;
+
 export default function ConnectionsScreen() {
-  const { authUser } = useUser();
+  const { authUser, userDoc } = useUser();
   const insets = useSafeAreaInsets();
 
   const [connections, setConnections] = useState<any[]>([]);
@@ -91,8 +100,20 @@ export default function ConnectionsScreen() {
     router.push({ pathname: "/connection/[id]", params: { id: connectionId } });
   };
 
-  const goToNewConnectionScreen = () =>
+  const goToNewConnectionScreen = () => {
+    const isPremium = userDoc?.isPremiumMember ?? false;
+    const limit = isPremium ? PREMIUM_CONNECTION_LIMIT : FREE_CONNECTION_LIMIT;
+    if (connections.length >= limit) {
+      Alert.alert(
+        'Connection limit reached',
+        isPremium
+          ? `Premium members can save up to ${PREMIUM_CONNECTION_LIMIT} connections.`
+          : `Free accounts can save up to ${FREE_CONNECTION_LIMIT} connections. Upgrade to Premium for up to ${PREMIUM_CONNECTION_LIMIT}.`,
+      );
+      return;
+    }
     router.push("/connection/new");
+  };
 
   useEffect(() => {
     fade.value = withTiming(1, { duration: 250, easing: Easing.out(Easing.cubic) });
@@ -101,15 +122,26 @@ export default function ConnectionsScreen() {
 
   useEffect(() => {
     if (!authUser?.uid) return;
-    const ref = collection(db, "users", authUser.uid, "connections");
+    const uid = authUser.uid;
+
+    // Show cached data immediately so the list is never empty on mount
+    ConnectionsCache.load(uid).then((cached) => {
+      if (cached.length > 0) {
+        setConnections(cached);
+        setLoading(false);
+      }
+    });
+
+    const ref = collection(db, "users", uid, "connections");
     const q = query(ref, orderBy("createTime", "desc"));
 
     const unsubscribe = onSnapshot(
       q,
       (snap) => {
-        setConnections(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-        console.log("Connections snapshot received:", snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+        const fresh = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        setConnections(fresh);
         setLoading(false);
+        ConnectionsCache.save(uid, fresh);
       },
       (err) => {
         console.error("Firestore listener error:", err);
@@ -134,6 +166,7 @@ export default function ConnectionsScreen() {
               const deleteFn = httpsCallable(functions, "deleteConnection");
               await deleteFn({ userId: authUser?.uid, connectionId });
               setConnections((prev) => prev.filter((c) => c.id !== connectionId));
+              if (authUser?.uid) ConnectionsCache.remove(authUser.uid, connectionId);
             } catch (err) {
               console.error("Error deleting connection:", err);
               Alert.alert("Error", "Failed to delete connection.");
@@ -146,6 +179,7 @@ export default function ConnectionsScreen() {
 
   if (loading) {
     return (
+      
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#fff" />
       </View>
@@ -207,7 +241,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, width: "100%" },
   centered: { flex: 1, justifyContent: "space-around", alignItems: "center", padding: scale(15) },
   listContainer: { flexGrow: 1, paddingHorizontal: scale(15), paddingTop: verticalScale(20) },
-  connectionItem: { padding: scale(16) },
+  connectionItem: { padding: scale(16), flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center", },
   connectionName: { color: "#fff", fontSize: moderateScale(16) },
   addConnectionText: { color: "#fff", fontSize: moderateScale(16) },
   deleteActionContainer: { justifyContent: "center" },

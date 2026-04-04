@@ -77,6 +77,7 @@ type FieldConfig = {
   returnKeyType?: "next" | "done";
   blurOnSubmit?: boolean;
   onSubmitEditing?: () => void;
+  onFocus?: () => void;
 };
 
 // ─── Local utilities ──────────────────────────────────────────────────────────
@@ -168,6 +169,7 @@ function DelalunaInputRow({
             returnKeyType={field.returnKeyType}
             submitBehavior={field.blurOnSubmit === false ? "newline" : "blurAndSubmit"}
             onSubmitEditing={field.onSubmitEditing}
+            onFocus={field.onFocus}
             onChangeText={(text) => onChange({ [field.label]: text } as PersonBirthUpdate)}
           />
         </ThemedView>
@@ -586,7 +588,7 @@ export default function SingleConnectionCreateScreen() {
   const { chartDetails } = useHoroscope();
   const insets = useSafeAreaInsets();
   const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
-
+  const footHeight = verticalScale(10);
   const [isMe, setIsMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("Calculating cosmic alignment...");
@@ -633,6 +635,7 @@ export default function SingleConnectionCreateScreen() {
 
   type PersonKey = "first" | "second";
 
+  const flatListRef = useRef<FlatList>(null);
   const firstNameRef = useRef<TextInput>(null);
   const firstLastNameRef = useRef<TextInput>(null);
   const firstLocationRef = useRef<{ dismissSuggestions: () => void; focus: () => void }>(null);
@@ -871,7 +874,10 @@ export default function SingleConnectionCreateScreen() {
     setLoading(false);
   };
 
-  const userFullName = userDoc?.fullName;
+  const userFullName =
+    userDoc?.fullName ||
+    [userDoc?.firstName, userDoc?.lastName].filter(Boolean).join(" ") ||
+    undefined;
 
   if (loading) {
     return <LoadingScreen progress={0} message={loadingMessage} />;
@@ -887,15 +893,17 @@ export default function SingleConnectionCreateScreen() {
       <Animated.View style={[styles.container, { opacity: fade, marginTop: headerHeight }]}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior="padding"
+          keyboardVerticalOffset={insets.bottom + 40}
         >
           <FlatList
+            ref={flatListRef}
             data={sections}
             keyExtractor={(item) => item.key}
-            style={{ backgroundColor: "transparent" }}
-            contentContainerStyle={{ paddingTop: verticalScale(5), paddingBottom: verticalScale(20) }}
+            style={{ backgroundColor: "transparent", flex: 1 }}
+            contentContainerStyle={{ paddingTop: verticalScale(5), paddingBottom: verticalScale(10) }}
             keyboardShouldPersistTaps="handled"
-            renderItem={({ item }) => (
+            renderItem={({ item, index }) => (
               <ThemedView style={styles.section}>
                 <ThemedView style={styles.userRow}>
                   <ThemedText style={styles.titleText}>{item.title}</ThemedText>
@@ -919,7 +927,8 @@ export default function SingleConnectionCreateScreen() {
                 ) : (
                   (() => {
                     const personKey = item.key as PersonKey;
-                    return item.fields.map((field) => {
+                    const scrollToSection = () => flatListRef.current?.scrollToIndex({ index, animated: true });
+                    return item.fields.map((field: FieldConfig) => {
                       const value = sanitizeValue(
                         personKey === "first"
                           ? firstPerson[field.label as keyof PersonBirthData]
@@ -985,7 +994,7 @@ export default function SingleConnectionCreateScreen() {
                       return (
                         <DelalunaInputRow
                           key={field.label}
-                          fields={[{ ...field, value, inputRef, returnKeyType, blurOnSubmit: field.type === "text" ? false : undefined, onSubmitEditing }]}
+                          fields={[{ ...field, value, inputRef, returnKeyType, blurOnSubmit: field.type === "text" ? false : undefined, onSubmitEditing, onFocus: scrollToSection }]}
                           onChange={(vals) => item.onChange((prev: PersonBirthData) => ({ ...prev, ...vals }))}
                         />
                       );
