@@ -327,7 +327,7 @@ const styles = StyleSheet.create({
 
   // ── Insight cards (Insights tab) ───────────────────────────────────────────
   insightCard: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: scale(12),
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
@@ -336,6 +336,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   insightLabel: {
+    color: 'rgba(255,255,255,0.7)',
     fontSize: moderateScale(15),
     textTransform: 'uppercase',
     letterSpacing: 1,
