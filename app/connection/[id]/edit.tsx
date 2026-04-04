@@ -1,38 +1,38 @@
-import React, { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  Image,
-  StyleSheet,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-} from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { doc, getDoc } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { db, functions } from "@/firebaseConfig";
-import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
-import { useUser } from "@/src/context/user-context";
-import HeaderNav from "@/src/components/shared/header-nav";
 import { GlassButton } from "@/src/assets/buttons/glass-button";
+import HeaderNav from "@/src/components/shared/header-nav";
+import { useUser } from "@/src/context/user-context";
+import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 
 const NAV_BAR_HEIGHT = 44;
 
 const RELATIONSHIP_OPTIONS = [
   {
     value: "consistent",
-    icon: require("@/src/assets/connections/satisfied_icon.png"),
+    icon: require("@/src/assets/connections/consistent-words.png"),
   },
   {
     value: "it's complicated",
-    icon: require("@/src/assets/connections/neutral_icon.png"),
+    icon: require("@/src/assets/connections/complicated-words.png"),
   },
   {
     value: "toxic",
-    icon: require("@/src/assets/connections/dissatisfied_icon.png"),
+    icon: require("@/src/assets/connections/chaotic-words.png"),
   },
 ];
 
