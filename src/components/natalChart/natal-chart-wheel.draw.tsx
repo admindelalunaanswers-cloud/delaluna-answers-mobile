@@ -158,8 +158,8 @@ export default function BirthChartWheel({ natalChart, size }: Props) {
     <Svg width={size} height={size}>
 
       {/* ── Boundary rings (no fill — transparent) ────────────────────── */}
-      <Circle cx={cx} cy={cy} r={rOuter}    fill="none" stroke={RING} strokeWidth={0.6} />
-      <Circle cx={cx} cy={cy} r={rZodiacIn} fill="none" stroke={RING} strokeWidth={0.4} />
+      <Circle cx={cx} cy={cy} r={rOuter}    fill="none" stroke={RING} strokeWidth={3} />
+      <Circle cx={cx} cy={cy} r={rZodiacIn} fill="none" stroke={RING} strokeWidth={2} />
 
       {/* ── Sign zone: floating names + ultra-thin radial dividers ───────── */}
 
