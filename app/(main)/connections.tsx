@@ -102,12 +102,13 @@ export default function ConnectionsScreen() {
   useEffect(() => {
     if (!authUser?.uid) return;
     const ref = collection(db, "users", authUser.uid, "connections");
-    const q = query(ref, orderBy("createdAt", "desc"));
+    const q = query(ref, orderBy("createTime", "desc"));
 
     const unsubscribe = onSnapshot(
       q,
       (snap) => {
         setConnections(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+        console.log("Connections snapshot received:", snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
         setLoading(false);
       },
       (err) => {
