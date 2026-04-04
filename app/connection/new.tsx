@@ -385,7 +385,7 @@ const ConnectionsPlaceOfBirthField = React.forwardRef<
       <ThemedText style={fieldStyles.label}>PLACE OF BIRTH</ThemedText>
       {isUnknown ? (
         <>
-          <ThemedText style={styles.unknownText}>Not provided</ThemedText>
+          <ThemedText style={styles.unknownText}>I don't know</ThemedText>
           <TouchableOpacity onPress={handleEnterLocation}>
             <ThemedText style={styles.unknownLink}>Enter location</ThemedText>
           </TouchableOpacity>
@@ -493,7 +493,7 @@ function ConnectionsTimeOfBirthField({
       <ThemedText style={fieldStyles.label}>TIME OF BIRTH</ThemedText>
       {isUnknown ? (
         <>
-          <ThemedText style={styles.unknownText}>Not provided</ThemedText>
+          <ThemedText style={styles.unknownText}>I don't know</ThemedText>
           <TouchableOpacity onPress={handleEnterTime}>
             <ThemedText style={styles.unknownLink}>Enter time</ThemedText>
           </TouchableOpacity>
@@ -1141,14 +1141,14 @@ const styles = StyleSheet.create({
     fontWeight: "600" as const,
   },
   skipLink: {
-    color: "rgba(255,255,255,0.4)",
+    color: "#6FFFE9",
     fontSize: moderateScale(12),
     textDecorationLine: "underline" as const,
     marginTop: verticalScale(6),
-    alignSelf: "flex-start" as const,
+    alignSelf: "flex-end" as const,
   },
   unknownText: {
-    color: "rgba(255,255,255,0.35)",
+    color: "#ffffff",
     fontSize: moderateScale(14),
     paddingVertical: verticalScale(6),
     fontStyle: "italic" as const,
@@ -1158,6 +1158,6 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(12),
     textDecorationLine: "underline" as const,
     marginTop: verticalScale(2),
-    alignSelf: "flex-start" as const,
+    alignSelf: "flex-end" as const,
   },
 });
