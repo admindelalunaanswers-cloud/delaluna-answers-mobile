@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
   // 🪐 Default (your Figma style)
   defaultContainer: {
     display: "flex",
-    flexDirection: "row",
+    flexDirection: "column",
     justifyContent: "center",
     alignItems: "center",
     alignSelf: "stretch",
@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
   // 🪶 Subtle version
   subtleContainer: {
     display: "flex",
-    flexDirection: "row",
+    flexDirection: "column",
     justifyContent: "center",
     alignItems: "center",
     alignSelf: "stretch",

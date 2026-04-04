@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { router } from 'expo-router';
 
@@ -8,34 +8,34 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doc, getFirestore, updateDoc } from 'firebase/firestore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import DateSwitcher from '@/src/components/home/date-switcher.component';
-import HeaderNav from '@/src/components/shared/header-nav';
 import { getProfileImageSource } from '@/app/(settings)/select-avatar';
-import HomeSignsDisplay from '@/src/components/shared/signs-display.component';
+import DateSwitcher from '@/src/components/home/date-switcher.component';
 import HomeTextBox from '@/src/components/home/home-text-box.component';
-// import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
-import AdBanner from '@/src/components/shared/ad-banner.component';
+import HeaderNav from '@/src/components/shared/header-nav';
+import HomeSignsDisplay from '@/src/components/shared/signs-display.component';
+import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
 import AdBannerFull from '@/src/components/shared/ad-banner-full.component';
+import AdBanner from '@/src/components/shared/ad-banner.component';
 import SectionTitle from '@/src/components/shared/section-title.component';
-import type { DailyCardPack } from '@/src/schemas/dailyCardPack.schema';
-import type { HoroscopeResult } from '@/src/types/horoscope.types';
-import { ChatStore } from '@/src/stores/chat-store';
-import { HOME_STRINGS } from '@/src/constants/strings';
 import { ThemedView } from '@/src/components/themed-view';
+import { HOME_STRINGS } from '@/src/constants/strings';
+import type { DailyCardPack } from '@/src/schemas/dailyCardPack.schema';
 import { calculateTransits } from '@/src/services/astroEngine';
 import { fetchHoroscope, getTodayDateId } from '@/src/services/horoscope.service';
 import { scheduleBreakdownReadyNotification } from '@/src/services/notifications.service';
 import { getTarotCardDraw } from '@/src/services/tarot-card.service';
-// import { updateUserDoc } from '@/src/services/user.service';
+import { ChatStore } from '@/src/stores/chat-store';
+import type { HoroscopeResult } from '@/src/types/horoscope.types';
+import { updateUserDoc } from '@/src/services/user.service';
 import { useHoroscope } from '@/src/context/horoscope-context';
+import { useUser } from '@/src/context/user-context';
 import { usePullToRefresh } from '@/src/hooks/use-pull-to-refresh';
 import { useResponsive } from '@/src/hooks/use-responsive';
-import { useUser } from '@/src/context/user-context';
 
 const NAV_BAR_HEIGHT = 44;
 
 export default function HomeScreen() {
-  const { authUser, userDoc } = useUser();
+  const { authUser, userDoc, refresh: refreshUser } = useUser();
   const {
     chartDetails,
     horoscope,
@@ -156,21 +156,20 @@ export default function HomeScreen() {
   const risingSign = chartDetails?.ascendant.sign ?? '—';
 
   const activeMoonData = moonByDate[selectedDate];
-
-  const retrogrades = (activeHoroscope?.planetsRetrograde ?? []).filter(p => p.toLowerCase() !== 'none');
+  const noRetrogradesLabel = "No planets currently in retrograde";
+  const retrogrades = (activeHoroscope?.planetsRetrograde ?? []).filter(p => p.toLowerCase() !== 'none' || noRetrogradesLabel);
 
   const dateSwitcherDates = Object.keys(cardDraw).sort();
 
-  // DEV: toggle to simulate free vs premium reading
-  const [devPremium, setDevPremium] = useState(true);
   const [showFullBanner] = useState(() => Math.random() < 0.5);
-  // const isPaygated = selectedDate !== todayDateId && !devPremium;
+  const isPremium = !!userDoc?.isPremiumMember;
+  const isPaygated = selectedDate !== todayDateId && !isPremium;
 
-  // const handleUnlock = async () => {
-  //   if (!authUser?.uid) return;
-  //   await updateUserDoc(authUser.uid, { isPremiumMember: true });
-  //   await refreshUser();
-  // };
+  const handleUnlock = async () => {
+    if (!authUser?.uid) return;
+    await updateUserDoc(authUser.uid, { isPremiumMember: true });
+    await refreshUser();
+  };
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
@@ -196,19 +195,13 @@ export default function HomeScreen() {
           onChange={setSelectedDate}
         />
 
-        {/* DEV: free/premium toggle */}
-        <View style={styles.devToggle}>
-          <Text style={styles.devToggleLabel}>Free</Text>
-          <Switch value={devPremium} onValueChange={setDevPremium} />
-          <Text style={styles.devToggleLabel}>Premium</Text>
-        </View>
-
-        {/* <PaygateOverlay
+        <PaygateOverlay
           locked={isPaygated}
           style={{ flex: 1 }}
           unlockTitle="Unlock Past & Future Readings"
           unlockMessage="Upgrade to Premium to view yesterday's and tomorrow's horoscope."
-        > */}
+          onUnlock={handleUnlock}
+        >
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + scale(20) }]}
@@ -288,7 +281,7 @@ export default function HomeScreen() {
           <SectionTitle sectionName="warning" title="Warning" />
           <HomeTextBox sectionName="warning" content={activeHoroscope?.warning} />
         </ScrollView>
-        {!devPremium && (
+        {!isPremium && (
           showFullBanner ? (
             <AdBannerFull
               icon="sparkles"
@@ -305,7 +298,7 @@ export default function HomeScreen() {
             />
           )
         )}
-        {/* </PaygateOverlay> */}
+        </PaygateOverlay>
       </View>
     </ThemedView>
   );
@@ -361,16 +354,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     textAlign: 'center',
-  },
-  devToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 6,
-  },
-  devToggleLabel: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 12,
   },
 });
