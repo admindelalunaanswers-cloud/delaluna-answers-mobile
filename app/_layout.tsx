@@ -5,6 +5,7 @@ import * as Notifications from 'expo-notifications';
 
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
@@ -125,14 +126,16 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <UserProvider>
-        <ThemeProvider>
-          <HoroscopeProvider>
-            <AuthGate />
-          </HoroscopeProvider>
-        </ThemeProvider>
-      </UserProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <UserProvider>
+          <ThemeProvider>
+            <HoroscopeProvider>
+              <AuthGate />
+            </HoroscopeProvider>
+          </ThemeProvider>
+        </UserProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
