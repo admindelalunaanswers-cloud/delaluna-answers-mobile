@@ -706,7 +706,7 @@ export default function SingleConnectionCreateScreen() {
     { key: "second", title: "Second Individual", toggle: false, fields: birthFields, onChange: setSecondPerson },
   ];
 
-  const relationshipOptions = ["consistent", "it's complicated", "toxic"];
+  const relationshipOptions = ["consistent", "complicated", "toxic"];
 
   const isEmpty = (val: any) =>
     val == null || (typeof val === "string" && val.trim().length === 0);
@@ -999,12 +999,13 @@ export default function SingleConnectionCreateScreen() {
                       const key = option.toLowerCase();
                       const iconSource =
                         key === "consistent"
-                          ? require("@/src/assets/connections/consistent.png")
-                          : key === "it's complicated"
-                            ? require("@/src/assets/connections/i_dunno.png")
-                            : require("@/src/assets/connections/complicated.png");
-
+                          ? require("@/src/assets/connections/consistent-words.png")
+                          : key === "complicated"
+                            ? require("@/src/assets/connections/complicated-words.png")
+                            : require("@/src/assets/connections/chaotic-words.png");
+                            
                       return (
+                        
                         <TouchableOpacity
                           key={option}
                           style={[styles.relationshipButton, relationshipType === option && styles.relationshipSelected]}
@@ -1016,7 +1017,10 @@ export default function SingleConnectionCreateScreen() {
                             style={[styles.relationshipIcon, relationshipType === option && styles.relationshipIconSelected]}
                             resizeMode="contain"
                           />
+          
+                         
                         </TouchableOpacity>
+                        
                       );
                     })}
                   </ThemedView>
@@ -1082,7 +1086,6 @@ const styles = StyleSheet.create({
   },
   relationshipRow: {
     flexDirection: "row",
-    height: verticalScale(110),
     marginTop: verticalScale(5),
   },
   relationshipButton: {
@@ -1093,16 +1096,19 @@ const styles = StyleSheet.create({
     marginHorizontal: scale(5),
     alignItems: "center",
     justifyContent: "center",
+    paddingVertical: verticalScale(2),
   },
   relationshipSelected: {
     backgroundColor: "rgba(142,68,173,0.7)",
     borderColor: "#FFFFFF",
   },
   relationshipIcon: {
-    width: Math.round(scale(85)),
-    height: Math.round(scale(85)),
+    width: scale(75),
+    height: scale(75),
     opacity: 0.8,
     tintColor: "rgba(255,255,255,0.85)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   relationshipIconSelected: {
     opacity: 1,
@@ -1111,7 +1117,7 @@ const styles = StyleSheet.create({
   footerSections: {
     paddingBottom: verticalScale(35),
     alignItems: "center",
-    gap: verticalScale(15),
+    gap: verticalScale(10),
   },
   pronounBtn: {
     paddingHorizontal: scale(12),
