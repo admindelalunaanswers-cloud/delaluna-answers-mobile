@@ -1,6 +1,6 @@
 module.exports = {
   expo: {
-    name: "delaluna-answers-mobile",
+    name: "Delaluna Answers",
     slug: "delaluna-answers-mobile",
     version: "1.0.0",
     orientation: "portrait",
@@ -42,8 +42,7 @@ module.exports = {
           image: "./src/assets/dlla-branded/delaluna_app_icon.png",
           imageWidth: 200,
           resizeMode: "contain",
-          backgroundColor: "#ffffff",
-          dark: { backgroundColor: "#000000" },
+          backgroundColor: "#1e083e",
         },
       ],
       "@react-native-community/datetimepicker",
@@ -63,7 +62,7 @@ module.exports = {
       FIREBASE_STORAGE_BUCKET:     process.env.FIREBASE_STORAGE_BUCKET,
       FIREBASE_MESSAGING_SENDER_ID: process.env.FIREBASE_MESSAGING_SENDER_ID,
       FIREBASE_APP_ID:             process.env.FIREBASE_APP_ID,
-      USE_EMULATOR:                process.env.USE_EMULATOR ?? 'false',
+      USE_EMULATOR:                'false',
       EMULATOR_HOST:               process.env.EMULATOR_HOST ?? 'localhost',
     },
     runtimeVersion: "1.0.0",
