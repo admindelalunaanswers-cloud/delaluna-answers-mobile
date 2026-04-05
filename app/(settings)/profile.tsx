@@ -71,7 +71,7 @@ export default function ProfileScreen() {
   const [enablingNotifs, setEnablingNotifs] = useState(false);
 
   const isPremium = ud?.isPremiumMember ?? false;
-  const profileImageSource = getProfileImageSource(ud?.profileImageId) ?? getProfileImageSource('profile9')!;
+  const profileImageSource = getProfileImageSource(ud?.profileImageId) ?? getProfileImageSource('profile8')!;
 
   // Check notification permission on mount
   useEffect(() => {

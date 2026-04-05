@@ -3,6 +3,7 @@ import {
   View,
   Text,
   Image,
+  ImageSourcePropType,
   TouchableOpacity,
   ScrollView,
   StyleSheet,
@@ -30,7 +31,7 @@ export type ProfileImageId =
 interface ProfileImageOption {
   id: ProfileImageId;
   label: string;
-  source: ReturnType<typeof require>;
+  source: ImageSourcePropType;
 }
 
 export const PROFILE_IMAGES: ProfileImageOption[] = [
