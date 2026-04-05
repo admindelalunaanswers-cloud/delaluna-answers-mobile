@@ -31,6 +31,7 @@ import { useHoroscope } from '@/src/context/horoscope-context';
 import { useUser } from '@/src/context/user-context';
 import { usePullToRefresh } from '@/src/hooks/use-pull-to-refresh';
 import { useResponsive } from '@/src/hooks/use-responsive';
+import { verticalScale } from '@/src/utils/responsive';
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -249,7 +250,7 @@ export default function HomeScreen() {
         >
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + scale(20) }]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: verticalScale(2) }]}
           refreshControl={refreshControl}
           showsVerticalScrollIndicator={false}
         >
