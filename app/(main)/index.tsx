@@ -222,7 +222,7 @@ export default function HomeScreen() {
     <ThemedView style={styles.container}>
       <HeaderNav
         title={userDoc?.fullName ?? ([userDoc?.firstName, userDoc?.lastName].filter(Boolean).join(' ') || 'Home')}
-        rightAvatarSource={getProfileImageSource((userDoc as any)?.profileImageId) ?? getProfileImageSource('profile9')!}
+        rightAvatarSource={getProfileImageSource((userDoc as any)?.profileImageId) ?? getProfileImageSource('profile8')!}
         onRightPress={() => router.push('/profile')}
       />
 

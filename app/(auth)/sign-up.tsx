@@ -156,7 +156,7 @@ export default function SignUpChatScreen() {
         isBirthTimeUnknown: answers.isBirthTimeUnknown ?? !answers.birthtime,
         isPlaceOfBirthUnknown: answers.isPlaceOfBirthUnknown ?? !answers.placeOfBirth,
         themeKey: 'default',
-        profileImageId: 'profile9',
+        profileImageId: 'profile8',
         ...(() => { const { password: _pw, ...rest } = answers; return rest; })(),
       };
 
