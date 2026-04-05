@@ -3,6 +3,9 @@
 # dependencies
 node_modules/
 
+# Firebase emulator seed data
+seed/
+
 # Expo
 .expo/
 dist/
