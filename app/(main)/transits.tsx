@@ -11,9 +11,9 @@ import { moderateScale, scale as staticScale, verticalScale } from '@/src/utils/
 import { C, R, S } from '@/src/constants/theme';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useUser } from '@/src/context/user-context';
+import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { usePullToRefresh } from '@/src/hooks/use-pull-to-refresh';
 import { useResponsive } from '@/src/hooks/use-responsive';
-import { updateUserDoc } from '@/src/services/user.service';
 import type { TransitHouseReading } from '@/src/types/transit-reading.types';
 
 import LoadingScreen from '../(util)/loading-screen';
@@ -110,7 +110,8 @@ export default function TransitsScreen() {
     refresh,
   } = useHoroscope();
 
-  const { authUser, userDoc, refresh: refreshUser } = useUser();
+  const { authUser, userDoc } = useUser();
+  const { isPro, presentPaywall } = useRevenueCat();
 
   const insets = useSafeAreaInsets();
   const { scale } = useResponsive();
@@ -119,7 +120,7 @@ export default function TransitsScreen() {
 
   const [unlocking, setUnlocking] = useState(false);
 
-  const isPremium = userDoc?.isPremiumMember ?? false;
+  const isPremium = isPro;
 
   // Determine which houses to lock for free users:
   // unlock the 3 houses with the most transiting planets, lock the rest.
@@ -135,11 +136,9 @@ export default function TransitsScreen() {
   }, [isPremium, transitReading?.houses]);
 
   const handleUnlock = async () => {
-    if (!authUser?.uid) return;
     setUnlocking(true);
     try {
-      await updateUserDoc(authUser.uid, { isPremiumMember: true });
-      await refreshUser();
+      await presentPaywall();
     } finally {
       setUnlocking(false);
     }

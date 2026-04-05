@@ -26,6 +26,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { db, functions } from "../../firebaseConfig";
 import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
 import { useUser } from "@/src/context/user-context";
+import { useRevenueCat } from "@/src/context/revenuecat-context";
 import HeaderNav from "@/src/components/shared/header-nav";
 import DelalunaContainer from "@/src/components/shared/delaluna-container.component";
 import { ThemedView } from "@/src/components/themed-view";
@@ -86,7 +87,8 @@ const FREE_CONNECTION_LIMIT = 3;
 const PREMIUM_CONNECTION_LIMIT = 10;
 
 export default function ConnectionsScreen() {
-  const { authUser, userDoc } = useUser();
+  const { authUser } = useUser();
+  const { isPro } = useRevenueCat();
   const insets = useSafeAreaInsets();
 
   const [connections, setConnections] = useState<any[]>([]);
@@ -101,7 +103,7 @@ export default function ConnectionsScreen() {
   };
 
   const goToNewConnectionScreen = () => {
-    const isPremium = userDoc?.isPremiumMember ?? false;
+    const isPremium = isPro;
     const limit = isPremium ? PREMIUM_CONNECTION_LIMIT : FREE_CONNECTION_LIMIT;
     if (connections.length >= limit) {
       Alert.alert(
