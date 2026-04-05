@@ -18,17 +18,28 @@ export type SynastryPayload = {
   nameA:  string;
 };
 
+export type SynastryAnalysisPayload = {
+  chartA: Awaited<ReturnType<typeof calculateNatalChart>>;
+  chartB: Awaited<ReturnType<typeof calculateNatalChart>>;
+  nameA:  string;
+  nameB:  string;
+};
+
 const store: {
-  results:  ResultsPayload | null;
-  synastry: SynastryPayload | null;
+  results:           ResultsPayload | null;
+  synastry:          SynastryPayload | null;
+  synastryAnalysis:  SynastryAnalysisPayload | null;
 } = {
-  results:  null,
-  synastry: null,
+  results:          null,
+  synastry:         null,
+  synastryAnalysis: null,
 };
 
 export const TestingStore = {
-  setResults:  (p: ResultsPayload)  => { store.results  = p; },
-  getResults:  ()                   => store.results,
-  setSynastry: (p: SynastryPayload) => { store.synastry = p; },
-  getSynastry: ()                   => store.synastry,
+  setResults:           (p: ResultsPayload)           => { store.results          = p; },
+  getResults:           ()                            => store.results,
+  setSynastry:          (p: SynastryPayload)          => { store.synastry         = p; },
+  getSynastry:          ()                            => store.synastry,
+  setSynastryAnalysis:  (p: SynastryAnalysisPayload)  => { store.synastryAnalysis = p; },
+  getSynastryAnalysis:  ()                            => store.synastryAnalysis,
 };

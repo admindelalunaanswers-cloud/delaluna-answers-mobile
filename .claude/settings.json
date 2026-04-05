@@ -5,7 +5,9 @@
       "Bash(npx svgo --version)",
       "Bash(grep -l \"\\\\.svg\" /Users/naicode/Developer/GitHub/delaluna-answers-mobile/src/assets/buttons/*.tsx)",
       "Bash(node -e \"require\\(''@react-native-async-storage/async-storage''\\)\")",
-      "Bash(node -e \"const x = require\\(''@firebase/auth''\\); console.log\\(Object.keys\\(x\\).filter\\(k=>k.includes\\(''Persist''\\)||k.includes\\(''Native''\\)\\).join\\(''\\\\n''\\)\\)\")"
+      "Bash(node -e \"const x = require\\(''@firebase/auth''\\); console.log\\(Object.keys\\(x\\).filter\\(k=>k.includes\\(''Persist''\\)||k.includes\\(''Native''\\)\\).join\\(''\\\\n''\\)\\)\")",
+      "Bash(ls /Users/naicode/Developer/GitHub/delaluna-answers-mobile/app/\\\\\\(main\\\\\\)/)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

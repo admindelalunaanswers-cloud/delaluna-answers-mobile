@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -21,7 +21,7 @@ import { ThemedView } from '@/src/components/themed-view';
 import { HOME_STRINGS } from '@/src/constants/strings';
 import type { DailyCardPack } from '@/src/schemas/dailyCardPack.schema';
 import { calculateTransits } from '@/src/services/astroEngine';
-import { fetchHoroscope, getTodayDateId } from '@/src/services/horoscope.service';
+import { fetchHoroscope, getTodayDateId, requestHoroscope, subscribeToHoroscope } from '@/src/services/horoscope.service';
 import { scheduleBreakdownReadyNotification } from '@/src/services/notifications.service';
 import { getTarotCardDraw } from '@/src/services/tarot-card.service';
 import { ChatStore } from '@/src/stores/chat-store';
@@ -34,12 +34,17 @@ import { useResponsive } from '@/src/hooks/use-responsive';
 
 const NAV_BAR_HEIGHT = 44;
 
+const RETROGRADE_PLANET_NAMES = new Set([
+  'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto',
+]);
+
 export default function HomeScreen() {
   const { authUser, userDoc, refresh: refreshUser } = useUser();
   const {
     chartDetails,
     horoscope,
     transitMoon,
+    transitRetrogrades,
     breakdown,
     refresh,
   } = useHoroscope();
@@ -145,9 +150,49 @@ export default function HomeScreen() {
   const { scale } = useResponsive();
   const headerHeight = insets.top + scale(NAV_BAR_HEIGHT);
 
-  // ─── Pull-to-refresh ────────────────────────────────────────────────────────
+  // ─── Pull-to-refresh: re-send horoscope for selected date ───────────────────
 
-  const { refreshControl } = usePullToRefresh(refresh);
+  const resendUnsubRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => () => { resendUnsubRef.current?.(); }, []);
+
+  const handleHoroscopeResend = useCallback(async () => {
+    if (!authUser?.uid || !chartDetails) { await refresh(); return; }
+    const pronouns = userDoc?.pronouns ?? 'they/them';
+
+    let moon: { sign: string; phase: string; illumination: number; degree: number };
+    let retrogrades: string[];
+
+    if (selectedDate === todayDateId) {
+      moon = transitMoon ?? chartDetails.moon;
+      retrogrades = transitRetrogrades;
+    } else {
+      const [y, mo, d] = selectedDate.split('-').map(Number);
+      const t = await calculateTransits(
+        new Date(y, mo - 1, d, 12, 0, 0),
+        userDoc?.birthLat ?? 0,
+        userDoc?.birthLon ?? 0,
+      ).catch(() => null);
+      moon = t?.moon ?? chartDetails.moon;
+      retrogrades = t
+        ? t.planets.filter(p => p.isRetrograde && RETROGRADE_PLANET_NAMES.has(p.name)).map(p => p.name)
+        : [];
+    }
+
+    await requestHoroscope(authUser.uid, selectedDate, chartDetails, moon, retrogrades, pronouns);
+
+    setHoroscopeByDate(prev => { const next = { ...prev }; delete next[selectedDate]; return next; });
+
+    resendUnsubRef.current?.();
+    const capturedDate = selectedDate;
+    resendUnsubRef.current = subscribeToHoroscope(authUser.uid, capturedDate, (result) => {
+      setHoroscopeByDate(prev => ({ ...prev, [capturedDate]: result }));
+      resendUnsubRef.current?.();
+      resendUnsubRef.current = null;
+    });
+  }, [authUser?.uid, chartDetails, userDoc?.pronouns, userDoc?.birthLat, userDoc?.birthLon, selectedDate, todayDateId, transitMoon, transitRetrogrades, refresh]);
+
+  const { refreshControl } = usePullToRefresh(handleHoroscopeResend);
 
   // ─── Derived values ─────────────────────────────────────────────────────────
 

@@ -217,29 +217,47 @@ export async function requestSurroundingHoroscopes(
   pronouns = 'they/them',
 ): Promise<void> {
   const natalChart  = buildNatalChartSummary(chart);
-  const tarotDraw   = await getTarotCardDraw(uid, 3).catch(() => null);
   const yesterdayId = offsetDateId(dateId, -1);
   const tomorrowId  = offsetDateId(dateId, +1);
 
-  calculateTransits(dateIdToDate(yesterdayId))
-    .then(t => writeHoroscopeDoc(
-      uid, yesterdayId, natalChart,
-      t.moon,
-      t.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name),
-      tarotDraw?.yesterday.keywordString ?? '',
-      pronouns,
-    ))
-    .catch(console.error);
+  // Check existence before writing — avoids overwriting docs that already have
+  // a completed response (or are pending), which would strip the response and
+  // leave the doc stuck with only a prompt field.
+  const [yesterdaySnap, tomorrowSnap] = await Promise.all([
+    getDoc(doc(db, 'users', uid, 'horoscope', yesterdayId)),
+    getDoc(doc(db, 'users', uid, 'horoscope', tomorrowId)),
+  ]);
 
-  calculateTransits(dateIdToDate(tomorrowId))
-    .then(t => writeHoroscopeDoc(
-      uid, tomorrowId, natalChart,
-      t.moon,
-      t.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name),
-      tarotDraw?.tomorrow.keywordString ?? '',
-      pronouns,
-    ))
-    .catch(console.error);
+  const needsYesterday = !yesterdaySnap.exists();
+  const needsTomorrow  = !tomorrowSnap.exists();
+
+  if (!needsYesterday && !needsTomorrow) return;
+
+  const tarotDraw = await getTarotCardDraw(uid, 3).catch(() => null);
+
+  if (needsYesterday) {
+    calculateTransits(dateIdToDate(yesterdayId))
+      .then(t => writeHoroscopeDoc(
+        uid, yesterdayId, natalChart,
+        t.moon,
+        t.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name),
+        tarotDraw?.yesterday.keywordString ?? '',
+        pronouns,
+      ))
+      .catch(console.error);
+  }
+
+  if (needsTomorrow) {
+    calculateTransits(dateIdToDate(tomorrowId))
+      .then(t => writeHoroscopeDoc(
+        uid, tomorrowId, natalChart,
+        t.moon,
+        t.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name),
+        tarotDraw?.tomorrow.keywordString ?? '',
+        pronouns,
+      ))
+      .catch(console.error);
+  }
 }
 
 /**
