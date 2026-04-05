@@ -29,7 +29,8 @@ import type { ChatMessageDoc } from '@/src/services/chat.service';
 import { ChatStore } from '@/src/stores/chat-store';
 import { HOME_STRINGS } from '@/src/constants/strings';
 
-const FREE_QUESTION_LIMIT = 5;
+const FREE_CHAT_LIMIT = 3;
+const PREMIUM_CHAT_LIMIT = 5;
 const UNLOCK_BONUS = 5;
 
 const SUGGESTIONS = [
@@ -131,7 +132,10 @@ export default function ChatScreen() {
   const [chatUnlocked, setChatUnlocked] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
-  const questionLimit = FREE_QUESTION_LIMIT + (chatUnlocked ? UNLOCK_BONUS : 0);
+  const isPremium = userDoc?.isPremiumMember ?? false;
+  const questionLimit = isPremium
+    ? PREMIUM_CHAT_LIMIT
+    : FREE_CHAT_LIMIT + (chatUnlocked ? UNLOCK_BONUS : 0);
   const questionsUsed = messages.length;
   const questionsRemaining = Math.max(0, questionLimit - questionsUsed);
   const chatLocked = questionsUsed >= questionLimit;
@@ -311,13 +315,23 @@ export default function ChatScreen() {
 
           {chatLocked ? (
             <View style={[styles.paygateContainer, { paddingBottom: insets.bottom}]}>
-              <PremiumUnlock
-                title="You've used all your free questions"
-                message={chatUnlocked
-                  ? 'Upgrade to Premium for unlimited cosmic guidance.'
-                  : 'Unlock 5 more questions to keep the conversation going.'}
-                onUnlock={() => setChatUnlocked(true)}
-              />
+              {isPremium ? (
+                <PremiumUnlock
+                  title="Daily limit reached"
+                  message={`Premium members get ${PREMIUM_CHAT_LIMIT} questions per day. Come back tomorrow!`}
+                />
+              ) : chatUnlocked ? (
+                <PremiumUnlock
+                  title="You've used all your questions"
+                  message="Upgrade to Premium for 5 daily questions and more cosmic guidance."
+                />
+              ) : (
+                <PremiumUnlock
+                  title="You've used your 3 free questions"
+                  message={`Unlock ${UNLOCK_BONUS} more questions to keep the conversation going.`}
+                  onUnlock={() => setChatUnlocked(true)}
+                />
+              )}
             </View>
           ) : (
             <>
@@ -351,7 +365,7 @@ export default function ChatScreen() {
               {questionsUsed > 0 && (
                 <View style={styles.counterBar}>
                   <Text style={styles.counterText}>
-                    {questionsRemaining} {chatUnlocked ? '' : 'free '}question{questionsRemaining !== 1 ? 's' : ''} remaining
+                    {questionsRemaining} question{questionsRemaining !== 1 ? 's' : ''} remaining today
                   </Text>
                 </View>
               )}
