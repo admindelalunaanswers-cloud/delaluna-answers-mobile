@@ -11,6 +11,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "lint": "expo lint",
+    "build:dev-sim": "eas build --profile development-simulator --platform all",
+    "build:dev-device": "eas build --profile development-device --platform all",
     "build:preview": "eas build --profile preview-device --platform all",
     "update:preview": "eas update --channel preview-device --environment preview --message"
   },
