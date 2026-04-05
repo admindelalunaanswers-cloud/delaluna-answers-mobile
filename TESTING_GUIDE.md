@@ -148,7 +148,14 @@ The home screen shows daily horoscope content in scrollable sections:
 - [ ] **Lucky Numbers** - A list of numbers
 - [ ] **Warning** - Warning text for the day
 
-### 4g. Pull to Refresh
+### 4g. Ad Banners (Free Users Only)
+
+- [ ] A premium upgrade banner appears at the bottom of the home screen for free users
+- [ ] The banner randomly shows as either a compact or full-width variant
+- [ ] Tapping the "Upgrade" button opens the RevenueCat paywall
+- [ ] The banner does not appear for premium users
+
+### 4h. Pull to Refresh
 
 - [ ] Pull down on the home screen to refresh the daily content
 
@@ -344,12 +351,29 @@ There are 12 house cards, one for each astrological house.
   - Place of birth
   - Pronouns
 
-### 8b. Activate / Deactivate Premium
+### 8b. Subscription Management (RevenueCat)
 
-- [ ] The profile screen clearly shows your current plan status
-- [ ] If on Free plan, the badge reads "FREE PLAN" with a lock icon
-- [ ] If on Premium, the badge reads "PREMIUM MEMBER" with a gold sparkle
-- [ ] Throughout the app, premium-locked features prompt an upgrade when tapped
+**Free users:**
+- [ ] The badge reads "FREE PLAN" with a lock icon
+- [ ] An "Upgrade to Premium" button is displayed
+- [ ] Tapping "Upgrade to Premium" opens the RevenueCat paywall (Branded Paywall)
+- [ ] The paywall shows available plans: Monthly, Yearly, and Consumable
+- [ ] Completing a purchase returns to the profile with "PREMIUM MEMBER" badge
+- [ ] A "Restore Purchases" link appears below the upgrade button
+- [ ] Tapping "Restore Purchases" checks for prior purchases and restores entitlements
+- [ ] If no purchases found, an alert says "No Purchases Found"
+
+**Premium users:**
+- [ ] The badge reads "PREMIUM MEMBER" with a gold sparkle
+- [ ] A "Manage Subscription" button replaces the upgrade button
+- [ ] Tapping "Manage Subscription" opens the RevenueCat Customer Center
+- [ ] The Customer Center allows: viewing current plan, cancellation, plan changes, refund requests
+- [ ] After managing subscription, the profile refreshes to reflect any changes
+
+**Paywall (throughout the app):**
+- [ ] Tapping any premium-locked feature (locked houses, date switcher, etc.) opens the paywall
+- [ ] Dismissing the paywall returns to the previous screen without changes
+- [ ] Purchasing or restoring from the paywall immediately unlocks premium content
 
 ### 8c. Edit Profile
 
@@ -423,6 +447,9 @@ Chat Tab
   |-- Retry .............. Re-send stuck messages
 
 Profile
+  |-- Upgrade to Premium . Opens RevenueCat paywall (free users)
+  |-- Manage Subscription  Opens RevenueCat Customer Center (premium users)
+  |-- Restore Purchases .. Restores prior purchases (free users)
   |-- Edit Profile ....... Update name, email, birth details
   |-- Theme .............. Choose from 7 visual themes
   |-- Notifications ...... Enable push notifications
@@ -432,6 +459,10 @@ Profile
 ---
 
 ## Free vs Premium Feature Comparison
+
+Premium is gated by the **"Delaluna Answers Pro"** entitlement via RevenueCat.
+
+**Available plans:** Monthly, Yearly, Consumable
 
 | Feature | Free | Premium |
 |---------|------|---------|
@@ -443,3 +474,5 @@ Profile
 | Transit Houses | 3 most active houses | All 12 houses |
 | Chat Questions | 3/day (+5 bonus unlock) | 5/day |
 | Connections | Up to 3 | Up to 10 |
+| Ad Banners | Shown on home screen | Hidden |
+| Subscription Management | Upgrade / Restore | Customer Center (cancel, change plan, refund) |
