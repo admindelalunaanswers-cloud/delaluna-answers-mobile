@@ -14,7 +14,8 @@ import { ThemedView } from '@/src/components/themed-view';
 import HeaderNav from '@/src/components/shared/header-nav';
 import { useUser } from '@/src/context/user-context';
 import { useHoroscope } from '@/src/context/horoscope-context';
-import { updateUserDoc, signOut } from '@/src/services/user.service';
+import { useRevenueCat } from '@/src/context/revenuecat-context';
+import { signOut } from '@/src/services/user.service';
 import { registerForPushNotifications } from '@/src/services/notifications.service';
 import { getProfileImageSource } from '@/app/(settings)/select-avatar';
 import { auth } from '@/firebaseConfig';
@@ -63,6 +64,7 @@ const NAV_BAR_HEIGHT = 44;
 export default function ProfileScreen() {
   const { authUser, userDoc, refresh } = useUser();
   const { refresh: refreshHoroscope } = useHoroscope();
+  const { isPro, presentPaywall, presentCustomerCenter, restorePurchases } = useRevenueCat();
   const insets = useSafeAreaInsets();
   const ud = userDoc as any;
 
@@ -70,7 +72,7 @@ export default function ProfileScreen() {
   const [notifPermission, setNotifPermission] = useState<string | null>(null);
   const [enablingNotifs, setEnablingNotifs] = useState(false);
 
-  const isPremium = ud?.isPremiumMember ?? false;
+  const isPremium = isPro;
   const profileImageSource = getProfileImageSource(ud?.profileImageId) ?? getProfileImageSource('profile8')!;
 
   // Check notification permission on mount
@@ -94,17 +96,49 @@ export default function ProfileScreen() {
     }
   };
 
-  // ── Premium toggle ────────────────────────────────────────────────────────────
+  // ── Subscription actions ────────���──────────────────────────────────────────────
 
-  const togglePremium = async () => {
-    if (!authUser?.uid) return;
+  const handleUpgrade = async () => {
     setBusy(true);
     try {
-      await updateUserDoc(authUser.uid, { isPremiumMember: !isPremium });
+      const purchased = await presentPaywall();
+      if (purchased) {
+        await refresh();
+        await refreshHoroscope();
+      }
+    } catch {
+      Alert.alert('Error', 'Could not complete purchase.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleManageSubscription = async () => {
+    setBusy(true);
+    try {
+      await presentCustomerCenter();
       await refresh();
       await refreshHoroscope();
     } catch {
-      Alert.alert('Error', 'Could not update membership status.');
+      Alert.alert('Error', 'Could not open subscription management.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    setBusy(true);
+    try {
+      const restored = await restorePurchases();
+      if (restored) {
+        Alert.alert('Restored', 'Your premium access has been restored.');
+        await refresh();
+        await refreshHoroscope();
+      } else {
+        Alert.alert('No Purchases Found', 'No previous purchases were found to restore.');
+      }
+    } catch {
+      Alert.alert('Error', 'Could not restore purchases.');
     } finally {
       setBusy(false);
     }
@@ -295,21 +329,41 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         )}
 
-        {/* ── Premium toggle ── */}
-        <TouchableOpacity
-          style={[ss.button, isPremium ? ss.buttonDowngrade : ss.buttonUpgrade, busy && ss.buttonDisabled]}
-          onPress={togglePremium}
-          disabled={busy}
-          activeOpacity={0.8}
-        >
-          <Text style={ss.buttonText}>
-            {busy ? 'Updating...' : isPremium ? 'Cancel Subscription' : 'Activate Premium'}
-          </Text>
-        </TouchableOpacity>
+        {/* ── Subscription actions ── */}
+        {isPremium ? (
+          <TouchableOpacity
+            style={[ss.button, ss.buttonDowngrade, busy && ss.buttonDisabled]}
+            onPress={handleManageSubscription}
+            disabled={busy}
+            activeOpacity={0.8}
+          >
+            <Text style={ss.buttonText}>
+              {busy ? 'Loading...' : 'Manage Subscription'}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <>
+            <TouchableOpacity
+              style={[ss.button, ss.buttonUpgrade, busy && ss.buttonDisabled]}
+              onPress={handleUpgrade}
+              disabled={busy}
+              activeOpacity={0.8}
+            >
+              <Text style={ss.buttonText}>
+                {busy ? 'Loading...' : 'Upgrade to Premium'}
+              </Text>
+            </TouchableOpacity>
 
-        <Text style={ss.hint}>
-          After toggling, pull to refresh on content screens to load the updated tier.
-        </Text>
+            <TouchableOpacity
+              style={[ss.restoreButton, busy && ss.buttonDisabled]}
+              onPress={handleRestore}
+              disabled={busy}
+              activeOpacity={0.8}
+            >
+              <Text style={ss.restoreButtonText}>Restore Purchases</Text>
+            </TouchableOpacity>
+          </>
+        )}
 
         {/* ── Settings rows: reset password, log out, delete ── */}
         <View style={ss.settingsCard}>
@@ -406,7 +460,9 @@ const ss = StyleSheet.create({
   buttonDowngrade: { backgroundColor: 'rgba(255,100,100,0.12)', borderWidth: 1, borderColor: 'rgba(255,100,100,0.35)' },
   buttonDisabled:  { opacity: 0.5 },
   buttonText:      { color: '#fff', fontSize: moderateScale(14), fontWeight: '600' },
-  hint:            { color: 'rgba(255,255,255,0.3)', fontSize: moderateScale(11), textAlign: 'center', marginTop: verticalScale(6) },
+  restoreButton:     { marginTop: verticalScale(8) },
+  restoreButtonText: { color: 'rgba(255,255,255,0.45)', fontSize: moderateScale(13), textAlign: 'center', textDecorationLine: 'underline' },
+  hint:              { color: 'rgba(255,255,255,0.3)', fontSize: moderateScale(11), textAlign: 'center', marginTop: verticalScale(6) },
 
   // Settings rows
   settingsCard:    { width: '100%', marginTop: verticalScale(20), borderRadius: scale(16), backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', overflow: 'hidden' },
