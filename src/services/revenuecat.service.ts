@@ -66,6 +66,11 @@ export async function loginUser(
  * Reset to an anonymous RevenueCat user on sign-out.
  */
 export async function logoutUser(): Promise<CustomerInfo> {
+  const isAnonymous = await Purchases.isAnonymous();
+  if (isAnonymous) {
+    console.log('[RevenueCat] logOut skipped — already anonymous');
+    return Purchases.getCustomerInfo();
+  }
   const customerInfo = await Purchases.logOut();
   console.log('[RevenueCat] logOut — reset to anonymous');
   return customerInfo;
