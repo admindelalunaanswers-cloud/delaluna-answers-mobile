@@ -26,9 +26,9 @@ import { scheduleBreakdownReadyNotification } from '@/src/services/notifications
 import { getTarotCardDraw } from '@/src/services/tarot-card.service';
 import { ChatStore } from '@/src/stores/chat-store';
 import type { HoroscopeResult } from '@/src/types/horoscope.types';
-import { updateUserDoc } from '@/src/services/user.service';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useUser } from '@/src/context/user-context';
+import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { usePullToRefresh } from '@/src/hooks/use-pull-to-refresh';
 import { useResponsive } from '@/src/hooks/use-responsive';
 import { verticalScale } from '@/src/utils/responsive';
@@ -40,7 +40,7 @@ const RETROGRADE_PLANET_NAMES = new Set([
 ]);
 
 export default function HomeScreen() {
-  const { authUser, userDoc, refresh: refreshUser } = useUser();
+  const { authUser, userDoc } = useUser();
   const {
     chartDetails,
     horoscope,
@@ -49,6 +49,7 @@ export default function HomeScreen() {
     breakdown,
     refresh,
   } = useHoroscope();
+  const { isPro, presentPaywall } = useRevenueCat();
 
   const breakdownNotifiedRef = useRef(false);
 
@@ -208,13 +209,11 @@ export default function HomeScreen() {
   const dateSwitcherDates = Object.keys(cardDraw).sort();
 
   const [showFullBanner] = useState(() => Math.random() < 0.5);
-  const isPremium = !!userDoc?.isPremiumMember;
+  const isPremium = isPro;
   const isPaygated = selectedDate !== todayDateId && !isPremium;
 
   const handleUnlock = async () => {
-    if (!authUser?.uid) return;
-    await updateUserDoc(authUser.uid, { isPremiumMember: true });
-    await refreshUser();
+    await presentPaywall();
   };
 
   // ─── Render ─────────────────────────────────────────────────────────────────
@@ -334,6 +333,7 @@ export default function HomeScreen() {
               title="Unlock Your Full Birth Chart"
               subtitle="Premium readings, ad-free."
               ctaLabel="Upgrade"
+              onPress={handleUnlock}
             />
           ) : (
             <AdBanner
@@ -341,6 +341,7 @@ export default function HomeScreen() {
               title="Unlock Your Full Birth Chart"
               subtitle="Premium readings, ad-free."
               ctaLabel="Upgrade"
+              onPress={handleUnlock}
             />
           )
         )}
