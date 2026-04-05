@@ -13,6 +13,7 @@ import { StatusBar } from 'expo-status-bar';
 import ThemeProvider from '@/src/context/theme-context';
 import { HoroscopeProvider, useHoroscope } from '@/src/context/horoscope-context';
 import { UserProvider, useUser } from '@/src/context/user-context';
+import { RevenueCatProvider } from '@/src/context/revenuecat-context';
 import { useColorScheme } from '@/src/hooks/use-color-scheme';
 import { useTheme } from '@/src/hooks/use-theme';
 import LoadingScreen from './(util)/loading-screen';
@@ -129,11 +130,13 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <UserProvider>
-          <ThemeProvider>
-            <HoroscopeProvider>
-              <AuthGate />
-            </HoroscopeProvider>
-          </ThemeProvider>
+          <RevenueCatProvider>
+            <ThemeProvider>
+              <HoroscopeProvider>
+                <AuthGate />
+              </HoroscopeProvider>
+            </ThemeProvider>
+          </RevenueCatProvider>
         </UserProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
