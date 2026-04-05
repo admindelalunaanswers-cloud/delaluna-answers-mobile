@@ -23,6 +23,7 @@ import { ThemedView } from '@/src/components/themed-view';
 import { C, R, S } from '@/src/constants/theme';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useUser } from '@/src/context/user-context';
+import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { useResponsive } from '@/src/hooks/use-responsive';
 import { buildHistory, clearChatHistory, retryChatMessage, sendChatMessage, subscribeToChatHistory } from '@/src/services/chat.service';
 import type { ChatMessageDoc } from '@/src/services/chat.service';
@@ -121,6 +122,7 @@ function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: C
 export default function ChatScreen() {
   const { authUser, userDoc } = useUser();
   const { chartDetails } = useHoroscope();
+  const { isPro } = useRevenueCat();
   const insets = useSafeAreaInsets();
   const { scale } = useResponsive();
   const headerHeight = insets.top + scale(44);
@@ -132,7 +134,7 @@ export default function ChatScreen() {
   const [chatUnlocked, setChatUnlocked] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
-  const isPremium = userDoc?.isPremiumMember ?? false;
+  const isPremium = isPro;
   const questionLimit = isPremium
     ? PREMIUM_CHAT_LIMIT
     : FREE_CHAT_LIMIT + (chatUnlocked ? UNLOCK_BONUS : 0);
