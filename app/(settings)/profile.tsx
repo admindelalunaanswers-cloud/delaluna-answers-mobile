@@ -209,7 +209,7 @@ export default function ProfileScreen() {
             onPress={() => router.push('/(settings)/select-avatar')}
             activeOpacity={0.8}
           >
-            <Ionicons name="pencil-outline" size={scale(20)} color="#6FFFE9" />
+            <Ionicons name="pencil" size={scale(22)} color="#6FFFE9" />
           </TouchableOpacity>
         </View>
 
@@ -420,7 +420,15 @@ const ss = StyleSheet.create({
     overflow: 'hidden',
   },
   avatarImage: { width: '100%', height: '100%' },
-  pencilBadge: { position: 'absolute', bottom: scale(0), right: scale(0), padding: scale(4) },
+  pencilBadge: {
+    position: 'absolute',
+    bottom: scale(-2),
+    right: scale(-2),
+    padding: scale(4),
+    textShadowColor: '#000',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
 
   // Name / email / badge
   name:             { color: '#fff', fontSize: moderateScale(20), fontWeight: '700', marginTop: verticalScale(8) },
