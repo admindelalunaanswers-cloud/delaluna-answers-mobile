@@ -4,14 +4,10 @@ export const COMPATIBILITY_PROMPT_TEMPLATE = `Generate a compatibility report be
 The depth and detail of this report is determined by the user's
 account tier.
 
-- "teaser" should make the user want the full premium breakdown
 - Include ALL fields
-- "summary" MUST BE 5-7 sentences. No shorter or longer.
 - "scores" should include ALL 16 fields
-- Include "loveLanguage", "conflictStyle", "longevity"
-- Include "advice", "warning"
-- Do NOT include "teaser"
-- Nothing generic. If it could apply to any couple, rewrite it. 
+- Include "advice"
+- Nothing generic. If it could apply to any couple, rewrite it.
 - Personalize it to this specific pairing. Use the charts as the foundation, but blend in the relationship type and vibe to make it unique.
 
 ====================================================
@@ -73,21 +69,6 @@ Avoid:
 FIELD RULES
 ====================================================
 
-TITLE:
-- "title" : short and catchy.
-  Format like "Fire Meets Water: Leo × Pisces" using the user's and partner's Sun signs.
-
-SUMMARY:
-- "summary" :
-  - MUST BE 5-7 sentences. Deeper read on the dynamic
-    between both charts. 
-  - Blend astrological insight with
-    the relationship's vibe and energy.
-
-OVERALL COMPATIBILITY:
-- "overallCompatibility" : single score 0-100 reflecting
-  general harmony. Must be a number, not a string.
-
 SCORES:
 - "scores" : object with numeric fields (0-100).
   - All 16 fields must have values:
@@ -108,30 +89,9 @@ SCORES:
     - "accountability"
     - "hostility"
 
-SUMMARY READS:
-- "loveLanguage" MUST BE 5-7 sentences. How these two express and
-  receive love based on their Venus and Moon placements. What works
-  and what causes disconnect.
-- "conflictStyle" MUST BE 5-7 sentences. How these two fight based
-  on their Mars and Mercury placements. Who escalates, who shuts down,
-  and what they both need to hear.
-- "longevity" MUST BE 5-7 sentences. The long-term outlook for this
-  pairing based on Saturn aspects, North Node alignment, and overall
-  chart compatibility. Be honest.
-
-TEASER (free only):
-- "teaser" MUST BE 2-3 sentences. No shorter or longer.
-  Tease the locked scores and reads. Should feel like a cliffhanger.
-
-OTHER:
-- "closing" : empowering one-liner. Not a cliché.
-  Should land like a quote graphic on Instagram.
+ADVICE:
 - "advice": MUST BE 3-5 sentences. Personalized to the
   pairing. Can not reference astrological placements.
-- "warning": MUST BE 2-3 sentences. Based on challenging
-  dynamics between the two charts.
-- "release" : a short phrase that stems from spirituality,
-  recalibration and comforting words.
 
 ====================================================
 OUTPUT RULES
@@ -147,9 +107,6 @@ OUTPUT FORMAT
 ====================================================
 
 {
-  "title": "",
-  "summary": "",
-  "overallCompatibility": 0,
   "scores": {
     "interest": 0,
     "communication": 0,
@@ -168,12 +125,7 @@ OUTPUT FORMAT
     "accountability": 0,
     "hostility": 0
   },
-  "loveLanguage": "",
-  "conflictStyle": "",
-  "longevity": "",
-  "closing": "",
-  "advice": "",
-  "warning": "",
+  "advice": ""
 }
 `;
 

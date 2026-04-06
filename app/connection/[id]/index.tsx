@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
-  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -26,6 +25,7 @@ import HeaderNav from "@/src/components/shared/header-nav";
 import { COMPATIBILITY_DEFINITIONS } from "@/src/constants/definitions";
 import { calculateNatalChart } from "@/src/services/astroEngine";
 import { TestingStore } from "@/src/stores/testing-store";
+import { ThemedText } from "@/src/components/themed-text";
 
 const NAV_BAR_HEIGHT = 44;
 const BAR_MAX_WIDTH = Dimensions.get("window").width - scale(18) * 2;
@@ -79,15 +79,7 @@ interface CompatibilityScores {
 
 interface CompatibilityReport {
   advice: string;
-  closing: string;
-  conflictStyle: string;
-  longevity: string;
-  loveLanguage: string;
-  overallCompatibility: number | null;
   scores: CompatibilityScores;
-  summary: string;
-  title: string;
-  warning: string; 
 }
 
 interface ConnectionDoc {
@@ -137,12 +129,6 @@ const getBarColor = (value: number) => {
   return "#FF3B3B";
 };
 
-const SIGN_ICONS = {
-  sun: require("@/src/assets/main/sun_icon.png"),
-  moon: require("@/src/assets/main/moon_icon.png"),
-  rising: require("@/src/assets/main/arrow_upward_icon.png"),
-};
-
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function ScoreBar({ value, color, delay }: { value: number; color: string; delay: number }) {
@@ -159,20 +145,6 @@ function ScoreBar({ value, color, delay }: { value: number; color: string; delay
   return (
     <View style={styles.barBackground}>
       <Animated.View style={[styles.barFill, { backgroundColor: color }, animStyle]} />
-    </View>
-  );
-}
-
-function SignRow({ icon, value }: { icon: any; value?: string }) {
-  return (
-    <View style={styles.signRow}>
-      <Image
-        source={icon}
-        style={styles.signIcon}
-        resizeMode="contain"
-        tintColor="rgba(255,255,255,0.6)"
-      />
-      <Text style={styles.signValue} numberOfLines={1}>{value || "—"}</Text>
     </View>
   );
 }
@@ -280,7 +252,6 @@ export default function ConnectionViewScreen() {
   const handleCompareBirthCharts = async () => {
     const fp = connection?.firstPerson;
     const sp = connection?.secondPerson;
-
     if (!fp?.birthday || !sp?.birthday) return;
 
     setComputingSynastry(true);
@@ -364,52 +335,23 @@ export default function ConnectionViewScreen() {
             </Text>
           )}
 
-          {/* Overall score */}
-          {report?.overallCompatibility != null && (
-            <Text style={styles.overallScore}>
-              {Math.round(report.overallCompatibility)}%
-            </Text>
-          )}
+          
 
-          {/* Report title + summary */}
-          {report?.title && <Text style={styles.reportTitle}>{report.title}</Text>}
-          {report?.summary && <Text style={styles.reportSummary}>{report.summary}</Text>}
+          
 
-          {/* Big Three */}
-          {(connection?.firstPerson?.sun || connection?.secondPerson?.sun) && (
-            <View style={styles.bigThreeCard}>
-              <Text style={styles.sectionLabel}>BIG THREE</Text>
-              <View style={styles.signsRow}>
-                <View style={styles.signsCol}>
-                  <Text style={styles.signPersonLabel}>{firstName}</Text>
-                  <SignRow icon={SIGN_ICONS.sun} value={connection?.firstPerson?.sun} />
-                  <SignRow icon={SIGN_ICONS.moon} value={connection?.firstPerson?.moon} />
-                  <SignRow icon={SIGN_ICONS.rising} value={connection?.firstPerson?.rising} />
-                </View>
-                <View style={styles.signsDivider} />
-                <View style={styles.signsCol}>
-                  <Text style={styles.signPersonLabel}>{secondName}</Text>
-                  <SignRow icon={SIGN_ICONS.sun} value={connection?.secondPerson?.sun} />
-                  <SignRow icon={SIGN_ICONS.moon} value={connection?.secondPerson?.moon} />
-                  <SignRow icon={SIGN_ICONS.rising} value={connection?.secondPerson?.rising} />
-                </View>
-              </View>
-              {connection?.firstPerson?.birthday && connection?.secondPerson?.birthday && (
-                <TouchableOpacity
-                  style={styles.compareBirthChartsBtn}
-                  onPress={handleCompareBirthCharts}
-                  activeOpacity={0.75}
-                  disabled={computingSynastry}
-                >
-                  {computingSynastry ? (
-                    <ActivityIndicator size="small" color="#B8A3FF" />
-                  ) : (
-                    <Text style={styles.compareBirthChartsBtnText}>Compare Birth Charts</Text>
-                  )}
-                </TouchableOpacity>
+          {/* Compare Birth Charts */}
+          <TouchableOpacity
+              style={styles.compareBirthChartsBtn}
+              onPress={handleCompareBirthCharts}
+              activeOpacity={0.75}
+              disabled={computingSynastry}
+            >
+              {computingSynastry ? (
+                <ActivityIndicator size="small" color="#B8A3FF" />
+              ) : (
+                <Text style={styles.compareBirthChartsBtnText}>Compare Birth Charts</Text>
               )}
-            </View>
-          )}
+            </TouchableOpacity>
 
           {/* Score bars or pending state */}
           {!report ? (
@@ -422,7 +364,10 @@ export default function ConnectionViewScreen() {
             </View>
           ) : (
             <>
-              <Text style={styles.sectionLabel}>SCORES</Text>
+              <Text style={styles.sectionLabel}>Weekly Forecast</Text>
+              <ThemedText style={styles.reportSummary}>
+                Metrics are based on birth chart placements, aspects and planetary transits. Statistics are updated weekly.
+              </ThemedText>
               {Object.entries(report.scores || {}).map(([keyword, value], index) => {
                 if (typeof value !== "number") return null;
                 const barColor = getBarColor(value);
@@ -451,23 +396,10 @@ export default function ConnectionViewScreen() {
                 );
               })}
               
-              <Text style={styles.sectionLabel}>Advice:</Text>
+              <Text style={styles.sectionLabel}>Weekly Advice</Text>
               <Text style={styles.reportSummary}>{report.advice}</Text>
               
-              <Text style={styles.sectionLabel}>Conflict Style</Text>
-              <Text style={styles.reportSummary}>{report.conflictStyle}</Text>
               
-              <Text style={styles.sectionLabel}>Longevity</Text>
-              <Text style={styles.reportSummary}>{report.longevity}</Text>
-              
-              <Text style={styles.sectionLabel}>Love Language</Text>
-              <Text style={styles.reportSummary}>{report.loveLanguage}</Text>
-              
-              <Text style={styles.sectionLabel}>Warning</Text>
-              <Text style={{ ...styles.reportSummary, color: "#FF6B6B" }}> {report.warning}</Text>
-
-              <Text style={styles.sectionLabel}>Final Thoughts</Text>
-              <Text style={styles.reportSummary}>{report.closing}</Text>
               
             </>
           )}
@@ -533,14 +465,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: verticalScale(20),
   },
-  bigThreeCard: {
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    borderRadius: scale(12),
-    padding: scale(14),
-    marginBottom: verticalScale(20),
-  },
   sectionLabel: {
     color: "#FFFFFF",
     fontSize: moderateScale(15),
@@ -548,43 +472,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     marginBottom: verticalScale(10),
     textAlign: "center",
-  },
-  signsRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-  },
-  signsCol: {
-    flex: 0,
-    minWidth: scale(120),
-    alignItems: "center",
-    gap: verticalScale(6),
-  },
-  signsDivider: {
-    width: 1,
-    backgroundColor: "rgba(255,255,255,0.1)",
-    marginHorizontal: scale(12),
-  },
-  signPersonLabel: {
-    color: "#B8A3FF",
-    fontSize: moderateScale(12),
-    fontWeight: "600",
-    marginBottom: verticalScale(4),
-    textAlign: "center",
-  },
-  signRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: scale(6),
-  },
-  signIcon: {
-    width: scale(16),
-    height: scale(16),
-    flexShrink: 0,
-  },
-  signValue: {
-    color: "rgba(255,255,255,0.8)",
-    fontSize: moderateScale(13),
-    flexShrink: 1,
   },
   pendingCard: {
     alignItems: "center",
@@ -640,23 +527,23 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: verticalScale(24),
   },
-  errorText: {
-    color: "#FF6B6B",
-    fontSize: moderateScale(14),
-    textAlign: "center",
-  },
   compareBirthChartsBtn: {
     borderWidth: 1,
     borderColor: "rgba(184,163,255,0.4)",
     borderRadius: scale(10),
     paddingVertical: verticalScale(10),
     alignItems: "center",
-    marginTop: verticalScale(14),
+    marginBottom: verticalScale(20),
   },
   compareBirthChartsBtnText: {
     color: "#B8A3FF",
     fontSize: moderateScale(13),
     fontWeight: "600",
     letterSpacing: 0.5,
+  },
+  errorText: {
+    color: "#FF6B6B",
+    fontSize: moderateScale(14),
+    textAlign: "center",
   },
 });

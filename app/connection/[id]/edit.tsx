@@ -40,6 +40,7 @@ import { buildCompatibilityPrompt } from "@/src/prompts/compatibility-prompt";
 import LoadingScreen from "../../(util)/loading-screen";
 
 const NAV_BAR_HEIGHT = 44;
+const MAX_BIRTH_DETAIL_CHANGES = 2;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -567,6 +568,12 @@ export default function EditConnectionScreen() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("Calculating cosmic alignment...");
+  const [changeCount, setChangeCount] = useState(0);
+  const [originalSnapshot, setOriginalSnapshot] = useState<{
+    first: PersonBirthData;
+    second: PersonBirthData;
+    relationshipType: string | null;
+  } | null>(null);
 
   const LOADING_SAYINGS = [
     "Calculating cosmic alignment...",
@@ -599,7 +606,7 @@ export default function EditConnectionScreen() {
   });
   const [relationshipType, setRelationshipType] = useState<string | null>(null);
 
-  // Load existing connection data to pre-populate names/pronouns
+  // Load existing connection data to pre-populate all fields
   useEffect(() => {
     if (!authUser?.uid || !connectionId) return;
     const ref = doc(db, "users", authUser.uid, "connections", connectionId);
@@ -610,19 +617,34 @@ export default function EditConnectionScreen() {
         return;
       }
       const data = snap.data();
-      setFirstPerson((prev) => ({
-        ...prev,
-        "First Name": data.firstPerson?.firstName ?? "",
-        "Last Name": data.firstPerson?.lastName ?? "",
-        Pronouns: data.firstPerson?.pronouns ?? "",
-      }));
-      setSecondPerson((prev) => ({
-        ...prev,
-        "First Name": data.secondPerson?.firstName ?? "",
-        "Last Name": data.secondPerson?.lastName ?? "",
-        Pronouns: data.secondPerson?.pronouns ?? "",
-      }));
-      setRelationshipType(data.relationshipType ?? null);
+
+      const hydratePerson = (p: any): PersonBirthData => ({
+        "First Name": p?.firstName ?? "",
+        "Last Name": p?.lastName ?? "",
+        Pronouns: p?.pronouns ?? "",
+        Birthday: p?.birthday ?? "",
+        "Place of Birth": p?.placeOfBirth ?? "",
+        "Time of Birth": p?.timeOfBirth ?? "",
+        birthLat: typeof p?.birthLat === "number" ? p.birthLat : undefined,
+        birthLon: typeof p?.birthLon === "number" ? p.birthLon : undefined,
+        birthTimezone: typeof p?.birthTimezone === "number" ? p.birthTimezone : undefined,
+        isBirthTimeUnknown: !!p?.isBirthTimeUnknown,
+        isPlaceOfBirthUnknown: !!p?.isPlaceOfBirthUnknown,
+      });
+
+      const hydratedFirst = hydratePerson(data.firstPerson);
+      const hydratedSecond = hydratePerson(data.secondPerson);
+      const hydratedRelationship = data.relationshipType ?? null;
+
+      setFirstPerson(hydratedFirst);
+      setSecondPerson(hydratedSecond);
+      setRelationshipType(hydratedRelationship);
+      setChangeCount(typeof data.birthDetailsChangeCount === "number" ? data.birthDetailsChangeCount : 0);
+      setOriginalSnapshot({
+        first: hydratedFirst,
+        second: hydratedSecond,
+        relationshipType: hydratedRelationship,
+      });
       setInitialLoading(false);
     }).catch(() => {
       Alert.alert("Error", "Failed to load connection.");
@@ -717,12 +739,34 @@ export default function EditConnectionScreen() {
     return true;
   };
 
+  const birthDetailsChanged = (() => {
+    if (!originalSnapshot) return false;
+    const fields: (keyof PersonBirthData)[] = [
+      "Birthday", "Time of Birth", "Place of Birth",
+      "birthLat", "birthLon", "birthTimezone",
+      "isBirthTimeUnknown", "isPlaceOfBirthUnknown",
+    ] as any;
+    const diff = (a: PersonBirthData, b: PersonBirthData) =>
+      fields.some((f) => (a[f] ?? "") !== (b[f] ?? ""));
+    return diff(firstPerson, originalSnapshot.first) || diff(secondPerson, originalSnapshot.second);
+  })();
+
+  const remainingChanges = Math.max(0, MAX_BIRTH_DETAIL_CHANGES - changeCount);
+
   const handleSave = async () => {
     dismissAllSuggestions();
     if (!validatePerson(firstPerson, "First Person")) return;
     if (!validatePerson(secondPerson, "Second Person")) return;
     if (!relationshipType) {
       Alert.alert("Missing Relationship Type", "Please select a relationship type.");
+      return;
+    }
+
+    if (birthDetailsChanged && changeCount >= MAX_BIRTH_DETAIL_CHANGES) {
+      Alert.alert(
+        "Change limit reached",
+        `Connection birth details can only be updated ${MAX_BIRTH_DETAIL_CHANGES} times. Please contact support if you need further changes.`,
+      );
       return;
     }
 
@@ -790,6 +834,8 @@ export default function EditConnectionScreen() {
         relationshipType,
       );
 
+      const nextChangeCount = birthDetailsChanged ? changeCount + 1 : changeCount;
+
       const createConnectionFn = httpsCallable(functions, "createConnection");
       const result = await createConnectionFn({
         userId: authUser!.uid,
@@ -798,6 +844,7 @@ export default function EditConnectionScreen() {
         firstPerson: enrichedFirst,
         secondPerson: enrichedSecond,
         prompt,
+        birthDetailsChangeCount: nextChangeCount,
       }) as { data: { connectionId: string } };
 
       router.replace({ pathname: "/connection/[id]", params: { id: result.data.connectionId } });
@@ -879,6 +926,25 @@ export default function EditConnectionScreen() {
             style={{ backgroundColor: "transparent", flex: 1 }}
             contentContainerStyle={{ paddingTop: verticalScale(5), paddingBottom: verticalScale(10) }}
             keyboardShouldPersistTaps="handled"
+            ListHeaderComponent={
+              <ThemedView style={styles.changesBanner}>
+                <Ionicons
+                  name={remainingChanges === 0 ? "lock-closed-outline" : "information-circle-outline"}
+                  size={moderateScale(14)}
+                  color={remainingChanges === 0 ? "#FF6B6B" : "rgba(111,255,233,0.7)"}
+                />
+                <ThemedText
+                  style={[
+                    styles.changesBannerText,
+                    remainingChanges === 0 && styles.changesBannerTextEmpty,
+                  ]}
+                >
+                  {remainingChanges === 0
+                    ? "No birth detail changes left"
+                    : `${remainingChanges} of ${MAX_BIRTH_DETAIL_CHANGES} birth detail ${remainingChanges === 1 ? "change" : "changes"} remaining`}
+                </ThemedText>
+              </ThemedView>
+            }
             renderItem={({ item, index }) => (
               <ThemedView style={styles.section}>
                 <ThemedView style={styles.userRow}>
@@ -1118,5 +1184,28 @@ const styles = StyleSheet.create({
     color: "rgba(111,255,233,0.7)",
     fontSize: moderateScale(12),
     marginTop: verticalScale(4),
+  },
+  changesBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: scale(6),
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(10),
+    marginHorizontal: scale(15),
+    marginTop: verticalScale(8),
+    borderRadius: scale(10),
+    borderWidth: 1,
+    borderColor: "rgba(111,255,233,0.25)",
+    backgroundColor: "rgba(111,255,233,0.06)",
+  },
+  changesBannerText: {
+    color: "rgba(111,255,233,0.85)",
+    fontSize: moderateScale(12),
+    fontWeight: "600",
+    letterSpacing: 0.3,
+  },
+  changesBannerTextEmpty: {
+    color: "#FF6B6B",
   },
 });
