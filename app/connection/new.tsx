@@ -754,7 +754,7 @@ export default function SingleConnectionCreateScreen() {
     dismissAllSuggestions();
     setLoading(true);
 
-    console.log("Saving connection with data:", { firstPerson, secondPerson, relationshipType });
+    
     try {
       if (!isMe && !validatePerson(firstPerson, "First Person")) { setLoading(false); return; }
       if (!validatePerson(secondPerson, "Second Person")) { setLoading(false); return; }
@@ -797,36 +797,47 @@ export default function SingleConnectionCreateScreen() {
         return { day, month, year, hour, min, lat, lon, tzone };
       };
 
-      console.log("Extracting birth params...", extractBirthParams);
-
       let enrichedFirst: any;
       let userNatalChart: any;
       let firstChart: NatalChart;
       if (isMe) {
+        const bday = userDoc?.birthday.toDate();
+        const bdayStr = bday
+          ? `${bday.getUTCMonth() + 1}/${bday.getUTCDate()}/${bday.getUTCFullYear()}`
+          : "";
         enrichedFirst = {
-          "First Name": userDoc?.firstName ?? "",
-          "Last Name": userDoc?.lastName ?? "",
+          FirstName: userDoc?.firstName ?? "",
+          LastName: userDoc?.lastName ?? "",
           Pronouns: userDoc?.pronouns ?? "",
-          "Sun Sign": chartDetails?.planets.find(p => p.name === 'Sun')?.sign ?? '',
-          "Moon Sign": chartDetails?.planets.find(p => p.name === 'Moon')?.sign ?? '',
-          "Rising Sign": chartDetails?.ascendant.sign ?? '',
+          Sun_Sign: chartDetails?.planets.find(p => p.name === 'Sun')?.sign ?? '',
+          Moon_Sign: chartDetails?.planets.find(p => p.name === 'Moon')?.sign ?? '',
+          Rising_Sign: chartDetails?.ascendant.sign ?? '',
+          Birthday: bdayStr,
+          timeOfBirth: userDoc?.birthTime ?? "",
+          placeOfBirth: userDoc?.birthplace ?? "",
+          birthLat: userDoc?.birthLat ?? null,
+          birthLon: userDoc?.birthLon ?? null,
+          birthTimezone: userDoc?.timezone ?? null,
+          isBirthTimeUnknown: userDoc?.isBirthTimeUnknown ?? false,
+          isPlaceOfBirthUnknown: userDoc?.isBirthPlaceUnknown ?? false,
         };
         userNatalChart = chartDetails ?? null;
+        console.log("Saving connection with data:", { enrichedFirst, userNatalChart });
       } else {
         const firstBirthParams = extractBirthParams(firstPerson);
-        firstChart = await calculateNatalChart({
+        userNatalChart = await calculateNatalChart({
           year: firstBirthParams.year, month: firstBirthParams.month, day: firstBirthParams.day,
           hour: firstBirthParams.hour, minute: firstBirthParams.min,
           lat: firstBirthParams.lat, lon: firstBirthParams.lon, timezone: firstBirthParams.tzone,
         });
-        userNatalChart = firstChart;
         enrichedFirst = {
           ...firstPerson,
-          "Sun Sign": firstChart.planets.find((p: any) => p.name === "Sun")?.sign ?? "",
-          "Moon Sign": firstChart.planets.find((p: any) => p.name === "Moon")?.sign ?? "",
-          "Rising Sign": firstChart.ascendant.sign,
+          "Sun Sign": userNatalChart?.planets.find((p: any) => p.name === "Sun")?.sign ?? "",
+          "Moon Sign": userNatalChart?.planets.find((p: any) => p.name === "Moon")?.sign ?? "",
+          "Rising Sign": userNatalChart?.ascendant.sign,
           userName: `${firstPerson["First Name"]} ${firstPerson["Last Name"]}`,
         };
+         console.log("Saving New First Person connection with data:", { enrichedFirst, userNatalChart });
       }
 
       const secondBirthParams = extractBirthParams(secondPerson);
@@ -841,6 +852,7 @@ export default function SingleConnectionCreateScreen() {
         "Moon Sign": secondChart.planets.find((p: any) => p.name === "Moon")?.sign ?? "",
         "Rising Sign": secondChart.ascendant.sign,
       };
+      console.log("Saving New Second Person connection with data:", { enrichedSecond, secondChart });
 
       const userPronouns = isMe ? (userDoc?.pronouns ?? "") : firstPerson.Pronouns;
       const partnerPronouns = secondPerson.Pronouns;
