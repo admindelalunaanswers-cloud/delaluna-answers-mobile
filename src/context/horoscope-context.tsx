@@ -31,7 +31,6 @@ import {
   subscribeToBreakdown,
   type BreakdownFetchResult,
 } from '@/src/services/natal-chart-breakdown.service';
-import { notifyOnce, scheduleHoroscopeReadyNotification, scheduleTransitReadyNotification } from '@/src/services/notifications.service';
 
 import {
   fetchTransitReading,
@@ -161,7 +160,6 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
       setTransitReadingGenerating(false);
       unsubTransitRef.current?.();
       unsubTransitRef.current = null;
-      notifyOnce(`@delaluna/transit_notified_${uid}_${dateId}`, scheduleTransitReadyNotification);
     });
     unsubTransitRef.current = unsub;
 
@@ -214,7 +212,6 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     if (breakdownFetch.result) setBreakdown(breakdownFetch.result);
     if (transitReadingFetch.result) {
       setTransitReading(transitReadingFetch.result);
-      notifyOnce(`@delaluna/transit_notified_${uid}_${weekDateId}`, scheduleTransitReadyNotification);
     }
 
     setLoading(false);
@@ -227,7 +224,6 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     // Horoscope subscribe / request
     if (result) {
       setHoroscope(result);
-      notifyOnce(`@delaluna/horoscope_notified_${uid}_${dateId}`, scheduleHoroscopeReadyNotification);
       // Horoscope already done — subscribe transit + breakdown, then surrounding days.
       if (chart) {
         subscribeBreakdown(uid, chart, signal, breakdownFetch, pronouns);
@@ -248,8 +244,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
         setHoroscopeGenerating(false);
         unsubHoroscopeRef.current?.();
         unsubHoroscopeRef.current = null;
-        notifyOnce(`@delaluna/horoscope_notified_${uid}_${dateId}`, scheduleHoroscopeReadyNotification);
-        // The Firebase Extension requires natalChart/details to exist before it
+          // The Firebase Extension requires natalChart/details to exist before it
         // can generate the horoscope, so the chart is guaranteed to be written
         // by the time this fires. Re-fetch it so chartDetails (and the 3 signs)
         // are populated on the home screen.
@@ -288,7 +283,6 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
       setHoroscopeGenerating(false);
       unsubHoroscopeRef.current?.();
       unsubHoroscopeRef.current = null;
-      notifyOnce(`@delaluna/horoscope_notified_${uid}_${dateId}`, scheduleHoroscopeReadyNotification);
     });
     unsubHoroscopeRef.current = unsub;
 

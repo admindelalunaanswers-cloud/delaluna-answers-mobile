@@ -177,6 +177,8 @@ interface ExpoPushMessage {
   body: string;
   channelId?: string;
   data?: Record<string, string>;
+  priority?: 'default' | 'normal' | 'high';
+  _contentAvailable?: boolean;
 }
 
 /**
@@ -190,8 +192,8 @@ interface ExpoPushMessage {
 export const clearDailyChatHistory = onSchedule('every day 00:00', async () => {
   const cutoff = admin.firestore.Timestamp.fromMillis(Date.now() - 24 * 60 * 60 * 1000);
 
-  const snap = await db.collectionGroup('chat')
-    .where('createdAt', '<', cutoff)
+  const snap = await db.collectionGroup('updayedChat')
+    .where('createTime', '<', cutoff)
     .get();
 
   if (snap.empty) return;
@@ -227,6 +229,8 @@ export const sendMorningReminder = onSchedule('every day 08:00', async () => {
       body: 'Your horoscope and cards for today are ready.',
       channelId: 'default',
       data: { screen: '/(main)' },
+      priority: 'high',
+      _contentAvailable: true,
     }));
 
   for (let i = 0; i < messages.length; i += PUSH_CHUNK_SIZE) {
@@ -381,6 +385,52 @@ export const createConnection = onCall(async (request) => {
 
   return { connectionId };
 });
+
+// ─── notifyBreakdownReady ────────────────────────────────────────────────────
+
+/**
+ * When the Firebase Extension writes a `response` to the natal chart breakdown
+ * document, send a push notification to the user — works whether the app is
+ * in the foreground, background, or killed.
+ */
+export const notifyBreakdownReady = onDocumentUpdated(
+  'users/{userId}/natalChart/details',
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+
+    // Only fire when a new response appears
+    if (!after?.response) return;
+    if (before?.response === after.response) return;
+
+    const userId = event.params.userId;
+
+    // Look up the user's push token
+    const userSnap = await db.collection('users').doc(userId).get();
+    const token = userSnap.data()?.expoPushToken as string | undefined;
+    if (!token) return;
+
+    await fetch(EXPO_PUSH_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        to: token,
+        sound: 'default',
+        title: 'Your Birth Chart is Ready',
+        body: 'Your natal chart breakdown is complete. Tap to explore your cosmic blueprint.',
+        channelId: 'default',
+        data: { screen: '/(home)/birth-chart-view' },
+        priority: 'high',
+        _contentAvailable: true,
+      }),
+    });
+
+    console.log(`[notifyBreakdownReady] Push sent to user ${userId}`);
+  }
+);
 
 // ─── parseConnectionCompatibility ────────────────────────────────────────────
 
