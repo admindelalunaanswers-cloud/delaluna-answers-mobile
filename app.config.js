@@ -33,6 +33,7 @@ module.exports = {
           icon: "./src/assets/dlla-branded/delaluna_app_icon.png",
           color: "#0d0628",
           sounds: [],
+          enableFCMv1: true,
         },
       ],
       [
@@ -46,6 +47,7 @@ module.exports = {
         },
       ],
       "@react-native-community/datetimepicker",
+      "./plugins/with-adi-registration",
     ],
     experiments: {
       typedRoutes: true,
