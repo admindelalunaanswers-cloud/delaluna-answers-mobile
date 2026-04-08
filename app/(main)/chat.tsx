@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   Animated,
+  AppState,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -26,8 +27,9 @@ import { useUser } from '@/src/context/user-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
 import { useResponsive } from '@/src/hooks/use-responsive';
-import { buildHistory, clearChatHistory, retryChatMessage, sendChatMessage, subscribeToChatHistory } from '@/src/services/chat.service';
-import type { ChatMessageDoc } from '@/src/services/chat.service';
+import { useFocusEffect } from 'expo-router';
+import { buildHistory, deleteChatSession, retryChatMessage, saveChatAndClear, sendChatMessage, subscribeToChatHistory, subscribeToChatSessions } from '@/src/services/chat.service';
+import type { ChatMessageDoc, SavedChatSession } from '@/src/services/chat.service';
 import { ChatStore } from '@/src/stores/chat-store';
 import { HOME_STRINGS } from '@/src/constants/strings';
 
@@ -138,6 +140,8 @@ export default function ChatScreen() {
   const [isSending, setIsSending] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [savedSessions, setSavedSessions] = useState<SavedChatSession[]>([]);
+  const [viewingSession, setViewingSession] = useState<SavedChatSession | null>(null);
 
   const isPremium = isPro;
   // --- Limits temporarily disabled ---
@@ -160,6 +164,9 @@ export default function ChatScreen() {
 
   const flatListRef = useRef<FlatList>(null);
   const chatStarted = useRef(false);
+  const messagesRef = useRef<ChatMessageDoc[]>([]);
+  messagesRef.current = messages;
+  const fromNotification = useRef(false);
   const [suggestionOffset, setSuggestionOffset] = useState(0);
 
   // ─── Subscribe to chat history ─────────────────────────────────────────────
@@ -173,6 +180,48 @@ export default function ChatScreen() {
     });
     return unsub;
   }, [authUser?.uid]);
+
+  // ─── Subscribe to saved chat sessions ─────────────────────────────────────
+
+  useEffect(() => {
+    if (!authUser) return;
+    const unsub = subscribeToChatSessions(authUser.uid, setSavedSessions);
+    return unsub;
+  }, [authUser?.uid]);
+
+  // ─── Check notification flag on mount ──────────────────────────────────────
+
+  useEffect(() => {
+    fromNotification.current = ChatStore.popFromNotification();
+  }, []);
+
+  // ─── Auto-save on leaving chat screen (navigate away) ─────────────────────
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        if (!authUser || fromNotification.current) {
+          fromNotification.current = false;
+          return;
+        }
+        const msgs = messagesRef.current;
+        if (msgs.length > 0) {
+          saveChatAndClear(authUser.uid, msgs).catch(console.error);
+        }
+      };
+    }, [authUser]),
+  );
+
+  // ─── Auto-save when app goes to background ────────────────────────────────
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background' && authUser && messagesRef.current.length > 0) {
+        saveChatAndClear(authUser.uid, messagesRef.current).catch(console.error);
+      }
+    });
+    return () => sub.remove();
+  }, [authUser]);
 
   // ─── Auto-send initial message from ChatStore ──────────────────────────────
 
@@ -237,8 +286,8 @@ export default function ChatScreen() {
   const handleNewChat = useCallback(async () => {
     if (!authUser) return;
     chatStarted.current = false;
-    await clearChatHistory(authUser.uid);
-  }, [authUser]);
+    await saveChatAndClear(authUser.uid, messages);
+  }, [authUser, messages]);
 
   // ─── Derived ───────────────────────────────────────────────────────────────
 
@@ -248,49 +297,88 @@ export default function ChatScreen() {
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
-  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const historyMessages = messages.filter(m => m.createdAt >= cutoff && !m.isPending && !m.isError);
-
   return (
     <ThemedView style={styles.container}>
       <HeaderNav
         title="Chat"
-        leftIconName={__DEV__ ? 'time-outline' : undefined}
-        onLeftPress={__DEV__ ? () => setShowHistory(true) : undefined}
+        leftIconName="time-outline"
+        onLeftPress={() => setShowHistory(true)}
         rightIconName="add"
         onRightPress={handleNewChat}
       />
 
       {/* ── History modal ── */}
-      <Modal visible={showHistory} animationType="slide" onRequestClose={() => setShowHistory(false)}>
+      <Modal visible={showHistory} animationType="slide" onRequestClose={() => {
+        if (viewingSession) { setViewingSession(null); } else { setShowHistory(false); }
+      }}>
         <View style={[styles.historyModal, { paddingTop: insets.top }]}>
-          <View style={styles.historyHeader}>
-            <Text style={styles.historyTitle}>Chat History</Text>
-            <TouchableOpacity onPress={() => setShowHistory(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Ionicons name="close" size={24} color={C.white} />
-            </TouchableOpacity>
-          </View>
-
-          {historyMessages.length === 0 ? (
-            <View style={styles.historyEmpty}>
-              <Text style={styles.historyEmptyText}>No conversation yet today.</Text>
-            </View>
-          ) : (
-            <ScrollView contentContainerStyle={styles.historyList} showsVerticalScrollIndicator={false}>
-              {historyMessages.map(m => (
-                <View key={m.id} style={styles.historyEntry}>
-                  <Text style={styles.historyTimestamp}>{formatTime(m.createdAt)}</Text>
-                  <View style={[styles.userBubble, { alignSelf: 'flex-end' }]}>
-                    <Text style={styles.userBubbleText}>{m.userMessage}</Text>
-                  </View>
-                  {m.response ? (
-                    <View style={[styles.aiBubble, { alignSelf: 'flex-start' }]}>
-                      <Text style={styles.aiBubbleText}>{stripBoldTitles(m.response ?? '')}</Text>
+          {viewingSession ? (
+            <>
+              <View style={styles.historyHeader}>
+                <TouchableOpacity onPress={() => setViewingSession(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Ionicons name="arrow-back" size={24} color={C.white} />
+                </TouchableOpacity>
+                <Text style={[styles.historyTitle, { flex: 1, marginLeft: S.sm }]} numberOfLines={1}>
+                  {viewingSession.title}
+                </Text>
+                <TouchableOpacity onPress={() => { setViewingSession(null); setShowHistory(false); }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Ionicons name="close" size={24} color={C.white} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={styles.historyList} showsVerticalScrollIndicator={false}>
+                {viewingSession.messages.map((m, i) => (
+                  <View key={i} style={styles.historyEntry}>
+                    <Text style={styles.historyTimestamp}>{formatTime(m.createdAt)}</Text>
+                    <View style={[styles.userBubble, { alignSelf: 'flex-end' }]}>
+                      <Text style={styles.userBubbleText}>{m.userMessage}</Text>
                     </View>
-                  ) : null}
+                    {m.response ? (
+                      <View style={[styles.aiBubble, { alignSelf: 'flex-start' }]}>
+                        <Text style={styles.aiBubbleText}>{stripBoldTitles(m.response)}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ))}
+              </ScrollView>
+            </>
+          ) : (
+            <>
+              <View style={styles.historyHeader}>
+                <Text style={styles.historyTitle}>Chat History</Text>
+                <TouchableOpacity onPress={() => setShowHistory(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Ionicons name="close" size={24} color={C.white} />
+                </TouchableOpacity>
+              </View>
+              {savedSessions.length === 0 ? (
+                <View style={styles.historyEmpty}>
+                  <Text style={styles.historyEmptyText}>No saved chats yet.</Text>
                 </View>
-              ))}
-            </ScrollView>
+              ) : (
+                <ScrollView contentContainerStyle={styles.historyList} showsVerticalScrollIndicator={false}>
+                  {savedSessions.map(session => (
+                    <TouchableOpacity
+                      key={session.id}
+                      style={styles.sessionRow}
+                      onPress={() => setViewingSession(session)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.sessionInfo}>
+                        <Text style={styles.sessionTitle} numberOfLines={1}>{session.title}</Text>
+                        <Text style={styles.sessionDate}>
+                          {session.savedAt.toLocaleDateString()} · {session.messages.length} message{session.messages.length !== 1 ? 's' : ''}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => authUser && deleteChatSession(authUser.uid, session.id)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <Ionicons name="trash-outline" size={18} color={C.muted} />
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+            </>
           )}
         </View>
       </Modal>
@@ -595,5 +683,27 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: 'center',
     marginBottom: S.xs,
+  },
+  sessionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: R.md,
+    paddingHorizontal: S.md,
+    paddingVertical: S.sm + 2,
+  },
+  sessionInfo: {
+    flex: 1,
+    marginRight: S.sm,
+  },
+  sessionTitle: {
+    color: C.white,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  sessionDate: {
+    color: C.muted,
+    fontSize: 12,
+    marginTop: 2,
   },
 });

@@ -18,6 +18,19 @@ export interface ChatMessageDoc {
   createdAt: Date;
 }
 
+export interface SavedChatMessage {
+  userMessage: string;
+  response: string | null;
+  createdAt: Date;
+}
+
+export interface SavedChatSession {
+  id: string;
+  title: string;
+  messages: SavedChatMessage[];
+  savedAt: Date;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function parseResponse(data: Record<string, any>): string | null {
@@ -147,4 +160,64 @@ export function buildHistory(
     }
   }
   return history;
+}
+
+/**
+ * Saves the current chat messages as a session, then clears the active chat.
+ * Title is the first user message.
+ */
+export async function saveChatAndClear(uid: string, messages: ChatMessageDoc[]): Promise<void> {
+  const completed = messages.filter(m => !m.isPending && !m.isError && m.response);
+  if (completed.length === 0) {
+    // Nothing worth saving — just clear
+    await clearChatHistory(uid);
+    return;
+  }
+
+  await addDoc(collection(db, 'users', uid, 'savedChats'), {
+    title: completed[0].userMessage,
+    messages: completed.map(m => ({
+      userMessage: m.userMessage,
+      response: m.response,
+      createdAt: Timestamp.fromDate(m.createdAt),
+    })),
+    savedAt: Timestamp.now(),
+  });
+
+  await clearChatHistory(uid);
+}
+
+/**
+ * Real-time listener for saved chat sessions, newest first.
+ */
+export function subscribeToChatSessions(
+  uid: string,
+  onSessions: (sessions: SavedChatSession[]) => void,
+): () => void {
+  return onSnapshot(
+    query(collection(db, 'users', uid, 'savedChats'), orderBy('savedAt', 'desc')),
+    (snap) => {
+      const sessions: SavedChatSession[] = snap.docs.map(d => {
+        const data = d.data();
+        return {
+          id: d.id,
+          title: data.title ?? '',
+          messages: (data.messages ?? []).map((m: any) => ({
+            userMessage: m.userMessage ?? '',
+            response: m.response ?? null,
+            createdAt: m.createdAt?.toDate?.() ?? new Date(),
+          })),
+          savedAt: (data.savedAt as Timestamp)?.toDate() ?? new Date(),
+        };
+      });
+      onSessions(sessions);
+    },
+  );
+}
+
+/**
+ * Deletes a saved chat session.
+ */
+export async function deleteChatSession(uid: string, sessionId: string): Promise<void> {
+  await deleteDoc(doc(db, 'users', uid, 'savedChats', sessionId));
 }

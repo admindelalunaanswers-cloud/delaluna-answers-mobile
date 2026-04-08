@@ -45,7 +45,12 @@ function AuthGate() {
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener(response => {
       const screen = response.notification.request.content.data?.screen;
-      if (screen && authUser) router.push(screen as any);
+      if (screen && authUser) {
+        if (String(screen).includes('chat')) {
+          require('@/src/stores/chat-store').ChatStore.setFromNotification(true);
+        }
+        router.push(screen as any);
+      }
     });
     return () => sub.remove();
   }, [authUser?.uid]);
