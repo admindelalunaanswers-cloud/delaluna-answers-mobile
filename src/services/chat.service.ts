@@ -1,4 +1,5 @@
 import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore';
+import { Platform } from 'react-native';
 
 import { db } from '@/firebaseConfig';
 import { buildChatPrompt } from '@/src/prompts/chat-prompt';
@@ -61,7 +62,7 @@ export function subscribeToChatHistory(
   onMessages: (messages: ChatMessageDoc[]) => void,
 ): () => void {
   return onSnapshot(
-    query(collection(db, 'users', uid, 'chat'), orderBy('createdAt', 'asc')),
+    query(collection(db, 'users', uid, 'updayedChat'), orderBy('createTime', 'asc')),
     (snap) => {
       const messages: ChatMessageDoc[] = snap.docs.map(docSnap => {
         const data = docSnap.data();
@@ -74,7 +75,7 @@ export function subscribeToChatHistory(
           response,
           isPending: !response && state !== 'ERROR',
           isError: state === 'ERROR',
-          createdAt: (data.createdAt as Timestamp)?.toDate() ?? new Date(),
+          createdAt: (data.createTime as Timestamp)?.toDate() ?? new Date(),
         };
       });
       onMessages(messages);
@@ -86,8 +87,8 @@ export function subscribeToChatHistory(
  * Deletes all messages in the user's chat collection.
  */
 export async function clearChatHistory(uid: string): Promise<void> {
-  const snap = await getDocs(collection(db, 'users', uid, 'chat'));
-  await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'users', uid, 'chat', d.id))));
+  const snap = await getDocs(collection(db, 'users', uid, 'updayedChat'));
+  await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'users', uid, 'updayedChat', d.id))));
 }
 
 /**
@@ -105,13 +106,12 @@ export async function sendChatMessage(
     ? buildNatalChartSummary(chart)
     : 'No natal chart available.';
 
-  const prompt = buildChatPrompt(natalChartSummary, history, userMessage, pronouns);
+  const prompt = buildChatPrompt(natalChartSummary, history, userMessage, pronouns, Platform.OS);
 
-  await addDoc(collection(db, 'users', uid, 'chat'), {
+  await addDoc(collection(db, 'users', uid, 'updayedChat'), {
     userMessage,
     prompt,
-    createdAt: Timestamp.now(),
-    requestedAt: Timestamp.now(),
+    createTime: Timestamp.now(),
   });
 }
 
@@ -124,12 +124,11 @@ export async function retryChatMessage(
   prompt: string,
   userMessage: string,
 ): Promise<void> {
-  await deleteDoc(doc(db, 'users', uid, 'chat', docId));
-  await addDoc(collection(db, 'users', uid, 'chat'), {
+  await deleteDoc(doc(db, 'users', uid, 'updayedChat', docId));
+  await addDoc(collection(db, 'users', uid, 'updayedChat'), {
     userMessage,
     prompt,
-    createdAt: Timestamp.now(),
-    requestedAt: Timestamp.now(),
+    createTime: Timestamp.now(),
   });
 }
 
