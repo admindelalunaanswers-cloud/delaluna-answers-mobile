@@ -44,6 +44,13 @@ interface RevenueCatContextValue {
   presentPaywallIfNeeded: () => Promise<boolean>;
   /** Present the RevenueCat Customer Center for subscription management */
   presentCustomerCenter: () => Promise<void>;
+  /**
+   * True when the SDK is disabled (no production API key). In this mode
+   * `isPro` is driven by `toggleDevPro` instead of the paywall.
+   */
+  isDevMode: boolean;
+  /** Flip the local pro flag when RevenueCat is disabled. No-op otherwise. */
+  toggleDevPro: () => void;
 }
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -57,6 +64,8 @@ const RevenueCatContext = createContext<RevenueCatContextValue>({
   presentPaywall: async () => false,
   presentPaywallIfNeeded: async () => false,
   presentCustomerCenter: async () => {},
+  isDevMode: !REVENUECAT_ENABLED,
+  toggleDevPro: () => {},
 });
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
@@ -67,14 +76,21 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(REVENUECAT_ENABLED);
   const configuredRef = useRef(false);
 
-  // Derive pro status from customer info.
-  // When RevenueCat is disabled we default to `true` so premium features
-  // stay unlocked in testing builds that don't have a real API key.
+  // Local pro flag used only when RevenueCat is disabled so we can still
+  // exercise the free ↔ premium UI from the profile screen.
+  const [devPro, setDevPro] = useState(true);
+
+  // Derive pro status from customer info. When RevenueCat is disabled we
+  // fall back to the local `devPro` flag instead of the real entitlement.
   const isPro = REVENUECAT_ENABLED
     ? customerInfo
       ? hasEntitlement(customerInfo)
       : false
-    : true;
+    : devPro;
+
+  const toggleDevPro = useCallback(() => {
+    setDevPro((prev) => !prev);
+  }, []);
 
   // ── Configure SDK once ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -205,6 +221,8 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
         presentPaywall,
         presentPaywallIfNeeded,
         presentCustomerCenter,
+        isDevMode: !REVENUECAT_ENABLED,
+        toggleDevPro,
       }}
     >
       {children}

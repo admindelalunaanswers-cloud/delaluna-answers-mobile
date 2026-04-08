@@ -64,7 +64,14 @@ const NAV_BAR_HEIGHT = 44;
 export default function ProfileScreen() {
   const { authUser, userDoc, refresh } = useUser();
   const { refresh: refreshHoroscope } = useHoroscope();
-  const { isPro, presentPaywall, presentCustomerCenter, restorePurchases } = useRevenueCat();
+  const {
+    isPro,
+    presentPaywall,
+    presentCustomerCenter,
+    restorePurchases,
+    isDevMode,
+    toggleDevPro,
+  } = useRevenueCat();
   const insets = useSafeAreaInsets();
   const ud = userDoc as any;
 
@@ -99,6 +106,10 @@ export default function ProfileScreen() {
   // ── Subscription actions ────────���──────────────────────────────────────────────
 
   const handleUpgrade = async () => {
+    if (isDevMode) {
+      toggleDevPro();
+      return;
+    }
     setBusy(true);
     try {
       const purchased = await presentPaywall();
@@ -114,6 +125,17 @@ export default function ProfileScreen() {
   };
 
   const handleManageSubscription = async () => {
+    if (isDevMode) {
+      Alert.alert(
+        'Dev mode',
+        'RevenueCat is disabled. Switch back to the free plan for testing?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Switch to Free', onPress: toggleDevPro },
+        ],
+      );
+      return;
+    }
     setBusy(true);
     try {
       await presentCustomerCenter();
@@ -127,6 +149,10 @@ export default function ProfileScreen() {
   };
 
   const handleRestore = async () => {
+    if (isDevMode) {
+      toggleDevPro();
+      return;
+    }
     setBusy(true);
     try {
       const restored = await restorePurchases();
