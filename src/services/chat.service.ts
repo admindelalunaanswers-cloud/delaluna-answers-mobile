@@ -221,3 +221,34 @@ export function subscribeToChatSessions(
 export async function deleteChatSession(uid: string, sessionId: string): Promise<void> {
   await deleteDoc(doc(db, 'users', uid, 'savedChats', sessionId));
 }
+
+/**
+ * Restores a saved chat session as the active chat. The currently active chat
+ * (if any) is saved first via `saveChatAndClear` so nothing is lost. Then the
+ * session's messages are written back into `updayedChat` with their original
+ * timestamps and the saved session is deleted.
+ */
+export async function resumeChatSession(
+  uid: string,
+  session: SavedChatSession,
+  currentMessages: ChatMessageDoc[],
+): Promise<void> {
+  // Park the current active chat (no-op if empty / nothing worth saving)
+  await saveChatAndClear(uid, currentMessages);
+
+  // Write the session's messages back into the active chat collection.
+  // These are already-completed turns: include `response` and a COMPLETED
+  // status so the listener treats them as finished.
+  for (const msg of session.messages) {
+    await addDoc(collection(db, 'users', uid, 'updayedChat'), {
+      userMessage: msg.userMessage,
+      prompt: '',
+      response: msg.response ?? '',
+      status: { state: 'COMPLETED' },
+      createTime: Timestamp.fromDate(msg.createdAt),
+    });
+  }
+
+  // The session is now active — drop the saved copy.
+  await deleteDoc(doc(db, 'users', uid, 'savedChats', session.id));
+}
