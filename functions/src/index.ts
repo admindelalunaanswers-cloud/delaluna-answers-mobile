@@ -432,6 +432,51 @@ export const notifyBreakdownReady = onDocumentUpdated(
   }
 );
 
+// ─── notifyChatReply ─────────────────────────────────────────────────────────
+
+/**
+ * When the Firebase Extension writes a `response` to a chat message doc,
+ * send a push notification so the user sees the reply even if the app is
+ * backgrounded or killed.
+ */
+export const notifyChatReply = onDocumentUpdated(
+  'users/{userId}/updayedChat/{messageId}',
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+
+    // Only fire when a new response appears
+    if (!after?.response) return;
+    if (before?.response === after.response) return;
+
+    const userId = event.params.userId;
+
+    const userSnap = await db.collection('users').doc(userId).get();
+    const token = userSnap.data()?.expoPushToken as string | undefined;
+    if (!token) return;
+
+    await fetch(EXPO_PUSH_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        to: token,
+        sound: 'default',
+        title: 'New Message',
+        body: 'Your cosmic advisor has replied. Tap to read.',
+        channelId: 'default',
+        data: { screen: '/(main)/chat' },
+        priority: 'high',
+        _contentAvailable: true,
+      }),
+    });
+
+    console.log(`[notifyChatReply] Push sent to user ${userId}`);
+  }
+);
+
 // ─── parseConnectionCompatibility ────────────────────────────────────────────
 
 export const parseConnectionCompatibility = onDocumentUpdated(
