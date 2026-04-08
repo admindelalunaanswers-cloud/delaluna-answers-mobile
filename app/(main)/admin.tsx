@@ -24,11 +24,6 @@ import { calculateTransits } from '@/src/services/astroEngine';
 import { requestBreakdown } from '@/src/services/natal-chart-breakdown.service';
 import { requestHoroscope, getTodayDateId } from '@/src/services/horoscope.service';
 import { requestTransitReading, getThisWeekDateId } from '@/src/services/transit-reading.service';
-import {
-  scheduleBreakdownReadyNotification,
-  scheduleHoroscopeReadyNotification,
-  scheduleTransitReadyNotification,
-} from '@/src/services/notifications.service';
 
 // ─── Known accounts ──────────────────────────────────────────────────────────
 
@@ -60,10 +55,6 @@ export default function AdminScreen() {
   const { moderateScale: ms } = useResponsive();
   const insets = useSafeAreaInsets();
 
-  // Notification test statuses
-  const [notifHoroscope, setNotifHoroscope] = useState<ActionStatus>('idle');
-  const [notifBreakdown, setNotifBreakdown] = useState<ActionStatus>('idle');
-  const [notifTransit,   setNotifTransit]   = useState<ActionStatus>('idle');
 
   // Re-send prompt statuses
   const [resendHoroscope, setResendHoroscope] = useState<ActionStatus>('idle');
@@ -137,15 +128,6 @@ export default function AdminScreen() {
   };
 
   // ─── Push notification tests ──────────────────────────────────────────────
-
-  const testHoroscopeNotif = () =>
-    run('Sending horoscope notification…', setNotifHoroscope, () => scheduleHoroscopeReadyNotification());
-
-  const testBreakdownNotif = () =>
-    run('Sending birth chart notification…', setNotifBreakdown, () => scheduleBreakdownReadyNotification());
-
-  const testTransitNotif = () =>
-    run('Sending transit notification…', setNotifTransit, () => scheduleTransitReadyNotification());
 
   // ─── Re-send prompts ──────────────────────────────────────────────────────
 
@@ -260,12 +242,6 @@ export default function AdminScreen() {
       contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + ms(24) }]}
     >
       <Text style={[styles.pageTitle, { marginTop: insets.top + ms(16) }]}>Admin</Text>
-
-      {/* ── Push Notification Tests ── */}
-      <Text style={styles.sectionTitle}>Push Notification Tests</Text>
-      <ActionButton label="Horoscope Ready"   status={notifHoroscope} onPress={testHoroscopeNotif} />
-      <ActionButton label="Birth Chart Ready" status={notifBreakdown} onPress={testBreakdownNotif} />
-      <ActionButton label="Transit Ready"     status={notifTransit}   onPress={testTransitNotif}   />
 
       {/* ── Re-send Prompts ── */}
       <Text style={styles.sectionTitle}>Re-send Prompts</Text>
