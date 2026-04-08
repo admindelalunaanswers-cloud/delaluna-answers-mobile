@@ -47,7 +47,6 @@ module.exports = {
         },
       ],
       "@react-native-community/datetimepicker",
-      "./plugins/with-adi-registration",
     ],
     experiments: {
       typedRoutes: true,
