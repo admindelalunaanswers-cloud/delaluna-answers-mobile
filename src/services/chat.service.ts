@@ -1,9 +1,6 @@
 import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore';
-import { Platform } from 'react-native';
 
 import { db } from '@/firebaseConfig';
-import { buildChatPrompt } from '@/src/prompts/chat-prompt';
-import type { NatalChartDetailsDoc } from '@/src/types/user.type';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,19 +48,6 @@ function parseResponse(data: Record<string, any>): string | null {
   return str;
 }
 
-function buildNatalChartSummary(chart: NatalChartDetailsDoc): string {
-  return JSON.stringify({
-    planets: chart.planets.map(p => ({
-      name: p.name,
-      sign: p.sign,
-      house: p.house,
-      isRetrograde: p.isRetrograde,
-    })),
-    ascendant: { sign: chart.ascendant.sign, degree: chart.ascendant.degree },
-    midheaven: { sign: chart.midheaven.sign, degree: chart.midheaven.degree },
-  });
-}
-
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -105,25 +89,18 @@ export async function clearChatHistory(uid: string): Promise<void> {
 }
 
 /**
- * Sends a chat message by writing a document to users/{uid}/chat.
+ * Sends a chat message by writing a document to users/{uid}/updayedChat.
  * The Firebase Extension reads the `prompt` field and writes back `response`.
+ * Only the raw user input is sent — the extension's CONTEXT config provides
+ * the system prompt.
  */
 export async function sendChatMessage(
   uid: string,
   userMessage: string,
-  history: { role: 'user' | 'assistant'; content: string }[],
-  chart: NatalChartDetailsDoc | null,
-  pronouns = 'they/them',
 ): Promise<void> {
-  const natalChartSummary = chart
-    ? buildNatalChartSummary(chart)
-    : 'No natal chart available.';
-
-  const prompt = buildChatPrompt(natalChartSummary, history, userMessage, pronouns, Platform.OS);
-
   await addDoc(collection(db, 'users', uid, 'updayedChat'), {
     userMessage,
-    prompt,
+    prompt: userMessage,
     createTime: Timestamp.now(),
   });
 }
@@ -143,23 +120,6 @@ export async function retryChatMessage(
     prompt,
     createTime: Timestamp.now(),
   });
-}
-
-/**
- * Builds the conversation history array from completed messages,
- * for inclusion in the next message's prompt.
- */
-export function buildHistory(
-  messages: ChatMessageDoc[],
-): { role: 'user' | 'assistant'; content: string }[] {
-  const history: { role: 'user' | 'assistant'; content: string }[] = [];
-  for (const msg of messages) {
-    history.push({ role: 'user', content: msg.userMessage });
-    if (msg.response) {
-      history.push({ role: 'assistant', content: msg.response });
-    }
-  }
-  return history;
 }
 
 /**
