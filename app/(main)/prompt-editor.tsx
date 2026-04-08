@@ -40,10 +40,8 @@ import { HOROSCOPE_PROMPT_TEMPLATE } from '@/src/prompts/horoscope-prompt';
 import { TRANSITS_PROMPT_TEMPLATE } from '@/src/prompts/transits-prompt';
 import { COMPATIBILITY_PROMPT_TEMPLATE } from '@/src/prompts/compatibility-prompt';
 import {
-  FREE_NATAL_CHART_PROMPT_TEMPLATE,
-  PREMIUM_NATAL_CHART_PROMPT_TEMPLATE,
-  buildFreeNatalChartPrompt,
-  buildPremiumNatalChartPrompt,
+  NATAL_CHART_PROMPT_TEMPLATE,
+  buildNatalChartPrompt,
 } from '@/src/prompts/natal-chart-prompt';
 import { CHAT_SYSTEM_PROMPT_TEMPLATE } from '@/src/prompts/chat-prompt';
 import { getTodayDateId } from '@/src/services/horoscope.service';
@@ -51,7 +49,7 @@ import { getThisWeekDateId } from '@/src/services/transit-reading.service';
 
 // ─── Prompt definitions ───────────────────────────────────────────────────────
 
-type ResendTarget = 'horoscope' | 'transits' | 'birthchart_free' | 'birthchart_premium' | null;
+type ResendTarget = 'horoscope' | 'transits' | 'birthchart' | null;
 
 interface PromptDef {
   key: string;
@@ -77,18 +75,11 @@ const PROMPT_DEFS: PromptDef[] = [
     resendLabel: 'Resend This Week\'s Transits',
   },
   {
-    key: 'birthchart_free',
-    label: 'Birth Chart (Free)',
-    defaultTemplate: FREE_NATAL_CHART_PROMPT_TEMPLATE,
-    resendTarget: 'birthchart_free',
-    resendLabel: 'Resend Free Birth Chart',
-  },
-  {
-    key: 'birthchart_premium',
-    label: 'Birth Chart (Premium)',
-    defaultTemplate: PREMIUM_NATAL_CHART_PROMPT_TEMPLATE,
-    resendTarget: 'birthchart_premium',
-    resendLabel: 'Resend Premium Birth Chart',
+    key: 'birthchart',
+    label: 'Birth Chart',
+    defaultTemplate: NATAL_CHART_PROMPT_TEMPLATE,
+    resendTarget: 'birthchart',
+    resendLabel: 'Resend Birth Chart',
   },
   {
     key: 'chat',
@@ -278,19 +269,11 @@ export default function PromptEditorScreen() {
           prompt, requestedAt: serverTimestamp(),
         });
 
-      } else if (def.resendTarget === 'birthchart_free') {
-        const prompt = buildFreeNatalChartPrompt(natalJson, pronouns, template);
+      } else if (def.resendTarget === 'birthchart') {
+        const prompt = buildNatalChartPrompt(natalJson, pronouns, template);
         await setDoc(
-          doc(db, 'users', uid, 'natalChart', 'free'),
-          { prompt, requestedAt: serverTimestamp() },
-          { merge: true },
-        );
-
-      } else if (def.resendTarget === 'birthchart_premium') {
-        const prompt = buildPremiumNatalChartPrompt(natalJson, pronouns, template);
-        await setDoc(
-          doc(db, 'users', uid, 'natalChart', 'premium'),
-          { prompt, requestedAt: serverTimestamp() },
+          doc(db, 'users', uid, 'natalChart', 'details'),
+          { prompt, natalChart: natalJson, requestedAt: serverTimestamp() },
           { merge: true },
         );
       }
@@ -329,7 +312,6 @@ export default function PromptEditorScreen() {
       color: C.text,
       fontSize: ms(11),
       opacity: 0.55,
-      numberOfLines: 2,
     },
     row:          { flexDirection: 'row', gap: ms(8), flexWrap: 'wrap' },
     btn: {
