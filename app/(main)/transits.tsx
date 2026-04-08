@@ -12,6 +12,7 @@ import { C, R, S } from '@/src/constants/theme';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useUser } from '@/src/context/user-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
+import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
 import { usePullToRefresh } from '@/src/hooks/use-pull-to-refresh';
 import { useResponsive } from '@/src/hooks/use-responsive';
 import type { TransitHouseReading } from '@/src/types/transit-reading.types';
@@ -28,10 +29,12 @@ function HouseCard({
   house,
   isLocked,
   retrogradesActive,
+  onLockedPress,
 }: {
   house: TransitHouseReading;
   isLocked: boolean;
   retrogradesActive?: string[];
+  onLockedPress: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const hasTransits = house.transits && house.transits.length > 0;
@@ -39,10 +42,10 @@ function HouseCard({
   return (
     <TouchableOpacity
       activeOpacity={0.75}
-      onPress={() => setExpanded(e => !e)}
+      onPress={() => (isLocked ? onLockedPress() : setExpanded(e => !e))}
       style={houseStyles.card}
     >
-      {/* Header: house number + keyword + chevron */}
+      {/* Header: house number + keyword + chevron / lock */}
       <View style={houseStyles.header}>
         <View style={houseStyles.headerLeft}>
           <Text style={houseStyles.houseNum}>House {house.house}</Text>
@@ -50,11 +53,19 @@ function HouseCard({
             <Text style={houseStyles.houseKeyword}>{HOUSE_KEYWORDS[house.house]}</Text>
           )}
         </View>
-        <Ionicons
-          name={expanded ? 'chevron-up' : 'chevron-down'}
-          size={moderateScale(14)}
-          color={C.muted}
-        />
+        {isLocked ? (
+          <Ionicons
+            name="lock-closed"
+            size={moderateScale(14)}
+            color={C.muted}
+          />
+        ) : (
+          <Ionicons
+            name={expanded ? 'chevron-up' : 'chevron-down'}
+            size={moderateScale(14)}
+            color={C.muted}
+          />
+        )}
       </View>
 
       {/* Transiting planet chips — always visible */}
@@ -82,18 +93,11 @@ function HouseCard({
         </Text>
       )}
 
-      {/* Expanded: full interpretation or lock */}
-      {expanded && (
+      {/* Expanded: full interpretation (only when unlocked) */}
+      {!isLocked && expanded && (
         <>
           <View style={houseStyles.divider} />
-          {isLocked ? (
-            <View style={houseStyles.lockedRow}>
-              <Ionicons name="lock-closed-outline" size={moderateScale(14)} color={C.muted} />
-              <Text style={houseStyles.lockedText}>Unlock with Premium</Text>
-            </View>
-          ) : (
-            <Text style={houseStyles.interpretation}>{house.interpretation}</Text>
-          )}
+          <Text style={houseStyles.interpretation}>{house.interpretation}</Text>
         </>
       )}
     </TouchableOpacity>
@@ -112,6 +116,7 @@ export default function TransitsScreen() {
 
   const { authUser, userDoc } = useUser();
   const { isPro, presentPaywall } = useRevenueCat();
+  const { hasAccess } = useFreeTrialAccess();
 
   const insets = useSafeAreaInsets();
   const { scale } = useResponsive();
@@ -122,10 +127,11 @@ export default function TransitsScreen() {
 
   const isPremium = isPro;
 
-  // Determine which houses to lock for free users:
-  // unlock the 3 houses with the most transiting planets, lock the rest.
+  // Determine which houses to lock. Premium users and free users still inside
+  // their 24-hour trial see everything. Free users post-trial keep a 3-house
+  // preview (the houses with the most transiting planets) and the rest lock.
   const lockedHouses = useMemo(() => {
-    if (isPremium || !transitReading?.houses) return new Set<string>();
+    if (hasAccess || !transitReading?.houses) return new Set<string>();
     const sorted = [...transitReading.houses].sort(
       (a, b) => b.transits.length - a.transits.length,
     );
@@ -133,7 +139,7 @@ export default function TransitsScreen() {
     return new Set(
       transitReading.houses.filter(h => !unlocked.has(h.house)).map(h => h.house),
     );
-  }, [isPremium, transitReading?.houses]);
+  }, [hasAccess, transitReading?.houses]);
 
   const handleUnlock = async () => {
     setUnlocking(true);
@@ -180,6 +186,7 @@ export default function TransitsScreen() {
               house={house}
               isLocked={lockedHouses.has(house.house)}
               retrogradesActive={transitReading.retrogradesActive}
+              onLockedPress={handleUnlock}
             />
           ))}
 
@@ -268,18 +275,6 @@ const houseStyles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: 'rgba(142, 68, 173, 0.3)',
-  },
-  lockedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: staticScale(S.xs),
-    paddingVertical: verticalScale(S.xs),
-  },
-  lockedText: {
-    fontSize: moderateScale(13),
-    color: C.muted,
-    fontStyle: 'italic',
   },
   interpretation: {
     fontSize: moderateScale(13),

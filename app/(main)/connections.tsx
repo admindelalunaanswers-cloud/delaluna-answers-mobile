@@ -27,6 +27,7 @@ import { db, functions } from "../../firebaseConfig";
 import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
 import { useUser } from "@/src/context/user-context";
 import { useRevenueCat } from "@/src/context/revenuecat-context";
+import { useFreeTrialAccess } from "@/src/hooks/use-free-trial-access";
 import HeaderNav from "@/src/components/shared/header-nav";
 import DelalunaContainer from "@/src/components/shared/delaluna-container.component";
 import { ThemedView } from "@/src/components/themed-view";
@@ -35,7 +36,7 @@ import { ConnectionsCache, connectionDisplayName } from "@/src/services/connecti
 const NAV_BAR_HEIGHT = 44;
 
 const AnimatedConnectionItem = memo(
-  ({ index, connection, onOpen, onDelete }: any) => {
+  ({ index, connection, isLocked, onOpen, onDelete, onLockedPress }: any) => {
     const itemFade = useSharedValue(0);
     const itemSlide = useSharedValue(verticalScale(10));
 
@@ -69,14 +70,32 @@ const AnimatedConnectionItem = memo(
     return (
       <Animated.View style={animStyle}>
         <ReanimatedSwipeable renderRightActions={renderRightActions} overshootRight={false}>
-          <ThemedView style={styles.connectionItem}>
-            <TouchableOpacity onPress={() => onOpen(connection.id)} style={styles.connectionItem}>
-            <Text style={styles.connectionName}>{connection.firstPerson?.firstName} {connection.firstPerson?.lastName} </Text>
-            <Ionicons name="heart" size={moderateScale(22)} color="#fff" />
-            <Text style={styles.connectionName}> {connection.secondPerson?.firstName} {connection.secondPerson?.lastName}</Text>
-          </TouchableOpacity>
+          <ThemedView style={[styles.connectionItem, isLocked && styles.connectionItemLocked]}>
+            <TouchableOpacity
+              onPress={() => (isLocked ? onLockedPress() : onOpen(connection.id))}
+              style={styles.connectionItem}
+              activeOpacity={0.75}
+            >
+              <Text
+                style={[styles.connectionName, isLocked && styles.connectionNameLocked]}
+                numberOfLines={1}
+              >
+                {connection.firstPerson?.firstName} {connection.firstPerson?.lastName}{' '}
+              </Text>
+              <Ionicons
+                name={isLocked ? 'lock-closed' : 'heart'}
+                size={moderateScale(20)}
+                color={isLocked ? 'rgba(255,255,255,0.55)' : '#fff'}
+              />
+              <Text
+                style={[styles.connectionName, isLocked && styles.connectionNameLocked]}
+                numberOfLines={1}
+              >
+                {' '}
+                {connection.secondPerson?.firstName} {connection.secondPerson?.lastName}
+              </Text>
+            </TouchableOpacity>
           </ThemedView>
-          
         </ReanimatedSwipeable>
       </Animated.View>
     );
@@ -88,7 +107,8 @@ const PREMIUM_CONNECTION_LIMIT = 10;
 
 export default function ConnectionsScreen() {
   const { authUser } = useUser();
-  const { isPro } = useRevenueCat();
+  const { isPro, presentPaywall } = useRevenueCat();
+  const { hasAccess } = useFreeTrialAccess();
   const insets = useSafeAreaInsets();
 
   const [connections, setConnections] = useState<any[]>([]);
@@ -98,19 +118,39 @@ export default function ConnectionsScreen() {
 
   const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
 
+  // Premium and trial users can create up to 10. Free post-trial users are
+  // capped at 3 — anything beyond that index gets locked in the list.
+  const accessLimit = hasAccess ? PREMIUM_CONNECTION_LIMIT : FREE_CONNECTION_LIMIT;
+  const canAddNew = connections.length < accessLimit;
+
+  const presentUpgradePaywall = async () => {
+    try {
+      await presentPaywall();
+    } catch (err) {
+      console.error('[connections] presentPaywall error:', err);
+    }
+  };
+
   const handleOpenConnection = (connectionId: string) => {
     router.push({ pathname: "/connection/[id]", params: { id: connectionId } });
   };
 
   const goToNewConnectionScreen = () => {
-    const isPremium = isPro;
-    const limit = isPremium ? PREMIUM_CONNECTION_LIMIT : FREE_CONNECTION_LIMIT;
-    if (connections.length >= limit) {
+    if (!canAddNew) {
+      if (isPro) {
+        Alert.alert(
+          'Connection limit reached',
+          `Premium members can save up to ${PREMIUM_CONNECTION_LIMIT} connections.`,
+        );
+        return;
+      }
       Alert.alert(
-        'Connection limit reached',
-        isPremium
-          ? `Premium members can save up to ${PREMIUM_CONNECTION_LIMIT} connections.`
-          : `Free accounts can save up to ${FREE_CONNECTION_LIMIT} connections. Upgrade to Premium for up to ${PREMIUM_CONNECTION_LIMIT}.`,
+        'Upgrade to add more',
+        `Free accounts can keep ${FREE_CONNECTION_LIMIT} connections. Upgrade to Premium to save up to ${PREMIUM_CONNECTION_LIMIT}.`,
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Upgrade', onPress: () => void presentUpgradePaywall() },
+        ],
       );
       return;
     }
@@ -208,15 +248,22 @@ export default function ConnectionsScreen() {
             ]}
             showsVerticalScrollIndicator={false}
           >
-            {connections.map((c, index) => (
-              <AnimatedConnectionItem
-                key={c.id}
-                index={index}
-                connection={c}
-                onOpen={handleOpenConnection}
-                onDelete={handleDeleteConnection}
-              />
-            ))}
+            {connections.map((c, index) => {
+              // Free post-trial users only get the first FREE_CONNECTION_LIMIT
+              // connections; anything beyond is locked behind the paywall.
+              const isLocked = !hasAccess && index >= FREE_CONNECTION_LIMIT;
+              return (
+                <AnimatedConnectionItem
+                  key={c.id}
+                  index={index}
+                  connection={c}
+                  isLocked={isLocked}
+                  onOpen={handleOpenConnection}
+                  onDelete={handleDeleteConnection}
+                  onLockedPress={presentUpgradePaywall}
+                />
+              );
+            })}
           </ScrollView>
         ) : (
           <ThemedView style={[styles.centered, { marginTop: headerHeight }]}>
@@ -246,7 +293,9 @@ const styles = StyleSheet.create({
   connectionItem: { padding: scale(16), flexDirection: "row",
     alignItems: "center",
     justifyContent: "center", },
+  connectionItemLocked: { opacity: 0.55 },
   connectionName: { color: "#fff", fontSize: moderateScale(16) },
+  connectionNameLocked: { color: "rgba(255,255,255,0.55)" },
   addConnectionText: { color: "#fff", fontSize: moderateScale(16) },
   deleteActionContainer: { justifyContent: "center" },
   deleteButton: {
