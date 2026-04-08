@@ -24,6 +24,7 @@ import { C, R, S } from '@/src/constants/theme';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useUser } from '@/src/context/user-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
+import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
 import { useResponsive } from '@/src/hooks/use-responsive';
 import { buildHistory, clearChatHistory, retryChatMessage, sendChatMessage, subscribeToChatHistory } from '@/src/services/chat.service';
 import type { ChatMessageDoc } from '@/src/services/chat.service';
@@ -32,7 +33,6 @@ import { HOME_STRINGS } from '@/src/constants/strings';
 
 const FREE_CHAT_LIMIT = 3;
 const PREMIUM_CHAT_LIMIT = 5;
-const UNLOCK_BONUS = 5;
 
 const SUGGESTIONS = [
   HOME_STRINGS.newLove.questionFunnel,
@@ -122,7 +122,8 @@ function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: C
 export default function ChatScreen() {
   const { authUser, userDoc } = useUser();
   const { chartDetails } = useHoroscope();
-  const { isPro } = useRevenueCat();
+  const { isPro, presentPaywall } = useRevenueCat();
+  const { inTrial } = useFreeTrialAccess();
   const insets = useSafeAreaInsets();
   const { scale } = useResponsive();
   const headerHeight = insets.top + scale(44);
@@ -131,16 +132,23 @@ export default function ChatScreen() {
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
-  const [chatUnlocked, setChatUnlocked] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
   const isPremium = isPro;
-  const questionLimit = isPremium
-    ? PREMIUM_CHAT_LIMIT
-    : FREE_CHAT_LIMIT + (chatUnlocked ? UNLOCK_BONUS : 0);
+  // During the 24h free trial, free users get the premium daily limit.
+  // After the trial expires, they fall back to the free tier.
+  const questionLimit = (isPremium || inTrial) ? PREMIUM_CHAT_LIMIT : FREE_CHAT_LIMIT;
   const questionsUsed = messages.length;
   const questionsRemaining = Math.max(0, questionLimit - questionsUsed);
   const chatLocked = questionsUsed >= questionLimit;
+
+  const handleUpgrade = useCallback(async () => {
+    try {
+      await presentPaywall();
+    } catch (err) {
+      console.error('[chat] presentPaywall error:', err);
+    }
+  }, [presentPaywall]);
 
   const flatListRef = useRef<FlatList>(null);
   const chatStarted = useRef(false);
@@ -249,7 +257,7 @@ export default function ChatScreen() {
       <Modal visible={showHistory} animationType="slide" onRequestClose={() => setShowHistory(false)}>
         <View style={[styles.historyModal, { paddingTop: insets.top }]}>
           <View style={styles.historyHeader}>
-            <Text style={styles.historyTitle}>Today's History</Text>
+            <Text style={styles.historyTitle}>Chat History</Text>
             <TouchableOpacity onPress={() => setShowHistory(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Ionicons name="close" size={24} color={C.white} />
             </TouchableOpacity>
@@ -322,16 +330,17 @@ export default function ChatScreen() {
                   title="Daily limit reached"
                   message={`Premium members get ${PREMIUM_CHAT_LIMIT} questions per day. Come back tomorrow!`}
                 />
-              ) : chatUnlocked ? (
+              ) : inTrial ? (
                 <PremiumUnlock
-                  title="You've used all your questions"
-                  message="Upgrade to Premium for 5 daily questions and more cosmic guidance."
+                  title="Trial daily limit reached"
+                  message={`You've used all ${PREMIUM_CHAT_LIMIT} questions for today. Upgrade to keep this access after your free trial ends.`}
+                  onUnlock={handleUpgrade}
                 />
               ) : (
                 <PremiumUnlock
                   title="You've used your 3 free questions"
-                  message={`Unlock ${UNLOCK_BONUS} more questions to keep the conversation going.`}
-                  onUnlock={() => setChatUnlocked(true)}
+                  message="Upgrade to Premium for more daily questions and unlimited cosmic guidance."
+                  onUnlock={handleUpgrade}
                 />
               )}
             </View>
