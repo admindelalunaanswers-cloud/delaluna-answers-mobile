@@ -21,6 +21,7 @@ import {
   restorePurchases as restorePurchasesService,
   onCustomerInfoUpdate,
   ENTITLEMENT_ID,
+  REVENUECAT_ENABLED,
 } from '@/src/services/revenuecat.service';
 import { useUser } from './user-context';
 
@@ -63,11 +64,17 @@ const RevenueCatContext = createContext<RevenueCatContextValue>({
 export function RevenueCatProvider({ children }: { children: ReactNode }) {
   const { authUser } = useUser();
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(REVENUECAT_ENABLED);
   const configuredRef = useRef(false);
 
-  // Derive pro status from customer info
-  const isPro = customerInfo ? hasEntitlement(customerInfo) : false;
+  // Derive pro status from customer info.
+  // When RevenueCat is disabled we default to `true` so premium features
+  // stay unlocked in testing builds that don't have a real API key.
+  const isPro = REVENUECAT_ENABLED
+    ? customerInfo
+      ? hasEntitlement(customerInfo)
+      : false
+    : true;
 
   // ── Configure SDK once ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -78,6 +85,8 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
 
   // ── Link to Firebase user & fetch initial customer info ─────────────────────
   useEffect(() => {
+    if (!REVENUECAT_ENABLED) return;
+
     let cancelled = false;
 
     async function syncUser() {
@@ -107,6 +116,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
 
   // ── Listen for real-time updates ────────────────────────────────────────────
   useEffect(() => {
+    if (!REVENUECAT_ENABLED) return;
     const unsubscribe = onCustomerInfoUpdate((info) => {
       setCustomerInfo(info);
     });
@@ -116,6 +126,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
   // ── Actions ─────────────────────────────────────────────────────────────────
 
   const refresh = useCallback(async () => {
+    if (!REVENUECAT_ENABLED) return;
     try {
       const info = await getCustomerInfo();
       setCustomerInfo(info);
@@ -125,6 +136,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const restorePurchases = useCallback(async (): Promise<boolean> => {
+    if (!REVENUECAT_ENABLED) return true;
     try {
       const info = await restorePurchasesService();
       setCustomerInfo(info);
@@ -136,6 +148,10 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const presentPaywall = useCallback(async (): Promise<boolean> => {
+    if (!REVENUECAT_ENABLED) {
+      console.log('[RevenueCat] disabled — skipping presentPaywall');
+      return false;
+    }
     try {
       const result: PAYWALL_RESULT = await RevenueCatUI.presentPaywall();
       // Refresh customer info after paywall interaction
@@ -148,6 +164,10 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const presentPaywallIfNeeded = useCallback(async (): Promise<boolean> => {
+    if (!REVENUECAT_ENABLED) {
+      console.log('[RevenueCat] disabled — skipping presentPaywallIfNeeded');
+      return false;
+    }
     try {
       const result: PAYWALL_RESULT = await RevenueCatUI.presentPaywallIfNeeded({
         requiredEntitlementIdentifier: ENTITLEMENT_ID,
@@ -161,6 +181,10 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const presentCustomerCenter = useCallback(async () => {
+    if (!REVENUECAT_ENABLED) {
+      console.log('[RevenueCat] disabled — skipping presentCustomerCenter');
+      return;
+    }
     try {
       await RevenueCatUI.presentCustomerCenter();
       // Refresh after user manages their subscription

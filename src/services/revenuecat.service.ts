@@ -15,6 +15,14 @@ import Purchases, {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+/**
+ * Master switch for RevenueCat integration.
+ * Set to `false` while we don't have a production API key — all SDK calls
+ * become no-ops and `isPro` defaults to `true` so premium features stay
+ * unlocked for testing builds.
+ */
+export const REVENUECAT_ENABLED = false;
+
 /** RevenueCat public SDK key (same key for both platforms during testing) */
 const API_KEY = 'test_HdGTsVRVGbHGXFBydudQTRISayC';
 
@@ -38,6 +46,12 @@ let _configured = false;
  */
 export function configureRevenueCat(): void {
   if (_configured) return;
+
+  if (!REVENUECAT_ENABLED) {
+    _configured = true;
+    console.log('[RevenueCat] disabled — skipping SDK configuration');
+    return;
+  }
 
   if (__DEV__) {
     Purchases.setLogLevel(LOG_LEVEL.DEBUG);
