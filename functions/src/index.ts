@@ -242,6 +242,43 @@ export const sendMorningReminder = onSchedule('every day 08:00', async () => {
   }
 });
 
+// ─── deleteConnection ─────────────────────────────────────────────────────────
+
+export const deleteConnection = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Must be signed in.');
+  }
+
+  const { userId, connectionId } = request.data as {
+    userId: string;
+    connectionId: string;
+  };
+
+  if (!userId || !connectionId) {
+    throw new HttpsError('invalid-argument', 'Missing userId or connectionId.');
+  }
+
+  // Only allow users to delete their own connections
+  if (request.auth.uid !== userId) {
+    throw new HttpsError('permission-denied', 'You can only delete your own connections.');
+  }
+
+  const connectionRef = db
+    .collection('users')
+    .doc(userId)
+    .collection('connections')
+    .doc(connectionId);
+
+  const snap = await connectionRef.get();
+  if (!snap.exists) {
+    throw new HttpsError('not-found', 'Connection not found.');
+  }
+
+  await connectionRef.delete();
+
+  return { deleted: true };
+});
+
 // ─── createConnection ─────────────────────────────────────────────────────────
 
 export const createConnection = onCall(async (request) => {
@@ -249,13 +286,22 @@ export const createConnection = onCall(async (request) => {
     throw new HttpsError('unauthenticated', 'Must be signed in.');
   }
 
-  const { userId, isMe, relationshipType, firstPerson, secondPerson, prompt: clientPrompt } = request.data as {
+  const {
+    userId,
+    isMe,
+    relationshipType,
+    firstPerson,
+    secondPerson,
+    prompt: clientPrompt,
+    birthDetailsChangeCount,
+  } = request.data as {
     userId: string;
     isMe: boolean;
     relationshipType: string;
     firstPerson: Record<string, any>;
     secondPerson: Record<string, any>;
     prompt?: string;
+    birthDetailsChangeCount?: number;
   };
 
   if (!userId || !relationshipType || !firstPerson || !secondPerson) {
@@ -312,15 +358,26 @@ export const createConnection = onCall(async (request) => {
     .collection('connections')
     .doc(connectionId);
 
-  await connectionRef.set({
-    connectionId,
-    relationshipType,
-    firstPerson: mappedFirst,
-    secondPerson: mappedSecond,
-    status: { state: 'pending' },
-    prompt,
-    createTime: FieldValue.serverTimestamp(),
-  });
+  const existingSnap = await connectionRef.get();
+  const isNew = !existingSnap.exists;
+
+  await connectionRef.set(
+    {
+      connectionId,
+      relationshipType,
+      firstPerson: mappedFirst,
+      secondPerson: mappedSecond,
+      status: { state: 'pending' },
+      prompt,
+      birthDetailsChangeCount:
+        typeof birthDetailsChangeCount === 'number'
+          ? birthDetailsChangeCount
+          : existingSnap.data()?.birthDetailsChangeCount ?? 0,
+      // Stamp createTime only on first creation; preserve it on edits
+      ...(isNew ? { createTime: FieldValue.serverTimestamp() } : {}),
+    },
+    { merge: true },
+  );
 
   return { connectionId };
 });
