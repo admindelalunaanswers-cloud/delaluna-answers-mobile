@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   Animated,
-  AppState,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -27,8 +26,7 @@ import { useUser } from '@/src/context/user-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
 import { useResponsive } from '@/src/hooks/use-responsive';
-import { useFocusEffect } from 'expo-router';
-import { buildHistory, deleteChatSession, retryChatMessage, saveChatAndClear, sendChatMessage, subscribeToChatHistory, subscribeToChatSessions } from '@/src/services/chat.service';
+import { buildHistory, deleteChatSession, resumeChatSession, retryChatMessage, saveChatAndClear, sendChatMessage, subscribeToChatHistory, subscribeToChatSessions } from '@/src/services/chat.service';
 import type { ChatMessageDoc, SavedChatSession } from '@/src/services/chat.service';
 import { ChatStore } from '@/src/stores/chat-store';
 import { HOME_STRINGS } from '@/src/constants/strings';
@@ -196,32 +194,34 @@ export default function ChatScreen() {
   }, []);
 
   // ─── Auto-save on leaving chat screen (navigate away) ─────────────────────
+  // Disabled: was clearing chat when tabbing away/back, breaking notification flow.
 
-  useFocusEffect(
-    useCallback(() => {
-      return () => {
-        if (!authUser || fromNotification.current) {
-          fromNotification.current = false;
-          return;
-        }
-        const msgs = messagesRef.current;
-        if (msgs.length > 0) {
-          saveChatAndClear(authUser.uid, msgs).catch(console.error);
-        }
-      };
-    }, [authUser]),
-  );
+  // useFocusEffect(
+  //   useCallback(() => {
+  //     return () => {
+  //       if (!authUser || fromNotification.current) {
+  //         fromNotification.current = false;
+  //         return;
+  //       }
+  //       const msgs = messagesRef.current;
+  //       if (msgs.length > 0) {
+  //         saveChatAndClear(authUser.uid, msgs).catch(console.error);
+  //       }
+  //     };
+  //   }, [authUser]),
+  // );
 
   // ─── Auto-save when app goes to background ────────────────────────────────
+  // Disabled: was clearing chat when app backgrounded, breaking notification flow.
 
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'background' && authUser && messagesRef.current.length > 0) {
-        saveChatAndClear(authUser.uid, messagesRef.current).catch(console.error);
-      }
-    });
-    return () => sub.remove();
-  }, [authUser]);
+  // useEffect(() => {
+  //   const sub = AppState.addEventListener('change', (state) => {
+  //     if (state === 'background' && authUser && messagesRef.current.length > 0) {
+  //       saveChatAndClear(authUser.uid, messagesRef.current).catch(console.error);
+  //     }
+  //   });
+  //   return () => sub.remove();
+  // }, [authUser]);
 
   // ─── Auto-send initial message from ChatStore ──────────────────────────────
 
@@ -289,6 +289,20 @@ export default function ChatScreen() {
     await saveChatAndClear(authUser.uid, messages);
   }, [authUser, messages]);
 
+  // ─── Resume saved chat ─────────────────────────────────────────────────────
+
+  const handleResumeSession = useCallback(async (session: SavedChatSession) => {
+    if (!authUser) return;
+    try {
+      await resumeChatSession(authUser.uid, session, messagesRef.current);
+      chatStarted.current = true;
+      setViewingSession(null);
+      setShowHistory(false);
+    } catch (e) {
+      console.error('chat resume error', e);
+    }
+  }, [authUser]);
+
   // ─── Derived ───────────────────────────────────────────────────────────────
 
   const showSuggestions = historyLoaded && messages.length === 0;
@@ -321,7 +335,16 @@ export default function ChatScreen() {
                 <Text style={[styles.historyTitle, { flex: 1, marginLeft: S.sm }]} numberOfLines={1}>
                   {viewingSession.title}
                 </Text>
-                <TouchableOpacity onPress={() => { setViewingSession(null); setShowHistory(false); }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <TouchableOpacity
+                  onPress={() => handleResumeSession(viewingSession)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={styles.resumeButton}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="play" size={16} color={C.white} />
+                  <Text style={styles.resumeButtonText}>Resume</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => { setViewingSession(null); setShowHistory(false); }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ marginLeft: S.sm }}>
                   <Ionicons name="close" size={24} color={C.white} />
                 </TouchableOpacity>
               </View>
@@ -705,5 +728,19 @@ const styles = StyleSheet.create({
     color: C.muted,
     fontSize: 12,
     marginTop: 2,
+  },
+  resumeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: S.sm,
+    paddingVertical: 6,
+    borderRadius: R.pill,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  resumeButtonText: {
+    color: C.white,
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

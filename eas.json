@@ -34,7 +34,8 @@
       "environment": "preview",
       "env": {
         "APP_ENV": "preview-device",
-        "EAS_UPDATE_CHANNEL": "preview-device"
+        "EAS_UPDATE_CHANNEL": "preview-device",
+        "USE_EMULATOR": "false"
       }
     },
     "preview": {
@@ -50,7 +51,8 @@
       "environment": "preview",
       "env": {
         "APP_ENV": "preview",
-        "EAS_UPDATE_CHANNEL": "preview-device"
+        "EAS_UPDATE_CHANNEL": "preview-device",
+        "USE_EMULATOR": "false"
       }
     },
     "production": {

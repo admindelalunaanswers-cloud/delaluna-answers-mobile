@@ -386,6 +386,59 @@ export const createConnection = onCall(async (request) => {
   return { connectionId };
 });
 
+// ─── Push helper ─────────────────────────────────────────────────────────────
+
+interface PushPayload {
+  title: string;
+  body: string;
+  data?: Record<string, string>;
+}
+
+/**
+ * Sends a single Expo push notification and logs the response.
+ * Logs Expo Push API errors (DeviceNotRegistered, InvalidCredentials, etc.)
+ * so we can diagnose why a push didn't arrive.
+ */
+async function sendExpoPush(
+  userId: string,
+  token: string,
+  payload: PushPayload,
+  context: string,
+): Promise<void> {
+  const message = {
+    to: token,
+    sound: 'default' as const,
+    title: payload.title,
+    body: payload.body,
+    channelId: 'default',
+    data: payload.data ?? {},
+    priority: 'high' as const,
+    _contentAvailable: true,
+  };
+
+  try {
+    const res = await fetch(EXPO_PUSH_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(message),
+    });
+
+    const json = await res.json().catch(() => null);
+    console.log(`[${context}] user=${userId} status=${res.status} response=${JSON.stringify(json)}`);
+
+    // Expo returns 200 even when individual messages have errors — check the data array
+    const ticket = json?.data?.[0] ?? json?.data;
+    if (ticket?.status === 'error') {
+      console.error(`[${context}] Push ticket error for user ${userId}:`, ticket);
+    }
+  } catch (err) {
+    console.error(`[${context}] Push send failed for user ${userId}:`, err);
+  }
+}
+
 // ─── notifyBreakdownReady ────────────────────────────────────────────────────
 
 /**
@@ -398,37 +451,32 @@ export const notifyBreakdownReady = onDocumentUpdated(
   async (event) => {
     const before = event.data?.before?.data();
     const after = event.data?.after?.data();
-
-    // Only fire when a new response appears
-    if (!after?.response) return;
-    if (before?.response === after.response) return;
-
     const userId = event.params.userId;
 
-    // Look up the user's push token
+    console.log(`[notifyBreakdownReady] Triggered for user ${userId}`);
+
+    // Only fire when a new response appears
+    if (!after?.response) {
+      console.log(`[notifyBreakdownReady] Skip — no response field on doc`);
+      return;
+    }
+    if (before?.response === after.response) {
+      console.log(`[notifyBreakdownReady] Skip — response unchanged`);
+      return;
+    }
+
     const userSnap = await db.collection('users').doc(userId).get();
     const token = userSnap.data()?.expoPushToken as string | undefined;
-    if (!token) return;
+    if (!token) {
+      console.log(`[notifyBreakdownReady] Skip — user ${userId} has no expoPushToken`);
+      return;
+    }
 
-    await fetch(EXPO_PUSH_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify({
-        to: token,
-        sound: 'default',
-        title: 'Your Birth Chart is Ready',
-        body: 'Your natal chart breakdown is complete. Tap to explore your cosmic blueprint.',
-        channelId: 'default',
-        data: { screen: '/(home)/birth-chart-view' },
-        priority: 'high',
-        _contentAvailable: true,
-      }),
-    });
-
-    console.log(`[notifyBreakdownReady] Push sent to user ${userId}`);
+    await sendExpoPush(userId, token, {
+      title: 'Your Birth Chart is Ready',
+      body: 'Your natal chart breakdown is complete. Tap to explore your cosmic blueprint.',
+      data: { screen: '/(home)/birth-chart-view' },
+    }, 'notifyBreakdownReady');
   }
 );
 
@@ -444,36 +492,31 @@ export const notifyChatReply = onDocumentUpdated(
   async (event) => {
     const before = event.data?.before?.data();
     const after = event.data?.after?.data();
-
-    // Only fire when a new response appears
-    if (!after?.response) return;
-    if (before?.response === after.response) return;
-
     const userId = event.params.userId;
+
+    console.log(`[notifyChatReply] Triggered for user ${userId}`);
+
+    if (!after?.response) {
+      console.log(`[notifyChatReply] Skip — no response field on doc`);
+      return;
+    }
+    if (before?.response === after.response) {
+      console.log(`[notifyChatReply] Skip — response unchanged`);
+      return;
+    }
 
     const userSnap = await db.collection('users').doc(userId).get();
     const token = userSnap.data()?.expoPushToken as string | undefined;
-    if (!token) return;
+    if (!token) {
+      console.log(`[notifyChatReply] Skip — user ${userId} has no expoPushToken`);
+      return;
+    }
 
-    await fetch(EXPO_PUSH_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify({
-        to: token,
-        sound: 'default',
-        title: 'New Message',
-        body: 'Your cosmic advisor has replied. Tap to read.',
-        channelId: 'default',
-        data: { screen: '/(main)/chat' },
-        priority: 'high',
-        _contentAvailable: true,
-      }),
-    });
-
-    console.log(`[notifyChatReply] Push sent to user ${userId}`);
+    await sendExpoPush(userId, token, {
+      title: 'New Message',
+      body: 'Your cosmic advisor has replied. Tap to read.',
+      data: { screen: '/(main)/chat' },
+    }, 'notifyChatReply');
   }
 );
 
