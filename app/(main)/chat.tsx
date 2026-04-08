@@ -21,12 +21,11 @@ import HeaderNav from '@/src/components/shared/header-nav';
 import PremiumUnlock from '@/src/components/shared/premium-unlock.component';
 import { ThemedView } from '@/src/components/themed-view';
 import { C, R, S } from '@/src/constants/theme';
-import { useHoroscope } from '@/src/context/horoscope-context';
 import { useUser } from '@/src/context/user-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
 import { useResponsive } from '@/src/hooks/use-responsive';
-import { buildHistory, deleteChatSession, resumeChatSession, retryChatMessage, saveChatAndClear, sendChatMessage, subscribeToChatHistory, subscribeToChatSessions } from '@/src/services/chat.service';
+import { deleteChatSession, resumeChatSession, retryChatMessage, saveChatAndClear, sendChatMessage, subscribeToChatHistory, subscribeToChatSessions } from '@/src/services/chat.service';
 import type { ChatMessageDoc, SavedChatSession } from '@/src/services/chat.service';
 import { ChatStore } from '@/src/stores/chat-store';
 import { HOME_STRINGS } from '@/src/constants/strings';
@@ -125,8 +124,7 @@ function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: C
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function ChatScreen() {
-  const { authUser, userDoc } = useUser();
-  const { chartDetails } = useHoroscope();
+  const { authUser } = useUser();
   const { isPro, presentPaywall } = useRevenueCat();
   const { inTrial } = useFreeTrialAccess();
   const insets = useSafeAreaInsets();
@@ -261,14 +259,13 @@ export default function ChatScreen() {
     setInputText('');
     setIsSending(true);
     try {
-      const history = buildHistory(messages.filter(m => !m.isPending));
-      await sendChatMessage(authUser.uid, msg, history, chartDetails, userDoc?.pronouns);
+      await sendChatMessage(authUser.uid, msg);
     } catch (e) {
       console.error('chat send error', e);
     } finally {
       setIsSending(false);
     }
-  }, [inputText, authUser, isSending, messages, chartDetails]);
+  }, [inputText, authUser, isSending, chatLocked]);
 
   // ─── Retry ─────────────────────────────────────────────────────────────────
 
