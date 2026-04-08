@@ -31,8 +31,8 @@ import type { ChatMessageDoc } from '@/src/services/chat.service';
 import { ChatStore } from '@/src/stores/chat-store';
 import { HOME_STRINGS } from '@/src/constants/strings';
 
-const FREE_CHAT_LIMIT = 3;
-const PREMIUM_CHAT_LIMIT = 5;
+// const FREE_CHAT_LIMIT = 3;
+// const PREMIUM_CHAT_LIMIT = 5;
 
 const SUGGESTIONS = [
   HOME_STRINGS.newLove.questionFunnel,
@@ -51,6 +51,11 @@ const VISIBLE_SUGGESTIONS = 5;
 
 function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+/** Strip markdown bold titles like **Reality Check:** and leftover asterisks */
+function stripBoldTitles(text: string): string {
+  return text.replace(/\*\*[^*]+:\*\*\s*/g, '').replace(/\*/g, '').replace(/^ +/gm, '').trim();
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -104,7 +109,7 @@ function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: C
               Something went wrong. Try again.
             </Text>
           ) : (
-            <Text style={styles.aiBubbleText}>{msg.response}</Text>
+            <Text style={styles.aiBubbleText}>{stripBoldTitles(msg.response ?? '')}</Text>
           )}
         </View>
         {showRetry && (
@@ -135,12 +140,15 @@ export default function ChatScreen() {
   const [showHistory, setShowHistory] = useState(false);
 
   const isPremium = isPro;
-  // During the 24h free trial, free users get the premium daily limit.
-  // After the trial expires, they fall back to the free tier.
-  const questionLimit = (isPremium || inTrial) ? PREMIUM_CHAT_LIMIT : FREE_CHAT_LIMIT;
+  // --- Limits temporarily disabled ---
+  // const questionLimit = (isPremium || inTrial) ? PREMIUM_CHAT_LIMIT : FREE_CHAT_LIMIT;
+  // const questionsUsed = messages.length;
+  // const questionsRemaining = Math.max(0, questionLimit - questionsUsed);
+  // const chatLocked = questionsUsed >= questionLimit;
+  const questionLimit = Infinity;
   const questionsUsed = messages.length;
-  const questionsRemaining = Math.max(0, questionLimit - questionsUsed);
-  const chatLocked = questionsUsed >= questionLimit;
+  const questionsRemaining = Infinity;
+  const chatLocked = false;
 
   const handleUpgrade = useCallback(async () => {
     try {
@@ -277,7 +285,7 @@ export default function ChatScreen() {
                   </View>
                   {m.response ? (
                     <View style={[styles.aiBubble, { alignSelf: 'flex-start' }]}>
-                      <Text style={styles.aiBubbleText}>{m.response}</Text>
+                      <Text style={styles.aiBubbleText}>{stripBoldTitles(m.response ?? '')}</Text>
                     </View>
                   ) : null}
                 </View>
@@ -328,12 +336,12 @@ export default function ChatScreen() {
               {isPremium ? (
                 <PremiumUnlock
                   title="Daily limit reached"
-                  message={`Premium members get ${PREMIUM_CHAT_LIMIT} questions per day. Come back tomorrow!`}
+                  message="Premium members have reached their daily limit. Come back tomorrow!"
                 />
               ) : inTrial ? (
                 <PremiumUnlock
                   title="Trial daily limit reached"
-                  message={`You've used all ${PREMIUM_CHAT_LIMIT} questions for today. Upgrade to keep this access after your free trial ends.`}
+                  message="You've used all questions for today. Upgrade to keep this access after your free trial ends."
                   onUnlock={handleUpgrade}
                 />
               ) : (

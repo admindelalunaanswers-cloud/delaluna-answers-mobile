@@ -801,20 +801,17 @@ export default function SingleConnectionCreateScreen() {
       let userNatalChart: any;
       let firstChart: NatalChart;
       if (isMe) {
-        const bday = userDoc?.birthday.toDate();
-        const bdayStr = bday
-          ? `${bday.getUTCMonth() + 1}/${bday.getUTCDate()}/${bday.getUTCFullYear()}`
-          : "";
+        const bdayStr = userDoc?.birthday ?? "";
         enrichedFirst = {
-          FirstName: userDoc?.firstName ?? "",
-          LastName: userDoc?.lastName ?? "",
+          "First Name": userDoc?.firstName ?? "",
+          "Last Name": userDoc?.lastName ?? "",
           Pronouns: userDoc?.pronouns ?? "",
-          Sun_Sign: chartDetails?.planets.find(p => p.name === 'Sun')?.sign ?? '',
-          Moon_Sign: chartDetails?.planets.find(p => p.name === 'Moon')?.sign ?? '',
-          Rising_Sign: chartDetails?.ascendant.sign ?? '',
+          "Sun Sign": chartDetails?.planets.find(p => p.name === 'Sun')?.sign ?? '',
+          "Moon Sign": chartDetails?.planets.find(p => p.name === 'Moon')?.sign ?? '',
+          "Rising Sign": chartDetails?.ascendant.sign ?? '',
           Birthday: bdayStr,
-          timeOfBirth: userDoc?.birthTime ?? "",
-          placeOfBirth: userDoc?.birthplace ?? "",
+          "Time of Birth": userDoc?.birthTime ?? "",
+          "Place of Birth": userDoc?.birthplace ?? "",
           birthLat: userDoc?.birthLat ?? null,
           birthLon: userDoc?.birthLon ?? null,
           birthTimezone: userDoc?.timezone ?? null,
