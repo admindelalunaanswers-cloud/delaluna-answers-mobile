@@ -66,6 +66,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   detailsContainer: {
+    width: "100%",
     alignItems: "center",
     gap: scale(4),
   }
