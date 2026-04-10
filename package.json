@@ -3,7 +3,7 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
-    "start": "expo start",
+    "start": "expo start -c",
     "emulators": "firebase emulators:start --only auth,functions,firestore,storage,eventarc,extensions --import=./seed --export-on-exit=./seed",
     "dev": "concurrently -k -n EMU,EXPO -c cyan,magenta \"firebase emulators:start --only auth,functions,firestore,storage,eventarc,extensions --import=./seed --export-on-exit=./seed\" \"expo start\"",
     "seed:export": "firebase emulators:export ./seed",
