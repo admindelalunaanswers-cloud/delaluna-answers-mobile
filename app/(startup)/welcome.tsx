@@ -41,7 +41,7 @@ export default function Welcome() {
             source={require('@/src/assets/animations/logo.json')}
             autoPlay
             loop={false}
-            style={{ width: logoW, aspectRatio: 0.95 / 2 }}
+            style={{ width: '100%', height: '100%' }}
           />
         </View>
       </View>
