@@ -263,17 +263,6 @@ export default function VerifyEmail() {
                   </ThemedText>
                 </TouchableOpacity>
 
-                {/* Reload */}
-                <TouchableOpacity
-                  onPress={handleReload}
-                  disabled={reloading}
-                  style={styles.signOutButton}
-                >
-                  <ThemedText style={[styles.signOutText, reloading && { opacity: 0.45 }]}>
-                    {reloading ? 'Reloading…' : 'Already verified? Reload'}
-                  </ThemedText>
-                </TouchableOpacity>
-
                 {/* Sign out link */}
                 <TouchableOpacity
                   onPress={handleSignOut}
