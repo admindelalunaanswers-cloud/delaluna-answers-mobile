@@ -13,25 +13,9 @@ import HeaderNav from "@/src/components/shared/header-nav";
 import { calculateSynastry, Aspect } from "@/src/services/astroEngine";
 import { TestingStore } from "@/src/stores/testing-store";
 import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
+import { summarizeSynastry } from "@/src/utils/synastry";
 
 const NAV_BAR_HEIGHT = 44;
-
-// ─── Key pairs ───────────────────────────────────────────────────────────────
-
-const KEY_PAIRS = new Set([
-  "Sun|Moon", "Moon|Sun",
-  "Sun|Venus", "Venus|Sun",
-  "Sun|Sun",
-  "Moon|Moon",
-  "Venus|Mars", "Mars|Venus",
-  "Moon|Venus", "Venus|Moon",
-  "Sun|Jupiter", "Jupiter|Sun",
-  "Mercury|Mercury",
-]);
-
-function isKeyPair(a: Aspect) {
-  return KEY_PAIRS.has(`${a.planet1}|${a.planet2}`);
-}
 
 // ─── Colors ──────────────────────────────────────────────────────────────────
 
@@ -119,10 +103,7 @@ export default function SynastryAnalysisScreen() {
   const { chartA, chartB, nameA, nameB } = payload;
   const aspects = calculateSynastry(chartA.planets, chartB.planets);
 
-  const keyAspects = aspects.filter(isKeyPair);
-  const harmonious = aspects.filter((a) => a.nature === "harmonious").length;
-  const challenging = aspects.filter((a) => a.nature === "challenging").length;
-  const neutral = aspects.filter((a) => a.nature === "neutral").length;
+  const { keyAspects, harmonious, neutral, challenging } = summarizeSynastry(aspects);
 
   const sunA = chartA.planets.find((p) => p.name === "Sun");
   const moonA = chartA.planets.find((p) => p.name === "Moon");
