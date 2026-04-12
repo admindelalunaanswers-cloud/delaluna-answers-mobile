@@ -15,6 +15,7 @@ import { router } from 'expo-router';
 import { calculateNatalChart, calculateSynastry, BirthData, Aspect, NatalChart } from '@/src/services/astroEngine';
 import { C, R, S } from '@/src/constants/theme';
 import { verticalScale } from '@/src/utils/responsive';
+import { summarizeSynastry } from '@/src/utils/synastry';
 import { TestingStore } from '@/src/stores/testing-store';
 
 type NominatimResult = {
@@ -38,24 +39,6 @@ function formatPlace(r: NominatimResult): string {
   const a = r.address;
   const place = a.city ?? a.town ?? a.village ?? a.municipality;
   return [place, a.state, a.country].filter(Boolean).join(', ') || r.display_name;
-}
-
-// Key synastry pairs — shown in a highlighted section before the full list
-const KEY_PAIRS = new Set([
-  'Sun|Moon', 'Moon|Sun',
-  'Sun|Venus', 'Venus|Sun',
-  'Sun|Sun',
-  'Moon|Moon',
-  'Venus|Mars', 'Mars|Venus',
-  'Moon|Venus', 'Venus|Moon',
-  'Sun|Jupiter', 'Jupiter|Sun',
-  'Mercury|Mercury',
-]);
-
-function pairKey(a: string, b: string) { return `${a}|${b}`; }
-
-function isKeyPair(a: Aspect) {
-  return KEY_PAIRS.has(pairKey(a.planet1, a.planet2));
 }
 
 // Duplicate of InputScreen's getUtcOffsetHours (small function, avoids shared-util overhead)
@@ -306,11 +289,7 @@ export default function SynastryScreen() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   // Results-page derived data
-  const keyAspects   = aspects.filter(isKeyPair);
-  const otherAspects = aspects.filter(a => !isKeyPair(a));
-  const harmonious   = aspects.filter(a => a.nature === 'harmonious').length;
-  const challenging  = aspects.filter(a => a.nature === 'challenging').length;
-  const neutral      = aspects.filter(a => a.nature === 'neutral').length;
+  const { keyAspects, harmonious, neutral, challenging } = summarizeSynastry(aspects);
 
   return (
     <SafeAreaView style={sc.safe} edges={['top']}>
