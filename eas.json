@@ -18,7 +18,7 @@
       "env": {
         "APP_ENV": "development",
         "EAS_UPDATE_CHANNEL": "development-device",
-        "USE_EMULATOR": "true"
+        "USE_EMULATOR": "false"
       }
     },
     "preview-device": {
