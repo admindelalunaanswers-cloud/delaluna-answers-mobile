@@ -21,7 +21,7 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 
 import SecondaryButton from '@/src/assets/buttons/secondary-button-component';
@@ -120,8 +120,11 @@ export default function Login() {
 
       const cred = await signInWithEmailAndPassword(auth, email.trim(), password.trim());
 
-      // Sync isAdmin on every login — catches promotions/removals since last sign-up
-      updateUserDoc(cred.user.uid, { isAdmin: isAdminEmail(email.trim().toLowerCase()) }).catch(console.error);
+      // Sync isAdmin + record login timestamp on every login
+      updateUserDoc(cred.user.uid, {
+        isAdmin: isAdminEmail(email.trim().toLowerCase()),
+        lastLoggedInAt: serverTimestamp() as any,
+      }).catch(console.error);
 
       const key = await resolveThemeBeforeNavigate(cred.user.uid);
       await Promise.resolve(setThemeKey(key));
