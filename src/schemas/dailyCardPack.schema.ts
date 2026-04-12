@@ -11,7 +11,7 @@ export const DailyCardPackSchema = z.object({
   meaningString: z.string(),
   reversedCount: z.number(),
   uprightCount: z.number(),
-  createdAt: z.number(),
+  createdAt: z.any(),
   firstView: z.boolean().default(false), // false = not yet revealed (tap to reveal)
 });
 

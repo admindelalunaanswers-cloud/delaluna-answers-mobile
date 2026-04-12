@@ -46,6 +46,11 @@ function sanitizeFirestoreData(obj: any, path: string = ''): any {
 
   if (obj instanceof Date) return obj;
 
+  // Preserve Firestore FieldValue sentinels (serverTimestamp, increment, etc.)
+  // These are objects with a `_methodName` marker — iterating their keys would
+  // strip the sentinel and save it as a literal map.
+  if (typeof obj === 'object' && '_methodName' in obj) return obj;
+
   // Numbers
   if (typeof obj === 'number') {
     if (!Number.isFinite(obj)) {
@@ -95,7 +100,7 @@ export async function createNewUserDoc(userId: string): Promise<void> {
     const docSnap = await getDoc(userDocRef);
 
     if (!docSnap.exists()) {
-      setDoc(userDocRef, {
+      await setDoc(userDocRef, {
         createdAt: serverTimestamp(),
         lastUpdatedAt: serverTimestamp(),
       });
@@ -130,14 +135,16 @@ export async function createUserDoc(userId: string, userData: FinalSignupPayload
     const sanitizedData = sanitizeFirestoreData({
       ...userData,
       ...(userData.email ? { email } : {}),
-      createdAt: serverTimestamp(),
-      lastUpdatedAt: serverTimestamp(),
       isPremiumMember: true,
       isEmailVerified: false,
       isAdmin: ADMIN_EMAILS.has(email.toLowerCase()),
     });
 
-    await setDoc(userDocRef, sanitizedData, { merge: true });
+    await setDoc(userDocRef, {
+      ...sanitizedData,
+      createdAt: serverTimestamp(),
+      lastUpdatedAt: serverTimestamp(),
+    }, { merge: true });
   } catch (error) {
     console.error('❌ Error creating user document:', error);
     throw new Error('Error creating user document');
@@ -210,10 +217,12 @@ export async function updateUserDoc(userId: string, userData: Partial<UserDoc>):
     const sanitizedData = sanitizeFirestoreData({
       ...userData,
       ...(normalizedEmail ? { email: normalizedEmail, isAdmin: ADMIN_EMAILS.has(normalizedEmail) } : {}),
-      lastUpdatedAt: serverTimestamp(),
     });
 
-    await setDoc(userDocRef, sanitizedData, { merge: true });
+    await setDoc(userDocRef, {
+      ...sanitizedData,
+      lastUpdatedAt: serverTimestamp(),
+    }, { merge: true });
   } catch (error) {
     console.error('❌ Error updating user document:', error);
     throw new Error('Error updating user document');
@@ -250,10 +259,12 @@ export async function updateUserBirthData(
       isBirthTimeUnknown: payload.isBirthTimeUnknown ?? false,
       isPlaceOfBirthUnknown: payload.isPlaceOfBirthUnknown ?? false,
       signupStatus: 'processing',
-      lastUpdatedAt: serverTimestamp(),
     });
 
-    await setDoc(userDocRef, sanitizedData, { merge: true });
+    await setDoc(userDocRef, {
+      ...sanitizedData,
+      lastUpdatedAt: serverTimestamp(),
+    }, { merge: true });
   } catch (error) {
     console.error('❌ Error updating user birth data:', error);
     throw new Error('Error updating user birth data');

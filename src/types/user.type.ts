@@ -32,6 +32,8 @@ export interface UserDoc {
   isPremiumMember:         boolean;
   isAdmin?:                boolean;
   createdAt:               Timestamp;
+  lastUpdatedAt?:          Timestamp;
+  lastLoggedInAt?:         Timestamp;
   expoPushToken?:          string;
   birthDetailsChangeCount?: number;  // max 3 allowed
 }
