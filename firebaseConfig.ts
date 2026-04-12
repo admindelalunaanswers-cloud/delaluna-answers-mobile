@@ -124,7 +124,8 @@ export const functions = getFunctions(app, "us-central1");
 
 // Emulator Support (DEV only)
 // Using LAN IP for real device testing
-export const USE_EMULATOR = __DEV__ && extra?.USE_EMULATOR === "true";
+// __DEV__ && extra?.USE_EMULATOR ===
+export const USE_EMULATOR = false;
 if (USE_EMULATOR) {
   const host: string = extra?.EMULATOR_HOST ?? "localhost";
   connectAuthEmulator(auth, `http://${host}:9099`);
