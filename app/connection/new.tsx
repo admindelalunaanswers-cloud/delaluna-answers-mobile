@@ -1020,7 +1020,7 @@ export default function SingleConnectionCreateScreen() {
                           ? require("@/src/assets/connections/consistent-words.png")
                           : key === "complicated"
                             ? require("@/src/assets/connections/complicated-words.png")
-                            : require("@/src/assets/connections/chaotic-words.png");
+                            : require("@/src/assets/connections/i-dunno-words.png");
                             
                       return (
                         
