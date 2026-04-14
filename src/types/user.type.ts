@@ -19,12 +19,12 @@ export interface UserDoc {
 
   // Birth details
   birthday:       Timestamp;       // midnight UTC of birth date
-  birthplace:     string;          // human-readable city/country
-  isBirthPlaceUnknown: boolean;
+  placeOfBirth:     string;          // human-readable city/country
+  isPlaceOfBirthUnknown: boolean;
   birthLat:       number;
   birthLon:       number;
-  timezone:       number;          // UTC offset e.g. -5, +5.5
-  birthTime:      string;          // "HH:MM" local time
+  birthTimezone:       number;          // UTC offset e.g. -5, +5.5
+  birthtime:      string;          // "HH:MM" local time
   isBirthTimeUnknown: boolean;
 
   pronouns?:               string;  // e.g. "She/Her", "He/Him", "They/Them", "Non Binary"
