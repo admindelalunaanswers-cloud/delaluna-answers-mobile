@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, Image, TouchableOpacity, StyleSheet, Alert, ScrollView,
+  View, Text, Image, TouchableOpacity, StyleSheet, Alert, ScrollView, ActivityIndicator,
 } from 'react-native';
 
 import { router } from 'expo-router';
@@ -62,7 +62,7 @@ function formatTimeDisplay(time: string): string {
 const NAV_BAR_HEIGHT = 44;
 
 export default function ProfileScreen() {
-  const { authUser, userDoc, refresh } = useUser();
+  const { authUser, userDoc, loading: userLoading, refresh } = useUser();
   const { refresh: refreshHoroscope } = useHoroscope();
   const {
     isPro,
@@ -211,6 +211,26 @@ export default function ProfileScreen() {
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────────
+
+  // Avoid rendering empty "—" placeholders while the user doc is still being
+  // fetched from Firestore (context sets `userDoc` to `undefined` until the
+  // first `getDoc` resolves).
+  const isUserDocLoading = userLoading || userDoc === undefined;
+
+  if (isUserDocLoading) {
+    return (
+      <ThemedView style={ss.container}>
+        <HeaderNav
+          title="Profile"
+          leftIconName="chevron-back-outline"
+          onLeftPress={() => router.back()}
+        />
+        <View style={[ss.loadingContainer, { paddingTop: insets.top + scale(NAV_BAR_HEIGHT) }]}>
+          <ActivityIndicator size="large" color="#6FFFE9" />
+        </View>
+      </ThemedView>
+    );
+  }
 
   return (
     <ThemedView style={ss.container}>
@@ -432,6 +452,7 @@ const ss = StyleSheet.create({
   container: { flex: 1 },
   scroll:    { flex: 1 },
   content:   { paddingHorizontal: scale(24), alignItems: 'center', gap: scale(8) },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   // Avatar
   avatarContainer: { position: 'relative', marginBottom: verticalScale(4) },
