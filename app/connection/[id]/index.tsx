@@ -1,3 +1,5 @@
+import { router, useLocalSearchParams } from "expo-router";
+import { doc, onSnapshot } from "firebase/firestore";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -9,23 +11,21 @@ import {
   View,
 } from "react-native";
 import Animated, {
-  useSharedValue,
   useAnimatedStyle,
-  withTiming,
+  useSharedValue,
   withDelay,
+  withTiming,
 } from "react-native-reanimated";
-import { router, useLocalSearchParams } from "expo-router";
-import { doc, onSnapshot } from "firebase/firestore";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { db } from "@/firebaseConfig";
-import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
-import { useUser } from "@/src/context/user-context";
 import HeaderNav from "@/src/components/shared/header-nav";
+import { ThemedText } from "@/src/components/themed-text";
 import { COMPATIBILITY_DEFINITIONS } from "@/src/constants/definitions";
+import { useUser } from "@/src/context/user-context";
 import { calculateNatalChart } from "@/src/services/astroEngine";
 import { TestingStore } from "@/src/stores/testing-store";
-import { ThemedText } from "@/src/components/themed-text";
+import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 
 const NAV_BAR_HEIGHT = 44;
 const BAR_MAX_WIDTH = Dimensions.get("window").width - scale(18) * 2;
@@ -226,27 +226,78 @@ export default function ConnectionViewScreen() {
   const [computingSynastry, setComputingSynastry] = useState(false);
 
   const parseBirthParams = (p: PersonInfo) => {
-    const [month, day, year] = (p.birthday ?? '').split('/').map(Number);
+    const raw = (p.birthday ?? '').trim();
+    let year: number, month: number, day: number;
+    if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(raw)) {
+      [year, month, day] = raw.split('-').map(Number);
+    } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(raw)) {
+      [month, day, year] = raw.split('/').map(Number);
+    } else {
+      throw new Error(`Invalid birthday format: "${raw}"`);
+    }
+
     let hour = 0, min = 0;
-    const match = (p.timeOfBirth ?? '').trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-    if (match) {
-      let h = Number(match[1]);
-      min = Number(match[2]);
-      const period = match[3].toUpperCase();
+    const timeRaw = (p.timeOfBirth ?? '').trim();
+    const ampm = timeRaw.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (ampm) {
+      let h = Number(ampm[1]);
+      min = Number(ampm[2]);
+      const period = ampm[3].toUpperCase();
       if (period === 'PM' && h !== 12) h += 12;
       if (period === 'AM' && h === 12) h = 0;
       hour = h;
-    } else {
-      const parts = (p.timeOfBirth ?? '').split(':');
-      hour = Number(parts[0]) || 0;
-      min = Number(parts[1]) || 0;
+    } else if (/^\d{1,2}:\d{2}$/.test(timeRaw)) {
+      const [h, m] = timeRaw.split(':').map(Number);
+      hour = h;
+      min = m;
     }
-    return {
+
+    const params = {
       year, month, day, hour, minute: min,
       lat: p.birthLat ?? 0,
       lon: p.birthLon ?? 0,
       timezone: p.birthTimezone ?? 0,
     };
+    if (
+      !Number.isFinite(params.year) ||
+      !Number.isFinite(params.month) ||
+      !Number.isFinite(params.day)
+    ) {
+      throw new Error(`Invalid birth params: ${JSON.stringify(params)}`);
+    }
+    return params;
+  };
+
+  const handleCompareBirthChart = async () => {
+    const fp = connection?.firstPerson;
+    const sp = connection?.secondPerson;
+    
+    if (!fp?.birthday || !sp?.birthday) {
+      console.warn("Missing birthday info for one or both persons");
+      return;
+    }
+    
+      setComputingSynastry(true);
+    try {
+      const chartA = await calculateNatalChart(parseBirthParams(fp));
+      const chartB = await calculateNatalChart(parseBirthParams(sp));
+      
+      TestingStore.setSynastryAnalysis({
+        chartA,
+        chartB,
+        nameA: `${fp.firstName ?? ''} ${fp.lastName ?? ''}`.trim(),
+        nameB: `${sp.firstName ?? ''} ${sp.lastName ?? ''}`.trim(),
+      });
+      
+      router.push(`/connection/${connectionId}/synastry`);
+     
+    } catch (e) {
+      console.error("Error calculating synastry:", e);
+      setComputingSynastry(false);
+    } 
+
+
+
   };
 
   const handleCompareBirthCharts = async () => {
@@ -259,12 +310,7 @@ export default function ConnectionViewScreen() {
       const chartA = await calculateNatalChart(parseBirthParams(fp));
       const chartB = await calculateNatalChart(parseBirthParams(sp));
 
-      TestingStore.setSynastryAnalysis({
-        chartA,
-        chartB,
-        nameA: `${fp.firstName ?? ''} ${fp.lastName ?? ''}`.trim(),
-        nameB: `${sp.firstName ?? ''} ${sp.lastName ?? ''}`.trim(),
-      });
+      
       router.push(`/connection/${connectionId}/synastry`);
     } catch (e) {
       console.error("Error calculating synastry:", e);
@@ -342,15 +388,11 @@ export default function ConnectionViewScreen() {
           {/* Compare Birth Charts */}
           <TouchableOpacity
               style={styles.compareBirthChartsBtn}
-              onPress={handleCompareBirthCharts}
+              onPress={handleCompareBirthChart}
               activeOpacity={0.75}
               disabled={computingSynastry}
             >
-              {computingSynastry ? (
-                <ActivityIndicator size="small" color="#B8A3FF" />
-              ) : (
-                <Text style={styles.compareBirthChartsBtnText}>Compare Birth Charts</Text>
-              )}
+              <Text style={styles.compareBirthChartsBtnText}>Compare Birth Charts</Text>
             </TouchableOpacity>
 
           {/* Score bars or pending state */}

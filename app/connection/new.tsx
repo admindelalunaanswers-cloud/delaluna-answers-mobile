@@ -810,13 +810,13 @@ export default function SingleConnectionCreateScreen() {
           "Moon Sign": chartDetails?.planets.find(p => p.name === 'Moon')?.sign ?? '',
           "Rising Sign": chartDetails?.ascendant.sign ?? '',
           Birthday: bdayStr,
-          "Time of Birth": userDoc?.birthTime ?? "",
-          "Place of Birth": userDoc?.birthplace ?? "",
+          "Time of Birth": userDoc?.birthtime ?? "",
+          "Place of Birth": userDoc?.placeOfBirth ?? "",
           birthLat: userDoc?.birthLat ?? null,
           birthLon: userDoc?.birthLon ?? null,
-          birthTimezone: userDoc?.timezone ?? null,
+          birthTimezone: userDoc?.birthTimezone ?? null,
           isBirthTimeUnknown: userDoc?.isBirthTimeUnknown ?? false,
-          isPlaceOfBirthUnknown: userDoc?.isBirthPlaceUnknown ?? false,
+          isPlaceOfBirthUnknown: userDoc?.isPlaceOfBirthUnknown ?? false,
         };
         userNatalChart = chartDetails ?? null;
         console.log("Saving connection with data:", { enrichedFirst, userNatalChart });
