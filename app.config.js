@@ -31,7 +31,7 @@ module.exports = {
         "expo-notifications",
         {
           icon: "./src/assets/dlla-branded/delaluna_app_icon.png",
-          color: "#0d0628",
+          color: "#ffffff",
           sounds: [],
           enableFCMv1: true,
         },
@@ -42,7 +42,7 @@ module.exports = {
           image: "./src/assets/dlla-branded/delaluna_app_icon.png",
           imageWidth: 200,
           resizeMode: "contain",
-          backgroundColor: "#1e083e",
+          backgroundColor: "#ffffff",
         },
       ],
       "@react-native-community/datetimepicker",
