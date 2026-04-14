@@ -29,6 +29,8 @@ export const RETURNS_DEFINITION = "Interferences can create obstacles in your cu
 
 export const TRANSITS_DEFINITION = "Planets are always moving and visiting different areas of your chart. As a result, they are constantly bringing new energy and events to your life. This is your 'cosmic weather report,' showing which areas of your life are seeing sunshine or storms this week.";
 
+export const CONNECTIONS_DEFINITION = "Connections reveal how someone's planets speak to yours, where you click, where you clash, and the unspoken chemistry underneath.";
+
 export const HOUSE_KEYWORDS: Record<string, string> = {
   '1':  'Body & Style',
   '2':  'Money',

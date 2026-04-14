@@ -21,7 +21,7 @@ import { Ionicons } from "@expo/vector-icons";
 import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
 import { httpsCallable } from "firebase/functions";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { initialWindowSafeAreaInsets, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { db, functions } from "../../firebaseConfig";
 import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
@@ -32,6 +32,8 @@ import HeaderNav from "@/src/components/shared/header-nav";
 import DelalunaContainer from "@/src/components/shared/delaluna-container.component";
 import { ThemedView } from "@/src/components/themed-view";
 import { ConnectionsCache, connectionDisplayName } from "@/src/services/connections-cache.service";
+import { ThemedText } from "@/src/components/themed-text";
+import { CONNECTIONS_DEFINITION } from "@/src/constants/definitions";
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -222,7 +224,6 @@ export default function ConnectionsScreen() {
 
   if (loading) {
     return (
-      
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#fff" />
       </View>
@@ -239,13 +240,15 @@ export default function ConnectionsScreen() {
           rightIconName={hasConnections ? "add" : undefined}
           onRightPress={hasConnections ? goToNewConnectionScreen : undefined}
         />
-
+         <ThemedText type="definition" style={{ marginTop: headerHeight, paddingHorizontal: scale(10), paddingVertical: scale(15), textAlign: "center" }}>
+            {CONNECTIONS_DEFINITION}
+          </ThemedText>
         {hasConnections ? (
           <ScrollView
             style={{ flex: 1 }}
             contentContainerStyle={[
               styles.listContainer,
-              { marginTop: headerHeight, paddingBottom: insets.bottom + verticalScale(60) },
+              { paddingBottom: insets.bottom + verticalScale(60) },
             ]}
             showsVerticalScrollIndicator={false}
           >
@@ -290,9 +293,8 @@ export default function ConnectionsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, width: "100%" },
   centered: { flex: 1, justifyContent: "space-around", alignItems: "center", padding: scale(15) },
-  listContainer: { flexGrow: 1, paddingHorizontal: scale(15), paddingTop: verticalScale(20) },
+  listContainer: { flexGrow: 1, paddingHorizontal: scale(15),  },
   connectionItem: { padding: scale(16), flexDirection: "row",
-    alignItems: "center",
     justifyContent: "center", },
   connectionItemLocked: { opacity: 0.55 },
   connectionName: { color: "#fff", fontSize: moderateScale(16) },
