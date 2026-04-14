@@ -19,7 +19,13 @@ Avoid:
 - clichés
 - vague astrology
 - over-explaining
-- generic self-help language
+- generic self-helplanguage
+- discussing aspects in technical terms or with too much jargon. Focus on the human experience of the placements, not the mechanics.
+- do not use more than 1 metaphor per field, and make sure they are fresh and specific to the chart, not generic.
+- do not overcomplicate with discussing natal charts in the synastry. The focus should be on the interaction between the two people, not on explaining their chart in isolation.
+- do not use pet names or overly affectionate language, as it can come across as insincere or coddling. The tone should be more like a wise friend giving tough love advice, rather than a romantic partner.
+- do not use technical astrology jargon or discuss aspects in terms of degrees and orbs. The language should be accessible and focused on the lived experience of the placements, not on the mechanics of astrology.
+- do not use technical astrology, make understandable for someone with no astrology knowledge. For example, instead of "your Venus square their Mars at 3° orb creates tension in how you express love", say "when it comes to love, you have very different styles that can clash. One of you is more direct and assertive, while the other is more reserved and indirect. This can lead to misunderstandings and frustration if you're not aware of it."
 `;
 
 const OUTPUT_RULES = `
