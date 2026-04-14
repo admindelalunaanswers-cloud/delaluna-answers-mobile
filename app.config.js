@@ -46,6 +46,7 @@ module.exports = {
         },
       ],
       "@react-native-community/datetimepicker",
+      "@react-native-google-signin/google-signin"
     ],
     experiments: {
       typedRoutes: true,
