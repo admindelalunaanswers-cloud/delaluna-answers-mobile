@@ -2,12 +2,22 @@ import { Text, type TextProps } from 'react-native';
 
 import { useResponsive } from '@/src/hooks/use-responsive';
 import { useThemeColor } from '@/src/hooks/use-theme-color';
+import { verticalScale } from '@/src/utils/responsive';
 import { C } from '../constants/theme';
 
 export type ThemedTextProps = TextProps & {
   lightColor?: string;
   darkColor?: string;
-  type?: 'default' | 'title' | 'defaultSemiBold' | 'subtitle' | 'link' | 'table';
+  type?:
+    | 'default'
+    | 'title'
+    | 'defaultSemiBold'
+    | 'subtitle'
+    | 'link'
+    | 'table'
+    | 'definition'
+    | 'question'
+    | 'sectionDefinition';
 };
 
 export function ThemedText({
@@ -32,6 +42,34 @@ export function ThemedText({
         return { fontSize: moderateScale(16), lineHeight: moderateScale(30), color: '#0a7ea4' };
       case 'table':
         return { fontSize: moderateScale(16), lineHeight: moderateScale(14) };
+      case 'definition':
+        return {
+          marginTop: verticalScale(16),
+          fontSize: moderateScale(14),
+          color: 'rgba(255,255,255,0.6)',
+          textAlign: 'center' as const,
+          marginBottom: verticalScale(16),
+          alignSelf: 'stretch' as const,
+        };
+      case 'question':
+        return {
+          borderWidth: 1,
+          borderColor: 'rgba(188,168,244,0.35)',
+          borderRadius: 20,
+          paddingVertical: 10,
+          paddingHorizontal: 16,
+          marginBottom: 24,
+          backgroundColor: 'rgba(188,168,244,0.07)',
+        };
+      case 'sectionDefinition':
+        return {
+          color: 'rgba(255,255,255,0.4)',
+          fontSize: 12,
+          lineHeight: 18,
+          marginTop: -8,
+          marginBottom: 8,
+          textAlign: 'center' as const,
+        };
       default:
         return { fontSize: moderateScale(16), lineHeight: moderateScale(24) };
     }
