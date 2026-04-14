@@ -1,89 +1,154 @@
-import React from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Image,
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import HeaderNav from "@/src/components/shared/header-nav";
-import { calculateSynastry, Aspect } from "@/src/services/astroEngine";
+import SynastryWheel from "@/src/components/synastry/synastry-wheel.draw";
+import { calculateSynastry } from "@/src/services/astroEngine";
+import {
+  fetchSynastryReading,
+  requestSynastryReading,
+  subscribeToSynastryReading,
+} from "@/src/services/synastry-reading.service";
+import { useUser } from "@/src/context/user-context";
 import { TestingStore } from "@/src/stores/testing-store";
+import { selectTopAspects } from "@/src/utils/synastry";
+import type { SynastryReadingResult } from "@/src/types/synastry-reading.types";
+import { C } from "@/src/constants/theme";
 import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
-import { summarizeSynastry } from "@/src/utils/synastry";
 
 const NAV_BAR_HEIGHT = 44;
 
-// ─── Colors ──────────────────────────────────────────────────────────────────
+// ─── Sub-components ─────────────────────────────────────────────────────────
 
-const NATURE_COLORS: Record<string, string> = {
-  harmonious: "#41FF88",
-  challenging: "#FF3B3B",
-  neutral: "#FFDD00",
-  minor: "#9098b8",
-};
-
-const SIGN_ICONS = {
-  sun: require("@/src/assets/main/sun_icon.png"),
-  moon: require("@/src/assets/main/moon_icon.png"),
-  rising: require("@/src/assets/main/arrow_upward_icon.png"),
-};
-
-// ─── Sub-components ──────────────────────────────────────────────────────────
-
-function SignRow({ icon, value }: { icon: any; value?: string }) {
+function NamesRow({ nameA, nameB }: { nameA: string; nameB: string }) {
   return (
-    <View style={styles.signRow}>
-      <Image
-        source={icon}
-        style={styles.signIcon}
-        resizeMode="contain"
-        tintColor="rgba(255,255,255,0.6)"
+    <View style={styles.namesRow}>
+      <Text
+        style={[styles.nameText, { color: C.purpleLight }]}
+        numberOfLines={1}
+      >
+        {nameA}
+      </Text>
+      <Ionicons
+        name="heart"
+        size={moderateScale(16)}
+        color="#ffffff"
+        style={styles.heartIcon}
       />
-      <Text style={styles.signValue} numberOfLines={1}>{value || "\u2014"}</Text>
+      <Text
+        style={[styles.nameText, { color: C.gold }]}
+        numberOfLines={1}
+      >
+        {nameB}
+      </Text>
     </View>
   );
 }
 
-function AspectRow({ aspect, highlighted }: { aspect: Aspect; highlighted?: boolean }) {
-  const color = NATURE_COLORS[aspect.nature] ?? "rgba(255,255,255,0.5)";
-  const orbDeg = Math.floor(aspect.orb);
-  const orbMin = Math.floor((aspect.orb % 1) * 60);
-
+function ReadingSection({
+  label,
+  body,
+  loading,
+}: {
+  label: string;
+  body?: string;
+  loading: boolean;
+}) {
   return (
-    <View style={[styles.aspectRow, highlighted && styles.aspectRowHighlighted]}>
-      <View style={styles.aspectSymbols}>
-        <Text style={[styles.planetSymbol, { color: "rgba(255,255,255,0.85)" }]}>{aspect.symbol1}</Text>
-        <Text style={[styles.aspectSymbol, { color }]}>{aspect.aspectSymbol}</Text>
-        <Text style={[styles.planetSymbol, { color: "rgba(255,255,255,0.85)" }]}>{aspect.symbol2}</Text>
-      </View>
-      <View style={styles.aspectInfo}>
-        <Text style={[styles.aspectType, { color }]}>{aspect.type}</Text>
-        <Text style={styles.aspectPlanets}>{aspect.planet1} / {aspect.planet2}</Text>
-      </View>
-      <Text style={styles.aspectOrb}>{orbDeg}°{String(orbMin).padStart(2, "0")}'</Text>
+    <View style={styles.readingCard}>
+      <Text style={styles.readingLabel}>{label}</Text>
+      {body ? (
+        <Text style={styles.readingBody}>{body}</Text>
+      ) : loading ? (
+        <View style={styles.readingLoading}>
+          <ActivityIndicator size="small" color="rgba(255,255,255,0.6)" />
+          <Text style={styles.readingLoadingText}>Generating…</Text>
+        </View>
+      ) : (
+        <Text style={styles.readingPlaceholder}>Reading unavailable.</Text>
+      )}
     </View>
   );
 }
 
-function CountPill({ count, label, color }: { count: number; label: string; color: string }) {
-  return (
-    <View style={[styles.countPill, { borderColor: color }]}>
-      <Text style={[styles.countNumber, { color }]}>{count}</Text>
-      <Text style={styles.countLabel}>{label}</Text>
-    </View>
-  );
-}
-
-// ─── Screen ──────────────────────────────────────────────────────────────────
+// ─── Screen ─────────────────────────────────────────────────────────────────
 
 export default function SynastryAnalysisScreen() {
   const payload = TestingStore.getSynastryAnalysis();
   const insets = useSafeAreaInsets();
   const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
+  const { width: windowWidth } = useWindowDimensions();
+  const { id: connectionId } = useLocalSearchParams<{ id: string }>();
+  const { authUser } = useUser();
+
+  const wheelSize = Math.min(windowWidth - scale(36), scale(340));
+
+  const topAspects = useMemo(() => {
+    if (!payload) return [];
+    const aspects = calculateSynastry(payload.chartA.planets, payload.chartB.planets);
+    return selectTopAspects(aspects);
+  }, [payload]);
+
+  const [reading, setReading] = useState<SynastryReadingResult | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const unsubRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (!payload || !connectionId || !authUser?.uid) return;
+
+    const uid = authUser.uid;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const existing = await fetchSynastryReading(uid, connectionId);
+        if (cancelled) return;
+
+        if (existing.result) {
+          setReading(existing.result);
+          setLoading(false);
+          return;
+        }
+
+        if (!existing.pending) {
+          await requestSynastryReading(
+            uid,
+            connectionId,
+            payload.chartA,
+            payload.chartB,
+            payload.nameA,
+            payload.nameB,
+          );
+        }
+
+        if (cancelled) return;
+
+        unsubRef.current = subscribeToSynastryReading(uid, connectionId, (r) => {
+          setReading(r);
+          setLoading(false);
+        });
+      } catch (err) {
+        console.error("[synastry] failed to load reading", err);
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      unsubRef.current?.();
+      unsubRef.current = null;
+    };
+  }, [payload, connectionId, authUser?.uid]);
 
   if (!payload) {
     return (
@@ -101,14 +166,6 @@ export default function SynastryAnalysisScreen() {
   }
 
   const { chartA, chartB, nameA, nameB } = payload;
-  const aspects = calculateSynastry(chartA.planets, chartB.planets);
-
-  const { keyAspects, harmonious, neutral, challenging } = summarizeSynastry(aspects);
-
-  const sunA = chartA.planets.find((p) => p.name === "Sun");
-  const moonA = chartA.planets.find((p) => p.name === "Moon");
-  const sunB = chartB.planets.find((p) => p.name === "Sun");
-  const moonB = chartB.planets.find((p) => p.name === "Moon");
 
   return (
     <View style={styles.wrapper}>
@@ -123,65 +180,50 @@ export default function SynastryAnalysisScreen() {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
-          {/* Names */}
-          <Text style={styles.namesText}>{nameA}  &  {nameB}</Text>
+          <NamesRow nameA={nameA} nameB={nameB} />
 
-          {/* Big Three side by side */}
-          <View style={styles.bigThreeCard}>
-            <Text style={styles.sectionLabel}>BIG THREE</Text>
-            <View style={styles.signsContainer}>
-              <View style={styles.signsCol}>
-                <Text style={styles.signPersonLabel}>{nameA}</Text>
-                <SignRow icon={SIGN_ICONS.sun} value={sunA?.sign} />
-                <SignRow icon={SIGN_ICONS.moon} value={moonA?.sign} />
-                <SignRow icon={SIGN_ICONS.rising} value={chartA.ascendant.sign} />
-              </View>
-              <View style={styles.signsDivider} />
-              <View style={styles.signsCol}>
-                <Text style={styles.signPersonLabel}>{nameB}</Text>
-                <SignRow icon={SIGN_ICONS.sun} value={sunB?.sign} />
-                <SignRow icon={SIGN_ICONS.moon} value={moonB?.sign} />
-                <SignRow icon={SIGN_ICONS.rising} value={chartB.ascendant.sign} />
-              </View>
+          <View style={styles.wheelWrap}>
+            <SynastryWheel
+              chartA={chartA}
+              chartB={chartB}
+              highlightedAspects={topAspects}
+              size={wheelSize}
+            />
+          </View>
+
+          <View style={styles.legendRow}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: C.purpleLight }]} />
+              <Text style={styles.legendText}>{nameA}</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: C.gold }]} />
+              <Text style={styles.legendText}>{nameB}</Text>
             </View>
           </View>
 
-          {/* Compatibility overview */}
-          <Text style={styles.sectionLabel}>COMPATIBILITY OVERVIEW</Text>
-          <View style={styles.countRow}>
-            <CountPill count={harmonious} label="Harmonious" color={NATURE_COLORS.harmonious} />
-            <CountPill count={neutral} label="Neutral" color={NATURE_COLORS.neutral} />
-            <CountPill count={challenging} label="Challenging" color={NATURE_COLORS.challenging} />
-          </View>
-
-          {/* Key connections */}
-          {keyAspects.length > 0 && (
-            <>
-              <Text style={styles.sectionLabel}>KEY CONNECTIONS</Text>
-              <View style={styles.aspectList}>
-                {keyAspects.map((a, i) => (
-                  <AspectRow key={i} aspect={a} highlighted />
-                ))}
-              </View>
-            </>
-          )}
-
-          {/* All aspects */}
-          <Text style={styles.sectionLabel}>ALL ASPECTS ({aspects.length})</Text>
-          <View style={styles.aspectList}>
-            {aspects.length === 0 ? (
-              <Text style={styles.noAspects}>No major aspects found.</Text>
-            ) : (
-              aspects.map((a, i) => <AspectRow key={i} aspect={a} />)
-            )}
-          </View>
+          <ReadingSection
+            label="LOVE LANGUAGE"
+            body={reading?.loveLanguage}
+            loading={loading}
+          />
+          <ReadingSection
+            label="CONFLICT STYLE"
+            body={reading?.conflictStyle}
+            loading={loading}
+          />
+          <ReadingSection
+            label="LONGEVITY"
+            body={reading?.longevity}
+            loading={loading}
+          />
         </ScrollView>
       </View>
     </View>
   );
 }
 
-// ─── Styles ──────────────────────────────────────────────────────────────────
+// ─── Styles ─────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   wrapper: {
@@ -199,23 +241,8 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: scale(18),
-    paddingTop: verticalScale(20),
+    paddingTop: verticalScale(16),
     paddingBottom: verticalScale(48),
-  },
-  namesText: {
-    color: "#B8A3FF",
-    fontSize: moderateScale(18),
-    fontWeight: "600",
-    textAlign: "center",
-    marginBottom: verticalScale(16),
-  },
-  sectionLabel: {
-    color: "#FFFFFF",
-    fontSize: moderateScale(12),
-    fontWeight: "600",
-    letterSpacing: 1.5,
-    marginBottom: verticalScale(10),
-    textAlign: "center",
   },
   errorText: {
     color: "#FF6B6B",
@@ -223,141 +250,86 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // Big Three
-  bigThreeCard: {
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    borderRadius: scale(12),
-    padding: scale(14),
-    marginBottom: verticalScale(20),
+  // Names header
+  namesRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: verticalScale(12),
   },
-  signsContainer: {
+  nameText: {
+    fontSize: moderateScale(17),
+    fontWeight: "700",
+    letterSpacing: 0.3,
+    flexShrink: 1,
+  },
+  heartIcon: {
+    marginHorizontal: scale(10),
+  },
+
+  // Wheel
+  wheelWrap: {
+    alignItems: "center",
+    marginBottom: verticalScale(8),
+  },
+  legendRow: {
     flexDirection: "row",
     justifyContent: "center",
+    gap: scale(20),
+    marginBottom: verticalScale(20),
   },
-  signsCol: {
-    flex: 0,
-    minWidth: scale(120),
-    alignItems: "center",
-    gap: verticalScale(6),
-  },
-  signsDivider: {
-    width: 1,
-    backgroundColor: "rgba(255,255,255,0.1)",
-    marginHorizontal: scale(12),
-  },
-  signPersonLabel: {
-    color: "#B8A3FF",
-    fontSize: moderateScale(12),
-    fontWeight: "600",
-    marginBottom: verticalScale(4),
-    textAlign: "center",
-  },
-  signRow: {
+  legendItem: {
     flexDirection: "row",
     alignItems: "center",
     gap: scale(6),
   },
-  signIcon: {
-    width: scale(16),
-    height: scale(16),
-    flexShrink: 0,
+  legendDot: {
+    width: scale(8),
+    height: scale(8),
+    borderRadius: scale(4),
   },
-  signValue: {
-    color: "rgba(255,255,255,0.8)",
-    fontSize: moderateScale(13),
-    flexShrink: 1,
-  },
-
-  // Count pills
-  countRow: {
-    flexDirection: "row",
-    gap: scale(8),
-    marginBottom: verticalScale(20),
-  },
-  countPill: {
-    flex: 1,
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderRadius: scale(12),
-    borderWidth: 1,
-    paddingVertical: verticalScale(12),
-  },
-  countNumber: {
-    fontSize: moderateScale(26),
-    fontWeight: "800",
-    lineHeight: moderateScale(30),
-  },
-  countLabel: {
-    color: "rgba(255,255,255,0.5)",
-    fontSize: moderateScale(9),
-    fontWeight: "700",
-    letterSpacing: 1,
-    marginTop: verticalScale(2),
+  legendText: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: moderateScale(11),
+    fontWeight: "600",
   },
 
-  // Aspects
-  aspectList: {
+  // Reading cards
+  readingCard: {
     backgroundColor: "rgba(255,255,255,0.05)",
     borderRadius: scale(12),
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
-    overflow: "hidden",
-    marginBottom: verticalScale(20),
+    paddingVertical: verticalScale(16),
+    paddingHorizontal: scale(16),
+    marginBottom: verticalScale(14),
   },
-  aspectRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: scale(14),
-    paddingVertical: verticalScale(10),
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.06)",
-  },
-  aspectRowHighlighted: {
-    backgroundColor: "rgba(184,163,255,0.1)",
-  },
-  aspectSymbols: {
-    flexDirection: "row",
-    alignItems: "center",
-    width: scale(68),
-    gap: 2,
-  },
-  planetSymbol: {
-    fontSize: moderateScale(17),
-    width: scale(22),
-    textAlign: "center",
-  },
-  aspectSymbol: {
-    fontSize: moderateScale(14),
-    width: scale(20),
-    textAlign: "center",
-    fontWeight: "700",
-  },
-  aspectInfo: {
-    flex: 1,
-    paddingHorizontal: scale(8),
-  },
-  aspectType: {
+  readingLabel: {
+    color: "#ffffff",
     fontSize: moderateScale(12),
     fontWeight: "700",
-    letterSpacing: 0.5,
+    letterSpacing: 1.5,
+    marginBottom: verticalScale(10),
   },
-  aspectPlanets: {
-    color: "rgba(255,255,255,0.4)",
-    fontSize: moderateScale(10),
-    marginTop: 1,
-  },
-  aspectOrb: {
-    color: "rgba(255,255,255,0.6)",
-    fontSize: moderateScale(11),
-    minWidth: scale(40),
-    textAlign: "right",
-  },
-  noAspects: {
-    color: "rgba(255,255,255,0.5)",
+  readingBody: {
+    color: "rgba(255,255,255,0.82)",
     fontSize: moderateScale(13),
-    textAlign: "center",
-    padding: scale(20),
+    lineHeight: moderateScale(20),
+  },
+  readingLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: verticalScale(8),
+    gap: scale(10),
+  },
+  readingLoadingText: {
+    color: "rgba(255,255,255,0.55)",
+    fontSize: moderateScale(12),
+    fontStyle: "italic",
+  },
+  readingPlaceholder: {
+    color: "rgba(255,255,255,0.35)",
+    fontSize: moderateScale(12),
+    fontStyle: "italic",
   },
 });
