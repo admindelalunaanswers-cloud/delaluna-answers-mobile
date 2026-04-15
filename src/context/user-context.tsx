@@ -3,9 +3,9 @@
  * Listens to Firebase Auth state, fetches the Firestore user doc + purchases subcollection.
  */
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, collection, getDocs, Unsubscribe } from 'firebase/firestore';
 import { auth, db } from '@/firebaseConfig';
 import type { UserDoc, PurchaseDoc } from '@/src/types/user.type';
 
@@ -38,11 +38,6 @@ const UserContext = createContext<UserContextValue>({
 
 // ─── Fetch helpers ────────────────────────────────────────────────────────────
 
-async function fetchUserDoc(uid: string): Promise<UserDoc | null> {
-  const snap = await getDoc(doc(db, 'users', uid));
-  return snap.exists() ? (snap.data() as UserDoc) : null;
-}
-
 async function fetchPurchases(uid: string): Promise<PurchaseDoc[]> {
   const snap = await getDocs(collection(db, 'users', uid, 'purchases'));
   return snap.docs.map(d => d.data() as PurchaseDoc);
@@ -56,25 +51,36 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [purchases, setPurchases] = useState<PurchaseDoc[]>([]);
   const [loading,   setLoading]   = useState(true);
 
-  const loadAll = async (uid: string) => {
-    console.log('[UserContext] loadAll uid:', uid);
-    try {
-      const [uDoc, purcs] = await Promise.all([
-        fetchUserDoc(uid),
-        fetchPurchases(uid),
-      ]);
-      console.log('[UserContext] userDoc:', uDoc);
-      setUserDoc(uDoc);
-      setPurchases(purcs);
-    } catch (err) {
-      console.error('[UserContext] loadAll error:', err);
-      setUserDoc(null);
-      setPurchases([]);
-    }
+  const userDocUnsubRef = useRef<Unsubscribe | null>(null);
+
+  const subscribeToUserDoc = (uid: string) => {
+    userDocUnsubRef.current?.();
+    userDocUnsubRef.current = onSnapshot(
+      doc(db, 'users', uid),
+      (snap) => {
+        const next = snap.exists() ? (snap.data() as UserDoc) : null;
+        console.log('[UserContext] userDoc snapshot:', next);
+        setUserDoc(next);
+      },
+      (err) => {
+        console.error('[UserContext] userDoc snapshot error:', err);
+        setUserDoc(null);
+      },
+    );
   };
 
   const refresh = async () => {
-    if (authUser?.uid) await loadAll(authUser.uid);
+    if (!authUser?.uid) return;
+    try {
+      const [snap, purcs] = await Promise.all([
+        getDoc(doc(db, 'users', authUser.uid)),
+        fetchPurchases(authUser.uid),
+      ]);
+      setUserDoc(snap.exists() ? (snap.data() as UserDoc) : null);
+      setPurchases(purcs);
+    } catch (err) {
+      console.error('[UserContext] refresh error:', err);
+    }
   };
 
   const reloadAuthUser = async () => {
@@ -88,14 +94,26 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setAuthUser(user);
       if (user) {
-        await loadAll(user.uid);
+        subscribeToUserDoc(user.uid);
+        try {
+          setPurchases(await fetchPurchases(user.uid));
+        } catch (err) {
+          console.error('[UserContext] fetchPurchases error:', err);
+          setPurchases([]);
+        }
       } else {
+        userDocUnsubRef.current?.();
+        userDocUnsubRef.current = null;
         setUserDoc(null);
         setPurchases([]);
       }
       setLoading(false);
     });
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      userDocUnsubRef.current?.();
+      userDocUnsubRef.current = null;
+    };
   }, []);
 
   return (
