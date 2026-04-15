@@ -35,7 +35,7 @@ const CODE_LENGTH = 6;
 
 export default function VerifyEmail() {
   const { authUser, reloadAuthUser, refresh } = useUser();
-  const { horoscope, transitReadingGenerating, loading: dataLoading, horoscopeGenerating } = useHoroscope();
+  const { horoscope, loading: dataLoading, horoscopeGenerating } = useHoroscope();
   const { theme } = useContext(ThemeContext);
   const router = useRouter();
 
@@ -46,11 +46,11 @@ export default function VerifyEmail() {
   const [codeSent, setCodeSent] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
-  const [reloading, setReloading] = useState(false);
 
+  // Don't gate on transitReadingGenerating — transit reading populates the
+  // transits screen separately and can lag well behind today's horoscope.
   const horoscopeReady =
-    (!!horoscope || (!dataLoading && !horoscopeGenerating)) &&
-    !transitReadingGenerating;
+    !!horoscope || (!dataLoading && !horoscopeGenerating);
 
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
@@ -88,17 +88,6 @@ export default function VerifyEmail() {
       setSendError(msg);
     } finally {
       setSending(false);
-    }
-  };
-
-  const handleReload = async () => {
-    setReloading(true);
-    try {
-      await reloadAuthUser();
-      await refresh();
-      if (auth.currentUser?.emailVerified) setVerified(true);
-    } catch { /* ignore */ } finally {
-      setReloading(false);
     }
   };
 
@@ -157,6 +146,15 @@ export default function VerifyEmail() {
   useEffect(() => {
     if (verified && horoscopeReady) router.replace('/(main)');
   }, [verified, horoscopeReady]);
+
+  // Safety net: if the horoscope is still generating 30s after verification,
+  // navigate anyway — the main app can render with partial data and the
+  // subscriptions will fill in the rest as docs arrive.
+  useEffect(() => {
+    if (!verified) return;
+    const timeout = setTimeout(() => router.replace('/(main)'), 30000);
+    return () => clearTimeout(timeout);
+  }, [verified]);
 
   if (verifying) return <LoadingScreen message="Verifying..." />;
 
