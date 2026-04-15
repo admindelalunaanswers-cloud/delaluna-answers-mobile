@@ -20,7 +20,7 @@ import { ThemedView } from '@/src/components/themed-view';
 import { HOME_STRINGS } from '@/src/constants/strings';
 import type { DailyCardPack } from '@/src/schemas/dailyCardPack.schema';
 import { calculateTransits } from '@/src/services/astroEngine';
-import { fetchHoroscope, getTodayDateId, requestHoroscope, subscribeToHoroscope } from '@/src/services/horoscope.service';
+import { getTodayDateId, requestHoroscope, subscribeToHoroscope } from '@/src/services/horoscope.service';
 import { getTarotCardDraw } from '@/src/services/tarot-card.service';
 import { ChatStore } from '@/src/stores/chat-store';
 import type { HoroscopeResult } from '@/src/types/horoscope.types';
@@ -83,22 +83,29 @@ export default function HomeScreen() {
     const { dateId: tomorrowId,  date: tomorrowDate  } = offset(+1);
 
     Promise.all([
-      fetchHoroscope(authUser.uid, yesterdayId),
-      fetchHoroscope(authUser.uid, tomorrowId),
       calculateTransits(yesterdayDate, 0, 0),
       calculateTransits(tomorrowDate,  0, 0),
-    ]).then(([yest, tmrw, yestTransits, tmrwTransits]) => {
-      setHoroscopeByDate(prev => ({
-        ...prev,
-        ...(yest.result ? { [yesterdayId]: yest.result } : {}),
-        ...(tmrw.result ? { [tomorrowId]:  tmrw.result } : {}),
-      }));
+    ]).then(([yestTransits, tmrwTransits]) => {
       setMoonByDate(prev => ({
         ...prev,
         [yesterdayId]: { phaseName: yestTransits.moon.phase, illumination: yestTransits.moon.illumination, moonSign: yestTransits.moon.sign },
         [tomorrowId]:  { phaseName: tmrwTransits.moon.phase, illumination: tmrwTransits.moon.illumination, moonSign: tmrwTransits.moon.sign },
       }));
     }).catch(console.error);
+
+    // Subscribe to yesterday/tomorrow horoscope docs so they populate when the
+    // extension finishes generating them — can lag 10-30s on real devices.
+    const unsubYesterday = subscribeToHoroscope(authUser.uid, yesterdayId, (result) => {
+      setHoroscopeByDate(prev => ({ ...prev, [yesterdayId]: result }));
+    });
+    const unsubTomorrow = subscribeToHoroscope(authUser.uid, tomorrowId, (result) => {
+      setHoroscopeByDate(prev => ({ ...prev, [tomorrowId]: result }));
+    });
+
+    return () => {
+      unsubYesterday();
+      unsubTomorrow();
+    };
   }, [authUser?.uid]);
 
   // Keep today's horoscope and moon in the by-date maps
