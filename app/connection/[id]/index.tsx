@@ -1,8 +1,9 @@
+import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { doc, onSnapshot } from "firebase/firestore";
+import LottieView from "lottie-react-native";
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Dimensions,
   ScrollView,
   StyleSheet,
@@ -18,12 +19,14 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import LoadingScreen from "@/app/(util)/loading-screen";
 import { db } from "@/firebaseConfig";
 import HeaderNav from "@/src/components/shared/header-nav";
 import { ThemedText } from "@/src/components/themed-text";
 import { COMPATIBILITY_DEFINITIONS } from "@/src/constants/definitions";
 import { useUser } from "@/src/context/user-context";
 import { calculateNatalChart } from "@/src/services/astroEngine";
+import { subscribeToSynastryReading } from "@/src/services/synastry-reading.service";
 import { TestingStore } from "@/src/stores/testing-store";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 
@@ -131,12 +134,33 @@ const getBarColor = (value: number) => {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function ScoreBar({ value, color, delay }: { value: number; color: string; delay: number }) {
-  const progress = useSharedValue(0);
+// Tracks which score bars have already animated this session, so returning
+// to a connection doesn't replay the animation.
+const ANIMATED_BARS = new Set<string>();
+
+function ScoreBar({
+  value,
+  color,
+  delay,
+  id,
+}: {
+  value: number;
+  color: string;
+  delay: number;
+  id: string;
+}) {
+  const target = (value / 100) * BAR_MAX_WIDTH;
+  const alreadyAnimated = ANIMATED_BARS.has(id);
+  const progress = useSharedValue(alreadyAnimated ? target : 0);
 
   useEffect(() => {
-    progress.value = withDelay(delay, withTiming(value / 100 * BAR_MAX_WIDTH, { duration: 900 }));
-  }, [value]);
+    if (alreadyAnimated) {
+      progress.value = target;
+      return;
+    }
+    progress.value = withDelay(delay, withTiming(target, { duration: 900 }));
+    ANIMATED_BARS.add(id);
+  }, [target]);
 
   const animStyle = useAnimatedStyle(() => ({
     width: progress.value,
@@ -162,6 +186,7 @@ export default function ConnectionViewScreen() {
   const [error, setError] = useState<string | null>(null);
   const [expandedKeyword, setExpandedKeyword] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState(LOADING_SAYINGS[0]);
+  const [hasSynastryReading, setHasSynastryReading] = useState(false);
 
   // Rotate loading messages while waiting for report
   useEffect(() => {
@@ -207,6 +232,15 @@ export default function ConnectionViewScreen() {
     );
 
     return () => unsubscribe();
+  }, [authUser?.uid, connectionId]);
+
+  // Track whether a completed synastry reading exists
+  useEffect(() => {
+    if (!authUser?.uid || !connectionId) return;
+    const unsub = subscribeToSynastryReading(authUser.uid, connectionId, () => {
+      setHasSynastryReading(true);
+    });
+    return () => unsub();
   }, [authUser?.uid, connectionId]);
 
   const handleToggleKeyword = (keyword: string) => {
@@ -326,18 +360,7 @@ export default function ConnectionViewScreen() {
   // ─── Loading / Error states ─────────────────────────────────────────────────
 
   if (loading) {
-    return (
-      <View style={styles.wrapper}>
-        <HeaderNav
-          title="Compatibility"
-          leftIconName="arrow-back"
-          onLeftPress={() => router.replace("/(main)/connections")}
-        />
-        <View style={[styles.centered, { marginTop: headerHeight }]}>
-          <ActivityIndicator size="large" color="#C77DFF" />
-        </View>
-      </View>
-    );
+    return <LoadingScreen message={loadingMessage} />;
   }
 
   if (error) {
@@ -385,64 +408,87 @@ export default function ConnectionViewScreen() {
 
           
 
-          {/* Compare Birth Charts */}
-          <TouchableOpacity
-              style={styles.compareBirthChartsBtn}
-              onPress={handleCompareBirthChart}
-              activeOpacity={0.75}
-              disabled={computingSynastry}
-            >
-              <Text style={styles.compareBirthChartsBtnText}>Compare Birth Charts</Text>
-            </TouchableOpacity>
-
           {/* Score bars or pending state */}
           {!report ? (
             <View style={styles.pendingCard}>
-              <ActivityIndicator size="small" color="#C77DFF" />
-              <Text style={styles.pendingText}>{statusLabel}</Text>
-              {connection?.status?.state === "error" && (
+              {connection?.status?.state === "error" ? (
                 <Text style={styles.errorText}>Something went wrong generating the report.</Text>
+              ) : (
+                <>
+                  <LottieView
+                    source={require("@/src/assets/animations/splash-loop.json")}
+                    autoPlay
+                    loop
+                    style={styles.pendingAnimation}
+                  />
+                  <Text style={styles.pendingText}>{statusLabel}</Text>
+                </>
               )}
             </View>
           ) : (
             <>
+              {/* Compare / View Birth Charts */}
+              <TouchableOpacity
+                style={styles.compareBirthChartsBtn}
+                onPress={handleCompareBirthChart}
+                activeOpacity={0.75}
+                disabled={computingSynastry}
+              >
+                <Text style={styles.compareBirthChartsBtnText}>
+                  {hasSynastryReading ? "View Birth Charts" : "Compare Birth Charts"}
+                </Text>
+              </TouchableOpacity>
+
+              <Text style={styles.sectionLabel}>Weekly Advice</Text>
+              <Text style={styles.reportSummary}>{report.advice}</Text>
+
               <Text style={styles.sectionLabel}>Weekly Forecast</Text>
               <ThemedText style={styles.reportSummary}>
                 Metrics are based on birth chart placements, aspects and planetary transits. Statistics are updated weekly.
               </ThemedText>
-              {Object.entries(report.scores || {}).map(([keyword, value], index) => {
-                if (typeof value !== "number") return null;
-                const barColor = getBarColor(value);
-                const defKey = keyword.toLowerCase().replace(/\s+/g, "");
-                const definition = KEYWORD_DEFINITIONS[defKey];
-                const label = keyword.charAt(0).toUpperCase() + keyword.slice(1);
+              {Object.entries(report.scores || {})
+                .filter(([, value]) => typeof value === "number")
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([keyword, value], index) => {
+                  const numericValue = value as number;
+                  const barColor = getBarColor(numericValue);
+                  const defKey = keyword.toLowerCase().replace(/\s+/g, "");
+                  const definition = KEYWORD_DEFINITIONS[defKey];
+                  const label = keyword.charAt(0).toUpperCase() + keyword.slice(1);
 
-                return (
-                  <View key={keyword} style={styles.keywordContainer}>
-                    <TouchableOpacity
-                      onPress={() => definition && handleToggleKeyword(keyword)}
-                      activeOpacity={definition ? 0.7 : 1}
-                    >
-                      <View style={styles.row}>
-                        <Text style={styles.keyword}>{label}</Text>
-                        <Text style={styles.valueText}>{Math.round(value)}%</Text>
-
-                      </View>
-                    </TouchableOpacity>
-                    {expandedKeyword === keyword && definition && (
-                      <Text style={styles.definition}>{definition}</Text>
-                    )}
-                    <ScoreBar value={value} color={barColor} delay={index * 80} />
-
-                  </View>
-                );
-              })}
-              
-              <Text style={styles.sectionLabel}>Weekly Advice</Text>
-              <Text style={styles.reportSummary}>{report.advice}</Text>
-              
-              
-              
+                  return (
+                    <View key={keyword} style={styles.keywordContainer}>
+                      <TouchableOpacity
+                        onPress={() => definition && handleToggleKeyword(keyword)}
+                        activeOpacity={definition ? 0.7 : 1}
+                      >
+                        <View style={styles.row}>
+                          <View style={styles.keywordLabelRow}>
+                            <Text style={styles.keyword}>{label}</Text>
+                            {definition && (
+                              <Ionicons
+                                name="information-circle-outline"
+                                size={moderateScale(14)}
+                                color="rgba(184,163,255,0.8)"
+                                style={styles.infoIcon}
+                              />
+                            )}
+                          </View>
+                          <Text style={styles.valueText}>{Math.round(numericValue)}%</Text>
+                        </View>
+                      </TouchableOpacity>
+                      {expandedKeyword === keyword && definition && (
+                        <Text style={styles.definition}>{definition}</Text>
+                      )}
+                      <ScoreBar
+                        value={numericValue}
+                        color={barColor}
+                        delay={index * 80}
+                        id={`${connectionId}-${keyword}`}
+                      />
+                    </View>
+                  );
+                })}
             </>
           )}
         </ScrollView>
@@ -521,6 +567,10 @@ const styles = StyleSheet.create({
     gap: verticalScale(10),
     paddingVertical: verticalScale(24),
   },
+  pendingAnimation: {
+    width: moderateScale(220),
+    height: moderateScale(220),
+  },
   pendingText: {
     color: "rgba(255,255,255,0.75)",
     fontSize: moderateScale(14),
@@ -538,6 +588,13 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: moderateScale(14),
     fontWeight: "600",
+  },
+  keywordLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  infoIcon: {
+    marginLeft: scale(6),
   },
   valueText: {
     color: "#FFFFFF",

@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import HeaderNav from "@/src/components/shared/header-nav";
 import SynastryWheel from "@/src/components/synastry/synastry-wheel.draw";
-import { calculateSynastry } from "@/src/services/astroEngine";
+import { calculateSynastry, type Aspect } from "@/src/services/astroEngine";
 import {
   fetchSynastryReading,
   requestSynastryReading,
@@ -28,7 +28,46 @@ import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
 
 const NAV_BAR_HEIGHT = 44;
 
+const ASPECT_COLORS: Record<string, string> = {
+  harmonious: "#70a060",
+  challenging: "#e05050",
+  neutral: "#d4a853",
+  minor: "#9098b8",
+};
+
+function pad(n: number) {
+  return String(n).padStart(2, "0");
+}
+
 // ─── Sub-components ─────────────────────────────────────────────────────────
+
+function AspectRow({ a }: { a: Aspect }) {
+  const color = ASPECT_COLORS[a.nature] ?? C.muted;
+  const orbDeg = Math.floor(a.orb);
+  const orbMin = Math.floor((a.orb % 1) * 60);
+  return (
+    <View style={styles.aspectRow}>
+      <View style={styles.aspectPlanets}>
+        <Text style={[styles.aspectPSym, { color: C.planet[a.planet1] ?? C.muted }]}>
+          {a.symbol1}
+        </Text>
+        <Text style={[styles.aspectSym, { color }]}>{a.aspectSymbol}</Text>
+        <Text style={[styles.aspectPSym, { color: C.planet[a.planet2] ?? C.muted }]}>
+          {a.symbol2}
+        </Text>
+      </View>
+      <View style={styles.aspectMid}>
+        <Text style={[styles.aspectType, { color }]}>{a.type}</Text>
+        <Text style={styles.aspectNames}>
+          {a.planet1} · {a.planet2}
+        </Text>
+      </View>
+      <Text style={styles.aspectOrb}>
+        {orbDeg}°{pad(orbMin)}'
+      </Text>
+    </View>
+  );
+}
 
 function NamesRow({ nameA, nameB }: { nameA: string; nameB: string }) {
   return (
@@ -202,6 +241,17 @@ export default function SynastryAnalysisScreen() {
             </View>
           </View>
 
+          <View style={styles.aspectsSection}>
+            <Text style={styles.aspectsTitle}>KEY ASPECTS</Text>
+            <View style={styles.aspectsList}>
+              {topAspects.length === 0 ? (
+                <Text style={styles.aspectsEmpty}>No major aspects found.</Text>
+              ) : (
+                topAspects.map((a, i) => <AspectRow key={`${a.planet1}-${a.planet2}-${i}`} a={a} />)
+              )}
+            </View>
+          </View>
+
           <ReadingSection
             label="LOVE LANGUAGE"
             body={reading?.loveLanguage}
@@ -292,6 +342,77 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.7)",
     fontSize: moderateScale(11),
     fontWeight: "600",
+  },
+
+  // Aspects list
+  aspectsSection: {
+    marginBottom: verticalScale(20),
+  },
+  aspectsTitle: {
+    color: "#ffffff",
+    fontSize: moderateScale(12),
+    fontWeight: "700",
+    letterSpacing: 1.5,
+    marginBottom: verticalScale(10),
+  },
+  aspectsList: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: scale(12),
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    paddingVertical: verticalScale(4),
+  },
+  aspectsEmpty: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: moderateScale(12),
+    textAlign: "center",
+    paddingVertical: verticalScale(14),
+    fontStyle: "italic",
+  },
+  aspectRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: scale(14),
+    paddingVertical: verticalScale(10),
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(255,255,255,0.08)",
+  },
+  aspectPlanets: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: scale(68),
+    gap: scale(2),
+  },
+  aspectPSym: {
+    fontSize: moderateScale(18),
+    width: scale(22),
+    textAlign: "center",
+  },
+  aspectSym: {
+    fontSize: moderateScale(15),
+    width: scale(20),
+    textAlign: "center",
+    fontWeight: "700",
+  },
+  aspectMid: {
+    flex: 1,
+    paddingHorizontal: scale(8),
+  },
+  aspectType: {
+    fontSize: moderateScale(12),
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  aspectNames: {
+    color: C.dimText,
+    fontSize: moderateScale(10),
+    marginTop: 1,
+  },
+  aspectOrb: {
+    color: C.moonSilver,
+    fontSize: moderateScale(11),
+    minWidth: scale(40),
+    textAlign: "right",
   },
 
   // Reading cards
