@@ -240,7 +240,7 @@ export default function ConnectionsScreen() {
           rightIconName={hasConnections ? "add" : undefined}
           onRightPress={hasConnections ? goToNewConnectionScreen : undefined}
         />
-         <ThemedText type="definition" style={{ marginTop: headerHeight, paddingHorizontal: scale(10), paddingVertical: scale(15), textAlign: "center" }}>
+         <ThemedText type="definition" style={{ marginTop: headerHeight, paddingHorizontal: scale(10), paddingVertical: scale(25), textAlign: "center" }}>
             {CONNECTIONS_DEFINITION}
           </ThemedText>
         {hasConnections ? (
@@ -270,7 +270,7 @@ export default function ConnectionsScreen() {
             })}
           </ScrollView>
         ) : (
-          <ThemedView style={[styles.centered, { marginTop: headerHeight }]}>
+          <ThemedView style={[styles.centered]}>
             <DelalunaContainer style={{ padding: scale(10), marginBottom: verticalScale(20) }}>
               <TouchableOpacity
                 onPress={goToNewConnectionScreen}
