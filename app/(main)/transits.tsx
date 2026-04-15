@@ -278,8 +278,9 @@ const houseStyles = StyleSheet.create({
   },
   interpretation: {
     fontSize: moderateScale(13),
-    lineHeight: moderateScale(20),
+    lineHeight: moderateScale(22),
     color: C.white,
+    includeFontPadding: false,
   },
 });
 
