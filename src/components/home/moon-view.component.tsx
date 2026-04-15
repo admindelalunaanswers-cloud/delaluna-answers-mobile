@@ -57,6 +57,7 @@ const styles = StyleSheet.create({
     lineHeight: moderateScale(25),
     color: "#FFFFFF",
     textAlign: "center",
+    includeFontPadding: false,
   },
   textPhase: {
     fontSize: moderateScale(14),
@@ -64,6 +65,7 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     textAlign: "center",
     fontWeight: "600",
+    includeFontPadding: false,
   },
   detailsContainer: {
     width: "100%",
