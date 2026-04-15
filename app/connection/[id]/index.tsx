@@ -503,9 +503,10 @@ const styles = StyleSheet.create({
   reportSummary: {
     color: "rgba(255,255,255,0.75)",
     fontSize: moderateScale(13),
-    lineHeight: 21,
+    lineHeight: 22,
     textAlign: "center",
     marginBottom: verticalScale(20),
+    includeFontPadding: false,
   },
   sectionLabel: {
     color: "#FFFFFF",
