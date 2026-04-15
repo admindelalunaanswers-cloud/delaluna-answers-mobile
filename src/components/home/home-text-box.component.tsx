@@ -162,6 +162,7 @@ const styles = StyleSheet.create({
     lineHeight: moderateScale(25),
     color: "#FFFFFF",
     textAlign: "center",
+    includeFontPadding: false,
   },
   newLoveRow: {
     flexDirection: "row",

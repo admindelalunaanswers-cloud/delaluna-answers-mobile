@@ -436,6 +436,7 @@ export default function ChatScreen() {
                 { paddingBottom: insets.bottom + S.md },
               ]}
               showsVerticalScrollIndicator={false}
+              onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
             />
           )}
 
@@ -576,7 +577,8 @@ const styles = StyleSheet.create({
   aiBubbleText: {
     color: C.white,
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 22,
+    includeFontPadding: false,
   },
   retryButton: {
     marginTop: 6,
