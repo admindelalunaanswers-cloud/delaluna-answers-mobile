@@ -23,7 +23,7 @@ import { ThemedView } from '@/src/components/themed-view';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { ThemeContext } from '@/src/context/theme-context';
 import { useUser } from '@/src/context/user-context';
-import { signOut, updateUserDoc, isAdminEmail } from '@/src/services/user.service';
+import { signOut, updateUserDoc } from '@/src/services/user.service';
 import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
 import LoadingScreen from '../(util)/loading-screen';
 
@@ -124,13 +124,11 @@ export default function VerifyEmail() {
       await reloadAuthUser();
       await refresh();
 
-      // Sync isEmailVerified + isAdmin now that email is confirmed
-      const uid  = auth.currentUser?.uid;
-      const mail = auth.currentUser?.email ?? '';
-      if (uid && mail) {
+      // Sync isEmailVerified now that email is confirmed
+      const uid = auth.currentUser?.uid;
+      if (uid) {
         updateUserDoc(uid, {
           isEmailVerified: true,
-          isAdmin: isAdminEmail(mail),
         } as any).catch(console.error);
       }
 

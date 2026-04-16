@@ -30,7 +30,6 @@ export interface UserDoc {
   pronouns?:               string;  // e.g. "She/Her", "He/Him", "They/Them", "Non Binary"
   avatarIconId?:           string;  // Ionicons name, e.g. 'person-circle', 'moon', 'planet', 'star'
   isPremiumMember:         boolean;
-  isAdmin?:                boolean;
   createdAt:               Timestamp;
   lastUpdatedAt?:          Timestamp;
   lastLoggedInAt?:         Timestamp;

@@ -30,7 +30,7 @@ import { ThemedText } from '@/src/components/themed-text';
 import { ThemedView } from '@/src/components/themed-view';
 import { auth, db } from '@/firebaseConfig';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
-import { updateUserDoc, isAdminEmail } from '@/src/services/user.service';
+import { updateUserDoc } from '@/src/services/user.service';
 import { useUser } from '@/src/context/user-context';
 
 import LoadingScreen from '../(util)/loading-screen';
@@ -120,9 +120,8 @@ export default function Login() {
 
       const cred = await signInWithEmailAndPassword(auth, email.trim(), password.trim());
 
-      // Sync isAdmin + record login timestamp on every login
+      // Record login timestamp on every login
       updateUserDoc(cred.user.uid, {
-        isAdmin: isAdminEmail(email.trim().toLowerCase()),
         lastLoggedInAt: serverTimestamp() as any,
       }).catch(console.error);
 

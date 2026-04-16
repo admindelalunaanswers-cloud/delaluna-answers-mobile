@@ -114,20 +114,6 @@ export async function createNewUserDoc(userId: string): Promise<void> {
 /**
  * Create new user document in Firestore
  */
-const ADMIN_EMAILS = new Set([
-  'delaluna.admin@delauna.com',
-  'jeanaicode@gmail.com',
-  'delalunaanswers@gmail.com',
-  'jeanairoberts@outlook.com',
-  'rockergretch@yahoo.com',
-  'debba85@yahoo.com',
-]);
-
-/** Returns true if the given email belongs to an admin. */
-export function isAdminEmail(email: string): boolean {
-  return ADMIN_EMAILS.has(email.toLowerCase());
-}
-
 export async function createUserDoc(userId: string, userData: FinalSignupPayload): Promise<void> {
   try {
     const userDocRef = doc(db, 'users', userId);
@@ -137,7 +123,6 @@ export async function createUserDoc(userId: string, userData: FinalSignupPayload
       ...(userData.email ? { email } : {}),
       isPremiumMember: true,
       isEmailVerified: false,
-      isAdmin: ADMIN_EMAILS.has(email.toLowerCase()),
     });
 
     await setDoc(userDocRef, {
@@ -216,7 +201,7 @@ export async function updateUserDoc(userId: string, userData: Partial<UserDoc>):
     const normalizedEmail = userData.email ? userData.email.toLowerCase() : undefined;
     const sanitizedData = sanitizeFirestoreData({
       ...userData,
-      ...(normalizedEmail ? { email: normalizedEmail, isAdmin: ADMIN_EMAILS.has(normalizedEmail) } : {}),
+      ...(normalizedEmail ? { email: normalizedEmail } : {}),
     });
 
     await setDoc(userDocRef, {
