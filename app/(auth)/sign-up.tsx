@@ -31,6 +31,8 @@ import { db } from '@/firebaseConfig';
 import { verticalScale, scale, moderateScale } from '@/src/utils/responsive';
 import ChatFlow, { StepConfig } from '@/src/components/sign-up/chat-flow';
 import LoadingScreen from '../(util)/loading-screen';
+import { Ionicons } from '@expo/vector-icons';
+import { ThemedView } from '@/src/components/themed-view';
 
 // ─── Fallback coordinates (Greenwich) ─────────────────────────────────────────
 
@@ -206,7 +208,8 @@ export default function SignUpChatScreen() {
 
       calculateTransits(new Date(), bd.lat, bd.lon)
         .then(transits => {
-          const retrogrades = transits.planets.filter(p => p.isRetrograde).map(p => p.name);
+          const RETROGRADE_PLANETS = new Set(['Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto']);
+          const retrogrades = transits.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name);
           requestTransitReading(uid, weekDateId, chartDetailsDoc, transits).catch(console.error);
           return requestHoroscope(uid, dateId, chartDetailsDoc, transits.moon, retrogrades);
         })
@@ -252,27 +255,40 @@ export default function SignUpChatScreen() {
   return (
     <ImageBackground source={theme.backgroundImage} style={styles.background} resizeMode="cover">
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={{ flex: 1 }}>
+        <ThemedView style={{ flex: 1 }}>
           <StatusBar style="light" translucent backgroundColor="transparent" />
 
           <BlurView intensity={10} tint="dark" style={[styles.overlay, Platform.OS === 'android' && { paddingTop: insets.top + verticalScale(12) }]}>
-            <View
+            <ThemedView
               style={styles.header}
               onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
             >
-              <TouchableOpacity onPress={() => {
+
+               <ThemedView style={{ flexDirection: 'row', alignItems: 'center' }}>
+                { step > 0 && (<TouchableOpacity onPress={() => {
                 Keyboard.dismiss();
                 if (step === 0) router.replace('/(startup)/welcome');
                 else setStep(step - 1);
               }}>
-                <Text style={styles.goBackText}>← Go Back</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={onCancelPress}>
+
+                <ThemedView style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="arrow-back" size={moderateScale(20)} color="#6FFFE9" />
+                <Text style={styles.goBackText}> Go Back</Text>
+                </ThemedView>
+                
+              </TouchableOpacity>)}
+               </ThemedView>
+
+                <ThemedView style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <TouchableOpacity onPress={onCancelPress}>
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
-            </View>
+                </ThemedView>
+      
+              
+            </ThemedView>
 
-            <View style={styles.chatFlowWrapper}>
+            <ThemedView style={styles.chatFlowWrapper}>
               <ChatFlow
                 steps={steps}
                 onComplete={handleComplete}
@@ -280,35 +296,35 @@ export default function SignUpChatScreen() {
                 setStep={setStep}
                 keyboardOffset={headerHeight}
               />
-            </View>
+            </ThemedView>
           </BlurView>
 
           {/* Loading overlay — keeps ChatFlow mounted so answers are preserved */}
           {isLoading && (
-            <View style={StyleSheet.absoluteFillObject}>
+            <ThemedView style={StyleSheet.absoluteFillObject}>
               <LoadingScreen message={loadingMessage || undefined} />
-            </View>
+            </ThemedView>
           )}
 
-        </View>
+        </ThemedView>
       </TouchableWithoutFeedback>
 
       {/* Discard confirmation modal */}
       <Modal visible={confirmVisible} transparent animationType="fade" onRequestClose={() => setConfirmVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { width: modalCardWidth }]}>
+        <ThemedView style={styles.modalOverlay}>
+          <ThemedView style={[styles.modalCard, { width: modalCardWidth }]}>
             <Text style={styles.modalTitle}>Discard signup?</Text>
             <Text style={styles.modalBody}>Your answers will be lost. You can start again anytime.</Text>
-            <View style={styles.modalActions}>
+            <ThemedView style={styles.modalActions}>
               <TouchableOpacity onPress={() => setConfirmVisible(false)} style={[styles.modalBtn, styles.btnGhost]}>
                 <Text style={styles.btnGhostText}>Keep editing</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={confirmCancel} style={[styles.modalBtn, styles.btnDanger]}>
                 <Text style={styles.btnDangerText}>Discard & Exit</Text>
               </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+            </ThemedView>
+          </ThemedView>
+        </ThemedView>
       </Modal>
     </ImageBackground>
   );
@@ -329,7 +345,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(16),
     marginBottom: verticalScale(8),
   },
-  goBackText: { color: '#6FFFE9', fontSize: moderateScale(18), fontWeight: '500' },
+  goBackText: { color: '#6FFFE9', fontSize: moderateScale(20), fontWeight: '500', textAlign: 'center', },
   cancelText: { color: '#6FFFE9', fontSize: moderateScale(18), fontWeight: '500' },
   chatFlowWrapper: { flex: 1, width: '100%' },
   modalOverlay: {
