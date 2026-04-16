@@ -459,7 +459,8 @@ export default function EditProfileScreen() {
 
         calculateTransits(new Date(), bd.lat, bd.lon)
           .then(transits => {
-            const retrogrades = transits.planets.filter(p => p.isRetrograde).map(p => p.name);
+            const RETROGRADE_PLANETS = new Set(['Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto']);
+            const retrogrades = transits.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name);
             // Transit reading always regenerates (accuracy / personalization)
             requestTransitReading(uid, dateId, chartDetailsDoc, transits, 'free').catch(console.error);
             // Horoscopes only regenerate when the birthday itself changed;
