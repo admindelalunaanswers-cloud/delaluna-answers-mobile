@@ -25,7 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { ThemeContext } from '@/src/context/theme-context';
 import { useUser } from '@/src/context/user-context';
-import { updateUserDoc, isAdminEmail } from '@/src/services/user.service';
+import { updateUserDoc } from '@/src/services/user.service';
 import { calculateNatalChart, calculateTransits, BirthData } from '@/src/services/astroEngine';
 import { requestBreakdown } from '@/src/services/natal-chart-breakdown.service';
 import { requestHoroscope, getTodayDateId } from '@/src/services/horoscope.service';
@@ -396,7 +396,6 @@ export default function EditProfileScreen() {
           lastName:             lastName.trim(),
           pronouns,
           email:                trimmedEmail,
-          isAdmin:              isAdminEmail(trimmedEmail),
           birthTimezone:        effectiveTz,
           placeOfBirth:         isPlaceOfBirthUnknown ? null : placeOfBirth,
           isBirthTimeUnknown,
