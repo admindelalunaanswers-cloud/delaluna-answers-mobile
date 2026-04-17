@@ -14,7 +14,6 @@ import NatalTable from '@/src/components/natalChart/natal-chart-table.tab';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
 import PremiumUnlock from '@/src/components/shared/premium-unlock.component';
-import { usePullToRefresh } from '@/src/hooks/use-pull-to-refresh';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
 import type { NatalChart } from '@/src/services/astroEngine';
 import type { NatalChartBreakdownResult } from '@/src/types/natal-chart-breakdown.types';
@@ -35,7 +34,6 @@ export default function BirthChartScreen() {
     premiumBreakdown,
     breakdownGenerating,
     premiumBreakdownGenerating,
-    refresh,
   } = useHoroscope();
 
   const [chartTab, setChartTab]         = useState<ChartTab>('Natal Wheel');
@@ -44,7 +42,6 @@ export default function BirthChartScreen() {
   const { isPro } = useRevenueCat();
   const isPremium = isPro;
 
-  const { refreshControl } = usePullToRefresh(refresh);
   const insets       = useSafeAreaInsets();
   const headerHeight = insets.top + scale(NAV_BAR_HEIGHT);
 
@@ -160,7 +157,7 @@ export default function BirthChartScreen() {
       return <ActivityIndicator color="#BCA8F4" style={{ marginTop: verticalScale(24) }} />;
     }
     if (!activeBreakdown) {
-      return <ThemedText style={styles.errorText}>Breakdown not ready yet. Pull to refresh.</ThemedText>;
+      return <ThemedText style={styles.errorText}>Breakdown not ready yet.</ThemedText>;
     }
     if (!isPremium && (breakdownTab === 'Planets' || breakdownTab === 'Aspects')) {
       const messages: Record<string, string> = {
@@ -261,7 +258,6 @@ export default function BirthChartScreen() {
               styles.breakdownContent,
               { paddingBottom: insets.bottom + verticalScale(16) },
             ]}
-            refreshControl={refreshControl}
             showsVerticalScrollIndicator={false}
           >
             {renderBreakdownContent()}

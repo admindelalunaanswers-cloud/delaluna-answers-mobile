@@ -13,7 +13,6 @@ import { useHoroscope } from '@/src/context/horoscope-context';
 import { useUser } from '@/src/context/user-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
-import { usePullToRefresh } from '@/src/hooks/use-pull-to-refresh';
 import { useResponsive } from '@/src/hooks/use-responsive';
 import type { TransitHouseReading } from '@/src/types/transit-reading.types';
 
@@ -111,7 +110,6 @@ export default function TransitsScreen() {
     transitReading,
     transitReadingGenerating,
     loading,
-    refresh,
   } = useHoroscope();
 
   const { authUser, userDoc } = useUser();
@@ -121,8 +119,6 @@ export default function TransitsScreen() {
   const insets = useSafeAreaInsets();
   const { scale } = useResponsive();
   const headerHeight = insets.top + scale(NAV_BAR_HEIGHT);
-  const { refreshControl } = usePullToRefresh(refresh);
-
   const [unlocking, setUnlocking] = useState(false);
 
   const isPremium = isPro;
@@ -167,7 +163,6 @@ export default function TransitsScreen() {
             styles.scrollContent,
             { paddingTop: scale(12), paddingBottom: insets.bottom + scale(20) },
           ]}
-          refreshControl={refreshControl}
           showsVerticalScrollIndicator={false}
         >
          
