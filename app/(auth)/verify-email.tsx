@@ -23,13 +23,13 @@ import { ThemedView } from '@/src/components/themed-view';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { ThemeContext } from '@/src/context/theme-context';
 import { useUser } from '@/src/context/user-context';
-import { signOut, updateUserDoc } from '@/src/services/user.service';
+import { signOut } from '@/src/services/user.service';
 import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
 import LoadingScreen from '../(util)/loading-screen';
 
 const functions = getFunctions(app, 'us-central1');
 const sendVerificationCode = httpsCallable(functions, 'sendVerificationCode');
-// const verifyCodeFn = httpsCallable(functions, 'verifyCode'); // TODO: restore once unauthenticated error is resolved
+const verifyCodeFn = httpsCallable(functions, 'verifyCode');
 
 const CODE_LENGTH = 6;
 
@@ -117,24 +117,27 @@ export default function VerifyEmail() {
     }
   };
 
-  const handleVerify = async (_code?: string) => {
-    // TODO: restore code verification once unauthenticated error is resolved
+  const handleVerify = async (code?: string) => {
+    const enteredCode = code ?? digits.join('');
+
+    if (!enteredCode || enteredCode.length !== CODE_LENGTH) {
+      Alert.alert('Invalid code', 'Please enter the full 6-digit code.');
+      return;
+    }
+
     setVerifying(true);
     try {
+      await verifyCodeFn({ code: enteredCode });
+
       await reloadAuthUser();
       await refresh();
 
-      // Sync isEmailVerified now that email is confirmed
-      const uid = auth.currentUser?.uid;
-      if (uid) {
-        updateUserDoc(uid, {
-          isEmailVerified: true,
-        } as any).catch(console.error);
-      }
-
       setVerified(true);
     } catch (e: any) {
-      Alert.alert('Error', e?.message ?? 'Something went wrong.');
+      const msg = e?.message ?? 'Something went wrong.';
+      Alert.alert('Verification failed', msg);
+      setDigits(Array(CODE_LENGTH).fill(''));
+      inputRefs.current[0]?.focus();
     } finally {
       setVerifying(false);
     }
