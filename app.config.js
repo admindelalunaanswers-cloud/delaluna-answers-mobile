@@ -45,6 +45,17 @@ module.exports = {
           backgroundColor: "#ffffff",
         },
       ],
+      [
+        "expo-build-properties",
+        {
+          android: {
+            compileSdkVersion: 35,
+            targetSdkVersion: 35,
+            kotlinVersion: "2.0.21",
+            AGPVersion: "8.10.2",
+          },
+        },
+      ],
       "@react-native-community/datetimepicker",
       "@react-native-google-signin/google-signin"
     ],
