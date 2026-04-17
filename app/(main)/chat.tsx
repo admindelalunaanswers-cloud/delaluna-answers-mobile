@@ -30,8 +30,8 @@ import type { ChatMessageDoc, SavedChatSession } from '@/src/services/chat.servi
 import { ChatStore } from '@/src/stores/chat-store';
 import { HOME_STRINGS } from '@/src/constants/strings';
 
-// const FREE_CHAT_LIMIT = 3;
-// const PREMIUM_CHAT_LIMIT = 5;
+const FREE_CHAT_LIMIT = 3;
+const PREMIUM_CHAT_LIMIT = 5;
 
 const SUGGESTIONS = [
   HOME_STRINGS.newLove.questionFunnel,
@@ -140,15 +140,10 @@ export default function ChatScreen() {
   const [viewingSession, setViewingSession] = useState<SavedChatSession | null>(null);
 
   const isPremium = isPro;
-  // --- Limits temporarily disabled ---
-  // const questionLimit = (isPremium || inTrial) ? PREMIUM_CHAT_LIMIT : FREE_CHAT_LIMIT;
-  // const questionsUsed = messages.length;
-  // const questionsRemaining = Math.max(0, questionLimit - questionsUsed);
-  // const chatLocked = questionsUsed >= questionLimit;
-  const questionLimit = Infinity;
+  const questionLimit = (isPremium || inTrial) ? PREMIUM_CHAT_LIMIT : FREE_CHAT_LIMIT;
   const questionsUsed = messages.length;
-  const questionsRemaining = Infinity;
-  const chatLocked = false;
+  const questionsRemaining = Math.max(0, questionLimit - questionsUsed);
+  const chatLocked = questionsUsed >= questionLimit;
 
   const handleUpgrade = useCallback(async () => {
     try {

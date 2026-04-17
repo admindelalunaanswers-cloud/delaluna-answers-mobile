@@ -104,8 +104,8 @@ const AnimatedConnectionItem = memo(
   }
 );
 
-// const FREE_CONNECTION_LIMIT = 3;
-// const PREMIUM_CONNECTION_LIMIT = 10;
+const FREE_CONNECTION_LIMIT = 3;
+const PREMIUM_CONNECTION_LIMIT = 10;
 
 export default function ConnectionsScreen() {
   const { authUser } = useUser();
@@ -120,10 +120,8 @@ export default function ConnectionsScreen() {
 
   const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
 
-  // --- Limits temporarily disabled ---
-  // const accessLimit = hasAccess ? PREMIUM_CONNECTION_LIMIT : FREE_CONNECTION_LIMIT;
-  // const canAddNew = connections.length < accessLimit;
-  const canAddNew = true;
+  const accessLimit = hasAccess ? PREMIUM_CONNECTION_LIMIT : FREE_CONNECTION_LIMIT;
+  const canAddNew = connections.length < accessLimit;
 
   const presentUpgradePaywall = async () => {
     try {
@@ -138,25 +136,24 @@ export default function ConnectionsScreen() {
   };
 
   const goToNewConnectionScreen = () => {
-    // --- Limit check temporarily disabled ---
-    // if (!canAddNew) {
-    //   if (isPro) {
-    //     Alert.alert(
-    //       'Connection limit reached',
-    //       `Premium members can save up to ${PREMIUM_CONNECTION_LIMIT} connections.`,
-    //     );
-    //     return;
-    //   }
-    //   Alert.alert(
-    //     'Upgrade to add more',
-    //     `Free accounts can keep ${FREE_CONNECTION_LIMIT} connections. Upgrade to Premium to save up to ${PREMIUM_CONNECTION_LIMIT}.`,
-    //     [
-    //       { text: 'Not now', style: 'cancel' },
-    //       { text: 'Upgrade', onPress: () => void presentUpgradePaywall() },
-    //     ],
-    //   );
-    //   return;
-    // }
+    if (!canAddNew) {
+      if (isPro) {
+        Alert.alert(
+          'Connection limit reached',
+          `Premium members can save up to ${PREMIUM_CONNECTION_LIMIT} connections.`,
+        );
+        return;
+      }
+      Alert.alert(
+        'Upgrade to add more',
+        `Free accounts can keep ${FREE_CONNECTION_LIMIT} connections. Upgrade to Premium to save up to ${PREMIUM_CONNECTION_LIMIT}.`,
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Upgrade', onPress: () => void presentUpgradePaywall() },
+        ],
+      );
+      return;
+    }
     router.push("/connection/new");
   };
 
@@ -253,9 +250,7 @@ export default function ConnectionsScreen() {
             showsVerticalScrollIndicator={false}
           >
             {connections.map((c, index) => {
-              // --- Locking temporarily disabled ---
-              // const isLocked = !hasAccess && index >= FREE_CONNECTION_LIMIT;
-              const isLocked = false;
+              const isLocked = !hasAccess && index >= FREE_CONNECTION_LIMIT;
               return (
                 <AnimatedConnectionItem
                   key={c.id}
