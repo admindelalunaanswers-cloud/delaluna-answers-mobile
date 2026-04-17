@@ -121,7 +121,7 @@ export async function createUserDoc(userId: string, userData: FinalSignupPayload
     const sanitizedData = sanitizeFirestoreData({
       ...userData,
       ...(userData.email ? { email } : {}),
-      isPremiumMember: true,
+      isPremiumMember: false,
       isEmailVerified: false,
     });
 
