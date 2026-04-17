@@ -20,7 +20,7 @@ import {
   subscribeToSynastryReading,
 } from "@/src/services/synastry-reading.service";
 import { useUser } from "@/src/context/user-context";
-import { TestingStore } from "@/src/stores/testing-store";
+import { NavigationStore } from "@/src/stores/navigation-store";
 import { selectTopAspects } from "@/src/utils/synastry";
 import type { SynastryReadingResult } from "@/src/types/synastry-reading.types";
 import { C } from "@/src/constants/theme";
@@ -123,7 +123,7 @@ function ReadingSection({
 // ─── Screen ─────────────────────────────────────────────────────────────────
 
 export default function SynastryAnalysisScreen() {
-  const payload = TestingStore.getSynastryAnalysis();
+  const payload = NavigationStore.getSynastryAnalysis();
   const insets = useSafeAreaInsets();
   const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
   const { width: windowWidth } = useWindowDimensions();

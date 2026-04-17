@@ -27,7 +27,7 @@ import { COMPATIBILITY_DEFINITIONS } from "@/src/constants/definitions";
 import { useUser } from "@/src/context/user-context";
 import { calculateNatalChart } from "@/src/services/astroEngine";
 import { subscribeToSynastryReading } from "@/src/services/synastry-reading.service";
-import { TestingStore } from "@/src/stores/testing-store";
+import { NavigationStore } from "@/src/stores/navigation-store";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 
 const NAV_BAR_HEIGHT = 44;
@@ -316,7 +316,7 @@ export default function ConnectionViewScreen() {
       const chartA = await calculateNatalChart(parseBirthParams(fp));
       const chartB = await calculateNatalChart(parseBirthParams(sp));
       
-      TestingStore.setSynastryAnalysis({
+      NavigationStore.setSynastryAnalysis({
         chartA,
         chartB,
         nameA: `${fp.firstName ?? ''} ${fp.lastName ?? ''}`.trim(),
