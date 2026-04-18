@@ -10,7 +10,7 @@ const BREAKDOWN_DOC = 'details';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function buildNatalChartSummary(chart: NatalChartDetailsDoc): string {
+export function buildNatalChartSummary(chart: NatalChartDetailsDoc): string {
   return JSON.stringify({
     planets: chart.planets.map(p => ({
       name: p.name,

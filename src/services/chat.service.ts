@@ -91,16 +91,21 @@ export async function clearChatHistory(uid: string): Promise<void> {
 /**
  * Sends a chat message by writing a document to users/{uid}/updayedChat.
  * The Firebase Extension reads the `prompt` field and writes back `response`.
- * Only the raw user input is sent — the extension's CONTEXT config provides
- * the system prompt.
+ * When a natal chart summary is provided it is prepended to the prompt so the
+ * AI can give personalised, chart-aware answers.
  */
 export async function sendChatMessage(
   uid: string,
   userMessage: string,
+  natalChartSummary?: string,
 ): Promise<void> {
+  const prompt = natalChartSummary
+    ? `[NATAL CHART]\n${natalChartSummary}\n\n[QUESTION]\n${userMessage}`
+    : userMessage;
+
   await addDoc(collection(db, 'users', uid, 'updayedChat'), {
     userMessage,
-    prompt: userMessage,
+    prompt,
     createTime: Timestamp.now(),
   });
 }
@@ -111,15 +116,11 @@ export async function sendChatMessage(
 export async function retryChatMessage(
   uid: string,
   docId: string,
-  prompt: string,
   userMessage: string,
+  natalChartSummary?: string,
 ): Promise<void> {
   await deleteDoc(doc(db, 'users', uid, 'updayedChat', docId));
-  await addDoc(collection(db, 'users', uid, 'updayedChat'), {
-    userMessage,
-    prompt,
-    createTime: Timestamp.now(),
-  });
+  await sendChatMessage(uid, userMessage, natalChartSummary);
 }
 
 /**

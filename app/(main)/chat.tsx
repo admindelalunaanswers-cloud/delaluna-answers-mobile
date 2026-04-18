@@ -27,8 +27,10 @@ import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
 import { useResponsive } from '@/src/hooks/use-responsive';
 import { deleteChatSession, resumeChatSession, retryChatMessage, saveChatAndClear, sendChatMessage, subscribeToChatHistory, subscribeToChatSessions } from '@/src/services/chat.service';
 import type { ChatMessageDoc, SavedChatSession } from '@/src/services/chat.service';
+import { buildNatalChartSummary } from '@/src/services/natal-chart-breakdown.service';
 import { ChatStore } from '@/src/stores/chat-store';
 import { HOME_STRINGS } from '@/src/constants/strings';
+import { useHoroscope } from '@/src/context/horoscope-context';
 
 const FREE_CHAT_LIMIT = 3;
 const PREMIUM_CHAT_LIMIT = 5;
@@ -126,6 +128,7 @@ function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: C
 export default function ChatScreen() {
   const { authUser } = useUser();
   const { isPro, presentPaywall } = useRevenueCat();
+  const { chartDetails } = useHoroscope();
   const { inTrial } = useFreeTrialAccess();
   const insets = useSafeAreaInsets();
   const { scale } = useResponsive();
@@ -246,6 +249,8 @@ export default function ChatScreen() {
 
   // ─── Send ──────────────────────────────────────────────────────────────────
 
+  const chartSummary = chartDetails ? buildNatalChartSummary(chartDetails) : undefined;
+
   const handleSend = useCallback(async (text?: string) => {
     const msg = (text ?? inputText).trim();
     if (!msg || !authUser || isSending || chatLocked) return;
@@ -254,24 +259,24 @@ export default function ChatScreen() {
     setInputText('');
     setIsSending(true);
     try {
-      await sendChatMessage(authUser.uid, msg);
+      await sendChatMessage(authUser.uid, msg, chartSummary);
     } catch (e) {
       console.error('chat send error', e);
     } finally {
       setIsSending(false);
     }
-  }, [inputText, authUser, isSending, chatLocked]);
+  }, [inputText, authUser, isSending, chatLocked, chartSummary]);
 
   // ─── Retry ─────────────────────────────────────────────────────────────────
 
   const handleRetry = useCallback(async (msg: ChatMessageDoc) => {
     if (!authUser) return;
     try {
-      await retryChatMessage(authUser.uid, msg.id, msg.prompt, msg.userMessage);
+      await retryChatMessage(authUser.uid, msg.id, msg.userMessage, chartSummary);
     } catch (e) {
       console.error('chat retry error', e);
     }
-  }, [authUser]);
+  }, [authUser, chartSummary]);
 
   // ─── New chat ──────────────────────────────────────────────────────────────
 
