@@ -52,6 +52,7 @@ module.exports = {
           android: {
             compileSdkVersion: 35,
             targetSdkVersion: 35,
+            AGPVersion: "8.10.2",
           },
         },
       ],
