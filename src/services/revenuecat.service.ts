@@ -4,7 +4,7 @@
  * entitlement checking, purchases, and subscription management.
  */
 
-import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import Purchases, {
   LOG_LEVEL,
   type CustomerInfo,
@@ -15,16 +15,12 @@ import Purchases, {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-/**
- * Master switch for RevenueCat integration.
- * Set to `false` while we don't have a production API key — all SDK calls
- * become no-ops and `isPro` defaults to `true` so premium features stay
- * unlocked for testing builds.
- */
-export const REVENUECAT_ENABLED = false;
+/** RevenueCat public SDK key — test key for dev, production key from EAS env */
+const API_KEY = __DEV__
+  ? 'test_HdGTsVRVGbHGXFBydudQTRISayC'
+  : (Constants.expoConfig?.extra?.REVENUECAT_API_KEY as string);
 
-/** RevenueCat public SDK key (same key for both platforms during testing) */
-const API_KEY = 'test_HdGTsVRVGbHGXFBydudQTRISayC';
+export const REVENUECAT_ENABLED = true;
 
 /** The entitlement identifier configured in RevenueCat dashboard */
 export const ENTITLEMENT_ID = 'Delaluna Answers Pro';
@@ -50,6 +46,11 @@ export function configureRevenueCat(): void {
   if (!REVENUECAT_ENABLED) {
     _configured = true;
     console.log('[RevenueCat] disabled — skipping SDK configuration');
+    return;
+  }
+
+  if (!API_KEY) {
+    console.warn('[RevenueCat] no API key found — skipping configuration');
     return;
   }
 
