@@ -71,6 +71,7 @@ module.exports = {
       FIREBASE_STORAGE_BUCKET:     process.env.FIREBASE_STORAGE_BUCKET,
       FIREBASE_MESSAGING_SENDER_ID: process.env.FIREBASE_MESSAGING_SENDER_ID,
       FIREBASE_APP_ID:             process.env.FIREBASE_APP_ID,
+      REVENUECAT_API_KEY:          process.env.REVENUECAT_API_KEY ?? process.env.REVENUECAT_TEST_API_KEY,
       USE_EMULATOR:                'false',
       EMULATOR_HOST:               process.env.EMULATOR_HOST ?? 'localhost',
     },
