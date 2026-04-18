@@ -128,7 +128,7 @@ export default function HomeTextBox({
           phaseName={moonData?.phaseName}
           illumination={moonData?.illumination}
           sign={moonData?.moonSign}
-          horoscopeMoon={contentTwo || undefined}
+          horoscopeMoon={contentTwo || `The ${moonData?.moonSign} Moon is currently in its ${moonData?.phaseName} phase with an illumination of ${moonData?.illumination}%.`}
         />
       ) : (
         <DelalunaContainer>
@@ -159,10 +159,8 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: moderateScale(14),
-    lineHeight: moderateScale(25),
     color: "#FFFFFF",
     textAlign: "center",
-    includeFontPadding: false,
   },
   newLoveRow: {
     flexDirection: "row",

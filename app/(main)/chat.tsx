@@ -573,12 +573,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: S.md,
     paddingVertical: S.sm,
     maxWidth: '80%',
+    overflow: 'visible',
   },
   aiBubbleText: {
     color: C.white,
     fontSize: 14,
-    lineHeight: 22,
-    includeFontPadding: false,
   },
   retryButton: {
     marginTop: 6,
