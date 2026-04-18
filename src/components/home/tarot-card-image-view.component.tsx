@@ -51,11 +51,6 @@ function FlipCard({
   delay,
 }: FlipCardProps) {
   const progress = useSharedValue(shouldReveal ? 1 : 0);
-  const frontLoaded = useSharedValue(0);
-
-  useEffect(() => {
-    frontLoaded.value = 0;
-  }, [frontUri, frontLoaded]);
 
   useEffect(() => {
     if (shouldReveal) {
@@ -75,10 +70,6 @@ function FlipCard({
     }
   }, [shouldReveal, animate, delay, progress]);
 
-  const handleFrontLoad = () => {
-    frontLoaded.value = withTiming(1, { duration: 300 });
-  };
-
   const backStyle = useAnimatedStyle(() => ({
     transform: [
       { perspective: 1000 },
@@ -92,7 +83,6 @@ function FlipCard({
       { rotateY: `${interpolate(progress.value, [0, 1], [180, 360])}deg` },
       { rotateZ: reversed ? "180deg" : "0deg" },
     ],
-    opacity: frontLoaded.value,
   }));
 
   return (
@@ -101,11 +91,7 @@ function FlipCard({
         <Image source={backSource} style={styles.cardImage} />
       </Animated.View>
       <Animated.View style={[styles.face, frontStyle]}>
-        <Image
-          source={{ uri: frontUri }}
-          style={styles.cardImage}
-          onLoad={handleFrontLoad}
-        />
+        <Image source={{ uri: frontUri }} style={styles.cardImage} />
       </Animated.View>
     </View>
   );
