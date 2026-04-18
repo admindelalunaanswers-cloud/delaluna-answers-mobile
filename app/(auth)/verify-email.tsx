@@ -118,6 +118,8 @@ export default function VerifyEmail() {
   };
 
   const handleVerify = async (code?: string) => {
+    if (verifying) return;
+
     const enteredCode = code ?? digits.join('');
 
     if (!enteredCode || enteredCode.length !== CODE_LENGTH) {
@@ -128,19 +130,26 @@ export default function VerifyEmail() {
     setVerifying(true);
     try {
       await verifyCodeFn({ code: enteredCode });
-
-      await reloadAuthUser();
-      await refresh();
-
-      setVerified(true);
     } catch (e: any) {
       const msg = e?.message ?? 'Something went wrong.';
       Alert.alert('Verification failed', msg);
       setDigits(Array(CODE_LENGTH).fill(''));
       inputRefs.current[0]?.focus();
-    } finally {
       setVerifying(false);
+      return;
     }
+
+    // Verification succeeded — reload auth state but don't let failures
+    // undo the successful verification (the OTP doc is already deleted).
+    try {
+      await reloadAuthUser();
+      await refresh();
+    } catch {
+      // Post-verification refresh failed; navigation will still proceed.
+    }
+
+    setVerified(true);
+    setVerifying(false);
   };
 
   // Navigate once verified AND AI content is ready

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -152,6 +152,7 @@ export default function HomeScreen() {
   const noRetrogradesLabel = "No planets currently in retrograde";
   const retrogrades = (activeHoroscope?.planetsRetrograde ?? []).filter(p => p.toLowerCase() !== 'none' || noRetrogradesLabel);
 
+  const scrollRef = useRef<ScrollView>(null);
   const dateSwitcherDates = Object.keys(cardDraw).sort();
 
   const [showFullBanner] = useState(() => Math.random() < 0.5);
@@ -183,7 +184,10 @@ export default function HomeScreen() {
         <DateSwitcher
           value={selectedDate}
           dates={dateSwitcherDates.length > 0 ? dateSwitcherDates : [todayDateId]}
-          onChange={setSelectedDate}
+          onChange={(date) => {
+            setSelectedDate(date);
+            scrollRef.current?.scrollTo({ y: 0, animated: false });
+          }}
         />
 
         <PaygateOverlay
@@ -194,6 +198,7 @@ export default function HomeScreen() {
           onUnlock={handleUnlock}
         >
         <ScrollView
+          ref={scrollRef}
           style={styles.scroll}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: verticalScale(2) }]}
           showsVerticalScrollIndicator={false}
@@ -228,8 +233,8 @@ export default function HomeScreen() {
           <SectionTitle sectionName="moon" title="Moon Phase" />
           <HomeTextBox
             sectionName="moon"
-            content={activeHoroscope?.moonPhaseDetails}
-            contentTwo={activeHoroscope?.moon}
+            content={activeHoroscope?.moon}
+            contentTwo={activeHoroscope?.moonPhaseDetails}
             moonData={activeMoonData}
           />
 

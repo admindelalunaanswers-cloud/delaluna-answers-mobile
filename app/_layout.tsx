@@ -60,7 +60,9 @@ function AuthGate() {
 
     if (!authUser && !inAuth && !inStartup) {
       router.replace('/(startup)/welcome');
-    } else if (authUser && (inAuth || inStartup) && horoscopeReady && userDoc?.isEmailVerified !== false) {
+    } else if (authUser && userDoc && !userDoc.isEmailVerified && !inAuth) {
+      router.replace('/(auth)/verify-email');
+    } else if (authUser && (inAuth || inStartup) && horoscopeReady && userDoc?.isEmailVerified === true) {
       router.replace('/(main)');
     }
   }, [authUser, userDoc, userLoading, inAuth, inStartup, horoscopeReady]);
@@ -69,7 +71,8 @@ function AuthGate() {
     !userLoading &&
     (
       (!authUser && !inAuth && !inStartup) ||
-      (!!authUser && (inAuth || inStartup) && horoscopeReady && userDoc?.isEmailVerified !== false)
+      (!!authUser && !!userDoc && !userDoc.isEmailVerified && !inAuth) ||
+      (!!authUser && (inAuth || inStartup) && horoscopeReady && userDoc?.isEmailVerified === true)
     );
 
   // Show a global loading screen while:
