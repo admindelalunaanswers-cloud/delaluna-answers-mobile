@@ -37,7 +37,7 @@ function buildTransporter(user: string, pass: string) {
 // ─── sendVerificationCode ─────────────────────────────────────────────────────
 
 export const sendVerificationCode = onCall(
-  { secrets: [emailUser, emailPass]},
+  { secrets: [emailUser, emailPass], invoker: 'public' },
   
   async (request) => {
     if (!request.auth) {
@@ -113,7 +113,7 @@ export const sendVerificationCode = onCall(
 
 // ─── verifyCode ───────────────────────────────────────────────────────────────
 
-export const verifyCode = onCall(async (request) => {
+export const verifyCode = onCall({ invoker: 'public' }, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Must be signed in.');
   }
@@ -248,7 +248,7 @@ export const sendMorningReminder = onSchedule('every day 08:00', async () => {
 
 // ─── deleteConnection ─────────────────────────────────────────────────────────
 
-export const deleteConnection = onCall(async (request) => {
+export const deleteConnection = onCall({ invoker: 'public' }, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Must be signed in.');
   }
