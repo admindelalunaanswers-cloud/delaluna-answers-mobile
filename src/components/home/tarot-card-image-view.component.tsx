@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 
 import {
+  Image,
   ImageSourcePropType,
   Linking,
   StyleSheet,
@@ -37,6 +38,7 @@ interface FlipCardProps {
   frontUri: string;
   reversed: boolean;
   shouldReveal: boolean;
+  animate: boolean;
   delay: number;
 }
 
@@ -45,23 +47,37 @@ function FlipCard({
   frontUri,
   reversed,
   shouldReveal,
+  animate,
   delay,
 }: FlipCardProps) {
   const progress = useSharedValue(shouldReveal ? 1 : 0);
+  const frontLoaded = useSharedValue(0);
+
+  useEffect(() => {
+    frontLoaded.value = 0;
+  }, [frontUri, frontLoaded]);
 
   useEffect(() => {
     if (shouldReveal) {
-      progress.value = withDelay(
-        delay,
-        withTiming(1, {
-          duration: FLIP_DURATION,
-          easing: Easing.out(Easing.cubic),
-        }),
-      );
+      if (animate) {
+        progress.value = withDelay(
+          delay,
+          withTiming(1, {
+            duration: FLIP_DURATION,
+            easing: Easing.out(Easing.cubic),
+          }),
+        );
+      } else {
+        progress.value = 1;
+      }
     } else {
       progress.value = 0;
     }
-  }, [shouldReveal, delay, progress]);
+  }, [shouldReveal, animate, delay, progress]);
+
+  const handleFrontLoad = () => {
+    frontLoaded.value = withTiming(1, { duration: 300 });
+  };
 
   const backStyle = useAnimatedStyle(() => ({
     transform: [
@@ -76,15 +92,21 @@ function FlipCard({
       { rotateY: `${interpolate(progress.value, [0, 1], [180, 360])}deg` },
       { rotateZ: reversed ? "180deg" : "0deg" },
     ],
+    opacity: frontLoaded.value,
   }));
 
   return (
     <View style={styles.cardSlot}>
-      <Animated.Image source={backSource} style={[styles.face, backStyle]} />
-      <Animated.Image
-        source={{ uri: frontUri }}
-        style={[styles.face, frontStyle]}
-      />
+      <Animated.View style={[styles.face, backStyle]}>
+        <Image source={backSource} style={styles.cardImage} />
+      </Animated.View>
+      <Animated.View style={[styles.face, frontStyle]}>
+        <Image
+          source={{ uri: frontUri }}
+          style={styles.cardImage}
+          onLoad={handleFrontLoad}
+        />
+      </Animated.View>
     </View>
   );
 }
@@ -96,9 +118,11 @@ export default function TarotCardImageFrame({
   onReveal,
 }: TarotCardProps) {
   const [revealed, setRevealed] = useState(firstView);
+  const [animate, setAnimate] = useState(false);
 
   useEffect(() => {
     setRevealed(firstView);
+    setAnimate(false);
   }, [firstView]);
 
   const getTarotCardImageUrl = (num: number) =>
@@ -113,6 +137,7 @@ export default function TarotCardImageFrame({
   };
 
   const handleRevealCards = () => {
+    setAnimate(true);
     setRevealed(true);
     onReveal?.();
   };
@@ -134,6 +159,7 @@ export default function TarotCardImageFrame({
             frontUri={getTarotCardImageUrl(num)}
             reversed={!!reversed[idx]}
             shouldReveal={revealed}
+            animate={animate}
             delay={idx * STAGGER_MS}
           />
         ))}
@@ -182,8 +208,12 @@ const styles = StyleSheet.create({
     position: "absolute",
     width: "100%",
     height: "100%",
-    resizeMode: "contain",
     backfaceVisibility: "hidden",
+  },
+  cardImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "contain",
   },
   linksWrapper: {
     flexDirection: "row",
