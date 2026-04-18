@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { router } from 'expo-router';
 
@@ -114,6 +114,16 @@ export default function HomeScreen() {
       }));
     }
   }, [transitMoon]);
+
+  // Prefetch all card front images across all days so day-switching is instant
+  useEffect(() => {
+    const allCards = Object.values(cardDraw).flatMap(pack => pack.cards ?? []);
+    allCards.forEach(card => {
+      Image.prefetch(
+        `https://firebasestorage.googleapis.com/v0/b/delaluna-answers.firebasestorage.app/o/tarot-card-front%2F${card.id}.png?alt=media`
+      );
+    });
+  }, [cardDraw]);
 
   const activeCards = cardDraw[selectedDate] ?? null;
   const activeHoroscope = horoscopeByDate[selectedDate] ?? null;
