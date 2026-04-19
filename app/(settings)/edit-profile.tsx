@@ -25,11 +25,12 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { ThemeContext } from '@/src/context/theme-context';
 import { useUser } from '@/src/context/user-context';
+import { useHoroscope } from '@/src/context/horoscope-context';
 import { updateUserDoc } from '@/src/services/user.service';
 import { calculateNatalChart, calculateTransits, BirthData } from '@/src/services/astroEngine';
 import { requestBreakdown } from '@/src/services/natal-chart-breakdown.service';
 import { requestHoroscope, getTodayDateId } from '@/src/services/horoscope.service';
-import { requestTransitReading } from '@/src/services/transit-reading.service';
+import { requestTransitReading, getThisWeekDateId } from '@/src/services/transit-reading.service';
 import type { NatalChartDetailsDoc } from '@/src/types/user.type';
 import { auth, db } from '@/firebaseConfig';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
@@ -112,7 +113,9 @@ export default function EditProfileScreen() {
   const router = useRouter();
   const { theme } = useContext(ThemeContext);
   const { authUser, userDoc, refresh } = useUser();
+  const { refresh: refreshHoroscope } = useHoroscope();
   const ud = userDoc as any;
+  const formInitialized = useRef(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Saving changes...');
@@ -152,10 +155,13 @@ export default function EditProfileScreen() {
   // Snapshot of original chart-affecting values (for change detection)
   const [originalValues, setOriginalValues] = useState<ChartFields | null>(null);
 
-  // ── Load user data on mount ────────────────────────────────────────────────
+  // ── Load user data on mount (once only) ─────────────────────────────────────
+  // UserContext uses onSnapshot, so userDoc reference changes on every Firestore
+  // snapshot. We must only populate the form once — otherwise edits get wiped.
 
   useEffect(() => {
-    if (!ud) return;
+    if (!ud || formInitialized.current) return;
+    formInitialized.current = true;
 
     const fn = ud.firstName ?? (ud.name ? String(ud.name).split(' ')[0] : '');
     const ln = ud.lastName  ?? (ud.name ? String(ud.name).split(' ').slice(1).join(' ') : '');
@@ -435,7 +441,11 @@ export default function EditProfileScreen() {
         };
 
         // Save to both locations — overwrite entirely (birth data changed)
-        await setDoc(doc(db, 'users', uid, 'birthChart', 'data'), chartPayload);
+        // sign-up writes to both paths; horoscope-context reads chartData/details
+        await Promise.all([
+          setDoc(doc(db, 'users', uid, 'chartData', 'details'), chartPayload),
+          setDoc(doc(db, 'users', uid, 'birthChart', 'data'), chartPayload),
+        ]);
 
         setLoadingMessage('Regenerating your readings...');
 
@@ -449,35 +459,37 @@ export default function EditProfileScreen() {
         };
 
         const dateId = getTodayDateId();
+        const weekDateId = getThisWeekDateId();
         // Birthday change is the only trigger for horoscope regeneration.
         // Breakdown and transits regenerate whenever any chart field changes.
         const birthdayChanged = originalValues !== null && originalValues.birthday !== birthday;
 
         // Breakdown always regenerates on any natal chart change
-        requestBreakdown(uid, chartDetailsDoc).catch(console.error);
+        requestBreakdown(uid, chartDetailsDoc, pronouns).catch(console.error);
 
         calculateTransits(new Date(), bd.lat, bd.lon)
           .then(transits => {
             const RETROGRADE_PLANETS = new Set(['Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto']);
             const retrogrades = transits.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name);
-            // Transit reading always regenerates (accuracy / personalization)
-            requestTransitReading(uid, dateId, chartDetailsDoc, transits, 'free').catch(console.error);
+            // Transit reading always regenerates — keyed by week to match horoscope-context
+            requestTransitReading(uid, weekDateId, chartDetailsDoc, transits, pronouns).catch(console.error);
             // Horoscopes only regenerate when the birthday itself changed;
             // tarot cards are preserved (skipTarotDraw: true)
             if (birthdayChanged) {
-              requestHoroscope(uid, dateId, chartDetailsDoc, transits.moon, retrogrades)
+              requestHoroscope(uid, dateId, chartDetailsDoc, transits.moon, retrogrades, pronouns)
                 .catch(console.error);
             }
           })
           .catch(() => {
             if (birthdayChanged) {
-              requestHoroscope(uid, dateId, chartDetailsDoc, natalChart.moon, [],)
+              requestHoroscope(uid, dateId, chartDetailsDoc, natalChart.moon, [], pronouns)
                 .catch(console.error);
             }
           });
       }
 
       await refresh();
+      if (recalcChart) await refreshHoroscope();
       setIsLoading(false);
 
       Alert.alert(

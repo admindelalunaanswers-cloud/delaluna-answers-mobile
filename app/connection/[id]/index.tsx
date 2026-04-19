@@ -25,6 +25,7 @@ import HeaderNav from "@/src/components/shared/header-nav";
 import { ThemedText } from "@/src/components/themed-text";
 import { COMPATIBILITY_DEFINITIONS } from "@/src/constants/definitions";
 import { useUser } from "@/src/context/user-context";
+import { useRevenueCat } from "@/src/context/revenuecat-context";
 import { calculateNatalChart } from "@/src/services/astroEngine";
 import { subscribeToSynastryReading } from "@/src/services/synastry-reading.service";
 import { NavigationStore } from "@/src/stores/navigation-store";
@@ -178,6 +179,7 @@ function ScoreBar({
 export default function ConnectionViewScreen() {
   const { id: connectionId } = useLocalSearchParams<{ id: string }>();
   const { authUser } = useUser();
+  const { isPro } = useRevenueCat();
   const insets = useSafeAreaInsets();
   const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
 
@@ -303,35 +305,38 @@ export default function ConnectionViewScreen() {
   };
 
   const handleCompareBirthChart = async () => {
+    // Gate behind premium / consumable purchase (skip if already viewed)
+    if (!isPro && !hasSynastryReading) {
+      router.push('/(settings)/paywall');
+      return;
+    }
+
     const fp = connection?.firstPerson;
     const sp = connection?.secondPerson;
-    
+
     if (!fp?.birthday || !sp?.birthday) {
       console.warn("Missing birthday info for one or both persons");
       return;
     }
-    
-      setComputingSynastry(true);
+
+    setComputingSynastry(true);
     try {
       const chartA = await calculateNatalChart(parseBirthParams(fp));
       const chartB = await calculateNatalChart(parseBirthParams(sp));
-      
+
       NavigationStore.setSynastryAnalysis({
         chartA,
         chartB,
         nameA: `${fp.firstName ?? ''} ${fp.lastName ?? ''}`.trim(),
         nameB: `${sp.firstName ?? ''} ${sp.lastName ?? ''}`.trim(),
       });
-      
+
       router.push(`/connection/${connectionId}/synastry`);
-     
+
     } catch (e) {
       console.error("Error calculating synastry:", e);
       setComputingSynastry(false);
-    } 
-
-
-
+    }
   };
 
   const handleCompareBirthCharts = async () => {

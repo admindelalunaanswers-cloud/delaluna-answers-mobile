@@ -40,7 +40,7 @@ export default function HomeScreen() {
     transitMoon,
     breakdown,
   } = useHoroscope();
-  const { isPro, presentPaywall } = useRevenueCat();
+  const { isPro } = useRevenueCat();
 
 
   const todayDateId = getTodayDateId();
@@ -159,8 +159,8 @@ export default function HomeScreen() {
   const isPremium = isPro;
   const isPaygated = selectedDate !== todayDateId && !isPremium;
 
-  const handleUnlock = async () => {
-    await presentPaywall();
+  const handleUnlock = () => {
+    router.push('/(settings)/paywall');
   };
 
   // ─── Render ─────────────────────────────────────────────────────────────────

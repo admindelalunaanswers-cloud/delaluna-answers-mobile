@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HeaderNav from '@/src/components/shared/header-nav';
@@ -126,7 +127,7 @@ function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: C
 
 export default function ChatScreen() {
   const { authUser } = useUser();
-  const { isPro, presentPaywall } = useRevenueCat();
+  const { isPro } = useRevenueCat();
   const { chartDetails } = useHoroscope();
   const insets = useSafeAreaInsets();
   const { scale } = useResponsive();
@@ -146,13 +147,9 @@ export default function ChatScreen() {
   const questionsRemaining = Math.max(0, questionLimit - questionsUsed);
   const chatLocked = questionsUsed >= questionLimit;
 
-  const handleUpgrade = useCallback(async () => {
-    try {
-      await presentPaywall();
-    } catch (err) {
-      console.error('[chat] presentPaywall error:', err);
-    }
-  }, [presentPaywall]);
+  const handleUpgrade = useCallback(() => {
+    router.push('/(settings)/paywall');
+  }, []);
 
   const flatListRef = useRef<FlatList>(null);
   const chatStarted = useRef(false);

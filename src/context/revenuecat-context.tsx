@@ -27,6 +27,8 @@ import { useUser } from './user-context';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export type DevPlan = 'free' | 'freeTrial' | 'premium';
+
 interface RevenueCatContextValue {
   /** Whether the user has the "Delaluna Answers Pro" entitlement */
   isPro: boolean;
@@ -46,9 +48,13 @@ interface RevenueCatContextValue {
   presentCustomerCenter: () => Promise<void>;
   /**
    * True when the SDK is disabled (no production API key). In this mode
-   * `isPro` is driven by `toggleDevPro` instead of the paywall.
+   * `isPro` is driven by `devPlan` instead of the paywall.
    */
   isDevMode: boolean;
+  /** Current dev plan when RevenueCat is disabled. */
+  devPlan: DevPlan;
+  /** Set the dev plan (free / freeTrial / premium). No-op when SDK is enabled. */
+  setDevPlan: (plan: DevPlan) => void;
   /** Flip the local pro flag when RevenueCat is disabled. No-op otherwise. */
   toggleDevPro: () => void;
 }
@@ -65,6 +71,8 @@ const RevenueCatContext = createContext<RevenueCatContextValue>({
   presentPaywallIfNeeded: async () => false,
   presentCustomerCenter: async () => {},
   isDevMode: !REVENUECAT_ENABLED,
+  devPlan: 'free',
+  setDevPlan: () => {},
   toggleDevPro: () => {},
 });
 
@@ -76,20 +84,27 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(REVENUECAT_ENABLED);
   const configuredRef = useRef(false);
 
-  // Local pro flag used only when RevenueCat is disabled so we can still
-  // exercise the free ↔ premium UI from the profile screen.
-  const [devPro, setDevPro] = useState(true);
+  // Dev plan used only when RevenueCat is disabled so the client can
+  // exercise the free / free-trial / premium UI without the real SDK.
+  const [devPlan, setDevPlanState] = useState<DevPlan>('free');
 
   // Derive pro status from customer info. When RevenueCat is disabled we
-  // fall back to the local `devPro` flag instead of the real entitlement.
+  // fall back to the dev plan instead of the real entitlement.
   const isPro = REVENUECAT_ENABLED
     ? customerInfo
       ? hasEntitlement(customerInfo)
       : false
-    : devPro;
+    : devPlan === 'premium';
+
+  const setDevPlan = useCallback((plan: DevPlan) => {
+    if (!REVENUECAT_ENABLED) setDevPlanState(plan);
+  }, []);
 
   const toggleDevPro = useCallback(() => {
-    setDevPro((prev) => !prev);
+    setDevPlanState((prev) => {
+      const cycle: DevPlan[] = ['free', 'freeTrial', 'premium'];
+      return cycle[(cycle.indexOf(prev) + 1) % cycle.length];
+    });
   }, []);
 
   // ── Configure SDK once ──────────────────────────────────────────────────────
@@ -222,6 +237,8 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
         presentPaywallIfNeeded,
         presentCustomerCenter,
         isDevMode: !REVENUECAT_ENABLED,
+        devPlan,
+        setDevPlan,
         toggleDevPro,
       }}
     >

@@ -1,4 +1,4 @@
-import { Tabs } from 'expo-router';
+import { Tabs, router } from 'expo-router';
 import { useWindowDimensions } from 'react-native';
 
 import { IconSymbol } from '@/src/components/ui/icon-symbol';
@@ -8,7 +8,7 @@ import { useTheme } from '@/src/hooks/use-theme';
 export default function TabLayout() {
   const { theme: { colors: C } } = useTheme();
   const { width } = useWindowDimensions();
-  const { isPro, presentPaywall } = useRevenueCat();
+  const { isPro } = useRevenueCat();
   // Scale icon size from base 28 on 375px width, clamped between 22–36
   const iconSize = Math.round(Math.min(Math.max((width / 375) * 28, 22), 36));
 
@@ -48,7 +48,7 @@ export default function TabLayout() {
           tabPress: (e) => {
             if (!isPro) {
               e.preventDefault();
-              presentPaywall();
+              router.push('/(settings)/paywall');
             }
           },
         }}

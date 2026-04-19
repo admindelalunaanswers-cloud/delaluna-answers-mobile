@@ -48,6 +48,22 @@ export async function registerForPushNotifications(uid: string): Promise<void> {
   console.log('[push] token saved to Firestore');
 }
 
+// ─── Unregistration ──────────────────────────────────────────────────────────
+
+/**
+ * Removes the Expo push token from the user's Firestore doc.
+ * Call on logout so the device stops receiving notifications for this account.
+ */
+export async function unregisterPushToken(uid: string): Promise<void> {
+  try {
+    const { deleteField } = await import('firebase/firestore');
+    await setDoc(doc(db, 'users', uid), { expoPushToken: deleteField() }, { merge: true });
+    console.log('[push] token removed from Firestore for user', uid);
+  } catch (err) {
+    console.error('[push] failed to remove token:', err);
+  }
+}
+
 // ─── Foreground handler ───────────────────────────────────────────────────────
 
 /**
