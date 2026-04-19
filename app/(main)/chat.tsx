@@ -23,7 +23,6 @@ import { ThemedView } from '@/src/components/themed-view';
 import { C, R, S } from '@/src/constants/theme';
 import { useUser } from '@/src/context/user-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
-import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
 import { useResponsive } from '@/src/hooks/use-responsive';
 import { deleteChatSession, resumeChatSession, retryChatMessage, saveChatAndClear, sendChatMessage, subscribeToChatHistory, subscribeToChatSessions } from '@/src/services/chat.service';
 import type { ChatMessageDoc, SavedChatSession } from '@/src/services/chat.service';
@@ -129,7 +128,6 @@ export default function ChatScreen() {
   const { authUser } = useUser();
   const { isPro, presentPaywall } = useRevenueCat();
   const { chartDetails } = useHoroscope();
-  const { inTrial } = useFreeTrialAccess();
   const insets = useSafeAreaInsets();
   const { scale } = useResponsive();
   const headerHeight = insets.top + scale(44);
@@ -143,7 +141,7 @@ export default function ChatScreen() {
   const [viewingSession, setViewingSession] = useState<SavedChatSession | null>(null);
 
   const isPremium = isPro;
-  const questionLimit = (isPremium || inTrial) ? PREMIUM_CHAT_LIMIT : FREE_CHAT_LIMIT;
+  const questionLimit = isPremium ? PREMIUM_CHAT_LIMIT : FREE_CHAT_LIMIT;
   const questionsUsed = messages.length;
   const questionsRemaining = Math.max(0, questionLimit - questionsUsed);
   const chatLocked = questionsUsed >= questionLimit;
@@ -446,12 +444,6 @@ export default function ChatScreen() {
                 <PremiumUnlock
                   title="Daily limit reached"
                   message="Premium members have reached their daily limit. Come back tomorrow!"
-                />
-              ) : inTrial ? (
-                <PremiumUnlock
-                  title="Trial daily limit reached"
-                  message="You've used all questions for today. Upgrade to keep this access after your free trial ends."
-                  onUnlock={handleUpgrade}
                 />
               ) : (
                 <PremiumUnlock

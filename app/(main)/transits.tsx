@@ -10,9 +10,7 @@ import { ThemedView } from '@/src/components/themed-view';
 import { moderateScale, scale as staticScale, verticalScale } from '@/src/utils/responsive';
 import { C, R, S } from '@/src/constants/theme';
 import { useHoroscope } from '@/src/context/horoscope-context';
-import { useUser } from '@/src/context/user-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
-import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
 import { useResponsive } from '@/src/hooks/use-responsive';
 import type { TransitHouseReading } from '@/src/types/transit-reading.types';
 
@@ -107,14 +105,13 @@ function HouseCard({
 
 export default function TransitsScreen() {
   const {
+    chartDetails,
     transitReading,
     transitReadingGenerating,
     loading,
   } = useHoroscope();
 
-  const { authUser, userDoc } = useUser();
   const { isPro, presentPaywall } = useRevenueCat();
-  const { hasAccess } = useFreeTrialAccess();
 
   const insets = useSafeAreaInsets();
   const { scale } = useResponsive();
@@ -123,19 +120,21 @@ export default function TransitsScreen() {
 
   const isPremium = isPro;
 
-  // Determine which houses to lock. Premium users and free users still inside
-  // their 24-hour trial see everything. Free users post-trial keep a 3-house
-  // preview (the houses with the most transiting planets) and the rest lock.
+  // Determine which houses to lock.
+  // Premium users see everything. Free users only see their Big 3 natal
+  // houses: House 1 (Rising/Ascendant), natal Sun house, and natal Moon house.
   const lockedHouses = useMemo(() => {
-    if (hasAccess || !transitReading?.houses) return new Set<string>();
-    const sorted = [...transitReading.houses].sort(
-      (a, b) => b.transits.length - a.transits.length,
-    );
-    const unlocked = new Set(sorted.slice(0, 3).map(h => h.house));
+    if (isPro || !transitReading?.houses) return new Set<string>();
+    const unlocked = new Set<string>();
+    unlocked.add('1'); // Rising / Ascendant
+    const sunHouse = chartDetails?.planets.find(p => p.name === 'Sun')?.house;
+    const moonHouse = chartDetails?.planets.find(p => p.name === 'Moon')?.house;
+    if (sunHouse) unlocked.add(String(sunHouse));
+    if (moonHouse) unlocked.add(String(moonHouse));
     return new Set(
       transitReading.houses.filter(h => !unlocked.has(h.house)).map(h => h.house),
     );
-  }, [hasAccess, transitReading?.houses]);
+  }, [isPro, transitReading?.houses, chartDetails?.planets]);
 
   const handleUnlock = async () => {
     setUnlocking(true);
@@ -186,15 +185,15 @@ export default function TransitsScreen() {
           ))}
 
           {/* Unlock CTA for free users */}
-          {!isPremium && lockedHouses.size > 0 && (
+          {!isPremium && (
             <View style={styles.unlockWrap}>
               {unlocking ? (
                 <ActivityIndicator color={C.purple} />
               ) : (
                 <PremiumUnlock
                   onUnlock={handleUnlock}
-                  title="Unlock All 12 Houses"
-                  message="See how every transit is affecting every area of your life right now."
+                  title="Unlock All Transits"
+                  message="Go beyond your Big 3 and see how every transit is affecting every area of your life."
                 />
               )}
             </View>
