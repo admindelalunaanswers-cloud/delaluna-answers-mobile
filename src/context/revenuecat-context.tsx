@@ -84,20 +84,15 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(REVENUECAT_ENABLED);
   const configuredRef = useRef(false);
 
-  // Dev plan used only when RevenueCat is disabled so the client can
-  // exercise the free / free-trial / premium UI without the real SDK.
+  // Placeholder plan — lets the client test free / free-trial / premium
+  // flows via the mock paywall, regardless of real RevenueCat state.
   const [devPlan, setDevPlanState] = useState<DevPlan>('free');
 
-  // Derive pro status from customer info. When RevenueCat is disabled we
-  // fall back to the dev plan instead of the real entitlement.
-  const isPro = REVENUECAT_ENABLED
-    ? customerInfo
-      ? hasEntitlement(customerInfo)
-      : false
-    : devPlan === 'premium';
+  // Placeholder always drives isPro so the mock paywall works in every build.
+  const isPro = devPlan === 'premium';
 
   const setDevPlan = useCallback((plan: DevPlan) => {
-    if (!REVENUECAT_ENABLED) setDevPlanState(plan);
+    setDevPlanState(plan);
   }, []);
 
   const toggleDevPro = useCallback(() => {
