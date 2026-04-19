@@ -324,35 +324,6 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         )}
 
-        {/* ── One-time purchases ── */}
-        {!isPremium && (
-          <View style={ss.detailsCard}>
-            <Text style={ss.sectionLabel}>ONE-TIME PURCHASES</Text>
-
-            {([
-              { label: '3 Extra Chats', price: '$1.99' },
-              { label: '5 Extra Chats', price: '$3.99' },
-              { label: '3 Extra Connections', price: '$1.99' },
-              { label: '5 Extra Connections', price: '$3.99' },
-              { label: 'Synastry Analysis (1 person)', price: '$0.99' },
-            ] as const).map((item, i, arr) => (
-              <React.Fragment key={item.label}>
-                <TouchableOpacity
-                  style={ss.consumableRow}
-                  onPress={() => Alert.alert('Coming soon', `${item.label} will be available for purchase soon.`)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={ss.consumableLabel}>{item.label}</Text>
-                  <View style={ss.consumablePricePill}>
-                    <Text style={ss.consumablePrice}>{item.price}</Text>
-                  </View>
-                </TouchableOpacity>
-                {i < arr.length - 1 && <View style={ss.separator} />}
-              </React.Fragment>
-            ))}
-          </View>
-        )}
-
         {/* ── Settings rows: reset password, log out, delete ── */}
         <View style={ss.settingsCard}>
           <TouchableOpacity
@@ -512,8 +483,4 @@ const ss = StyleSheet.create({
   rowTextDanger:   { flex: 1, color: '#ff4d4f', fontSize: moderateScale(15), fontWeight: '500' },
 
   // Consumables
-  consumableRow:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: scale(16), paddingVertical: verticalScale(13) },
-  consumableLabel:     { color: '#fff', fontSize: moderateScale(14), fontWeight: '500', flex: 1, marginRight: scale(8) },
-  consumablePricePill: { backgroundColor: 'rgba(188,168,244,0.15)', paddingHorizontal: scale(12), paddingVertical: verticalScale(4), borderRadius: scale(8) },
-  consumablePrice:     { color: '#BCA8F4', fontSize: moderateScale(13), fontWeight: '700' },
 });
