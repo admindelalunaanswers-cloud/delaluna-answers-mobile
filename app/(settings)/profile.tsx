@@ -16,7 +16,7 @@ import { useUser } from '@/src/context/user-context';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { signOut } from '@/src/services/user.service';
-import { registerForPushNotifications } from '@/src/services/notifications.service';
+import { registerForPushNotifications, unregisterPushToken } from '@/src/services/notifications.service';
 import { getProfileImageSource } from '@/app/(settings)/select-avatar';
 import { auth } from '@/firebaseConfig';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
@@ -62,20 +62,17 @@ function formatTimeDisplay(time: string): string {
 const NAV_BAR_HEIGHT = 44;
 
 export default function ProfileScreen() {
-  const { authUser, userDoc, loading: userLoading, refresh } = useUser();
-  const { refresh: refreshHoroscope } = useHoroscope();
+  const { authUser, userDoc, loading: userLoading } = useUser();
+  const {} = useHoroscope();
   const {
     isPro,
-    presentPaywall,
-    presentCustomerCenter,
-    restorePurchases,
-    isDevMode,
-    toggleDevPro,
+    devPlan,
+    setDevPlan,
   } = useRevenueCat();
   const insets = useSafeAreaInsets();
   const ud = userDoc as any;
 
-  const [busy, setBusy] = useState(false);
+  const [busy] = useState(false);
   const [notifPermission, setNotifPermission] = useState<string | null>(null);
   const [enablingNotifs, setEnablingNotifs] = useState(false);
 
@@ -105,69 +102,17 @@ export default function ProfileScreen() {
 
   // ── Subscription actions ────────���──────────────────────────────────────────────
 
-  const handleUpgrade = async () => {
-    if (isDevMode) {
-      toggleDevPro();
-      return;
-    }
-    setBusy(true);
-    try {
-      const purchased = await presentPaywall();
-      if (purchased) {
-        await refresh();
-        await refreshHoroscope();
-      }
-    } catch {
-      Alert.alert('Error', 'Could not complete purchase.');
-    } finally {
-      setBusy(false);
-    }
+  const handleUpgrade = () => {
+    router.push('/(settings)/paywall');
   };
 
-  const handleManageSubscription = async () => {
-    if (isDevMode) {
-      Alert.alert(
-        'Dev mode',
-        'RevenueCat is disabled. Switch back to the free plan for testing?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Switch to Free', onPress: toggleDevPro },
-        ],
-      );
-      return;
-    }
-    setBusy(true);
-    try {
-      await presentCustomerCenter();
-      await refresh();
-      await refreshHoroscope();
-    } catch {
-      Alert.alert('Error', 'Could not open subscription management.');
-    } finally {
-      setBusy(false);
-    }
+  const handleManageSubscription = () => {
+    router.push('/(settings)/paywall');
   };
 
-  const handleRestore = async () => {
-    if (isDevMode) {
-      toggleDevPro();
-      return;
-    }
-    setBusy(true);
-    try {
-      const restored = await restorePurchases();
-      if (restored) {
-        Alert.alert('Restored', 'Your premium access has been restored.');
-        await refresh();
-        await refreshHoroscope();
-      } else {
-        Alert.alert('No Purchases Found', 'No previous purchases were found to restore.');
-      }
-    } catch {
-      Alert.alert('Error', 'Could not restore purchases.');
-    } finally {
-      setBusy(false);
-    }
+  const handleRestore = () => {
+    setDevPlan('premium');
+    Alert.alert('Restored', 'Premium access restored.');
   };
 
   // ── Log out / delete ──────────────────────────────────────────────────────────
@@ -178,7 +123,10 @@ export default function ProfileScreen() {
       {
         text: 'Log out', style: 'destructive',
         onPress: async () => {
-          try { await signOut(); } catch { Alert.alert('Error', 'Could not log out. Please try again.'); }
+          try {
+            if (authUser?.uid) await unregisterPushToken(authUser.uid);
+            await signOut();
+          } catch { Alert.alert('Error', 'Could not log out. Please try again.'); }
         },
       },
     ]);
@@ -196,6 +144,7 @@ export default function ProfileScreen() {
             try {
               const user = auth.currentUser;
               if (!user) return;
+              await unregisterPushToken(user.uid);
               await deleteUser(user);
             } catch (err: any) {
               if (err?.code === 'auth/requires-recent-login') {
@@ -263,14 +212,14 @@ export default function ProfileScreen() {
         <Text style={ss.name}>{ud?.name ?? '—'}</Text>
         <Text style={ss.email}>{ud?.email ?? authUser?.email ?? '—'}</Text>
 
-        <View style={[ss.badge, isPremium ? ss.badgePremium : ss.badgeFree]}>
+        <View style={[ss.badge, isPremium ? ss.badgePremium : devPlan === 'freeTrial' ? ss.badgeTrial : ss.badgeFree]}>
           <Ionicons
-            name={isPremium ? 'sparkles' : 'lock-closed-outline'}
+            name={isPremium ? 'sparkles' : devPlan === 'freeTrial' ? 'time-outline' : 'lock-closed-outline'}
             size={scale(13)}
-            color={isPremium ? '#FFD700' : '#888'}
+            color={isPremium ? '#FFD700' : devPlan === 'freeTrial' ? '#6FFFE9' : '#888'}
           />
-          <Text style={[ss.badgeText, isPremium ? ss.badgeTextPremium : ss.badgeTextFree]}>
-            {isPremium ? 'PREMIUM MEMBER' : 'FREE PLAN'}
+          <Text style={[ss.badgeText, isPremium ? ss.badgeTextPremium : devPlan === 'freeTrial' ? ss.badgeTextTrial : ss.badgeTextFree]}>
+            {isPremium ? 'PREMIUM MEMBER' : devPlan === 'freeTrial' ? 'FREE TRIAL' : 'FREE PLAN'}
           </Text>
         </View>
 
@@ -482,9 +431,11 @@ const ss = StyleSheet.create({
   email:            { color: 'rgba(255,255,255,0.45)', fontSize: moderateScale(13), marginBottom: verticalScale(4) },
   badge:            { flexDirection: 'row', alignItems: 'center', gap: scale(6), borderRadius: scale(20), paddingHorizontal: scale(14), paddingVertical: verticalScale(6) },
   badgePremium:     { backgroundColor: 'rgba(255,215,0,0.12)' },
+  badgeTrial:       { backgroundColor: 'rgba(111,255,233,0.12)' },
   badgeFree:        { backgroundColor: 'rgba(255,255,255,0.07)' },
   badgeText:        { fontSize: moderateScale(11), fontWeight: '800', letterSpacing: 1.2 },
   badgeTextPremium: { color: '#FFD700' },
+  badgeTextTrial:   { color: '#6FFFE9' },
   badgeTextFree:    { color: '#888' },
 
   // Action row

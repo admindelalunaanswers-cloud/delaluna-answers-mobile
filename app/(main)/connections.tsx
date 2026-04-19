@@ -108,7 +108,7 @@ const PREMIUM_CONNECTION_LIMIT = 10;
 
 export default function ConnectionsScreen() {
   const { authUser } = useUser();
-  const { isPro, presentPaywall } = useRevenueCat();
+  const { isPro } = useRevenueCat();
   const insets = useSafeAreaInsets();
 
   const [connections, setConnections] = useState<any[]>([]);
@@ -121,12 +121,8 @@ export default function ConnectionsScreen() {
   const accessLimit = isPro ? PREMIUM_CONNECTION_LIMIT : FREE_CONNECTION_LIMIT;
   const canAddNew = connections.length < accessLimit;
 
-  const presentUpgradePaywall = async () => {
-    try {
-      await presentPaywall();
-    } catch (err) {
-      console.error('[connections] presentPaywall error:', err);
-    }
+  const presentUpgradePaywall = () => {
+    router.push('/(settings)/paywall');
   };
 
   const handleOpenConnection = (connectionId: string) => {

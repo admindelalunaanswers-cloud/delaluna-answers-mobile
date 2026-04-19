@@ -37,9 +37,20 @@ function toMillis(value: any): number | null {
 
 export function useFreeTrialAccess(): FreeTrialAccess {
   const { userDoc } = useUser();
-  const { isPro } = useRevenueCat();
+  const { isPro, isDevMode, devPlan } = useRevenueCat();
 
   return useMemo(() => {
+    // When RevenueCat is disabled, let the dev plan drive trial state directly.
+    if (isDevMode) {
+      const isTrial = devPlan === 'freeTrial';
+      return {
+        hasAccess: isPro || isTrial,
+        inTrial: isTrial,
+        trialExpired: devPlan === 'free',
+        msRemaining: isTrial ? TRIAL_DURATION_MS : 0,
+      };
+    }
+
     const createdMs = toMillis((userDoc as any)?.createdAt);
     const trialEnd = createdMs != null ? createdMs + TRIAL_DURATION_MS : null;
     const now = Date.now();
@@ -50,5 +61,5 @@ export function useFreeTrialAccess(): FreeTrialAccess {
     const msRemaining = trialEnd != null ? Math.max(0, trialEnd - now) : 0;
 
     return { hasAccess, inTrial, trialExpired, msRemaining };
-  }, [userDoc, isPro]);
+  }, [userDoc, isPro, isDevMode, devPlan]);
 }

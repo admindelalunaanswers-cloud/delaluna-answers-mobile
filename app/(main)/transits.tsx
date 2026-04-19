@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HeaderNav from '@/src/components/shared/header-nav';
@@ -111,12 +112,12 @@ export default function TransitsScreen() {
     loading,
   } = useHoroscope();
 
-  const { isPro, presentPaywall } = useRevenueCat();
+  const { isPro } = useRevenueCat();
 
   const insets = useSafeAreaInsets();
   const { scale } = useResponsive();
   const headerHeight = insets.top + scale(NAV_BAR_HEIGHT);
-  const [unlocking, setUnlocking] = useState(false);
+  const [unlocking] = useState(false);
 
   const isPremium = isPro;
 
@@ -136,13 +137,8 @@ export default function TransitsScreen() {
     );
   }, [isPro, transitReading?.houses, chartDetails?.planets]);
 
-  const handleUnlock = async () => {
-    setUnlocking(true);
-    try {
-      await presentPaywall();
-    } finally {
-      setUnlocking(false);
-    }
+  const handleUnlock = () => {
+    router.push('/(settings)/paywall');
   };
 
   return (

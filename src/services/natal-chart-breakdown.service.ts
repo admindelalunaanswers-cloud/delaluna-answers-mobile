@@ -75,7 +75,6 @@ export async function requestBreakdown(
   await setDoc(
     doc(db, 'users', uid, 'natalChart', BREAKDOWN_DOC),
     { prompt, natalChart, requestedAt },
-    { merge: true },
   );
 }
 
