@@ -324,6 +324,66 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         )}
 
+        {/* ── One-time purchases ── */}
+        {!isPremium && (
+          <View style={ss.detailsCard}>
+            <Text style={ss.sectionLabel}>ONE-TIME PURCHASES</Text>
+
+            {([
+              { label: '3 Extra Chats', price: '$1.99' },
+              { label: '5 Extra Chats', price: '$3.99' },
+              { label: '3 Extra Connections', price: '$1.99' },
+              { label: '5 Extra Connections', price: '$3.99' },
+              { label: 'Synastry Analysis (1 person)', price: '$0.99' },
+            ] as const).map((item, i, arr) => (
+              <React.Fragment key={item.label}>
+                <TouchableOpacity
+                  style={ss.consumableRow}
+                  onPress={() => Alert.alert('Coming soon', `${item.label} will be available for purchase soon.`)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={ss.consumableLabel}>{item.label}</Text>
+                  <View style={ss.consumablePricePill}>
+                    <Text style={ss.consumablePrice}>{item.price}</Text>
+                  </View>
+                </TouchableOpacity>
+                {i < arr.length - 1 && <View style={ss.separator} />}
+              </React.Fragment>
+            ))}
+          </View>
+        )}
+
+        {/* ── Settings rows: reset password, log out, delete ── */}
+        <View style={ss.settingsCard}>
+          <TouchableOpacity
+            style={ss.settingsRow}
+            onPress={() => router.push('/(auth)/forgot-password')}
+            activeOpacity={0.75}
+          >
+            <Image source={require('@/src/assets/actions/change-password-icon.png')} style={ss.rowIcon} />
+            <Text style={ss.rowText}>Reset Password</Text>
+            <Image source={require('@/src/assets/actions/arrow-right-icon.png')} style={ss.rowArrow} />
+          </TouchableOpacity>
+
+          <View style={ss.rowDivider} />
+
+          <TouchableOpacity style={ss.settingsRow} onPress={handleLogout} activeOpacity={0.75}>
+            <Image source={require('@/src/assets/actions/log-out-icon.png')} style={ss.rowIcon} />
+            <Text style={ss.rowText}>Log out</Text>
+            <Image source={require('@/src/assets/actions/arrow-right-icon.png')} style={ss.rowArrow} />
+          </TouchableOpacity>
+
+          <View style={ss.rowDivider} />
+
+          <TouchableOpacity style={ss.settingsRow} onPress={handleDeleteAccount} activeOpacity={0.75}>
+            <Image source={require('@/src/assets/actions/delete-account-icon.png')} style={[ss.rowIcon, ss.rowIconDanger]} />
+            <Text style={ss.rowTextDanger}>Delete account</Text>
+            <Image source={require('@/src/assets/actions/arrow-right-icon.png')} style={[ss.rowArrow, ss.rowIconDanger]} />
+          </TouchableOpacity>
+
+          
+        </View>
+
         {/* ── Subscription actions ── */}
         {isPremium ? (
           <TouchableOpacity
@@ -359,35 +419,6 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </>
         )}
-
-        {/* ── Settings rows: reset password, log out, delete ── */}
-        <View style={ss.settingsCard}>
-          <TouchableOpacity
-            style={ss.settingsRow}
-            onPress={() => router.push('/(auth)/forgot-password')}
-            activeOpacity={0.75}
-          >
-            <Image source={require('@/src/assets/actions/change-password-icon.png')} style={ss.rowIcon} />
-            <Text style={ss.rowText}>Reset Password</Text>
-            <Image source={require('@/src/assets/actions/arrow-right-icon.png')} style={ss.rowArrow} />
-          </TouchableOpacity>
-
-          <View style={ss.rowDivider} />
-
-          <TouchableOpacity style={ss.settingsRow} onPress={handleLogout} activeOpacity={0.75}>
-            <Image source={require('@/src/assets/actions/log-out-icon.png')} style={ss.rowIcon} />
-            <Text style={ss.rowText}>Log out</Text>
-            <Image source={require('@/src/assets/actions/arrow-right-icon.png')} style={ss.rowArrow} />
-          </TouchableOpacity>
-
-          <View style={ss.rowDivider} />
-
-          <TouchableOpacity style={ss.settingsRow} onPress={handleDeleteAccount} activeOpacity={0.75}>
-            <Image source={require('@/src/assets/actions/delete-account-icon.png')} style={[ss.rowIcon, ss.rowIconDanger]} />
-            <Text style={ss.rowTextDanger}>Delete account</Text>
-            <Image source={require('@/src/assets/actions/arrow-right-icon.png')} style={[ss.rowArrow, ss.rowIconDanger]} />
-          </TouchableOpacity>
-        </View>
 
         <View style={{ height: verticalScale(32) }} />
       </ScrollView>
@@ -479,4 +510,10 @@ const ss = StyleSheet.create({
   rowDivider:      { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.08)', marginHorizontal: scale(16) },
   rowIconDanger:   { tintColor: '#ff4d4f' },
   rowTextDanger:   { flex: 1, color: '#ff4d4f', fontSize: moderateScale(15), fontWeight: '500' },
+
+  // Consumables
+  consumableRow:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: scale(16), paddingVertical: verticalScale(13) },
+  consumableLabel:     { color: '#fff', fontSize: moderateScale(14), fontWeight: '500', flex: 1, marginRight: scale(8) },
+  consumablePricePill: { backgroundColor: 'rgba(188,168,244,0.15)', paddingHorizontal: scale(12), paddingVertical: verticalScale(4), borderRadius: scale(8) },
+  consumablePrice:     { color: '#BCA8F4', fontSize: moderateScale(13), fontWeight: '700' },
 });

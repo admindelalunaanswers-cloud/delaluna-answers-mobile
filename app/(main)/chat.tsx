@@ -143,7 +143,14 @@ export default function ChatScreen() {
 
   const isPremium = isPro;
   const questionLimit = isPremium ? PREMIUM_CHAT_LIMIT : FREE_CHAT_LIMIT;
-  const questionsUsed = messages.length;
+
+  // Count ALL questions sent today (active chat + saved sessions)
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const activeToday = messages.filter(m => m.createdAt >= todayStart).length;
+  const savedToday = savedSessions.reduce((count, session) =>
+    count + session.messages.filter(m => m.createdAt >= todayStart).length, 0);
+  const questionsUsed = activeToday + savedToday;
   const questionsRemaining = Math.max(0, questionLimit - questionsUsed);
   const chatLocked = questionsUsed >= questionLimit;
 
