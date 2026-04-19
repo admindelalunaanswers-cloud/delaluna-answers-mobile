@@ -27,9 +27,9 @@ export const ENTITLEMENT_ID = 'Delaluna Answers Pro';
 
 /** Product identifiers configured in RevenueCat dashboard */
 export const PRODUCT_IDS = {
-  monthly: 'monthly',
-  yearly: 'yearly',
-  consumable: 'consumable',
+  weekly: 'com.delaluna.premium.weekly',
+  monthly: 'com.delaluna.premium.monthly',
+  annual: 'delaluna_premium_annual_trial',
 } as const;
 
 // ─── Initialization ──────────────────────────────────────────────────────────
