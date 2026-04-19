@@ -41,9 +41,11 @@ export default function PremiumUnlock({
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.message}>{message}</Text>
 
-        <TouchableOpacity style={styles.button} onPress={onUnlock} activeOpacity={0.8}>
-          <Text style={styles.buttonText}>Unlock Now</Text>
-        </TouchableOpacity>
+        {onUnlock && (
+          <TouchableOpacity style={styles.button} onPress={onUnlock} activeOpacity={0.8}>
+            <Text style={styles.buttonText}>Unlock Now</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </LinearGradient>
   );
