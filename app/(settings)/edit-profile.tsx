@@ -793,6 +793,8 @@ const ss = StyleSheet.create({
     paddingBottom: verticalScale(12),
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(10, 6, 30, 0)',
+    zIndex: 10,
   },
   headerSide: {
     flexDirection: 'row',
