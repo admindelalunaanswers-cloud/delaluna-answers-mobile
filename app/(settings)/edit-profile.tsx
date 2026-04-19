@@ -658,8 +658,6 @@ export default function EditProfileScreen() {
                     />
                     {(locationSearching || locationTzLoading) ? (
                       <ActivityIndicator size="small" color="#6FFFE9" style={{ marginRight: scale(8) }} />
-                    ) : selectedLocation ? (
-                      <Ionicons name="checkmark-circle" size={scale(18)} color="#6FFFE9" style={{ marginRight: scale(8) }} />
                     ) : null}
                     <TouchableOpacity onPress={() => {
                       setIsPlaceOfBirthUnknown(true);
@@ -911,12 +909,13 @@ const ss = StyleSheet.create({
   // Pronouns chips
   choicesRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: scale(8),
+    gap: scale(4),
   },
   chip: {
-    paddingHorizontal: scale(14),
-    paddingVertical: verticalScale(7),
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: scale(2),
+    paddingVertical: verticalScale(8),
     borderRadius: 999,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
@@ -928,7 +927,7 @@ const ss = StyleSheet.create({
   },
   chipText: {
     color: 'rgba(255,255,255,0.6)',
-    fontSize: moderateScale(13),
+    fontSize: moderateScale(12),
     fontWeight: '500',
   },
   chipTextActive: {
