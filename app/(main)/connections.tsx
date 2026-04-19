@@ -27,7 +27,6 @@ import { db, functions } from "../../firebaseConfig";
 import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
 import { useUser } from "@/src/context/user-context";
 import { useRevenueCat } from "@/src/context/revenuecat-context";
-import { useFreeTrialAccess } from "@/src/hooks/use-free-trial-access";
 import HeaderNav from "@/src/components/shared/header-nav";
 import DelalunaContainer from "@/src/components/shared/delaluna-container.component";
 import { ThemedView } from "@/src/components/themed-view";
@@ -110,7 +109,6 @@ const PREMIUM_CONNECTION_LIMIT = 10;
 export default function ConnectionsScreen() {
   const { authUser } = useUser();
   const { isPro, presentPaywall } = useRevenueCat();
-  const { hasAccess } = useFreeTrialAccess();
   const insets = useSafeAreaInsets();
 
   const [connections, setConnections] = useState<any[]>([]);
@@ -120,7 +118,7 @@ export default function ConnectionsScreen() {
 
   const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
 
-  const accessLimit = hasAccess ? PREMIUM_CONNECTION_LIMIT : FREE_CONNECTION_LIMIT;
+  const accessLimit = isPro ? PREMIUM_CONNECTION_LIMIT : FREE_CONNECTION_LIMIT;
   const canAddNew = connections.length < accessLimit;
 
   const presentUpgradePaywall = async () => {
@@ -250,7 +248,7 @@ export default function ConnectionsScreen() {
             showsVerticalScrollIndicator={false}
           >
             {connections.map((c, index) => {
-              const isLocked = !hasAccess && index >= FREE_CONNECTION_LIMIT;
+              const isLocked = !isPro && index >= FREE_CONNECTION_LIMIT;
               return (
                 <AnimatedConnectionItem
                   key={c.id}
