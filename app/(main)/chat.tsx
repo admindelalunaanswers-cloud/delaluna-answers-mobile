@@ -304,7 +304,7 @@ export default function ChatScreen() {
 
   // ─── Derived ───────────────────────────────────────────────────────────────
 
-  const showSuggestions = historyLoaded && messages.length === 0;
+  const showSuggestions = historyLoaded && messages.length === 0 && !chatLocked;
   const hasPending = messages.some(m => m.isPending);
   const sendDisabled = isSending || hasPending || !inputText.trim();
 
@@ -410,40 +410,8 @@ export default function ChatScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={[styles.flex, { paddingTop: headerHeight }]}>
-          {showSuggestions ? (
-            <View style={styles.suggestionsContainer}>
-              <Text style={styles.suggestionsLabel}>What's on your mind?</Text>
-              {Array.from({ length: VISIBLE_SUGGESTIONS }, (_, i) =>
-                SUGGESTIONS[(suggestionOffset + i) % SUGGESTIONS.length]
-              ).map((q) => (
-                <TouchableOpacity
-                  key={q}
-                  style={styles.suggestionChip}
-                  onPress={() => handleSend(q)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.suggestionText}>{q}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          ) : (
-            <FlatList
-              ref={flatListRef}
-              style={styles.flex}
-              data={messages}
-              keyExtractor={item => item.id}
-              renderItem={({ item }) => <MessageBubble msg={item} onRetry={handleRetry} />}
-              contentContainerStyle={[
-                styles.messageList,
-                { paddingBottom: insets.bottom + S.md },
-              ]}
-              showsVerticalScrollIndicator={false}
-              onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-            />
-          )}
-
-          {chatLocked ? (
-            <View style={[styles.paygateContainer, { paddingBottom: insets.bottom}]}>
+          {chatLocked && messages.length === 0 ? (
+            <View style={styles.paygateContainerCentered}>
               {isPremium ? (
                 <PremiumUnlock
                   title="Daily limit reached"
@@ -459,39 +427,87 @@ export default function ChatScreen() {
             </View>
           ) : (
             <>
-              
-              <View style={[styles.inputBar, { paddingBottom: S.sm }]}>
-                <TextInput
-                  style={styles.textInput}
-                  value={inputText}
-                  onChangeText={setInputText}
-                  placeholder="Ask Delaluna anything…"
-                  placeholderTextColor={C.muted}
-                  multiline
-                  maxLength={500}
-                  returnKeyType="send"
-                  onSubmitEditing={() => handleSend()}
-                  blurOnSubmit
-                />
-                <TouchableOpacity
-                  style={[styles.sendButton, sendDisabled && styles.sendButtonDisabled]}
-                  onPress={() => handleSend()}
-                  disabled={sendDisabled}
-                  activeOpacity={0.7}
-                >
-                  {isSending ? (
-                    <ActivityIndicator size="small" color={C.white} />
-                  ) : (
-                    <Text style={styles.sendButtonText}>→</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-              {questionsUsed > 0 && (
-                <View style={styles.counterBar}>
-                  <Text style={styles.counterText}>
-                    {questionsRemaining} question{questionsRemaining !== 1 ? 's' : ''} remaining today
-                  </Text>
+              {showSuggestions ? (
+                <View style={styles.suggestionsContainer}>
+                  <Text style={styles.suggestionsLabel}>What's on your mind?</Text>
+                  {Array.from({ length: VISIBLE_SUGGESTIONS }, (_, i) =>
+                    SUGGESTIONS[(suggestionOffset + i) % SUGGESTIONS.length]
+                  ).map((q) => (
+                    <TouchableOpacity
+                      key={q}
+                      style={styles.suggestionChip}
+                      onPress={() => handleSend(q)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.suggestionText}>{q}</Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
+              ) : (
+                <FlatList
+                  ref={flatListRef}
+                  style={styles.flex}
+                  data={messages}
+                  keyExtractor={item => item.id}
+                  renderItem={({ item }) => <MessageBubble msg={item} onRetry={handleRetry} />}
+                  contentContainerStyle={[
+                    styles.messageList,
+                    { paddingBottom: insets.bottom + S.md },
+                  ]}
+                  showsVerticalScrollIndicator={false}
+                  onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                />
+              )}
+
+              {chatLocked ? (
+                <View style={[styles.paygateContainer, { paddingBottom: insets.bottom }]}>
+                  {isPremium ? (
+                    <PremiumUnlock
+                      title="Daily limit reached"
+                      message="Premium members have reached their daily limit. Come back tomorrow!"
+                    />
+                  ) : (
+                    <PremiumUnlock
+                      title="You've used your 3 free questions"
+                      message="Upgrade to Premium for more daily questions and unlimited cosmic guidance."
+                      onUnlock={handleUpgrade}
+                    />
+                  )}
+                </View>
+              ) : (
+                <>
+                  <View style={[styles.inputBar, { paddingBottom: S.sm }]}>
+                    <TextInput
+                      style={styles.textInput}
+                      value={inputText}
+                      onChangeText={setInputText}
+                      placeholder="Ask Delaluna anything..."
+                      placeholderTextColor={C.muted}
+                      multiline
+                      maxLength={500}
+                      returnKeyType="send"
+                      onSubmitEditing={() => handleSend()}
+                      blurOnSubmit
+                    />
+                    <TouchableOpacity
+                      style={[styles.sendButton, sendDisabled && styles.sendButtonDisabled]}
+                      onPress={() => handleSend()}
+                      disabled={sendDisabled}
+                      activeOpacity={0.7}
+                    >
+                      {isSending ? (
+                        <ActivityIndicator size="small" color={C.white} />
+                      ) : (
+                        <Text style={styles.sendButtonText}>{'\u2192'}</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.counterBar}>
+                    <Text style={styles.counterText}>
+                      {questionsRemaining} of {questionLimit} questions remaining today
+                    </Text>
+                  </View>
+                </>
               )}
             </>
           )}
@@ -649,6 +665,11 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.08)',
     backgroundColor: 'rgba(0,0,0,0.2)',
+  },
+  paygateContainerCentered: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: S.md,
   },
   counterBar: {
     alignItems: 'center',

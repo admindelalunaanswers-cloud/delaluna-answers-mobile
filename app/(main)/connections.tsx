@@ -257,6 +257,21 @@ export default function ConnectionsScreen() {
                 />
               );
             })}
+            {/* Placeholder slots for remaining capacity */}
+            {canAddNew && Array.from({ length: Math.min(accessLimit - connections.length, 3) }).map((_, i) => (
+              <TouchableOpacity
+                key={`placeholder-${i}`}
+                style={styles.placeholderItem}
+                onPress={goToNewConnectionScreen}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="add-circle-outline" size={moderateScale(20)} color="rgba(255,255,255,0.3)" />
+                <Text style={styles.placeholderText}>Add Connection</Text>
+              </TouchableOpacity>
+            ))}
+            <Text style={styles.slotCounter}>
+              {connections.length} of {accessLimit} connections
+            </Text>
           </ScrollView>
         ) : (
           <ThemedView style={[styles.centered]}>
@@ -323,5 +338,27 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: moderateScale(18),
     fontWeight: "600",
+  },
+  placeholderItem: {
+    padding: scale(16),
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: scale(8),
+    borderWidth: 1,
+    borderStyle: "dashed" as const,
+    borderColor: "rgba(255,255,255,0.15)",
+    borderRadius: moderateScale(10),
+    marginTop: verticalScale(8),
+  },
+  placeholderText: {
+    color: "rgba(255,255,255,0.3)",
+    fontSize: moderateScale(14),
+  },
+  slotCounter: {
+    color: "rgba(255,255,255,0.35)",
+    fontSize: moderateScale(12),
+    textAlign: "center" as const,
+    marginTop: verticalScale(12),
   },
 });
