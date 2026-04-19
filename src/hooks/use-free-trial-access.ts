@@ -37,29 +37,16 @@ function toMillis(value: any): number | null {
 
 export function useFreeTrialAccess(): FreeTrialAccess {
   const { userDoc } = useUser();
-  const { isPro, isDevMode, devPlan } = useRevenueCat();
+  const { isPro, devPlan } = useRevenueCat();
 
   return useMemo(() => {
-    // When RevenueCat is disabled, let the dev plan drive trial state directly.
-    if (isDevMode) {
-      const isTrial = devPlan === 'freeTrial';
-      return {
-        hasAccess: isPro || isTrial,
-        inTrial: isTrial,
-        trialExpired: devPlan === 'free',
-        msRemaining: isTrial ? TRIAL_DURATION_MS : 0,
-      };
-    }
-
-    const createdMs = toMillis((userDoc as any)?.createdAt);
-    const trialEnd = createdMs != null ? createdMs + TRIAL_DURATION_MS : null;
-    const now = Date.now();
-
-    const inTrial = trialEnd != null ? now < trialEnd : false;
-    const hasAccess = isPro || inTrial;
-    const trialExpired = !isPro && trialEnd != null && now >= trialEnd;
-    const msRemaining = trialEnd != null ? Math.max(0, trialEnd - now) : 0;
-
-    return { hasAccess, inTrial, trialExpired, msRemaining };
-  }, [userDoc, isPro, isDevMode, devPlan]);
+    // Placeholder plan drives trial state so the client can test all flows.
+    const isTrial = devPlan === 'freeTrial';
+    return {
+      hasAccess: isPro || isTrial,
+      inTrial: isTrial,
+      trialExpired: devPlan === 'free',
+      msRemaining: isTrial ? TRIAL_DURATION_MS : 0,
+    };
+  }, [isPro, devPlan]);
 }
