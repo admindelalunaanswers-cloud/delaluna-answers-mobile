@@ -190,8 +190,8 @@ export default function ProfileScreen() {
       />
 
       <ScrollView
-        style={ss.scroll}
-        contentContainerStyle={[ss.content, { paddingTop: insets.top + scale(NAV_BAR_HEIGHT) + scale(24) }]}
+        style={[ss.scroll, { marginTop: insets.top + scale(NAV_BAR_HEIGHT) }]}
+        contentContainerStyle={[ss.content, { paddingTop: scale(24) }]}
         showsVerticalScrollIndicator={false}
       >
         {/* ── Avatar ── */}
