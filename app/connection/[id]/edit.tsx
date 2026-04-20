@@ -889,7 +889,7 @@ export default function EditConnectionScreen() {
     { key: "second", title: "Second Individual", fields: birthFields, onChange: setSecondPerson },
   ];
 
-  const relationshipOptions = ["consistent", "complicated", "toxic"];
+  const relationshipOptions = ["It's Consistent", "It's Complicated", "I Dunno"];
 
   if (initialLoading) {
     return (
@@ -1034,11 +1034,11 @@ export default function EditConnectionScreen() {
                     {relationshipOptions.map((option) => {
                       const key = option.toLowerCase();
                       const iconSource =
-                        key === "consistent"
-                          ? require("@/src/assets/connections/consistent-words.png")
-                          : key === "complicated"
-                            ? require("@/src/assets/connections/complicated-words.png")
-                            : require("@/src/assets/connections/i-dunno-words.png");
+                        key.includes("consistent")
+                          ? require("@/src/assets/connections/consistent_icon.png")
+                          : key.includes("complicated")
+                            ? require("@/src/assets/connections/complicated_icon.png")
+                            : require("@/src/assets/connections/dunno_icon.png");
                       return (
                         <TouchableOpacity
                           key={option}
@@ -1051,6 +1051,9 @@ export default function EditConnectionScreen() {
                             style={[styles.relationshipIcon, relationshipType === option && styles.relationshipIconSelected]}
                             resizeMode="contain"
                           />
+                          <ThemedText type="sectionDefinition" style={{ color: relationshipType === option ? "#FFFFFF" : "rgba(255,255,255,0.7)", marginTop: verticalScale(4) }}>
+                            {option}
+                          </ThemedText>
                         </TouchableOpacity>
                       );
                     })}
