@@ -755,10 +755,13 @@ export default function EditConnectionScreen() {
 
   const handleSave = async () => {
     dismissAllSuggestions();
-    if (!validatePerson(firstPerson, "First Person")) return;
-    if (!validatePerson(secondPerson, "Second Person")) return;
+    setSaving(true);
+
+    if (!validatePerson(firstPerson, "First Person")) { setSaving(false); return; }
+    if (!validatePerson(secondPerson, "Second Person")) { setSaving(false); return; }
     if (!relationshipType) {
       Alert.alert("Missing Relationship Type", "Please select a relationship type.");
+      setSaving(false);
       return;
     }
 
@@ -767,10 +770,9 @@ export default function EditConnectionScreen() {
         "Change limit reached",
         `Connection birth details can only be updated ${MAX_BIRTH_DETAIL_CHANGES} times. Please contact support if you need further changes.`,
       );
+      setSaving(false);
       return;
     }
-
-    setSaving(true);
     try {
       const extractBirthParams = (person: PersonBirthData) => {
         if (!person.Birthday) throw new Error("Birthday is missing");
