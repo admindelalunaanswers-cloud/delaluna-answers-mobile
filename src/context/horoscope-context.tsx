@@ -7,6 +7,7 @@
  */
 
 import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 
 import { doc, getDoc } from 'firebase/firestore';
 
@@ -116,6 +117,13 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
   const unsubHoroscopeRef          = useRef<(() => void) | null>(null);
   const unsubBreakdownRef          = useRef<(() => void) | null>(null);
   const unsubTransitRef            = useRef<(() => void) | null>(null);
+
+  // Track generating flags in a ref so the AppState listener always reads fresh
+  // values without needing them in its dependency array (avoids stale closures).
+  const generatingRef = useRef({ breakdown: false, transit: false, horoscope: false });
+  generatingRef.current.breakdown = breakdownGenerating && !breakdown;
+  generatingRef.current.transit   = transitReadingGenerating && !transitReading;
+  generatingRef.current.horoscope = horoscopeGenerating && !horoscope;
 
   // ─── Background subscribers (subscribe + request only, no re-fetch) ──────────
 
@@ -337,6 +345,40 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
       unsubBreakdownRef.current?.(); unsubBreakdownRef.current = null;
       unsubTransitRef.current?.();   unsubTransitRef.current = null;
     };
+  }, [authUser?.uid]);
+
+  // ─── App resume: re-check items still generating ───────────────────────────
+  // onSnapshot listeners may miss updates if the app was suspended long enough
+  // for the Firestore connection to drop. A one-time getDoc on resume fills the
+  // gap so the UI never stays stuck on a loading spinner.
+
+  useEffect(() => {
+    const uid = authUser?.uid;
+    if (!uid) return;
+
+    const handleAppState = (state: AppStateStatus) => {
+      if (state !== 'active') return;
+      const g = generatingRef.current;
+
+      if (g.breakdown) {
+        fetchBreakdown(uid).then(({ result }) => {
+          if (result) { setBreakdown(result); setBreakdownGenerating(false); }
+        }).catch(console.error);
+      }
+      if (g.transit) {
+        fetchTransitReading(uid, getThisWeekDateId()).then(({ result }) => {
+          if (result) { setTransitReading(result); setTransitReadingGenerating(false); }
+        }).catch(console.error);
+      }
+      if (g.horoscope) {
+        fetchHoroscope(uid, getTodayDateId()).then(({ result }) => {
+          if (result) { setHoroscope(result); setHoroscopeGenerating(false); }
+        }).catch(console.error);
+      }
+    };
+
+    const sub = AppState.addEventListener('change', handleAppState);
+    return () => sub.remove();
   }, [authUser?.uid]);
 
   // ─── Refresh ────────────────────────────────────────────────────────────────

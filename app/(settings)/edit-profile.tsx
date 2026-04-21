@@ -464,28 +464,25 @@ export default function EditProfileScreen() {
         // Breakdown and transits regenerate whenever any chart field changes.
         const birthdayChanged = originalValues !== null && originalValues.birthday !== birthday;
 
-        // Breakdown always regenerates on any natal chart change
-        requestBreakdown(uid, chartDetailsDoc, pronouns).catch(console.error);
+        // Await all Firestore writes before refreshHoroscope() so load() reads
+        // the new (response-less) documents and subscribes for the extension result.
+        // Previously these were fire-and-forget, causing a race where load() would
+        // read the OLD completed doc and skip subscribing entirely.
+        await requestBreakdown(uid, chartDetailsDoc, pronouns);
 
-        calculateTransits(new Date(), bd.lat, bd.lon)
-          .then(transits => {
-            const RETROGRADE_PLANETS = new Set(['Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto']);
-            const retrogrades = transits.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name);
-            // Transit reading always regenerates — keyed by week to match horoscope-context
-            requestTransitReading(uid, weekDateId, chartDetailsDoc, transits, pronouns).catch(console.error);
-            // Horoscopes only regenerate when the birthday itself changed;
-            // tarot cards are preserved (skipTarotDraw: true)
-            if (birthdayChanged) {
-              requestHoroscope(uid, dateId, chartDetailsDoc, transits.moon, retrogrades, pronouns)
-                .catch(console.error);
-            }
-          })
-          .catch(() => {
-            if (birthdayChanged) {
-              requestHoroscope(uid, dateId, chartDetailsDoc, natalChart.moon, [], pronouns)
-                .catch(console.error);
-            }
-          });
+        const RETROGRADE_PLANETS = new Set(['Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto']);
+        try {
+          const transits = await calculateTransits(new Date(), bd.lat, bd.lon);
+          const retrogrades = transits.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name);
+          await requestTransitReading(uid, weekDateId, chartDetailsDoc, transits, pronouns);
+          if (birthdayChanged) {
+            await requestHoroscope(uid, dateId, chartDetailsDoc, transits.moon, retrogrades, pronouns);
+          }
+        } catch {
+          if (birthdayChanged) {
+            await requestHoroscope(uid, dateId, chartDetailsDoc, natalChart.moon, [], pronouns);
+          }
+        }
       }
 
       await refresh();
