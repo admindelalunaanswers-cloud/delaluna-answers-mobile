@@ -1,49 +1,49 @@
 import React, { useContext, useEffect, useRef, useState } from "react";
 
 import {
-  StyleSheet,
+  ActivityIndicator,
+  Alert,
   Animated,
   Easing,
   FlatList,
-  TouchableOpacity,
+  Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
-  Image,
-  Alert,
-  TextInput,
+  StyleSheet,
   Switch,
-  Keyboard,
-  ActivityIndicator,
+  TextInput,
+  TouchableOpacity,
 } from "react-native";
 
 import { router } from "expo-router";
 
+import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { httpsCallable } from "firebase/functions";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import { Ionicons } from "@expo/vector-icons";
 
-import HeaderNav from "@/src/components/shared/header-nav";
-import { ThemedView } from "@/src/components/themed-view";
-import HomeSignsDisplay from "@/src/components/shared/signs-display.component";
-import { GlassButton } from "@/src/assets/buttons/glass-button";
-import { ThemeContext } from "@/src/context/theme-context";
-import { calculateNatalChart, NatalChart } from "@/src/services/astroEngine";
 import { functions } from "@/firebaseConfig";
+import { GlassButton } from "@/src/assets/buttons/glass-button";
+import HeaderNav from "@/src/components/shared/header-nav";
+import HomeSignsDisplay from "@/src/components/shared/signs-display.component";
+import { ThemedView } from "@/src/components/themed-view";
 import { useHoroscope } from "@/src/context/horoscope-context";
+import { ThemeContext } from "@/src/context/theme-context";
 import { useUser } from "@/src/context/user-context";
-import { verticalScale, scale, moderateScale } from "@/src/utils/responsive";
+import { calculateNatalChart, NatalChart } from "@/src/services/astroEngine";
 import {
-  NominatimResult,
-  formatPlace,
-  searchNominatim,
   detectTimezoneOffset,
+  formatPlace,
+  NominatimResult,
+  searchNominatim,
 } from "@/src/utils/location";
+import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 
-import LoadingScreen from "../(util)/loading-screen";
 import { ThemedText } from "@/src/components/themed-text";
 import { C } from "@/src/constants/theme";
 import { buildCompatibilityPrompt } from "@/src/prompts/compatibility-prompt";
+import LoadingScreen from "../(util)/loading-screen";
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -1017,10 +1017,10 @@ export default function SingleConnectionCreateScreen() {
                       const key = option.toLowerCase();
                       const iconSource =
                         key.toLowerCase().includes("consistent")
-                          ? require("@/src/assets/connections/consistent_icon.png")
+                          ? require("@/src/assets/connections/consistent.png")
                           : key.toLowerCase().includes("complicated")
-                            ? require("@/src/assets/connections/complicated_icon.png")
-                            : require("@/src/assets/connections/dunno_icon.png");
+                            ? require("@/src/assets/connections/complicated.png")
+                            : require("@/src/assets/connections/dunno.png");
                             
                       return (
                         
