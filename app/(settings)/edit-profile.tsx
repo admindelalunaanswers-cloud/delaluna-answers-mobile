@@ -460,9 +460,6 @@ export default function EditProfileScreen() {
 
         const dateId = getTodayDateId();
         const weekDateId = getThisWeekDateId();
-        // Birthday change is the only trigger for horoscope regeneration.
-        // Breakdown and transits regenerate whenever any chart field changes.
-        const birthdayChanged = originalValues !== null && originalValues.birthday !== birthday;
 
         // Await all Firestore writes before refreshHoroscope() so load() reads
         // the new (response-less) documents and subscribes for the extension result.
@@ -475,13 +472,9 @@ export default function EditProfileScreen() {
           const transits = await calculateTransits(new Date(), bd.lat, bd.lon);
           const retrogrades = transits.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name);
           await requestTransitReading(uid, weekDateId, chartDetailsDoc, transits, pronouns);
-          if (birthdayChanged) {
-            await requestHoroscope(uid, dateId, chartDetailsDoc, transits.moon, retrogrades, pronouns);
-          }
+          await requestHoroscope(uid, dateId, chartDetailsDoc, transits.moon, retrogrades, pronouns);
         } catch {
-          if (birthdayChanged) {
-            await requestHoroscope(uid, dateId, chartDetailsDoc, natalChart.moon, [], pronouns);
-          }
+          await requestHoroscope(uid, dateId, chartDetailsDoc, natalChart.moon, [], pronouns);
         }
       }
 
