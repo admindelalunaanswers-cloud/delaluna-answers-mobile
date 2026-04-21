@@ -1037,10 +1037,10 @@ export default function EditConnectionScreen() {
                       const key = option.toLowerCase();
                       const iconSource =
                         key.includes("consistent")
-                          ? require("@/src/assets/connections/consistent_icon.png")
+                          ? require("@/src/assets/connections/consistent.png")
                           : key.includes("complicated")
-                            ? require("@/src/assets/connections/complicated_icon.png")
-                            : require("@/src/assets/connections/dunno_icon.png");
+                            ? require("@/src/assets/connections/complicated.png")
+                            : require("@/src/assets/connections/dunno.png");
                       return (
                         <TouchableOpacity
                           key={option}
