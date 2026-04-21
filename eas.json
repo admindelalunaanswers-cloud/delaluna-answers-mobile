@@ -59,9 +59,6 @@
       "developmentClient": false,
       "distribution": "store",
       "autoIncrement": true,
-      "android": {
-        "buildType": "apk"
-      },
       "ios": {
         "simulator": false
       },

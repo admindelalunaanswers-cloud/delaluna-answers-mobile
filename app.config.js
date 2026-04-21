@@ -22,6 +22,11 @@ module.exports = {
     android: {
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
+      adaptiveIcon: {
+        foregroundImage: "./src/assets/images/android-icon-foreground.png",
+        backgroundImage: "./src/assets/images/android-icon-background.png",
+        monochromeImage: "./src/assets/images/android-icon-monochrome.png",
+      },
       package: "com.delalunaanswers.mobile",
       googleServicesFile: "./google-services.json",
     },
