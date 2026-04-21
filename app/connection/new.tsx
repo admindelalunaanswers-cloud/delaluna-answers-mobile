@@ -1035,11 +1035,6 @@ export default function SingleConnectionCreateScreen() {
                             style={[styles.relationshipIcon, relationshipType === option && styles.relationshipIconSelected]}
                             resizeMode="contain"
                           />
-                          <ThemedText type="sectionDefinition" style={{ color: relationshipType === option ? "#FFFFFF" : "rgba(255,255,255,0.7)", marginTop: verticalScale(4) }}>
-                            {option}
-                          </ThemedText>
-          
-                         
                         </TouchableOpacity>
                         
                       );
