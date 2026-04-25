@@ -89,7 +89,18 @@ function parseResult(data: Record<string, any>): TransitReadingResult | null {
   if (!raw) return null;
   try {
     const cleaned = typeof raw === 'string'
-      ? raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
+      ? raw
+          .replace(/^```(?:json)?\s*/i, '')
+          .replace(/```\s*$/, '')
+          // Repair: occasionally the model omits `},{` between consecutive
+          // house objects, leaving `"interpretation": "..." , "house": "..."`
+          // with duplicate keys — JSON.parse keeps the last, dropping the
+          // earlier house. Insert the missing object boundary.
+          .replace(
+            /("interpretation"\s*:\s*"(?:[^"\\]|\\.)*")\s*,\s*("house"\s*:)/g,
+            '$1},{$2',
+          )
+          .trim()
       : raw;
     return typeof cleaned === 'string'
       ? JSON.parse(cleaned)
