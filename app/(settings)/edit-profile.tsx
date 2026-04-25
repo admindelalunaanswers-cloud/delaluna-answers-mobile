@@ -440,10 +440,7 @@ export default function EditProfileScreen() {
           tier: 'free',
         };
 
-        // Save to both locations — overwrite entirely (birth data changed)
-        // sign-up writes to both paths; horoscope-context reads chartData/details
         await Promise.all([
-          setDoc(doc(db, 'users', uid, 'chartData', 'details'), chartPayload),
           setDoc(doc(db, 'users', uid, 'birthChart', 'data'), chartPayload),
         ]);
 

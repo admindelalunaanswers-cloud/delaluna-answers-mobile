@@ -6,18 +6,13 @@
  * background — available when the user navigates to those screens.
  */
 
-import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 
 import { doc, getDoc } from 'firebase/firestore';
 
 import { db } from '@/firebaseConfig';
 import { calculateTransits, type MoonData, type TransitData } from '@/src/services/astroEngine';
-
-const RETROGRADE_PLANETS = new Set([
-  'Mercury', 'Venus', 'Mars',
-  'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto',
-]);
 import {
   fetchHoroscope,
   getTodayDateId,
@@ -32,6 +27,11 @@ import {
   subscribeToBreakdown,
   type BreakdownFetchResult,
 } from '@/src/services/natal-chart-breakdown.service';
+
+const RETROGRADE_PLANETS = new Set([
+  'Mercury', 'Venus', 'Mars',
+  'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto',
+]);
 
 import {
   fetchTransitReading,
@@ -188,7 +188,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     // even before user-context has finished resolving its own fetch.
     const [userSnap, chartSnap, horoscopeRes, breakdownFetch, transitReadingFetch] = await Promise.all([
       getDoc(doc(db, 'users', uid)),
-      getDoc(doc(db, 'users', uid, 'chartData', 'details')),
+      getDoc(doc(db, 'users', uid, 'birthChart', 'data')),
       fetchHoroscope(uid, dateId),
       fetchBreakdown(uid),
       fetchTransitReading(uid, weekDateId),
@@ -252,11 +252,11 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
         setHoroscopeGenerating(false);
         unsubHoroscopeRef.current?.();
         unsubHoroscopeRef.current = null;
-          // The Firebase Extension requires natalChart/details to exist before it
+          // The Firebase Extension requires birthChart/data to exist before it
         // can generate the horoscope, so the chart is guaranteed to be written
         // by the time this fires. Re-fetch it so chartDetails (and the 3 signs)
         // are populated on the home screen.
-        getDoc(doc(db, 'users', uid, 'chartData', 'details')).then(snap => {
+        getDoc(doc(db, 'users', uid, 'birthChart', 'data')).then(snap => {
           if (!signal.cancelled && snap.exists()) {
             const newChart = snap.data() as NatalChartDetailsDoc;
             setChartDetails(newChart);

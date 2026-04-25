@@ -190,7 +190,6 @@ export default function SignUpChatScreen() {
         tier: 'free',
       };
 
-      await setDoc(doc(db, 'users', userCred.user.uid, 'chartData', 'details'), chartPayload);
       await setDoc(doc(db, 'users', userCred.user.uid, 'birthChart', 'data'), chartPayload);
 
       // Step 5 — Trigger AI generation (fire and forget — backend extension handles these)
