@@ -187,7 +187,6 @@ export default function SignUpChatScreen() {
         moon: natalChart.moon,
         ascendant: natalChart.ascendant,
         midheaven: natalChart.midheaven,
-        tier: 'free',
       };
 
       await setDoc(doc(db, 'users', userCred.user.uid, 'birthChart', 'data'), chartPayload);
