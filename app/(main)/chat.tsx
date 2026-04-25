@@ -20,11 +20,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HeaderNav from '@/src/components/shared/header-nav';
 import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
-import PremiumUnlock from '@/src/components/shared/premium-unlock.component';
 import { ThemedView } from '@/src/components/themed-view';
 import { C, R, S } from '@/src/constants/theme';
 import { useUser } from '@/src/context/user-context';
-import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { useResponsive } from '@/src/hooks/use-responsive';
 import { deleteChatSession, resumeChatSession, retryChatMessage, saveChatAndClear, sendChatMessage, subscribeToChatHistory, subscribeToChatSessions } from '@/src/services/chat.service';
 import type { ChatMessageDoc, SavedChatSession } from '@/src/services/chat.service';
@@ -127,7 +125,6 @@ function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: C
 
 export default function ChatScreen() {
   const { authUser } = useUser();
-  const { isPro } = useRevenueCat();
   const { chartDetails } = useHoroscope();
   const insets = useSafeAreaInsets();
   const { scale } = useResponsive();
@@ -141,7 +138,6 @@ export default function ChatScreen() {
   const [savedSessions, setSavedSessions] = useState<SavedChatSession[]>([]);
   const [viewingSession, setViewingSession] = useState<SavedChatSession | null>(null);
 
-  const isPremium = isPro;
   const questionLimit = DAILY_CHAT_LIMIT;
 
   // Count ALL questions sent today (active chat + saved sessions)
@@ -227,7 +223,12 @@ export default function ChatScreen() {
     if (!historyLoaded) return;
     const initial = ChatStore.popInitialMessage();
     if (initial) {
-      handleSend(initial);
+      if (chatLocked) {
+        setInputText(initial);
+        handleUpgrade();
+      } else {
+        handleSend(initial);
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [historyLoaded]);
@@ -255,7 +256,13 @@ export default function ChatScreen() {
 
   const handleSend = useCallback(async (text?: string) => {
     const msg = (text ?? inputText).trim();
-    if (!msg || !authUser || isSending || chatLocked) return;
+    if (!msg || !authUser || isSending) return;
+
+    if (chatLocked) {
+      setInputText(msg);
+      handleUpgrade();
+      return;
+    }
 
     chatStarted.current = true;
     setInputText('');
@@ -267,7 +274,7 @@ export default function ChatScreen() {
     } finally {
       setIsSending(false);
     }
-  }, [inputText, authUser, isSending, chatLocked, chartSummary]);
+  }, [inputText, authUser, isSending, chatLocked, chartSummary, handleUpgrade]);
 
   // ─── Retry ─────────────────────────────────────────────────────────────────
 
@@ -304,7 +311,7 @@ export default function ChatScreen() {
 
   // ─── Derived ───────────────────────────────────────────────────────────────
 
-  const showSuggestions = historyLoaded && messages.length === 0 && !chatLocked;
+  const showSuggestions = historyLoaded && messages.length === 0;
   const hasPending = messages.some(m => m.isPending);
   const sendDisabled = isSending || hasPending || !inputText.trim();
 
@@ -321,7 +328,7 @@ export default function ChatScreen() {
       />
 
       <PaygateOverlay
-        locked={!isPremium}
+        locked={false}
         style={{ flex: 1 }}
         unlockTitle="Unlock Chat"
         unlockMessage="Subscribe to get personalized cosmic guidance through Delaluna chat."
@@ -418,91 +425,76 @@ export default function ChatScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={[styles.flex, { paddingTop: headerHeight }]}>
-          {chatLocked && messages.length === 0 ? (
-            <View style={styles.paygateContainerCentered}>
-              <PremiumUnlock
-                title="Daily limit reached"
-                message="You've used your question for today. Come back tomorrow!"
-              />
+          {showSuggestions ? (
+            <View style={styles.suggestionsContainer}>
+              <Text style={styles.suggestionsLabel}>What's on your mind?</Text>
+              {Array.from({ length: VISIBLE_SUGGESTIONS }, (_, i) =>
+                SUGGESTIONS[(suggestionOffset + i) % SUGGESTIONS.length]
+              ).map((q) => (
+                <TouchableOpacity
+                  key={q}
+                  style={styles.suggestionChip}
+                  onPress={() => {
+                    if (chatLocked) {
+                      setInputText(q);
+                      handleUpgrade();
+                    } else {
+                      handleSend(q);
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.suggestionText}>{q}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
           ) : (
-            <>
-              {showSuggestions ? (
-                <View style={styles.suggestionsContainer}>
-                  <Text style={styles.suggestionsLabel}>What's on your mind?</Text>
-                  {Array.from({ length: VISIBLE_SUGGESTIONS }, (_, i) =>
-                    SUGGESTIONS[(suggestionOffset + i) % SUGGESTIONS.length]
-                  ).map((q) => (
-                    <TouchableOpacity
-                      key={q}
-                      style={styles.suggestionChip}
-                      onPress={() => handleSend(q)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.suggestionText}>{q}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              ) : (
-                <FlatList
-                  ref={flatListRef}
-                  style={styles.flex}
-                  data={messages}
-                  keyExtractor={item => item.id}
-                  renderItem={({ item }) => <MessageBubble msg={item} onRetry={handleRetry} />}
-                  contentContainerStyle={[
-                    styles.messageList,
-                    { paddingBottom: insets.bottom + S.md },
-                  ]}
-                  showsVerticalScrollIndicator={false}
-                  onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-                />
-              )}
-
-              {chatLocked ? (
-                <View style={[styles.paygateContainer, { paddingBottom: insets.bottom }]}>
-                  <PremiumUnlock
-                    title="Daily limit reached"
-                    message="You've used your question for today. Come back tomorrow!"
-                  />
-                </View>
-              ) : (
-                <>
-                  <View style={[styles.inputBar, { paddingBottom: S.sm }]}>
-                    <TextInput
-                      style={styles.textInput}
-                      value={inputText}
-                      onChangeText={setInputText}
-                      placeholder="Ask Delaluna anything..."
-                      placeholderTextColor={C.muted}
-                      multiline
-                      maxLength={500}
-                      returnKeyType="send"
-                      onSubmitEditing={() => handleSend()}
-                      blurOnSubmit
-                    />
-                    <TouchableOpacity
-                      style={[styles.sendButton, sendDisabled && styles.sendButtonDisabled]}
-                      onPress={() => handleSend()}
-                      disabled={sendDisabled}
-                      activeOpacity={0.7}
-                    >
-                      {isSending ? (
-                        <ActivityIndicator size="small" color={C.white} />
-                      ) : (
-                        <Text style={styles.sendButtonText}>{'\u2192'}</Text>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.counterBar}>
-                    <Text style={styles.counterText}>
-                      {questionsRemaining} of {questionLimit} questions remaining today
-                    </Text>
-                  </View>
-                </>
-              )}
-            </>
+            <FlatList
+              ref={flatListRef}
+              style={styles.flex}
+              data={messages}
+              keyExtractor={item => item.id}
+              renderItem={({ item }) => <MessageBubble msg={item} onRetry={handleRetry} />}
+              contentContainerStyle={[
+                styles.messageList,
+                { paddingBottom: insets.bottom + S.md },
+              ]}
+              showsVerticalScrollIndicator={false}
+              onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+            />
           )}
+
+          <View style={[styles.inputBar, { paddingBottom: S.sm }]}>
+            <TextInput
+              style={styles.textInput}
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder="Ask Delaluna anything..."
+              placeholderTextColor={C.muted}
+              multiline
+              maxLength={500}
+              returnKeyType="send"
+              onSubmitEditing={() => handleSend()}
+              blurOnSubmit
+            />
+            <TouchableOpacity
+              style={[styles.sendButton, sendDisabled && styles.sendButtonDisabled]}
+              onPress={() => handleSend()}
+              disabled={sendDisabled}
+              activeOpacity={0.7}
+            >
+              {isSending ? (
+                <ActivityIndicator size="small" color={C.white} />
+              ) : (
+                <Text style={styles.sendButtonText}>{'\u2192'}</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+          <View style={[styles.counterBar]}>
+            <Text style={styles.counterText}>
+              {questionsRemaining} of {questionLimit} questions remaining today
+            </Text>
+          </View>
         </View>
       </KeyboardAvoidingView>
       </PaygateOverlay>
