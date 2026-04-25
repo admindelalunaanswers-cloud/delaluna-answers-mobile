@@ -19,18 +19,20 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { StatusBar } from 'expo-status-bar';
+import { updateEmail } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 
 import { ThemeContext } from '@/src/context/theme-context';
 import { useUser } from '@/src/context/user-context';
+import { useHoroscope } from '@/src/context/horoscope-context';
 import { updateUserDoc } from '@/src/services/user.service';
 import { calculateNatalChart, calculateTransits, BirthData } from '@/src/services/astroEngine';
 import { requestBreakdown } from '@/src/services/natal-chart-breakdown.service';
 import { requestHoroscope, getTodayDateId } from '@/src/services/horoscope.service';
-import { requestTransitReading } from '@/src/services/transit-reading.service';
+import { requestTransitReading, getThisWeekDateId } from '@/src/services/transit-reading.service';
 import type { NatalChartDetailsDoc } from '@/src/types/user.type';
-import { db } from '@/firebaseConfig';
+import { auth, db } from '@/firebaseConfig';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
 import {
   NominatimResult,
@@ -111,7 +113,9 @@ export default function EditProfileScreen() {
   const router = useRouter();
   const { theme } = useContext(ThemeContext);
   const { authUser, userDoc, refresh } = useUser();
+  const { refresh: refreshHoroscope } = useHoroscope();
   const ud = userDoc as any;
+  const formInitialized = useRef(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Saving changes...');
@@ -121,6 +125,7 @@ export default function EditProfileScreen() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName]   = useState('');
   const [pronouns, setPronouns]   = useState('');
+  const [email, setEmail]         = useState('');
 
   // Birth fields
   const [birthday, setBirthday]                         = useState('');
@@ -150,16 +155,20 @@ export default function EditProfileScreen() {
   // Snapshot of original chart-affecting values (for change detection)
   const [originalValues, setOriginalValues] = useState<ChartFields | null>(null);
 
-  // ── Load user data on mount ────────────────────────────────────────────────
+  // ── Load user data on mount (once only) ─────────────────────────────────────
+  // UserContext uses onSnapshot, so userDoc reference changes on every Firestore
+  // snapshot. We must only populate the form once — otherwise edits get wiped.
 
   useEffect(() => {
-    if (!ud) return;
+    if (!ud || formInitialized.current) return;
+    formInitialized.current = true;
 
     const fn = ud.firstName ?? (ud.name ? String(ud.name).split(' ')[0] : '');
     const ln = ud.lastName  ?? (ud.name ? String(ud.name).split(' ').slice(1).join(' ') : '');
     setFirstName(fn);
     setLastName(ln);
     setPronouns(ud.pronouns ?? '');
+    setEmail(ud.email ?? authUser?.email ?? '');
 
     const bd = normalizeBirthday(ud.birthday);
     setBirthday(bd);
@@ -303,6 +312,10 @@ export default function EditProfileScreen() {
       Alert.alert('Name required', 'Please enter your first name.');
       return;
     }
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      Alert.alert('Invalid email', 'Please enter a valid email address.');
+      return;
+    }
     if (!birthday) {
       Alert.alert('Birthday required', 'Please enter your birthday.');
       return;
@@ -355,19 +368,40 @@ export default function EditProfileScreen() {
     const effectiveTime = isBirthTimeUnknown ? null : (birthtime || null);
 
     try {
-      const displayName = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ');
+      const displayName  = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ');
+      const trimmedEmail = email.trim().toLowerCase();
+      const currentEmail = (ud?.email ?? authUser?.email ?? '').toLowerCase();
+      const emailChanged = trimmedEmail !== currentEmail;
+
+      // Update Firebase Auth email if changed
+      if (emailChanged && auth.currentUser) {
+        try {
+          await updateEmail(auth.currentUser, trimmedEmail);
+        } catch (err: any) {
+          if (err?.code === 'auth/requires-recent-login') {
+            Alert.alert('Re-authentication required', 'Please log out and log back in to change your email.');
+          } else if (err?.code === 'auth/email-already-in-use') {
+            Alert.alert('Email in use', 'That email is already registered to another account.');
+          } else {
+            Alert.alert('Email update failed', err?.message ?? 'Could not update email.');
+          }
+          setIsLoading(false);
+          return;
+        }
+      }
 
       await updateUserDoc(uid, {
         name:                  displayName,
+        fullName:              displayName,
         birthday:              birthday,
         birthtime:             effectiveTime ?? '12:00',
         birthLat:              effectiveLat,
         birthLon:              effectiveLon,
-        // Extra fields not in UserDoc type but persisted via spread at sign-up
         ...({
           firstName:            firstName.trim(),
           lastName:             lastName.trim(),
           pronouns,
+          email:                trimmedEmail,
           birthTimezone:        effectiveTz,
           placeOfBirth:         isPlaceOfBirthUnknown ? null : placeOfBirth,
           isBirthTimeUnknown,
@@ -403,12 +437,11 @@ export default function EditProfileScreen() {
           moon:      natalChart.moon,
           ascendant: natalChart.ascendant,
           midheaven: natalChart.midheaven,
-          tier: 'free', // ensures {{tier}} is present when the extension fires on this write
         };
 
-        // Save to both locations — overwrite entirely (birth data changed)
-        await setDoc(doc(db, 'users', uid, 'natalChart', 'details'), chartPayload);
-        await setDoc(doc(db, 'users', uid, 'birthChart', 'data'), chartPayload);
+        await Promise.all([
+          setDoc(doc(db, 'users', uid, 'birthChart', 'data'), chartPayload),
+        ]);
 
         setLoadingMessage('Regenerating your readings...');
 
@@ -422,34 +455,27 @@ export default function EditProfileScreen() {
         };
 
         const dateId = getTodayDateId();
-        // Birthday change is the only trigger for horoscope regeneration.
-        // Breakdown and transits regenerate whenever any chart field changes.
-        const birthdayChanged = originalValues !== null && originalValues.birthday !== birthday;
+        const weekDateId = getThisWeekDateId();
 
-        // Breakdown always regenerates on any natal chart change
-        requestBreakdown(uid, chartDetailsDoc).catch(console.error);
+        // Await all Firestore writes before refreshHoroscope() so load() reads
+        // the new (response-less) documents and subscribes for the extension result.
+        // Previously these were fire-and-forget, causing a race where load() would
+        // read the OLD completed doc and skip subscribing entirely.
+        await requestBreakdown(uid, chartDetailsDoc, pronouns);
 
-        calculateTransits(new Date(), bd.lat, bd.lon)
-          .then(transits => {
-            const retrogrades = transits.planets.filter(p => p.isRetrograde).map(p => p.name);
-            // Transit reading always regenerates (accuracy / personalization)
-            requestTransitReading(uid, dateId, chartDetailsDoc, transits, 'free').catch(console.error);
-            // Horoscopes only regenerate when the birthday itself changed;
-            // tarot cards are preserved (skipTarotDraw: true)
-            if (birthdayChanged) {
-              requestHoroscope(uid, dateId, chartDetailsDoc, transits.moon, retrogrades, { skipTarotDraw: true })
-                .catch(console.error);
-            }
-          })
-          .catch(() => {
-            if (birthdayChanged) {
-              requestHoroscope(uid, dateId, chartDetailsDoc, natalChart.moon, [], { skipTarotDraw: true })
-                .catch(console.error);
-            }
-          });
+        const RETROGRADE_PLANETS = new Set(['Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto']);
+        try {
+          const transits = await calculateTransits(new Date(), bd.lat, bd.lon);
+          const retrogrades = transits.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name);
+          await requestTransitReading(uid, weekDateId, chartDetailsDoc, transits, pronouns);
+          await requestHoroscope(uid, dateId, chartDetailsDoc, transits.moon, retrogrades, pronouns);
+        } catch {
+          await requestHoroscope(uid, dateId, chartDetailsDoc, natalChart.moon, [], pronouns);
+        }
       }
 
       await refresh();
+      if (recalcChart) await refreshHoroscope();
       setIsLoading(false);
 
       Alert.alert(
@@ -537,6 +563,18 @@ export default function EditProfileScreen() {
                 ))}
               </View>
 
+              <Text style={ss.fieldLabel}>Email</Text>
+              <TextInput
+                style={ss.input}
+                value={email}
+                onChangeText={setEmail}
+                placeholder="Email address"
+                placeholderTextColor="rgba(255,255,255,0.35)"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+              />
+
               {/* ── Birth Details ── */}
               <Text style={[ss.sectionTitle, { marginTop: verticalScale(28) }]}>Birth Details</Text>
               <Text style={ss.sectionNote}>
@@ -606,8 +644,6 @@ export default function EditProfileScreen() {
                     />
                     {(locationSearching || locationTzLoading) ? (
                       <ActivityIndicator size="small" color="#6FFFE9" style={{ marginRight: scale(8) }} />
-                    ) : selectedLocation ? (
-                      <Ionicons name="checkmark-circle" size={scale(18)} color="#6FFFE9" style={{ marginRight: scale(8) }} />
                     ) : null}
                     <TouchableOpacity onPress={() => {
                       setIsPlaceOfBirthUnknown(true);
@@ -743,6 +779,8 @@ const ss = StyleSheet.create({
     paddingBottom: verticalScale(12),
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(10, 6, 30, 0)',
+    zIndex: 10,
   },
   headerSide: {
     flexDirection: 'row',
@@ -859,12 +897,13 @@ const ss = StyleSheet.create({
   // Pronouns chips
   choicesRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: scale(8),
+    gap: scale(4),
   },
   chip: {
-    paddingHorizontal: scale(14),
-    paddingVertical: verticalScale(7),
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: scale(2),
+    paddingVertical: verticalScale(8),
     borderRadius: 999,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
@@ -876,7 +915,7 @@ const ss = StyleSheet.create({
   },
   chipText: {
     color: 'rgba(255,255,255,0.6)',
-    fontSize: moderateScale(13),
+    fontSize: moderateScale(12),
     fontWeight: '500',
   },
   chipTextActive: {

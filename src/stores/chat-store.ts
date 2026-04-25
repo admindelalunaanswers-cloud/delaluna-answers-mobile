@@ -3,6 +3,7 @@
 //        ChatStore.popInitialMessage() inside chat.tsx on mount
 
 let pendingMessage: string | null = null;
+let _fromNotification = false;
 
 export const ChatStore = {
   setInitialMessage: (msg: string) => { pendingMessage = msg; },
@@ -10,5 +11,11 @@ export const ChatStore = {
     const m = pendingMessage;
     pendingMessage = null;
     return m;
+  },
+  setFromNotification: (val: boolean) => { _fromNotification = val; },
+  popFromNotification: (): boolean => {
+    const v = _fromNotification;
+    _fromNotification = false;
+    return v;
   },
 };

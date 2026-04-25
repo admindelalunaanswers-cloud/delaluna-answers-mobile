@@ -1,13 +1,12 @@
+import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
+import { Ionicons } from "@expo/vector-icons";
 import React, { useRef } from "react";
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
   Animated,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
 
 interface DateSwitcherProps {
   value: string;        // YYYY-MM-DD

@@ -24,6 +24,7 @@ type HeaderNavProps = {
   rightIconName?: React.ComponentProps<typeof Ionicons>["name"];
   leftIconSource?: ImageSourcePropType;
   rightIconSource?: ImageSourcePropType;
+  rightAvatarSource?: ImageSourcePropType;
   onLeftPress?: () => void;
   onRightPress?: () => void;
   backgroundColor?: string;
@@ -38,6 +39,7 @@ export default function HeaderNav({
   rightIconName,
   leftIconSource,
   rightIconSource,
+  rightAvatarSource,
   onLeftPress,
   onRightPress,
   backgroundColor,
@@ -122,7 +124,9 @@ export default function HeaderNav({
             style={[styles.sideContainer, styles.rightContainer, dynamic.sideContainer]}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            {rightIconName ? (
+            {rightAvatarSource ? (
+              <Image source={rightAvatarSource} style={[styles.avatar, dynamic.icon]} />
+            ) : rightIconName ? (
               <Ionicons name={rightIconName} size={moderateScale(30)} color={tc} />
             ) : rightIconSource ? (
               <Image source={rightIconSource} style={[styles.icon, dynamic.icon, { tintColor: tc }]} />
@@ -178,6 +182,10 @@ const styles = StyleSheet.create({
   },
   icon: {
     resizeMode: "contain",
+  },
+  avatar: {
+    borderRadius: 999,
+    overflow: "hidden",
   },
   sideText: {
     fontWeight: "500",

@@ -15,22 +15,23 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HeaderNav from '@/src/components/shared/header-nav';
-import PremiumUnlock from '@/src/components/shared/premium-unlock.component';
+import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
 import { ThemedView } from '@/src/components/themed-view';
 import { C, R, S } from '@/src/constants/theme';
-import { useHoroscope } from '@/src/context/horoscope-context';
 import { useUser } from '@/src/context/user-context';
 import { useResponsive } from '@/src/hooks/use-responsive';
-import { buildHistory, clearChatHistory, retryChatMessage, sendChatMessage, subscribeToChatHistory } from '@/src/services/chat.service';
-import type { ChatMessageDoc } from '@/src/services/chat.service';
+import { deleteChatSession, resumeChatSession, retryChatMessage, saveChatAndClear, sendChatMessage, subscribeToChatHistory, subscribeToChatSessions } from '@/src/services/chat.service';
+import type { ChatMessageDoc, SavedChatSession } from '@/src/services/chat.service';
+import { buildNatalChartSummary } from '@/src/services/natal-chart-breakdown.service';
 import { ChatStore } from '@/src/stores/chat-store';
 import { HOME_STRINGS } from '@/src/constants/strings';
+import { useHoroscope } from '@/src/context/horoscope-context';
 
-const FREE_QUESTION_LIMIT = 5;
-const UNLOCK_BONUS = 5;
+const DAILY_CHAT_LIMIT = 1;
 
 const SUGGESTIONS = [
   HOME_STRINGS.newLove.questionFunnel,
@@ -49,6 +50,11 @@ const VISIBLE_SUGGESTIONS = 5;
 
 function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+/** Strip markdown bold titles like **Reality Check:** and leftover asterisks */
+function stripBoldTitles(text: string): string {
+  return text.replace(/\*\*[^*]+:\*\*\s*/g, '').replace(/\*/g, '').replace(/^ +/gm, '').trim();
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -102,7 +108,7 @@ function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: C
               Something went wrong. Try again.
             </Text>
           ) : (
-            <Text style={styles.aiBubbleText}>{msg.response}</Text>
+            <Text style={styles.aiBubbleText}>{stripBoldTitles(msg.response ?? '')}</Text>
           )}
         </View>
         {showRetry && (
@@ -128,16 +134,31 @@ export default function ChatScreen() {
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
-  const [chatUnlocked, setChatUnlocked] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [savedSessions, setSavedSessions] = useState<SavedChatSession[]>([]);
+  const [viewingSession, setViewingSession] = useState<SavedChatSession | null>(null);
 
-  const questionLimit = FREE_QUESTION_LIMIT + (chatUnlocked ? UNLOCK_BONUS : 0);
-  const questionsUsed = messages.length;
+  const questionLimit = DAILY_CHAT_LIMIT;
+
+  // Count ALL questions sent today (active chat + saved sessions)
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const activeToday = messages.filter(m => m.createdAt >= todayStart).length;
+  const savedToday = savedSessions.reduce((count, session) =>
+    count + session.messages.filter(m => m.createdAt >= todayStart).length, 0);
+  const questionsUsed = activeToday + savedToday;
   const questionsRemaining = Math.max(0, questionLimit - questionsUsed);
   const chatLocked = questionsUsed >= questionLimit;
 
+  const handleUpgrade = useCallback(() => {
+    router.push('/(settings)/paywall');
+  }, []);
+
   const flatListRef = useRef<FlatList>(null);
   const chatStarted = useRef(false);
+  const messagesRef = useRef<ChatMessageDoc[]>([]);
+  messagesRef.current = messages;
+  const fromNotification = useRef(false);
   const [suggestionOffset, setSuggestionOffset] = useState(0);
 
   // ─── Subscribe to chat history ─────────────────────────────────────────────
@@ -152,13 +173,62 @@ export default function ChatScreen() {
     return unsub;
   }, [authUser?.uid]);
 
+  // ─── Subscribe to saved chat sessions ─────────────────────────────────────
+
+  useEffect(() => {
+    if (!authUser) return;
+    const unsub = subscribeToChatSessions(authUser.uid, setSavedSessions);
+    return unsub;
+  }, [authUser?.uid]);
+
+  // ─── Check notification flag on mount ──────────────────────────────────────
+
+  useEffect(() => {
+    fromNotification.current = ChatStore.popFromNotification();
+  }, []);
+
+  // ─── Auto-save on leaving chat screen (navigate away) ─────────────────────
+  // Disabled: was clearing chat when tabbing away/back, breaking notification flow.
+
+  // useFocusEffect(
+  //   useCallback(() => {
+  //     return () => {
+  //       if (!authUser || fromNotification.current) {
+  //         fromNotification.current = false;
+  //         return;
+  //       }
+  //       const msgs = messagesRef.current;
+  //       if (msgs.length > 0) {
+  //         saveChatAndClear(authUser.uid, msgs).catch(console.error);
+  //       }
+  //     };
+  //   }, [authUser]),
+  // );
+
+  // ─── Auto-save when app goes to background ────────────────────────────────
+  // Disabled: was clearing chat when app backgrounded, breaking notification flow.
+
+  // useEffect(() => {
+  //   const sub = AppState.addEventListener('change', (state) => {
+  //     if (state === 'background' && authUser && messagesRef.current.length > 0) {
+  //       saveChatAndClear(authUser.uid, messagesRef.current).catch(console.error);
+  //     }
+  //   });
+  //   return () => sub.remove();
+  // }, [authUser]);
+
   // ─── Auto-send initial message from ChatStore ──────────────────────────────
 
   useEffect(() => {
     if (!historyLoaded) return;
     const initial = ChatStore.popInitialMessage();
     if (initial) {
-      handleSend(initial);
+      if (chatLocked) {
+        setInputText(initial);
+        handleUpgrade();
+      } else {
+        handleSend(initial);
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [historyLoaded]);
@@ -182,40 +252,61 @@ export default function ChatScreen() {
 
   // ─── Send ──────────────────────────────────────────────────────────────────
 
+  const chartSummary = chartDetails ? buildNatalChartSummary(chartDetails) : undefined;
+
   const handleSend = useCallback(async (text?: string) => {
     const msg = (text ?? inputText).trim();
-    if (!msg || !authUser || isSending || chatLocked) return;
+    if (!msg || !authUser || isSending) return;
+
+    if (chatLocked) {
+      setInputText(msg);
+      handleUpgrade();
+      return;
+    }
 
     chatStarted.current = true;
     setInputText('');
     setIsSending(true);
     try {
-      const history = buildHistory(messages.filter(m => !m.isPending));
-      await sendChatMessage(authUser.uid, msg, history, chartDetails);
+      await sendChatMessage(authUser.uid, msg, chartSummary);
     } catch (e) {
       console.error('chat send error', e);
     } finally {
       setIsSending(false);
     }
-  }, [inputText, authUser, isSending, messages, chartDetails]);
+  }, [inputText, authUser, isSending, chatLocked, chartSummary, handleUpgrade]);
 
   // ─── Retry ─────────────────────────────────────────────────────────────────
 
   const handleRetry = useCallback(async (msg: ChatMessageDoc) => {
     if (!authUser) return;
     try {
-      await retryChatMessage(authUser.uid, msg.id, msg.prompt, msg.userMessage);
+      await retryChatMessage(authUser.uid, msg.id, msg.userMessage, chartSummary);
     } catch (e) {
       console.error('chat retry error', e);
     }
-  }, [authUser]);
+  }, [authUser, chartSummary]);
 
   // ─── New chat ──────────────────────────────────────────────────────────────
 
   const handleNewChat = useCallback(async () => {
     if (!authUser) return;
     chatStarted.current = false;
-    await clearChatHistory(authUser.uid);
+    await saveChatAndClear(authUser.uid, messages);
+  }, [authUser, messages]);
+
+  // ─── Resume saved chat ─────────────────────────────────────────────────────
+
+  const handleResumeSession = useCallback(async (session: SavedChatSession) => {
+    if (!authUser) return;
+    try {
+      await resumeChatSession(authUser.uid, session, messagesRef.current);
+      chatStarted.current = true;
+      setViewingSession(null);
+      setShowHistory(false);
+    } catch (e) {
+      console.error('chat resume error', e);
+    }
   }, [authUser]);
 
   // ─── Derived ───────────────────────────────────────────────────────────────
@@ -226,49 +317,105 @@ export default function ChatScreen() {
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
-  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const historyMessages = messages.filter(m => m.createdAt >= cutoff && !m.isPending && !m.isError);
-
   return (
     <ThemedView style={styles.container}>
       <HeaderNav
         title="Chat"
-        leftIconName={__DEV__ ? 'time-outline' : undefined}
-        onLeftPress={__DEV__ ? () => setShowHistory(true) : undefined}
+        leftIconName="time-outline"
+        onLeftPress={() => setShowHistory(true)}
         rightIconName="add"
         onRightPress={handleNewChat}
       />
 
-      {/* ── History modal ── */}
-      <Modal visible={showHistory} animationType="slide" onRequestClose={() => setShowHistory(false)}>
-        <View style={[styles.historyModal, { paddingTop: insets.top }]}>
-          <View style={styles.historyHeader}>
-            <Text style={styles.historyTitle}>Today's History</Text>
-            <TouchableOpacity onPress={() => setShowHistory(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Ionicons name="close" size={24} color={C.white} />
-            </TouchableOpacity>
-          </View>
+      <PaygateOverlay
+        locked={false}
+        style={{ flex: 1 }}
+        unlockTitle="Unlock Chat"
+        unlockMessage="Subscribe to get personalized cosmic guidance through Delaluna chat."
+        onUnlock={handleUpgrade}
+      >
 
-          {historyMessages.length === 0 ? (
-            <View style={styles.historyEmpty}>
-              <Text style={styles.historyEmptyText}>No conversation yet today.</Text>
-            </View>
-          ) : (
-            <ScrollView contentContainerStyle={styles.historyList} showsVerticalScrollIndicator={false}>
-              {historyMessages.map(m => (
-                <View key={m.id} style={styles.historyEntry}>
-                  <Text style={styles.historyTimestamp}>{formatTime(m.createdAt)}</Text>
-                  <View style={[styles.userBubble, { alignSelf: 'flex-end' }]}>
-                    <Text style={styles.userBubbleText}>{m.userMessage}</Text>
-                  </View>
-                  {m.response ? (
-                    <View style={[styles.aiBubble, { alignSelf: 'flex-start' }]}>
-                      <Text style={styles.aiBubbleText}>{m.response}</Text>
+      {/* ── History modal ── */}
+      <Modal visible={showHistory} animationType="slide" onRequestClose={() => {
+        if (viewingSession) { setViewingSession(null); } else { setShowHistory(false); }
+      }}>
+        <View style={[styles.historyModal, { paddingTop: insets.top }]}>
+          {viewingSession ? (
+            <>
+              <View style={styles.historyHeader}>
+                <TouchableOpacity onPress={() => setViewingSession(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Ionicons name="arrow-back" size={24} color={C.white} />
+                </TouchableOpacity>
+                <Text style={[styles.historyTitle, { flex: 1, marginLeft: S.sm }]} numberOfLines={1}>
+                  {viewingSession.title}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => handleResumeSession(viewingSession)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={styles.resumeButton}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="play" size={16} color={C.white} />
+                  <Text style={styles.resumeButtonText}>Resume</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => { setViewingSession(null); setShowHistory(false); }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ marginLeft: S.sm }}>
+                  <Ionicons name="close" size={24} color={C.white} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={styles.historyList} showsVerticalScrollIndicator={false}>
+                {viewingSession.messages.map((m, i) => (
+                  <View key={i} style={styles.historyEntry}>
+                    <Text style={styles.historyTimestamp}>{formatTime(m.createdAt)}</Text>
+                    <View style={[styles.userBubble, { alignSelf: 'flex-end' }]}>
+                      <Text style={styles.userBubbleText}>{m.userMessage}</Text>
                     </View>
-                  ) : null}
+                    {m.response ? (
+                      <View style={[styles.aiBubble, { alignSelf: 'flex-start' }]}>
+                        <Text style={styles.aiBubbleText}>{stripBoldTitles(m.response)}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ))}
+              </ScrollView>
+            </>
+          ) : (
+            <>
+              <View style={styles.historyHeader}>
+                <Text style={styles.historyTitle}>Chat History</Text>
+                <TouchableOpacity onPress={() => setShowHistory(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Ionicons name="close" size={24} color={C.white} />
+                </TouchableOpacity>
+              </View>
+              {savedSessions.length === 0 ? (
+                <View style={styles.historyEmpty}>
+                  <Text style={styles.historyEmptyText}>No saved chats yet.</Text>
                 </View>
-              ))}
-            </ScrollView>
+              ) : (
+                <ScrollView contentContainerStyle={styles.historyList} showsVerticalScrollIndicator={false}>
+                  {savedSessions.map(session => (
+                    <TouchableOpacity
+                      key={session.id}
+                      style={styles.sessionRow}
+                      onPress={() => setViewingSession(session)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.sessionInfo}>
+                        <Text style={styles.sessionTitle} numberOfLines={1}>{session.title}</Text>
+                        <Text style={styles.sessionDate}>
+                          {session.savedAt.toLocaleDateString()} · {session.messages.length} message{session.messages.length !== 1 ? 's' : ''}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => authUser && deleteChatSession(authUser.uid, session.id)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <Ionicons name="trash-outline" size={18} color={C.muted} />
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+            </>
           )}
         </View>
       </Modal>
@@ -287,7 +434,14 @@ export default function ChatScreen() {
                 <TouchableOpacity
                   key={q}
                   style={styles.suggestionChip}
-                  onPress={() => handleSend(q)}
+                  onPress={() => {
+                    if (chatLocked) {
+                      setInputText(q);
+                      handleUpgrade();
+                    } else {
+                      handleSend(q);
+                    }
+                  }}
                   activeOpacity={0.7}
                 >
                   <Text style={styles.suggestionText}>{q}</Text>
@@ -306,59 +460,44 @@ export default function ChatScreen() {
                 { paddingBottom: insets.bottom + S.md },
               ]}
               showsVerticalScrollIndicator={false}
+              onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
             />
           )}
 
-          {chatLocked ? (
-            <View style={[styles.paygateContainer, { paddingBottom: insets.bottom}]}>
-              <PremiumUnlock
-                title="You've used all your free questions"
-                message={chatUnlocked
-                  ? 'Upgrade to Premium for unlimited cosmic guidance.'
-                  : 'Unlock 5 more questions to keep the conversation going.'}
-                onUnlock={() => setChatUnlocked(true)}
-              />
-            </View>
-          ) : (
-            <>
-              
-              <View style={[styles.inputBar, { paddingBottom: S.sm }]}>
-                <TextInput
-                  style={styles.textInput}
-                  value={inputText}
-                  onChangeText={setInputText}
-                  placeholder="Ask Delaluna anything…"
-                  placeholderTextColor={C.muted}
-                  multiline
-                  maxLength={500}
-                  returnKeyType="send"
-                  onSubmitEditing={() => handleSend()}
-                  blurOnSubmit
-                />
-                <TouchableOpacity
-                  style={[styles.sendButton, sendDisabled && styles.sendButtonDisabled]}
-                  onPress={() => handleSend()}
-                  disabled={sendDisabled}
-                  activeOpacity={0.7}
-                >
-                  {isSending ? (
-                    <ActivityIndicator size="small" color={C.white} />
-                  ) : (
-                    <Text style={styles.sendButtonText}>→</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-              {questionsUsed > 0 && (
-                <View style={styles.counterBar}>
-                  <Text style={styles.counterText}>
-                    {questionsRemaining} {chatUnlocked ? '' : 'free '}question{questionsRemaining !== 1 ? 's' : ''} remaining
-                  </Text>
-                </View>
+          <View style={[styles.inputBar, { paddingBottom: S.sm }]}>
+            <TextInput
+              style={styles.textInput}
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder="Ask Delaluna anything..."
+              placeholderTextColor={C.muted}
+              multiline
+              maxLength={500}
+              returnKeyType="send"
+              onSubmitEditing={() => handleSend()}
+              blurOnSubmit
+            />
+            <TouchableOpacity
+              style={[styles.sendButton, sendDisabled && styles.sendButtonDisabled]}
+              onPress={() => handleSend()}
+              disabled={sendDisabled}
+              activeOpacity={0.7}
+            >
+              {isSending ? (
+                <ActivityIndicator size="small" color={C.white} />
+              ) : (
+                <Text style={styles.sendButtonText}>{'\u2192'}</Text>
               )}
-            </>
-          )}
+            </TouchableOpacity>
+          </View>
+          <View style={[styles.counterBar]}>
+            <Text style={styles.counterText}>
+              {questionsRemaining} of {questionLimit} questions remaining today
+            </Text>
+          </View>
         </View>
       </KeyboardAvoidingView>
+      </PaygateOverlay>
     </ThemedView>
   );
 }
@@ -431,11 +570,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: S.md,
     paddingVertical: S.sm,
     maxWidth: '80%',
+    overflow: 'visible',
   },
   aiBubbleText: {
     color: C.white,
     fontSize: 14,
-    lineHeight: 20,
   },
   retryButton: {
     marginTop: 6,
@@ -512,6 +651,11 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(255,255,255,0.08)',
     backgroundColor: 'rgba(0,0,0,0.2)',
   },
+  paygateContainerCentered: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: S.md,
+  },
   counterBar: {
     alignItems: 'center',
     paddingVertical: S.xs,
@@ -562,5 +706,41 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: 'center',
     marginBottom: S.xs,
+  },
+  sessionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: R.md,
+    paddingHorizontal: S.md,
+    paddingVertical: S.sm + 2,
+  },
+  sessionInfo: {
+    flex: 1,
+    marginRight: S.sm,
+  },
+  sessionTitle: {
+    color: C.white,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  sessionDate: {
+    color: C.muted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  resumeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: S.sm,
+    paddingVertical: 6,
+    borderRadius: R.pill,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  resumeButtonText: {
+    color: C.white,
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

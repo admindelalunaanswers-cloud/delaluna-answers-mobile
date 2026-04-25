@@ -1,43 +1,47 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { router } from 'expo-router';
 
 import { doc, getFirestore, updateDoc } from 'firebase/firestore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { getProfileImageSource } from '@/app/(settings)/select-avatar';
 import DateSwitcher from '@/src/components/home/date-switcher.component';
+import HomeTextBox from '@/src/components/home/home-text-box.component';
 import HeaderNav from '@/src/components/shared/header-nav';
 import HomeSignsDisplay from '@/src/components/shared/signs-display.component';
-import HomeTextBox from '@/src/components/home/home-text-box.component';
 import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
+import AdBannerFull from '@/src/components/shared/ad-banner-full.component';
+import AdBanner from '@/src/components/shared/ad-banner.component';
 import SectionTitle from '@/src/components/shared/section-title.component';
-import type { DailyCardPack } from '@/src/schemas/dailyCardPack.schema';
-import type { HoroscopeResult } from '@/src/types/horoscope.types';
-import { ChatStore } from '@/src/stores/chat-store';
-import { HOME_STRINGS } from '@/src/constants/strings';
 import { ThemedView } from '@/src/components/themed-view';
+import { HOME_STRINGS } from '@/src/constants/strings';
+import type { DailyCardPack } from '@/src/schemas/dailyCardPack.schema';
 import { calculateTransits } from '@/src/services/astroEngine';
-import { fetchHoroscope, getTodayDateId } from '@/src/services/horoscope.service';
+import { getTodayDateId, subscribeToHoroscope } from '@/src/services/horoscope.service';
 import { getTarotCardDraw } from '@/src/services/tarot-card.service';
-import { updateUserDoc } from '@/src/services/user.service';
+import { ChatStore } from '@/src/stores/chat-store';
+import type { HoroscopeResult } from '@/src/types/horoscope.types';
 import { useHoroscope } from '@/src/context/horoscope-context';
-import { usePullToRefresh } from '@/src/hooks/use-pull-to-refresh';
-import { useResponsive } from '@/src/hooks/use-responsive';
 import { useUser } from '@/src/context/user-context';
+import { useRevenueCat } from '@/src/context/revenuecat-context';
+import { useResponsive } from '@/src/hooks/use-responsive';
+import { verticalScale } from '@/src/utils/responsive';
 
 const NAV_BAR_HEIGHT = 44;
 
 export default function HomeScreen() {
-  const { authUser, userDoc, refresh: refreshUser } = useUser();
+  const { authUser, userDoc } = useUser();
   const {
     chartDetails,
     horoscope,
     transitMoon,
     breakdown,
-    refresh,
   } = useHoroscope();
+  const { isPro } = useRevenueCat();
+
 
   const todayDateId = getTodayDateId();
   const [selectedDate, setSelectedDate] = useState(todayDateId);
@@ -72,22 +76,29 @@ export default function HomeScreen() {
     const { dateId: tomorrowId,  date: tomorrowDate  } = offset(+1);
 
     Promise.all([
-      fetchHoroscope(authUser.uid, yesterdayId),
-      fetchHoroscope(authUser.uid, tomorrowId),
       calculateTransits(yesterdayDate, 0, 0),
       calculateTransits(tomorrowDate,  0, 0),
-    ]).then(([yest, tmrw, yestTransits, tmrwTransits]) => {
-      setHoroscopeByDate(prev => ({
-        ...prev,
-        ...(yest.result ? { [yesterdayId]: yest.result } : {}),
-        ...(tmrw.result ? { [tomorrowId]:  tmrw.result } : {}),
-      }));
+    ]).then(([yestTransits, tmrwTransits]) => {
       setMoonByDate(prev => ({
         ...prev,
         [yesterdayId]: { phaseName: yestTransits.moon.phase, illumination: yestTransits.moon.illumination, moonSign: yestTransits.moon.sign },
         [tomorrowId]:  { phaseName: tmrwTransits.moon.phase, illumination: tmrwTransits.moon.illumination, moonSign: tmrwTransits.moon.sign },
       }));
     }).catch(console.error);
+
+    // Subscribe to yesterday/tomorrow horoscope docs so they populate when the
+    // extension finishes generating them — can lag 10-30s on real devices.
+    const unsubYesterday = subscribeToHoroscope(authUser.uid, yesterdayId, (result) => {
+      setHoroscopeByDate(prev => ({ ...prev, [yesterdayId]: result }));
+    });
+    const unsubTomorrow = subscribeToHoroscope(authUser.uid, tomorrowId, (result) => {
+      setHoroscopeByDate(prev => ({ ...prev, [tomorrowId]: result }));
+    });
+
+    return () => {
+      unsubYesterday();
+      unsubTomorrow();
+    };
   }, [authUser?.uid]);
 
   // Keep today's horoscope and moon in the by-date maps
@@ -97,12 +108,29 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (transitMoon) {
+      console.log('[moon-phase]', {
+        date: todayDateId,
+        phase: transitMoon.phase,
+        sunMoonAngle: transitMoon.sunMoonAngle,
+        illumination: transitMoon.illumination,
+        sign: transitMoon.sign,
+      });
       setMoonByDate(prev => ({
         ...prev,
         [todayDateId]: { phaseName: transitMoon.phase, illumination: transitMoon.illumination, moonSign: transitMoon.sign },
       }));
     }
   }, [transitMoon]);
+
+  // Prefetch all card front images across all days so day-switching is instant
+  useEffect(() => {
+    const allCards = Object.values(cardDraw).flatMap(pack => pack.cards ?? []);
+    allCards.forEach(card => {
+      Image.prefetch(
+        `https://firebasestorage.googleapis.com/v0/b/delaluna-answers.firebasestorage.app/o/tarot-card-front%2F${card.id}.png?alt=media`
+      );
+    });
+  }, [cardDraw]);
 
   const activeCards = cardDraw[selectedDate] ?? null;
   const activeHoroscope = horoscopeByDate[selectedDate] ?? null;
@@ -121,10 +149,6 @@ export default function HomeScreen() {
   const { scale } = useResponsive();
   const headerHeight = insets.top + scale(NAV_BAR_HEIGHT);
 
-  // ─── Pull-to-refresh ────────────────────────────────────────────────────────
-
-  const { refreshControl } = usePullToRefresh(refresh);
-
   // ─── Derived values ─────────────────────────────────────────────────────────
 
   const sunSign    = chartDetails?.planets.find(p => p.name === 'Sun')?.sign  ?? '—';
@@ -132,16 +156,18 @@ export default function HomeScreen() {
   const risingSign = chartDetails?.ascendant.sign ?? '—';
 
   const activeMoonData = moonByDate[selectedDate];
+  const noRetrogradesLabel = "No planets currently in retrograde";
+  const retrogrades = (activeHoroscope?.planetsRetrograde ?? []).filter(p => p.toLowerCase() !== 'none' || noRetrogradesLabel);
 
-  const retrogrades = (activeHoroscope?.planetsRetrograde ?? []).filter(p => p.toLowerCase() !== 'none');
-
+  const scrollRef = useRef<ScrollView>(null);
   const dateSwitcherDates = Object.keys(cardDraw).sort();
-  const isPaygated = selectedDate !== todayDateId && !(userDoc?.isPremiumMember ?? false);
 
-  const handleUnlock = async () => {
-    if (!authUser?.uid) return;
-    await updateUserDoc(authUser.uid, { isPremiumMember: true });
-    await refreshUser();
+  const [showFullBanner] = useState(() => Math.random() < 0.5);
+  const isPremium = isPro;
+  const isPaygated = selectedDate !== todayDateId && !isPremium;
+
+  const handleUnlock = () => {
+    router.push('/(settings)/paywall');
   };
 
   // ─── Render ─────────────────────────────────────────────────────────────────
@@ -149,8 +175,8 @@ export default function HomeScreen() {
   return (
     <ThemedView style={styles.container}>
       <HeaderNav
-        title={userDoc?.name ?? 'Home'}
-        rightIconName="person-circle-outline"
+        title={userDoc?.fullName ?? ([userDoc?.firstName, userDoc?.lastName].filter(Boolean).join(' ') || 'Home')}
+        rightAvatarSource={getProfileImageSource((userDoc as any)?.profileImageId) ?? getProfileImageSource('profile8')!}
         onRightPress={() => router.push('/profile')}
       />
 
@@ -165,7 +191,10 @@ export default function HomeScreen() {
         <DateSwitcher
           value={selectedDate}
           dates={dateSwitcherDates.length > 0 ? dateSwitcherDates : [todayDateId]}
-          onChange={setSelectedDate}
+          onChange={(date) => {
+            setSelectedDate(date);
+            scrollRef.current?.scrollTo({ y: 0, animated: false });
+          }}
         />
 
         <PaygateOverlay
@@ -176,9 +205,9 @@ export default function HomeScreen() {
           onUnlock={handleUnlock}
         >
         <ScrollView
+          ref={scrollRef}
           style={styles.scroll}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + scale(20) }]}
-          refreshControl={refreshControl}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: verticalScale(2) }]}
           showsVerticalScrollIndicator={false}
         >
           <SectionTitle sectionName="quote" title="Quote" />
@@ -211,8 +240,8 @@ export default function HomeScreen() {
           <SectionTitle sectionName="moon" title="Moon Phase" />
           <HomeTextBox
             sectionName="moon"
-            content={activeHoroscope?.moonPhaseDetails}
-            contentTwo={activeHoroscope?.moon}
+            content={activeHoroscope?.moon}
+            contentTwo={activeHoroscope?.moonPhaseDetails}
             moonData={activeMoonData}
           />
 
@@ -254,6 +283,25 @@ export default function HomeScreen() {
           <SectionTitle sectionName="warning" title="Warning" />
           <HomeTextBox sectionName="warning" content={activeHoroscope?.warning} />
         </ScrollView>
+        {!isPremium && (
+          showFullBanner ? (
+            <AdBannerFull
+              icon="sparkles"
+              title="Unlock Your Full Birth Chart"
+              subtitle="Premium readings, ad-free."
+              ctaLabel="Upgrade"
+              onPress={handleUnlock}
+            />
+          ) : (
+            <AdBanner
+              icon="sparkles"
+              title="Unlock Your Full Birth Chart"
+              subtitle="Premium readings, ad-free."
+              ctaLabel="Upgrade"
+              onPress={handleUnlock}
+            />
+          )
+        )}
         </PaygateOverlay>
       </View>
     </ThemedView>

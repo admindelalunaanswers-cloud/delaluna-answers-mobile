@@ -1,6 +1,6 @@
 module.exports = {
   expo: {
-    name: "delaluna-answers-mobile",
+    name: "Delaluna Answers",
     slug: "delaluna-answers-mobile",
     version: "1.0.0",
     orientation: "portrait",
@@ -13,6 +13,7 @@ module.exports = {
       supportsTablet: false,
       bundleIdentifier: "com.delalunaanswers.mobile",
       newArchEnabled: true,
+      googleServicesFile: "./GoogleService-Info.plist",
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         UIBackgroundModes: ["remote-notification"],
@@ -21,7 +22,13 @@ module.exports = {
     android: {
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
+      adaptiveIcon: {
+        foregroundImage: "./src/assets/images/android-icon-foreground.png",
+        backgroundImage: "./src/assets/images/android-icon-background.png",
+        monochromeImage: "./src/assets/images/android-icon-monochrome.png",
+      },
       package: "com.delalunaanswers.mobile",
+      googleServicesFile: "./google-services.json",
     },
     plugins: [
       "expo-router",
@@ -29,8 +36,9 @@ module.exports = {
         "expo-notifications",
         {
           icon: "./src/assets/dlla-branded/delaluna_app_icon.png",
-          color: "#0d0628",
+          color: "#ffffff",
           sounds: [],
+          enableFCMv1: true,
         },
       ],
       [
@@ -40,10 +48,19 @@ module.exports = {
           imageWidth: 200,
           resizeMode: "contain",
           backgroundColor: "#ffffff",
-          dark: { backgroundColor: "#000000" },
         },
       ],
       "@react-native-community/datetimepicker",
+      [
+        "expo-build-properties",
+        {
+          android: {
+            compileSdkVersion: 35,
+            targetSdkVersion: 35,
+            AGPVersion: "8.10.2",
+          },
+        },
+      ],
     ],
     experiments: {
       typedRoutes: true,
@@ -60,12 +77,14 @@ module.exports = {
       FIREBASE_STORAGE_BUCKET:     process.env.FIREBASE_STORAGE_BUCKET,
       FIREBASE_MESSAGING_SENDER_ID: process.env.FIREBASE_MESSAGING_SENDER_ID,
       FIREBASE_APP_ID:             process.env.FIREBASE_APP_ID,
-      USE_EMULATOR:                process.env.USE_EMULATOR,
+      REVENUECAT_API_KEY:          process.env.APP_ENV === 'development'
+                                       ? process.env.REVENUECAT_API_KEY
+                                       : process.env.DELALUNA_ANSWERS_APP_STORE,
+      USE_EMULATOR:                'false',
       EMULATOR_HOST:               process.env.EMULATOR_HOST ?? 'localhost',
+
     },
-    runtimeVersion: {
-      policy: "appVersion",
-    },
+    runtimeVersion: "1.0.0",
     updates: {
       url: "https://u.expo.dev/a267fc5e-e587-4e94-b9ab-1cddd6decb94",
     },

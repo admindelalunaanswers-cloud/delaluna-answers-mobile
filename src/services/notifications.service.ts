@@ -8,6 +8,8 @@ import { db } from '@/firebaseConfig';
 
 const EXPO_PROJECT_ID = 'a267fc5e-e587-4e94-b9ab-1cddd6decb94';
 
+// ─── Registration ─────────────────────────────────────────────────────────────
+
 /**
  * Requests permission and saves the Expo push token to the user's Firestore doc.
  * Safe to call on every login — skips silently on simulators or if permission denied.
@@ -26,6 +28,7 @@ export async function registerForPushNotifications(uid: string): Promise<void> {
   }
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  console.log('[push] existing permission status:', existingStatus);
   let finalStatus = existingStatus;
 
   if (existingStatus !== 'granted') {
@@ -35,31 +38,33 @@ export async function registerForPushNotifications(uid: string): Promise<void> {
     finalStatus = status;
   }
 
+  console.log('[push] final permission status:', finalStatus);
   if (finalStatus !== 'granted') return; // User declined — skip silently
 
   const token = await Notifications.getExpoPushTokenAsync({ projectId: EXPO_PROJECT_ID });
+  console.log('[push] token:', token.data);
 
   await setDoc(doc(db, 'users', uid), { expoPushToken: token.data }, { merge: true });
+  console.log('[push] token saved to Firestore');
 }
 
+// ─── Unregistration ──────────────────────────────────────────────────────────
+
 /**
- * Fires an immediate local notification telling the user their birth chart
- * breakdown is ready. Safe to call on any platform.
+ * Removes the Expo push token from the user's Firestore doc.
+ * Call on logout so the device stops receiving notifications for this account.
  */
-export async function scheduleBreakdownReadyNotification(): Promise<void> {
+export async function unregisterPushToken(uid: string): Promise<void> {
   try {
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: 'Your Birth Chart is Ready ✨',
-        body: 'Your natal chart breakdown has been read. Tap to explore your cosmic blueprint.',
-        data: { screen: '/(home)/birth-chart-view' },
-      },
-      trigger: null, // deliver immediately
-    });
-  } catch {
-    // Notifications not available (simulator, permission denied, etc.) — skip silently
+    const { deleteField } = await import('firebase/firestore');
+    await setDoc(doc(db, 'users', uid), { expoPushToken: deleteField() }, { merge: true });
+    console.log('[push] token removed from Firestore for user', uid);
+  } catch (err) {
+    console.error('[push] failed to remove token:', err);
   }
 }
+
+// ─── Foreground handler ───────────────────────────────────────────────────────
 
 /**
  * Configures how notifications appear when the app is in the foreground.

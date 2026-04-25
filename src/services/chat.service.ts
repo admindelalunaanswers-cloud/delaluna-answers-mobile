@@ -1,8 +1,6 @@
 import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore';
 
 import { db } from '@/firebaseConfig';
-import { buildChatPrompt } from '@/src/prompts/chat-prompt';
-import type { NatalChartDetailsDoc } from '@/src/types/user.type';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -15,6 +13,19 @@ export interface ChatMessageDoc {
   isPending: boolean;
   isError: boolean;
   createdAt: Date;
+}
+
+export interface SavedChatMessage {
+  userMessage: string;
+  response: string | null;
+  createdAt: Date;
+}
+
+export interface SavedChatSession {
+  id: string;
+  title: string;
+  messages: SavedChatMessage[];
+  savedAt: Date;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -37,19 +48,6 @@ function parseResponse(data: Record<string, any>): string | null {
   return str;
 }
 
-function buildNatalChartSummary(chart: NatalChartDetailsDoc): string {
-  return JSON.stringify({
-    planets: chart.planets.map(p => ({
-      name: p.name,
-      sign: p.sign,
-      house: p.house,
-      isRetrograde: p.isRetrograde,
-    })),
-    ascendant: { sign: chart.ascendant.sign, degree: chart.ascendant.degree },
-    midheaven: { sign: chart.midheaven.sign, degree: chart.midheaven.degree },
-  });
-}
-
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -61,7 +59,7 @@ export function subscribeToChatHistory(
   onMessages: (messages: ChatMessageDoc[]) => void,
 ): () => void {
   return onSnapshot(
-    query(collection(db, 'users', uid, 'chat'), orderBy('createdAt', 'asc')),
+    query(collection(db, 'users', uid, 'updayedChat'), orderBy('createTime', 'asc')),
     (snap) => {
       const messages: ChatMessageDoc[] = snap.docs.map(docSnap => {
         const data = docSnap.data();
@@ -74,7 +72,7 @@ export function subscribeToChatHistory(
           response,
           isPending: !response && state !== 'ERROR',
           isError: state === 'ERROR',
-          createdAt: (data.createdAt as Timestamp)?.toDate() ?? new Date(),
+          createdAt: (data.createTime as Timestamp)?.toDate() ?? new Date(),
         };
       });
       onMessages(messages);
@@ -86,31 +84,29 @@ export function subscribeToChatHistory(
  * Deletes all messages in the user's chat collection.
  */
 export async function clearChatHistory(uid: string): Promise<void> {
-  const snap = await getDocs(collection(db, 'users', uid, 'chat'));
-  await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'users', uid, 'chat', d.id))));
+  const snap = await getDocs(collection(db, 'users', uid, 'updayedChat'));
+  await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'users', uid, 'updayedChat', d.id))));
 }
 
 /**
- * Sends a chat message by writing a document to users/{uid}/chat.
+ * Sends a chat message by writing a document to users/{uid}/updayedChat.
  * The Firebase Extension reads the `prompt` field and writes back `response`.
+ * When a natal chart summary is provided it is prepended to the prompt so the
+ * AI can give personalised, chart-aware answers.
  */
 export async function sendChatMessage(
   uid: string,
   userMessage: string,
-  history: { role: 'user' | 'assistant'; content: string }[],
-  chart: NatalChartDetailsDoc | null,
+  natalChartSummary?: string,
 ): Promise<void> {
-  const natalChartSummary = chart
-    ? buildNatalChartSummary(chart)
-    : 'No natal chart available.';
+  const prompt = natalChartSummary
+    ? `[NATAL CHART]\n${natalChartSummary}\n\n[QUESTION]\n${userMessage}`
+    : userMessage;
 
-  const prompt = buildChatPrompt(natalChartSummary, history, userMessage);
-
-  await addDoc(collection(db, 'users', uid, 'chat'), {
+  await addDoc(collection(db, 'users', uid, 'updayedChat'), {
     userMessage,
     prompt,
-    createdAt: Timestamp.now(),
-    requestedAt: Timestamp.now(),
+    createTime: Timestamp.now(),
   });
 }
 
@@ -120,31 +116,100 @@ export async function sendChatMessage(
 export async function retryChatMessage(
   uid: string,
   docId: string,
-  prompt: string,
   userMessage: string,
+  natalChartSummary?: string,
 ): Promise<void> {
-  await deleteDoc(doc(db, 'users', uid, 'chat', docId));
-  await addDoc(collection(db, 'users', uid, 'chat'), {
-    userMessage,
-    prompt,
-    createdAt: Timestamp.now(),
-    requestedAt: Timestamp.now(),
-  });
+  await deleteDoc(doc(db, 'users', uid, 'updayedChat', docId));
+  await sendChatMessage(uid, userMessage, natalChartSummary);
 }
 
 /**
- * Builds the conversation history array from completed messages,
- * for inclusion in the next message's prompt.
+ * Saves the current chat messages as a session, then clears the active chat.
+ * Title is the first user message.
  */
-export function buildHistory(
-  messages: ChatMessageDoc[],
-): { role: 'user' | 'assistant'; content: string }[] {
-  const history: { role: 'user' | 'assistant'; content: string }[] = [];
-  for (const msg of messages) {
-    history.push({ role: 'user', content: msg.userMessage });
-    if (msg.response) {
-      history.push({ role: 'assistant', content: msg.response });
-    }
+export async function saveChatAndClear(uid: string, messages: ChatMessageDoc[]): Promise<void> {
+  const completed = messages.filter(m => !m.isPending && !m.isError && m.response);
+  if (completed.length === 0) {
+    // Nothing worth saving — just clear
+    await clearChatHistory(uid);
+    return;
   }
-  return history;
+
+  await addDoc(collection(db, 'users', uid, 'savedChats'), {
+    title: completed[0].userMessage,
+    messages: completed.map(m => ({
+      userMessage: m.userMessage,
+      response: m.response,
+      createdAt: Timestamp.fromDate(m.createdAt),
+    })),
+    savedAt: Timestamp.now(),
+  });
+
+  await clearChatHistory(uid);
+}
+
+/**
+ * Real-time listener for saved chat sessions, newest first.
+ */
+export function subscribeToChatSessions(
+  uid: string,
+  onSessions: (sessions: SavedChatSession[]) => void,
+): () => void {
+  return onSnapshot(
+    query(collection(db, 'users', uid, 'savedChats'), orderBy('savedAt', 'desc')),
+    (snap) => {
+      const sessions: SavedChatSession[] = snap.docs.map(d => {
+        const data = d.data();
+        return {
+          id: d.id,
+          title: data.title ?? '',
+          messages: (data.messages ?? []).map((m: any) => ({
+            userMessage: m.userMessage ?? '',
+            response: m.response ?? null,
+            createdAt: m.createdAt?.toDate?.() ?? new Date(),
+          })),
+          savedAt: (data.savedAt as Timestamp)?.toDate() ?? new Date(),
+        };
+      });
+      onSessions(sessions);
+    },
+  );
+}
+
+/**
+ * Deletes a saved chat session.
+ */
+export async function deleteChatSession(uid: string, sessionId: string): Promise<void> {
+  await deleteDoc(doc(db, 'users', uid, 'savedChats', sessionId));
+}
+
+/**
+ * Restores a saved chat session as the active chat. The currently active chat
+ * (if any) is saved first via `saveChatAndClear` so nothing is lost. Then the
+ * session's messages are written back into `updayedChat` with their original
+ * timestamps and the saved session is deleted.
+ */
+export async function resumeChatSession(
+  uid: string,
+  session: SavedChatSession,
+  currentMessages: ChatMessageDoc[],
+): Promise<void> {
+  // Park the current active chat (no-op if empty / nothing worth saving)
+  await saveChatAndClear(uid, currentMessages);
+
+  // Write the session's messages back into the active chat collection.
+  // These are already-completed turns: include `response` and a COMPLETED
+  // status so the listener treats them as finished.
+  for (const msg of session.messages) {
+    await addDoc(collection(db, 'users', uid, 'updayedChat'), {
+      userMessage: msg.userMessage,
+      prompt: '',
+      response: msg.response ?? '',
+      status: { state: 'COMPLETED' },
+      createTime: Timestamp.fromDate(msg.createdAt),
+    });
+  }
+
+  // The session is now active — drop the saved copy.
+  await deleteDoc(doc(db, 'users', uid, 'savedChats', session.id));
 }

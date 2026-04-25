@@ -1,17 +1,100 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
-import { Image, Linking, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Image,
+  ImageSourcePropType,
+  Linking,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import Animated, {
+  Easing,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from "react-native-reanimated";
 
 import { Ionicons } from "@expo/vector-icons";
 
 import { CARD_LINKS } from "@/src/constants/links";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 
+const FLIP_DURATION = 650;
+const STAGGER_MS = 140;
+
 interface TarotCardProps {
   cardNumber: number[];
   reversed?: boolean[];
   firstView?: boolean;
   onReveal?: () => void;
+}
+
+interface FlipCardProps {
+  backSource: ImageSourcePropType;
+  frontUri: string;
+  reversed: boolean;
+  shouldReveal: boolean;
+  animate: boolean;
+  delay: number;
+}
+
+function FlipCard({
+  backSource,
+  frontUri,
+  reversed,
+  shouldReveal,
+  animate,
+  delay,
+}: FlipCardProps) {
+  const progress = useSharedValue(shouldReveal ? 1 : 0);
+
+  useEffect(() => {
+    if (shouldReveal) {
+      if (animate) {
+        progress.value = withDelay(
+          delay,
+          withTiming(1, {
+            duration: FLIP_DURATION,
+            easing: Easing.out(Easing.cubic),
+          }),
+        );
+      } else {
+        progress.value = 1;
+      }
+    } else {
+      progress.value = 0;
+    }
+  }, [shouldReveal, animate, delay, progress]);
+
+  const backStyle = useAnimatedStyle(() => ({
+    transform: [
+      { perspective: 1000 },
+      { rotateY: `${interpolate(progress.value, [0, 1], [0, 180])}deg` },
+    ],
+  }));
+
+  const frontStyle = useAnimatedStyle(() => ({
+    transform: [
+      { perspective: 1000 },
+      { rotateY: `${interpolate(progress.value, [0, 1], [180, 360])}deg` },
+      { rotateZ: reversed ? "180deg" : "0deg" },
+    ],
+  }));
+
+  return (
+    <View style={styles.cardSlot}>
+      <Animated.View style={[styles.face, backStyle]}>
+        <Image source={backSource} style={styles.cardImage} />
+      </Animated.View>
+      <Animated.View style={[styles.face, frontStyle]}>
+        <Image source={{ uri: frontUri }} style={styles.cardImage} />
+      </Animated.View>
+    </View>
+  );
 }
 
 export default function TarotCardImageFrame({
@@ -21,23 +104,15 @@ export default function TarotCardImageFrame({
   onReveal,
 }: TarotCardProps) {
   const [revealed, setRevealed] = useState(firstView);
+  const [animate, setAnimate] = useState(false);
 
-  // Sync local state when the prop changes (e.g. switching dates)
-  React.useEffect(() => {
+  useEffect(() => {
     setRevealed(firstView);
+    setAnimate(false);
   }, [firstView]);
 
   const getTarotCardImageUrl = (num: number) =>
     `https://firebasestorage.googleapis.com/v0/b/delaluna-answers.firebasestorage.app/o/tarot-card-front%2F${num}.png?alt=media`;
-
-  // Prefetch card front images while showing backs so reveal is instant
-  React.useEffect(() => {
-    if (!revealed) {
-      cardNumber.forEach((num) => {
-        Image.prefetch(getTarotCardImageUrl(num));
-      });
-    }
-  }, [cardNumber, revealed]);
 
   const handleOracleLinkPress = () => {
     Linking.openURL(CARD_LINKS.amazon.ORACLE_CARDS);
@@ -48,53 +123,38 @@ export default function TarotCardImageFrame({
   };
 
   const handleRevealCards = () => {
+    setAnimate(true);
     setRevealed(true);
     onReveal?.();
   };
 
-  const determineCardBack = (cardNumber: number) => {
-    if (cardNumber <= 53) {
-      return require('@/src/assets/card_backs/ORACLE_CARD_BACK.png');
-    } else if (cardNumber >= 54) {
-      return require('@/src/assets/card_backs/TAROT_CARD_BACK.png');
-    } else {
-      return "Unknown Card";
+  const determineCardBack = (num: number): ImageSourcePropType => {
+    if (num <= 53) {
+      return require("@/src/assets/card_backs/ORACLE_CARD_BACK.png");
     }
+    return require("@/src/assets/card_backs/TAROT_CARD_BACK.png");
   };
 
   return (
     <View style={styles.container}>
-      {revealed ? (
-        <View style={styles.frame}>
-          {cardNumber.map((num, idx) => (
-            <Image
-              key={`${num}-${idx}`}
-              style={[
-                styles.image,
-                reversed[idx] && { transform: [{ rotate: "180deg" }] },
-              ]}
-              source={{ uri: getTarotCardImageUrl(num) }}
-            />
-          ))}
-        </View>
-      ) : (
-        <>
-          <View style={styles.frame}>
-            {cardNumber.map((num, idx) => (
-              <Image
-                key={`${num}-${idx}`}
-                style={styles.image}
-                source={determineCardBack(num)}
-              />
-            ))}
-          </View>
+      <View style={styles.frame}>
+        {cardNumber.map((num, idx) => (
+          <FlipCard
+            key={`${num}-${idx}`}
+            backSource={determineCardBack(num)}
+            frontUri={getTarotCardImageUrl(num)}
+            reversed={!!reversed[idx]}
+            shouldReveal={revealed}
+            animate={animate}
+            delay={idx * STAGGER_MS}
+          />
+        ))}
+      </View>
 
-          <TouchableOpacity style={styles.revealButton} onPress={handleRevealCards}>
-            <Text style={styles.revealButtonText}>
-              Tap to Reveal Cards
-            </Text>
-          </TouchableOpacity>
-        </>
+      {!revealed && (
+        <TouchableOpacity style={styles.revealButton} onPress={handleRevealCards}>
+          <Text style={styles.revealButtonText}>Tap to Reveal Cards</Text>
+        </TouchableOpacity>
       )}
 
       <View style={styles.linksWrapper}>
@@ -123,15 +183,23 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    gap: scale(12),
+    gap: scale(2),
     width: "100%",
   },
-  image: {
+  cardSlot: {
     width: scale(120),
     height: scale(190),
+  },
+  face: {
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+    backfaceVisibility: "hidden",
+  },
+  cardImage: {
+    width: "100%",
+    height: "100%",
     resizeMode: "contain",
-    justifyContent: "center",
-    alignItems: "center",
   },
   linksWrapper: {
     flexDirection: "row",

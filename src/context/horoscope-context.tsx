@@ -6,7 +6,8 @@
  * background — available when the user navigates to those screens.
  */
 
-import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 
 import { doc, getDoc } from 'firebase/firestore';
 
@@ -16,6 +17,7 @@ import {
   fetchHoroscope,
   getTodayDateId,
   requestHoroscope,
+  requestSurroundingHoroscopes,
   rolloverHoroscope,
   subscribeToHoroscope,
 } from '@/src/services/horoscope.service';
@@ -25,7 +27,12 @@ import {
   subscribeToBreakdown,
   type BreakdownFetchResult,
 } from '@/src/services/natal-chart-breakdown.service';
-import { scheduleBreakdownReadyNotification } from '@/src/services/notifications.service';
+
+const RETROGRADE_PLANETS = new Set([
+  'Mercury', 'Venus', 'Mars',
+  'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto',
+]);
+
 import {
   fetchTransitReading,
   getThisWeekDateId,
@@ -90,7 +97,7 @@ const HoroscopeContext = createContext<HoroscopeContextValue>({
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function HoroscopeProvider({ children }: { children: ReactNode }) {
-  const { authUser, userDoc } = useUser();
+  const { authUser } = useUser();
 
   const [chartDetails, setChartDetails]                         = useState<NatalChartDetailsDoc | null>(null);
   const [horoscope, setHoroscope]                               = useState<HoroscopeResult | null>(null);
@@ -101,13 +108,22 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
   const [transitReadingGenerating, setTransitReadingGenerating] = useState(false);
   const [breakdown, setBreakdown]                               = useState<NatalChartBreakdownResult | null>(null);
   const [breakdownGenerating, setBreakdownGenerating]           = useState(false);
-  const [premiumBreakdown, setPremiumBreakdown]                 = useState<NatalChartBreakdownResult | null>(null);
-  const [premiumBreakdownGenerating, setPremiumBreakdownGenerating] = useState(false);
   const [loading, setLoading]                                   = useState(true);
 
-  const unsubHoroscopeRef = useRef<(() => void) | null>(null);
-  const unsubBreakdownRef = useRef<(() => void) | null>(null);
-  const unsubTransitRef   = useRef<(() => void) | null>(null);
+  // premiumBreakdown mirrors breakdown — both come from the same single doc now
+  const premiumBreakdown            = breakdown;
+  const premiumBreakdownGenerating  = breakdownGenerating;
+
+  const unsubHoroscopeRef          = useRef<(() => void) | null>(null);
+  const unsubBreakdownRef          = useRef<(() => void) | null>(null);
+  const unsubTransitRef            = useRef<(() => void) | null>(null);
+
+  // Track generating flags in a ref so the AppState listener always reads fresh
+  // values without needing them in its dependency array (avoids stale closures).
+  const generatingRef = useRef({ breakdown: false, transit: false, horoscope: false });
+  generatingRef.current.breakdown = breakdownGenerating && !breakdown;
+  generatingRef.current.transit   = transitReadingGenerating && !transitReading;
+  generatingRef.current.horoscope = horoscopeGenerating && !horoscope;
 
   // ─── Background subscribers (subscribe + request only, no re-fetch) ──────────
 
@@ -116,35 +132,22 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     chart: NatalChartDetailsDoc,
     signal: { cancelled: boolean },
     prefetched: BreakdownFetchResult,
+    pronouns: string,
   ) => {
-    const { result, premiumResult, pending, premiumPending } = prefetched;
-    const needsFreeSubscribe    = !result;
-    const needsPremiumSubscribe = !premiumResult;
-    const needsRequest = (!result && !pending) || (!premiumResult && !premiumPending);
+    const { result, pending } = prefetched;
 
-    if (!needsFreeSubscribe && !needsPremiumSubscribe) return;
+    if (result) return;
 
-    if (needsFreeSubscribe)    setBreakdownGenerating(true);
-    if (needsPremiumSubscribe) setPremiumBreakdownGenerating(true);
+    setBreakdownGenerating(true);
 
-    const freeWasGenerating = needsFreeSubscribe;
-    const unsub = subscribeToBreakdown(
-      uid,
-      (r) => {
-        if (signal.cancelled) return;
-        setBreakdown(r);
-        setBreakdownGenerating(false);
-        if (freeWasGenerating) scheduleBreakdownReadyNotification().catch(console.error);
-      },
-      (r) => {
-        if (signal.cancelled) return;
-        setPremiumBreakdown(r);
-        setPremiumBreakdownGenerating(false);
-      },
-    );
+    const unsub = subscribeToBreakdown(uid, (r) => {
+      if (signal.cancelled) return;
+      setBreakdown(r);
+      setBreakdownGenerating(false);
+    });
     unsubBreakdownRef.current = unsub;
 
-    if (needsRequest) requestBreakdown(uid, chart).catch(console.error);
+    if (!pending) requestBreakdown(uid, chart, pronouns).catch(console.error);
   };
 
   const subscribeTransitReading = (
@@ -154,6 +157,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     transits: TransitData,
     signal: { cancelled: boolean },
     prefetched: TransitFetchResult,
+    pronouns: string,
   ) => {
     if (prefetched.result) return; // already set in state, nothing to do
 
@@ -167,7 +171,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     });
     unsubTransitRef.current = unsub;
 
-    if (!prefetched.pending) requestTransitReading(uid, dateId, chart, transits).catch(console.error);
+    if (!prefetched.pending) requestTransitReading(uid, dateId, chart, transits, pronouns).catch(console.error);
   };
 
   // ─── Main load ──────────────────────────────────────────────────────────────
@@ -178,23 +182,28 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     // Transit readings are keyed by the week's Sunday so they regenerate once
     // per week. Every Sunday the key changes → a fresh reading is generated.
     const weekDateId = getThisWeekDateId();
-    const lat = userDoc?.birthLat ?? 0;
-    const lon = userDoc?.birthLon ?? 0;
 
-    // All fetches fire simultaneously — no waterfall.
-    // Breakdown and transit reading are included here so they're ready
-    // by the time loading=false, eliminating the secondary loading phase.
-    const transitKey = _transitKey(dateId, lat, lon);
-    const cachedTransit = _transitCache.get(transitKey);
-    const [chartSnap, horoscopeRes, transits, breakdownFetch, transitReadingFetch] = await Promise.all([
-      getDoc(doc(db, 'users', uid, 'natalChart', 'details')),
+    // Fetch user doc alongside other data so birth coordinates come from
+    // Firestore — not from userDoc state — and are always correct on first load,
+    // even before user-context has finished resolving its own fetch.
+    const [userSnap, chartSnap, horoscopeRes, breakdownFetch, transitReadingFetch] = await Promise.all([
+      getDoc(doc(db, 'users', uid)),
+      getDoc(doc(db, 'users', uid, 'birthChart', 'data')),
       fetchHoroscope(uid, dateId),
-      cachedTransit
-        ? Promise.resolve(cachedTransit)
-        : calculateTransits(new Date(), lat, lon).catch(() => null),
       fetchBreakdown(uid),
       fetchTransitReading(uid, weekDateId),
     ]);
+
+    const userData = userSnap.exists() ? userSnap.data() : null;
+    const lat      = typeof userData?.birthLat === 'number' ? userData.birthLat : 0;
+    const lon      = typeof userData?.birthLon === 'number' ? userData.birthLon : 0;
+    const pronouns: string = userData?.pronouns ?? 'they/them';
+
+    const transitKey = _transitKey(dateId, lat, lon);
+    const cachedTransit = _transitCache.get(transitKey);
+    const transits = cachedTransit
+      ? cachedTransit
+      : await calculateTransits(new Date(), lat, lon).catch(() => null);
     if (transits && !cachedTransit) _transitCache.set(transitKey, transits);
 
     if (signal.cancelled) return;
@@ -204,28 +213,34 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
 
     if (transits) {
       setTransitMoon(transits.moon);
-      setTransitRetrogrades(transits.planets.filter(p => p.isRetrograde).map(p => p.name));
+      setTransitRetrogrades(transits.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name));
     }
 
     // Set breakdown and transit reading immediately — no secondary loading phase
     if (breakdownFetch.result) setBreakdown(breakdownFetch.result);
-    if (breakdownFetch.premiumResult) setPremiumBreakdown(breakdownFetch.premiumResult);
-    if (transitReadingFetch.result) setTransitReading(transitReadingFetch.result);
+    if (transitReadingFetch.result) {
+      setTransitReading(transitReadingFetch.result);
+    }
 
     setLoading(false);
 
-    // Subscribe for data still being generated + background triggers
-    if (chart) {
-      subscribeBreakdown(uid, chart, signal, breakdownFetch);
-      if (transits) subscribeTransitReading(uid, weekDateId, chart, transits, signal, transitReadingFetch);
-      // Pre-generate tomorrow's horoscope so it's ready when the day rolls over.
-      rolloverHoroscope(uid, chart).catch(console.error);
-    }
+    // Pre-generate tomorrow's horoscope so it's ready when the day rolls over.
+    if (chart) rolloverHoroscope(uid, chart, pronouns).catch(console.error);
 
     const { result, pending } = horoscopeRes;
 
     // Horoscope subscribe / request
-    if (result) { setHoroscope(result); return; }
+    if (result) {
+      setHoroscope(result);
+      // Horoscope already done — subscribe transit + breakdown, then surrounding days.
+      if (chart) {
+        subscribeBreakdown(uid, chart, signal, breakdownFetch, pronouns);
+        if (transits) subscribeTransitReading(uid, weekDateId, chart, transits, signal, transitReadingFetch, pronouns);
+        requestSurroundingHoroscopes(uid, dateId, chart, pronouns).catch(console.error);
+      }
+      return;
+    }
+
     if (!chart) {
       // New user: chart hasn't been written yet. Stay in generating state so
       // AuthGate doesn't navigate early. Subscribe so we pick it up when
@@ -237,13 +252,21 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
         setHoroscopeGenerating(false);
         unsubHoroscopeRef.current?.();
         unsubHoroscopeRef.current = null;
-        // The Firebase Extension requires natalChart/details to exist before it
+          // The Firebase Extension requires birthChart/data to exist before it
         // can generate the horoscope, so the chart is guaranteed to be written
         // by the time this fires. Re-fetch it so chartDetails (and the 3 signs)
         // are populated on the home screen.
-        getDoc(doc(db, 'users', uid, 'natalChart', 'details')).then(snap => {
+        getDoc(doc(db, 'users', uid, 'birthChart', 'data')).then(snap => {
           if (!signal.cancelled && snap.exists()) {
-            setChartDetails(snap.data() as NatalChartDetailsDoc);
+            const newChart = snap.data() as NatalChartDetailsDoc;
+            setChartDetails(newChart);
+            // Start breakdown subscription now that the chart exists.
+            // (subscribeBreakdown was skipped in load() because chart was null
+            // at fetch time — Android timing: calculateNatalChart finishes after
+            // load()'s Promise.all already completed with chart=null.)
+            if (!unsubBreakdownRef.current) {
+              subscribeBreakdown(uid, newChart, signal, breakdownFetch, pronouns);
+            }
           }
         }).catch(console.error);
       });
@@ -272,9 +295,22 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     unsubHoroscopeRef.current = unsub;
 
     if (!pending) {
+      // Generation order: today horoscope → transit reading → breakdown → surrounding days.
+      // Each write arrives at the extension in sequence so today's horoscope is processed first.
       const moon        = transits?.moon ?? chart.moon;
-      const retrogrades = transits?.planets.filter(p => p.isRetrograde).map(p => p.name) ?? [];
-      requestHoroscope(uid, dateId, chart, moon, retrogrades).catch(console.error);
+      const retrogrades = transits?.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name) ?? [];
+      requestHoroscope(uid, dateId, chart, moon, retrogrades, pronouns)
+        .then(() => {
+          subscribeBreakdown(uid, chart, signal, breakdownFetch, pronouns);
+          if (transits) subscribeTransitReading(uid, weekDateId, chart, transits, signal, transitReadingFetch, pronouns);
+          requestSurroundingHoroscopes(uid, dateId, chart, pronouns).catch(console.error);
+        })
+        .catch(console.error);
+    } else {
+      // Horoscope already in-flight — subscribe transit + breakdown now, then surrounding.
+      subscribeBreakdown(uid, chart, signal, breakdownFetch, pronouns);
+      if (transits) subscribeTransitReading(uid, weekDateId, chart, transits, signal, transitReadingFetch, pronouns);
+      requestSurroundingHoroscopes(uid, dateId, chart, pronouns).catch(console.error);
     }
   };
 
@@ -291,8 +327,6 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
       setTransitReadingGenerating(false);
       setBreakdown(null);
       setBreakdownGenerating(false);
-      setPremiumBreakdown(null);
-      setPremiumBreakdownGenerating(false);
       // Keep loading=true so AuthGate doesn't briefly clear between
       // the null-auth reset and the next load() call (race condition).
       setLoading(true);
@@ -313,6 +347,40 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     };
   }, [authUser?.uid]);
 
+  // ─── App resume: re-check items still generating ───────────────────────────
+  // onSnapshot listeners may miss updates if the app was suspended long enough
+  // for the Firestore connection to drop. A one-time getDoc on resume fills the
+  // gap so the UI never stays stuck on a loading spinner.
+
+  useEffect(() => {
+    const uid = authUser?.uid;
+    if (!uid) return;
+
+    const handleAppState = (state: AppStateStatus) => {
+      if (state !== 'active') return;
+      const g = generatingRef.current;
+
+      if (g.breakdown) {
+        fetchBreakdown(uid).then(({ result }) => {
+          if (result) { setBreakdown(result); setBreakdownGenerating(false); }
+        }).catch(console.error);
+      }
+      if (g.transit) {
+        fetchTransitReading(uid, getThisWeekDateId()).then(({ result }) => {
+          if (result) { setTransitReading(result); setTransitReadingGenerating(false); }
+        }).catch(console.error);
+      }
+      if (g.horoscope) {
+        fetchHoroscope(uid, getTodayDateId()).then(({ result }) => {
+          if (result) { setHoroscope(result); setHoroscopeGenerating(false); }
+        }).catch(console.error);
+      }
+    };
+
+    const sub = AppState.addEventListener('change', handleAppState);
+    return () => sub.remove();
+  }, [authUser?.uid]);
+
   // ─── Refresh ────────────────────────────────────────────────────────────────
 
   const refresh = async () => {
@@ -322,7 +390,6 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     unsubTransitRef.current?.();   unsubTransitRef.current = null;
     setHoroscope(null);
     setBreakdown(null);
-    setPremiumBreakdown(null);
     setTransitReading(null);
     const signal = { cancelled: false };
     await load(authUser.uid, signal);
