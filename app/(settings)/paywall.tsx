@@ -30,28 +30,20 @@ interface SubPlan {
 
 const SUBSCRIPTIONS: SubPlan[] = [
   {
-    id: 'delaluna_premium_annual_trial',
-    label: 'Annual',
-    period: '1 year',
-    price: '$44.99/yr',
-    perMonth: '$3.75/mo',
-    badge: 'BEST VALUE',
-    highlight: true,
-  },
-  {
     id: 'com.delaluna.premium.monthly',
     label: 'Monthly',
     period: '1 month',
-    price: '$9.99/mo',
-    perMonth: '$9.99/mo',
-    badge: '3 FREE DAYS',
+    price: '$29.99/mo',
+    perMonth: '$29.99/mo',
+    badge: '1 WEEK FREE',
+    highlight: true,
   },
   {
     id: 'com.delaluna.premium.weekly',
     label: 'Weekly',
     period: '1 week',
-    price: '$3.99/wk',
-    perMonth: '$17.10/mo',
+    price: '$9.99/wk',
+    perMonth: '$42.81/mo',
   },
 ];
 
@@ -90,7 +82,7 @@ export default function PaywallScreen() {
 
   const handleFreeTrial = () => {
     setDevPlan('freeTrial');
-    Alert.alert('Free Trial Activated (Test)', 'You now have 24-hour full access.');
+    Alert.alert('Free Trial Activated (Test)', 'You now have 3-day full access.');
     router.back();
   };
 
@@ -115,7 +107,7 @@ export default function PaywallScreen() {
         {/* Hero */}
         <Ionicons name="sparkles" size={scale(40)} color="#FFD700" style={s.hero} />
         <Text style={s.heroTitle}>Unlock Full Access</Text>
-        <Text style={s.heroSub}>Unlimited chats, connections, transits & more</Text>
+        <Text style={s.heroSub}>Transits, connections, chat & past/future horoscopes</Text>
 
         {/* Current plan indicator */}
         <View style={s.currentPlanRow}>
@@ -174,7 +166,7 @@ export default function PaywallScreen() {
         {devPlan !== 'freeTrial' && devPlan !== 'premium' && (
           <TouchableOpacity style={s.trialButton} onPress={handleFreeTrial} activeOpacity={0.8}>
             <Ionicons name="time-outline" size={scale(15)} color="#6FFFE9" />
-            <Text style={s.trialText}>Start Free Trial (24 hours)</Text>
+            <Text style={s.trialText}>Start 3-Day Free Trial</Text>
           </TouchableOpacity>
         )}
 

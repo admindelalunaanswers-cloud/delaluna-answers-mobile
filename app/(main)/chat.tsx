@@ -19,6 +19,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HeaderNav from '@/src/components/shared/header-nav';
+import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
 import PremiumUnlock from '@/src/components/shared/premium-unlock.component';
 import { ThemedView } from '@/src/components/themed-view';
 import { C, R, S } from '@/src/constants/theme';
@@ -32,8 +33,7 @@ import { ChatStore } from '@/src/stores/chat-store';
 import { HOME_STRINGS } from '@/src/constants/strings';
 import { useHoroscope } from '@/src/context/horoscope-context';
 
-const FREE_CHAT_LIMIT = 3;
-const PREMIUM_CHAT_LIMIT = 5;
+const DAILY_CHAT_LIMIT = 1;
 
 const SUGGESTIONS = [
   HOME_STRINGS.newLove.questionFunnel,
@@ -142,7 +142,7 @@ export default function ChatScreen() {
   const [viewingSession, setViewingSession] = useState<SavedChatSession | null>(null);
 
   const isPremium = isPro;
-  const questionLimit = isPremium ? PREMIUM_CHAT_LIMIT : FREE_CHAT_LIMIT;
+  const questionLimit = DAILY_CHAT_LIMIT;
 
   // Count ALL questions sent today (active chat + saved sessions)
   const todayStart = new Date();
@@ -320,6 +320,14 @@ export default function ChatScreen() {
         onRightPress={handleNewChat}
       />
 
+      <PaygateOverlay
+        locked={!isPremium}
+        style={{ flex: 1 }}
+        unlockTitle="Unlock Chat"
+        unlockMessage="Subscribe to get personalized cosmic guidance through Delaluna chat."
+        onUnlock={handleUpgrade}
+      >
+
       {/* ── History modal ── */}
       <Modal visible={showHistory} animationType="slide" onRequestClose={() => {
         if (viewingSession) { setViewingSession(null); } else { setShowHistory(false); }
@@ -412,18 +420,10 @@ export default function ChatScreen() {
         <View style={[styles.flex, { paddingTop: headerHeight }]}>
           {chatLocked && messages.length === 0 ? (
             <View style={styles.paygateContainerCentered}>
-              {isPremium ? (
-                <PremiumUnlock
-                  title="Daily limit reached"
-                  message="Premium members have reached their daily limit. Come back tomorrow!"
-                />
-              ) : (
-                <PremiumUnlock
-                  title="You've used your 3 free questions"
-                  message="Upgrade to Premium for more daily questions and unlimited cosmic guidance."
-                  onUnlock={handleUpgrade}
-                />
-              )}
+              <PremiumUnlock
+                title="Daily limit reached"
+                message="You've used your question for today. Come back tomorrow!"
+              />
             </View>
           ) : (
             <>
@@ -461,18 +461,10 @@ export default function ChatScreen() {
 
               {chatLocked ? (
                 <View style={[styles.paygateContainer, { paddingBottom: insets.bottom }]}>
-                  {isPremium ? (
-                    <PremiumUnlock
-                      title="Daily limit reached"
-                      message="Premium members have reached their daily limit. Come back tomorrow!"
-                    />
-                  ) : (
-                    <PremiumUnlock
-                      title="You've used your 3 free questions"
-                      message="Upgrade to Premium for more daily questions and unlimited cosmic guidance."
-                      onUnlock={handleUpgrade}
-                    />
-                  )}
+                  <PremiumUnlock
+                    title="Daily limit reached"
+                    message="You've used your question for today. Come back tomorrow!"
+                  />
                 </View>
               ) : (
                 <>
@@ -513,6 +505,7 @@ export default function ChatScreen() {
           )}
         </View>
       </KeyboardAvoidingView>
+      </PaygateOverlay>
     </ThemedView>
   );
 }
