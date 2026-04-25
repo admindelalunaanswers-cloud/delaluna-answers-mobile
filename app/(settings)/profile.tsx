@@ -219,7 +219,7 @@ export default function ProfileScreen() {
             color={isPremium ? '#FFD700' : devPlan === 'freeTrial' ? '#6FFFE9' : '#888'}
           />
           <Text style={[ss.badgeText, isPremium ? ss.badgeTextPremium : devPlan === 'freeTrial' ? ss.badgeTextTrial : ss.badgeTextFree]}>
-            {isPremium ? 'PREMIUM MEMBER' : devPlan === 'freeTrial' ? 'PREMIUM TRIAL' : 'FREE PLAN'}
+            {isPremium ? 'PREMIUM MEMBER' : devPlan === 'freeTrial' ? 'PREMIUM TRIAL' : 'FREE MEMBER'}
           </Text>
         </View>
 
