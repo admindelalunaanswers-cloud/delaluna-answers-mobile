@@ -135,15 +135,15 @@ export default function ChatFlow({
   const scheduleScroll = (delay: number) => {
     if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
     scrollTimerRef.current = setTimeout(() => {
-      scrollRef.current?.scrollToEnd({ animated: true });
+      scrollRef.current?.scrollToEnd({ animated: false });
     }, delay);
   };
 
-  // Scroll to bottom when keyboard shows/hides (gives layout time to settle)
+  // Scroll to bottom after keyboard settles (snap, no animation)
   const [kbVisible, setKbVisible] = useState(false);
   useEffect(() => {
-    const onShow = Keyboard.addListener('keyboardDidShow', () => { setKbVisible(true); scheduleScroll(200); });
-    const onHide = Keyboard.addListener('keyboardDidHide', () => { setKbVisible(false); scheduleScroll(150); });
+    const onShow = Keyboard.addListener('keyboardDidShow', () => { setKbVisible(true); scheduleScroll(0); });
+    const onHide = Keyboard.addListener('keyboardDidHide', () => { setKbVisible(false); scheduleScroll(0); });
     return () => { onShow.remove(); onHide.remove(); };
   }, []);
 
@@ -191,7 +191,7 @@ export default function ChatFlow({
     }
 
     if (['text', 'email', 'secure', 'location', 'date', 'time'].includes(s.inputType)) {
-      const t = setTimeout(() => inputRef.current?.focus(), 120);
+      const t = setTimeout(() => inputRef.current?.focus(), 30);
       return () => clearTimeout(t);
     }
   }, [step]);
@@ -486,7 +486,7 @@ export default function ChatFlow({
         ref={scrollRef}
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
-        onContentSizeChange={() => scheduleScroll(100)}
+        onContentSizeChange={() => scheduleScroll(50)}
       >
         {/* Completed Q&A pairs */}
         {steps.slice(0, step).map((s, i) => {
