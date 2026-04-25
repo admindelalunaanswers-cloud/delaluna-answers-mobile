@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
@@ -6,7 +6,6 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HeaderNav from '@/src/components/shared/header-nav';
-import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
 import { ThemedView } from '@/src/components/themed-view';
 import { moderateScale, scale as staticScale, verticalScale } from '@/src/utils/responsive';
 import { C, R, S } from '@/src/constants/theme';
@@ -108,6 +107,7 @@ export default function TransitsScreen() {
   const {
     transitReading,
     transitReadingGenerating,
+    chartDetails,
     loading,
   } = useHoroscope();
 
@@ -117,6 +117,41 @@ export default function TransitsScreen() {
   const insets = useSafeAreaInsets();
   const { scale } = useResponsive();
   const headerHeight = insets.top + scale(NAV_BAR_HEIGHT);
+
+  // Free users get only the 3 houses containing their Big 3 (Sun, Moon, Rising).
+  // Rising = Ascendant, which is by definition the 1st house cusp → house 1.
+  const unlockedHouses = useMemo(() => {
+    const set = new Set<string>();
+    set.add('1');
+    if (!chartDetails) return set;
+    const sunHouse = chartDetails.planets.find(p => p.name === 'Sun')?.house;
+    const moonHouse = chartDetails.planets.find(p => p.name === 'Moon')?.house;
+    if (sunHouse) set.add(String(sunHouse));
+    if (moonHouse) set.add(String(moonHouse));
+    return set;
+  }, [chartDetails]);
+
+  // Render all 12 houses in order, merging in AI-generated data when present.
+  // Some model responses omit a house — fall back to a placeholder so the card
+  // (and its lock state) always renders.
+  const orderedHouses = useMemo<TransitHouseReading[]>(() => {
+    const byNumber = new Map<string, TransitHouseReading>();
+    transitReading?.houses?.forEach((h) => {
+      if (h?.house != null) byNumber.set(String(h.house), h);
+    });
+    return Array.from({ length: 12 }, (_, i) => {
+      const num = String(i + 1);
+      return (
+        byNumber.get(num) ?? {
+          house: num,
+          interpretation: '',
+          natalDegree: '',
+          natalSign: '',
+          transits: [],
+        }
+      );
+    });
+  }, [transitReading]);
 
   const handleUnlock = () => {
     router.push('/(settings)/paywall');
@@ -133,39 +168,31 @@ export default function TransitsScreen() {
       {loading ? (
         <LoadingScreen />
       ) : (
-        <PaygateOverlay
-          locked={!isPremium}
-          style={{ flex: 1 }}
-          unlockTitle="Unlock Transits"
-          unlockMessage="Subscribe to see how current planetary transits are affecting every area of your life."
-          onUnlock={handleUnlock}
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingTop: scale(12), paddingBottom: insets.bottom + scale(20) },
+          ]}
+          showsVerticalScrollIndicator={false}
         >
-          <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={[
-              styles.scrollContent,
-              { paddingTop: scale(12), paddingBottom: insets.bottom + scale(20) },
-            ]}
-            showsVerticalScrollIndicator={false}
-          >
-            {transitReadingGenerating && !transitReading && (
-              <View style={styles.generatingRow}>
-                <ActivityIndicator size="small" color={C.purple} />
-                <Text style={styles.generatingText}>Generating house readings...</Text>
-              </View>
-            )}
+          {transitReadingGenerating && !transitReading && (
+            <View style={styles.generatingRow}>
+              <ActivityIndicator size="small" color={C.purple} />
+              <Text style={styles.generatingText}>Generating house readings...</Text>
+            </View>
+          )}
 
-            {transitReading?.houses?.map((house) => (
-              <HouseCard
-                key={house.house}
-                house={house}
-                isLocked={false}
-                retrogradesActive={transitReading.retrogradesActive}
-                onLockedPress={handleUnlock}
-              />
-            ))}
-          </ScrollView>
-        </PaygateOverlay>
+          {transitReading && orderedHouses.map((house) => (
+            <HouseCard
+              key={house.house}
+              house={house}
+              isLocked={!isPremium && !unlockedHouses.has(house.house)}
+              retrogradesActive={transitReading.retrogradesActive}
+              onLockedPress={handleUnlock}
+            />
+          ))}
+        </ScrollView>
       )}
     </ThemedView>
   );
