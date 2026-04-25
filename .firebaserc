@@ -1,0 +1,20 @@
+{
+  "projects": {
+    "default": "delaluna-answers"
+  },
+  "targets": {},
+  "etags": {
+    "delaluna-answers": {
+      "extensionInstances": {
+        "delete-user-data": "0ad616e4c78ecc65cba5cf53f46e2eab78350b0ff4ac54ef3e33974dcee8c5e7",
+        "firestore-genai-chatbot": "ffe473bab2070b3635b0b42d2f4eeb435a47124ad3d875741d2cabc7b342351f",
+        "firestore-genai-chatbot-1rrn": "9e476f949033e20375c55add0b2c3d0b8057555d03a918e7655abdf67fdeb70e",
+        "firestore-genai-chatbot-update-5i5h": "060d624644a84ba963f9302ae56a99092bd98749fc8386b774f95b0dacce157f",
+        "firestore-natal-chart-chatbot-6ppy": "ef74b49c6fd2dd47ad8775370471d321394734cf93e0ce2d03222531ebd1ab15",
+        "firestore-revenuecat-purchases": "bd5f0d087b64271b26fc9df21e55c5192b60505e643e1bbbafe1ca4854333eff",
+        "firestore-transits-chatbot-cgl7": "76100ccb8d4a97e2fcc42d65e3a547a2e8ef16d44cae379159f93b2a38203d46",
+        "horoscope-chatbot-b6wc": "63991229a426e8b9c8f0f792bef4e1abd7a6620799e0fe69775ffa58494f156f"
+      }
+    }
+  }
+}

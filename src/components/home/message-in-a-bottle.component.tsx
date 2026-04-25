@@ -4,15 +4,12 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Platform,
-  ToastAndroid,
-  Animated,
   Text,
   Alert,
-  Dimensions,
+  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { scale, verticalScale } from "@/src/utils/responsive";
+import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { MESSAGE_IN_A_BOTTLE_RESPONSES } from "@/src/constants/strings";
 
 interface MessageInABottleComponentProps {
@@ -105,8 +102,8 @@ export default function MessageInABottleComponent({
   onSend,
 }: MessageInABottleComponentProps) {
   const [message, setMessage] = useState("");
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [fadeAnim] = useState(new Animated.Value(0));
+  const [overlayVisible, setOverlayVisible] = useState(false);
+  const [overlayMessage, setOverlayMessage] = useState<string | null>(null);
 
   const handleSend = () => {
     if (!message.trim()) return;
@@ -145,39 +142,19 @@ export default function MessageInABottleComponent({
 
       Alert.alert(alertTitle, alertMsg, [{ text: "OK" }]);
       setMessage("");
-      return; // DO NOT SEND — NO TOAST
+      return;
     }
 
     // -----------------------
-    // SAFE → SEND + TOAST
+    // SAFE → SEND + OVERLAY
     // -----------------------
     const msg = message.trim();
     setMessage("");
     onSend?.(msg);
 
-    // Pick a random approved message
     const randomIndex = Math.floor(Math.random() * MESSAGE_IN_A_BOTTLE_RESPONSES.length);
-    const approvedMessage = MESSAGE_IN_A_BOTTLE_RESPONSES[randomIndex];
-
-    if (Platform.OS === "android") {
-      ToastAndroid.show(approvedMessage, ToastAndroid.LONG);
-    } else {
-      setToastMessage(approvedMessage);
-
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 250,
-        useNativeDriver: true,
-      }).start();
-
-      setTimeout(() => {
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 500,
-          useNativeDriver: true,
-        }).start(() => setToastMessage(null));
-      }, 5000);
-    }
+    setOverlayMessage(MESSAGE_IN_A_BOTTLE_RESPONSES[randomIndex]);
+    setOverlayVisible(true);
   };
 
   return (
@@ -199,11 +176,24 @@ export default function MessageInABottleComponent({
         </TouchableOpacity>
       </View>
 
-      {Platform.OS === "ios" && toastMessage && (
-        <Animated.View style={[styles.toast, { opacity: fadeAnim }]}>
-          <Text style={styles.toastText}>{toastMessage}</Text>
-        </Animated.View>
-      )}
+      <Modal
+        visible={overlayVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setOverlayVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.overlay}
+          activeOpacity={1}
+          onPress={() => setOverlayVisible(false)}
+        >
+          <View style={styles.card}>
+            <Text style={styles.messageText}>{overlayMessage}</Text>
+            <Text style={styles.dismissHint}>tap anywhere to close</Text>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </>
   );
 }
@@ -235,22 +225,35 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  toast: {
-    position: "absolute",
-    bottom: verticalScale(80), // Fixed to bottom of screen
-    left: scale(20),
-    right: scale(20),
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(8, 2, 18, 0.88)",
+    justifyContent: "center",
     alignItems: "center",
-    zIndex: 9999,
-    backgroundColor: "rgba(0,0,0,0.85)",
-    paddingVertical: verticalScale(12),
-    paddingHorizontal: scale(20),
-    borderRadius: scale(12),
-    alignSelf: "center",
+    paddingHorizontal: scale(36),
   },
-
-  toastText: {
-    color: "#fff",
-    fontSize: scale(14),
+  card: {
+    backgroundColor: "rgba(30, 10, 50, 0.96)",
+    borderWidth: 1,
+    borderColor: "rgba(142, 68, 173, 0.5)",
+    borderRadius: scale(20),
+    paddingVertical: verticalScale(40),
+    paddingHorizontal: scale(28),
+    alignItems: "center",
+    width: "100%",
+    gap: verticalScale(28),
+  },
+  messageText: {
+    color: "#E8D5FF",
+    fontSize: moderateScale(20),
+    textAlign: "center",
+    lineHeight: moderateScale(30),
+    fontStyle: "italic",
+  },
+  dismissHint: {
+    color: "rgba(180, 150, 220, 0.4)",
+    fontSize: moderateScale(11),
+    textAlign: "center",
+    letterSpacing: 0.5,
   },
 });
