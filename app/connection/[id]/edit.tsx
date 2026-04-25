@@ -893,18 +893,7 @@ export default function EditConnectionScreen() {
 
   const relationshipOptions = ["It's Consistent", "It's Complicated", "I Dunno"];
 
-  if (initialLoading) {
-    return (
-      <ThemedView style={{ flex: 1 }}>
-        <HeaderNav title="Edit Connection" rightLabel="Cancel" onRightPress={handleCancel} />
-        <ThemedView style={[styles.centered, { marginTop: headerHeight }]}>
-          <ActivityIndicator size="large" color="#C77DFF" />
-        </ThemedView>
-      </ThemedView>
-    );
-  }
-
-  if (saving) {
+  if (initialLoading || saving) {
     return <LoadingScreen progress={0} message={loadingMessage} />;
   }
 
