@@ -110,7 +110,6 @@ export interface SerializedMoon {
   degree:       number;
   minutes:      number;
   phase:        string;
-  phaseEmoji:   string;
   illumination: number;
   sunMoonAngle: number;
   isRetrograde: boolean;
