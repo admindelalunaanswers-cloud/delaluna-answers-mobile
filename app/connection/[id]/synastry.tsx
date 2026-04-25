@@ -25,6 +25,7 @@ import { selectTopAspects } from "@/src/utils/synastry";
 import type { SynastryReadingResult } from "@/src/types/synastry-reading.types";
 import { C } from "@/src/constants/theme";
 import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
+import { ThemedView } from "@/src/components/themed-view";
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -242,7 +243,7 @@ export default function SynastryAnalysisScreen() {
           </View>
 
           <View style={styles.aspectsSection}>
-            <Text style={styles.aspectsTitle}>KEY ASPECTS</Text>
+            <Text style={styles.aspectsTitle}>KEY ASPECT</Text>
             <View style={styles.aspectsList}>
               {topAspects.length === 0 ? (
                 <Text style={styles.aspectsEmpty}>No major aspects found.</Text>
@@ -251,6 +252,8 @@ export default function SynastryAnalysisScreen() {
               )}
             </View>
           </View>
+
+          
 
           <ReadingSection
             label="LOVE LANGUAGE"
@@ -453,4 +456,10 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(12),
     fontStyle: "italic",
   },
+  aspectTable:{
+
+  },
+  aspectTableRow: {
+
+  }
 });
