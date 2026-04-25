@@ -75,11 +75,13 @@ function renderPrompt(vars: {
   natalChart: string;
   currentTransits: string;
   date: string;
+  pronouns: string;
 }): string {
   return TRANSITS_PROMPT_TEMPLATE
     .replace('{{natalChart}}', vars.natalChart)
     .replace('{{currentTransits}}', vars.currentTransits)
-    .replace('{{date}}', vars.date);
+    .replace('{{date}}', vars.date)
+    .replace(/\{\{pronouns\}\}/g, vars.pronouns);
 }
 
 function parseResult(data: Record<string, any>): TransitReadingResult | null {
@@ -87,7 +89,18 @@ function parseResult(data: Record<string, any>): TransitReadingResult | null {
   if (!raw) return null;
   try {
     const cleaned = typeof raw === 'string'
-      ? raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
+      ? raw
+          .replace(/^```(?:json)?\s*/i, '')
+          .replace(/```\s*$/, '')
+          // Repair: occasionally the model omits `},{` between consecutive
+          // house objects, leaving `"interpretation": "..." , "house": "..."`
+          // with duplicate keys — JSON.parse keeps the last, dropping the
+          // earlier house. Insert the missing object boundary.
+          .replace(
+            /("interpretation"\s*:\s*"(?:[^"\\]|\\.)*")\s*,\s*("house"\s*:)/g,
+            '$1},{$2',
+          )
+          .trim()
       : raw;
     return typeof cleaned === 'string'
       ? JSON.parse(cleaned)
@@ -129,12 +142,13 @@ export async function requestTransitReading(
   dateId: string,
   chart: NatalChartDetailsDoc,
   transits: TransitData,
+  pronouns = 'they/them',
 ): Promise<void> {
   const natalChart = buildNatalChartSummary(chart);
   const currentTransits = buildTransitsSummary(transits);
   const date = formatDateLabel(dateId);
 
-  const prompt = renderPrompt({ natalChart, currentTransits, date });
+  const prompt = renderPrompt({ natalChart, currentTransits, date, pronouns });
 
   await setDoc(doc(db, 'users', uid, 'transits', dateId), {
     prompt,

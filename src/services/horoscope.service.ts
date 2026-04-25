@@ -7,6 +7,11 @@ import { calculateTransits } from '@/src/services/astroEngine';
 import { getTarotCardDraw } from '@/src/services/tarot-card.service';
 import { HOROSCOPE_PROMPT_TEMPLATE } from '@/src/prompts/horoscope-prompt';
 
+const RETROGRADE_PLANETS = new Set([
+  'Mercury', 'Venus', 'Mars',
+  'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto',
+]);
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Returns today's date as YYYY-MM-DD (local time). */
@@ -87,13 +92,15 @@ function renderPrompt(vars: {
   date: string;
   todaysMoon: string;
   retrogradeplanets: string;
+  pronouns: string;
 }): string {
   return HOROSCOPE_PROMPT_TEMPLATE
     .replace('{{tarotKeywords}}', vars.tarotKeywords)
     .replace('{{natalChart}}', vars.natalChart)
     .replace('{{date}}', vars.date)
     .replace('{{todaysMoon}}', vars.todaysMoon)
-    .replace('{{retrogradeplanets}}', vars.retrogradeplanets);
+    .replace('{{retrogradeplanets}}', vars.retrogradeplanets)
+    .replace(/\{\{pronouns\}\}/g, vars.pronouns);
 }
 
 function parseResult(data: Record<string, any>): HoroscopeResult | null {
@@ -143,6 +150,7 @@ async function writeHoroscopeDoc(
   moon: MoonSummary,
   retrogrades: string[],
   tarotKeywords: string,
+  pronouns = 'they/them',
 ): Promise<void> {
   const date = formatDateLabel(dateId);
   const todaysMoonStr = formatMoonSummary(moon);
@@ -154,6 +162,7 @@ async function writeHoroscopeDoc(
     date,
     todaysMoon: todaysMoonStr,
     retrogradeplanets: retrogradeStr,
+    pronouns,
   });
 
   await setDoc(doc(db, 'users', uid, 'horoscope', dateId), {
@@ -168,11 +177,9 @@ async function writeHoroscopeDoc(
 }
 
 /**
- * Writes trigger documents for yesterday, today, and tomorrow.
- * Today uses the already-computed moon/retrogrades passed in by the caller.
- * Yesterday and tomorrow call calculateTransits for their respective dates
- * (lat/lon default to 0 — moon sign and retrograde status are ecliptic values
- * unaffected by geographic location).
+ * Writes the trigger document for today's horoscope only.
+ * Call requestSurroundingHoroscopes separately (after transits + breakdown)
+ * so the extension prioritises today's reading.
  */
 export async function requestHoroscope(
   uid: string,
@@ -180,6 +187,7 @@ export async function requestHoroscope(
   chart: NatalChartDetailsDoc,
   todaysMoon: MoonSummary,
   retrogradeplanets: string[] = [],
+  pronouns = 'they/them',
   options?: { skipTarotDraw?: boolean },
 ): Promise<void> {
   const natalChart = buildNatalChartSummary(chart);
@@ -189,35 +197,67 @@ export async function requestHoroscope(
     ? null
     : await getTarotCardDraw(uid, 3).catch(() => null);
 
-  // Today is what the user sees first — await it.
   await writeHoroscopeDoc(
     uid, dateId, natalChart,
     todaysMoon,
     retrogradeplanets,
     tarotDraw?.today.keywordString ?? '',
+    pronouns,
   );
+}
 
-  // Yesterday and tomorrow are prefetched in the background.
+/**
+ * Writes trigger documents for yesterday and tomorrow in the background.
+ * Call this after today's horoscope, transit reading, and breakdown have been requested.
+ */
+export async function requestSurroundingHoroscopes(
+  uid: string,
+  dateId: string,
+  chart: NatalChartDetailsDoc,
+  pronouns = 'they/them',
+): Promise<void> {
+  const natalChart  = buildNatalChartSummary(chart);
   const yesterdayId = offsetDateId(dateId, -1);
   const tomorrowId  = offsetDateId(dateId, +1);
 
-  calculateTransits(dateIdToDate(yesterdayId))
-    .then(t => writeHoroscopeDoc(
-      uid, yesterdayId, natalChart,
-      t.moon,
-      t.planets.filter(p => p.isRetrograde).map(p => p.name),
-      tarotDraw?.yesterday.keywordString ?? '',
-    ))
-    .catch(console.error);
+  // Check existence before writing — avoids overwriting docs that already have
+  // a completed response (or are pending), which would strip the response and
+  // leave the doc stuck with only a prompt field.
+  const [yesterdaySnap, tomorrowSnap] = await Promise.all([
+    getDoc(doc(db, 'users', uid, 'horoscope', yesterdayId)),
+    getDoc(doc(db, 'users', uid, 'horoscope', tomorrowId)),
+  ]);
 
-  calculateTransits(dateIdToDate(tomorrowId))
-    .then(t => writeHoroscopeDoc(
-      uid, tomorrowId, natalChart,
-      t.moon,
-      t.planets.filter(p => p.isRetrograde).map(p => p.name),
-      tarotDraw?.tomorrow.keywordString ?? '',
-    ))
-    .catch(console.error);
+  const needsYesterday = !yesterdaySnap.exists();
+  const needsTomorrow  = !tomorrowSnap.exists();
+
+  if (!needsYesterday && !needsTomorrow) return;
+
+  const tarotDraw = await getTarotCardDraw(uid, 3).catch(() => null);
+
+  if (needsYesterday) {
+    calculateTransits(dateIdToDate(yesterdayId))
+      .then(t => writeHoroscopeDoc(
+        uid, yesterdayId, natalChart,
+        t.moon,
+        t.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name),
+        tarotDraw?.yesterday.keywordString ?? '',
+        pronouns,
+      ))
+      .catch(console.error);
+  }
+
+  if (needsTomorrow) {
+    calculateTransits(dateIdToDate(tomorrowId))
+      .then(t => writeHoroscopeDoc(
+        uid, tomorrowId, natalChart,
+        t.moon,
+        t.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name),
+        tarotDraw?.tomorrow.keywordString ?? '',
+        pronouns,
+      ))
+      .catch(console.error);
+  }
 }
 
 /**
@@ -234,6 +274,7 @@ export async function requestHoroscope(
 export async function rolloverHoroscope(
   uid: string,
   chart: NatalChartDetailsDoc,
+  pronouns = 'they/them',
 ): Promise<void> {
   const dateId     = getTodayDateId();
   const twoDaysAgo = offsetDateId(dateId, -2);
@@ -261,11 +302,12 @@ export async function rolloverHoroscope(
   if (todayMissing) {
     try {
       const t = await calculateTransits(new Date());
-      const retrogrades = t.planets.filter(p => p.isRetrograde).map(p => p.name);
+      const retrogrades = t.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name);
       await writeHoroscopeDoc(
         uid, dateId, natalChart,
         t.moon, retrogrades,
         tarotDraw?.today.keywordString ?? '',
+        pronouns,
       );
     } catch (e) {
       console.error('rolloverHoroscope: failed to generate today', e);
@@ -278,8 +320,9 @@ export async function rolloverHoroscope(
       .then(t => writeHoroscopeDoc(
         uid, tomorrowId, natalChart,
         t.moon,
-        t.planets.filter(p => p.isRetrograde).map(p => p.name),
+        t.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name),
         tarotDraw?.tomorrow.keywordString ?? '',
+        pronouns,
       ))
       .catch(console.error);
   }

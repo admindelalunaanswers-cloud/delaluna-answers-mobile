@@ -18,7 +18,7 @@
       "env": {
         "APP_ENV": "development",
         "EAS_UPDATE_CHANNEL": "development-device",
-        "USE_EMULATOR": "true"
+        "USE_EMULATOR": "false"
       }
     },
     "preview-device": {
@@ -34,7 +34,8 @@
       "environment": "preview",
       "env": {
         "APP_ENV": "preview-device",
-        "EAS_UPDATE_CHANNEL": "preview-device"
+        "EAS_UPDATE_CHANNEL": "preview-device",
+        "USE_EMULATOR": "false"
       }
     },
     "preview": {
@@ -50,16 +51,14 @@
       "environment": "preview",
       "env": {
         "APP_ENV": "preview",
-        "EAS_UPDATE_CHANNEL": "preview-device"
+        "EAS_UPDATE_CHANNEL": "preview-device",
+        "USE_EMULATOR": "false"
       }
     },
     "production": {
       "developmentClient": false,
       "distribution": "store",
       "autoIncrement": true,
-      "android": {
-        "buildType": "app-bundle"
-      },
       "ios": {
         "simulator": false
       },
@@ -69,6 +68,14 @@
         "APP_ENV": "production",
         "EAS_UPDATE_CHANNEL": "production"
       }
+    },
+    "development-simulator": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      },
+      "environment": "development"
     }
   },
   "submit": {

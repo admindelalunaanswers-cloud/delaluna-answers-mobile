@@ -49,12 +49,14 @@
     "extensions": {}
   },
   "extensions": {
+    "delete-user-data": "firebase/delete-user-data@0.1.27",
     "firestore-genai-chatbot": "googlecloud/firestore-genai-chatbot@0.0.19",
     "firestore-genai-chatbot-1rrn": "googlecloud/firestore-genai-chatbot@0.0.19",
-    "firestore-multimodal-genai": "googlecloud/firestore-multimodal-genai@1.0.5",
+    "firestore-genai-chatbot-update-5i5h": "googlecloud/firestore-genai-chatbot@0.0.19",
+    "firestore-natal-chart-chatbot-6ppy": "googlecloud/firestore-genai-chatbot@0.0.19",
+    "firestore-revenuecat-purchases": "revenuecat/firestore-revenuecat-purchases@0.1.18",
     "firestore-transits-chatbot-cgl7": "googlecloud/firestore-genai-chatbot@0.0.19",
-    "horoscope-chatbot-b6wc": "googlecloud/firestore-genai-chatbot@0.0.19",
-    "firestore-natal-chart-chatbot-6ppy": "googlecloud/firestore-genai-chatbot@0.0.19"
+    "horoscope-chatbot-b6wc": "googlecloud/firestore-genai-chatbot@0.0.19"
   },
   "firestore": {
     "database": "(default)",

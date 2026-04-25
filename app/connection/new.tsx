@@ -1,39 +1,49 @@
 import React, { useContext, useEffect, useRef, useState } from "react";
 
 import {
-  StyleSheet,
+  ActivityIndicator,
+  Alert,
   Animated,
   Easing,
   FlatList,
-  TouchableOpacity,
+  Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
-  Image,
-  Alert,
-  TextInput,
+  StyleSheet,
   Switch,
-  Keyboard,
+  TextInput,
+  TouchableOpacity,
 } from "react-native";
 
 import { router } from "expo-router";
 
+import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { httpsCallable } from "firebase/functions";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import HeaderNav from "@/src/components/shared/header-nav";
-import { ThemedView } from "@/src/components/themed-view";
-import HomeSignsDisplay from "@/src/components/shared/signs-display.component";
-import { GlassButton } from "@/src/assets/buttons/glass-button";
-import { ThemeContext } from "@/src/context/theme-context";
-import { calculateNatalChart } from "@/src/services/astroEngine";
 import { functions } from "@/firebaseConfig";
+import { GlassButton } from "@/src/assets/buttons/glass-button";
+import HeaderNav from "@/src/components/shared/header-nav";
+import HomeSignsDisplay from "@/src/components/shared/signs-display.component";
+import { ThemedView } from "@/src/components/themed-view";
 import { useHoroscope } from "@/src/context/horoscope-context";
+import { ThemeContext } from "@/src/context/theme-context";
 import { useUser } from "@/src/context/user-context";
-import { verticalScale, scale, moderateScale } from "@/src/utils/responsive";
+import { calculateNatalChart, NatalChart } from "@/src/services/astroEngine";
+import {
+  detectTimezoneOffset,
+  formatPlace,
+  NominatimResult,
+  searchNominatim,
+} from "@/src/utils/location";
+import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 
-import LoadingScreen from "../(util)/loading-screen";
 import { ThemedText } from "@/src/components/themed-text";
 import { C } from "@/src/constants/theme";
+import { buildCompatibilityPrompt } from "@/src/prompts/compatibility-prompt";
+import LoadingScreen from "../(util)/loading-screen";
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -48,7 +58,9 @@ type PersonBirthData = {
   "Time of Birth": string;
   birthLat?: number;
   birthLon?: number;
-  birthTimezone?: string; // IANA timezone string, populated by PlaceOfBirth field
+  birthTimezone?: number;
+  isBirthTimeUnknown?: boolean;
+  isPlaceOfBirthUnknown?: boolean;
 };
 
 type PersonBirthUpdate = Partial<PersonBirthData>;
@@ -65,6 +77,7 @@ type FieldConfig = {
   returnKeyType?: "next" | "done";
   blurOnSubmit?: boolean;
   onSubmitEditing?: () => void;
+  onFocus?: () => void;
 };
 
 // ─── Local utilities ──────────────────────────────────────────────────────────
@@ -73,32 +86,49 @@ function toTitleCase(str: string): string {
   return str.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
 }
 
-// ─── Local services ───────────────────────────────────────────────────────────
 
-async function getAstroSigns(params: {
-  day: number; month: number; year: number;
-  hour: number; min: number; lat: number; lon: number; tzone: number;
-}) {
-  const chart = await calculateNatalChart({
-    year: params.year, month: params.month, day: params.day,
-    hour: params.hour, minute: params.min,
-    lat: params.lat, lon: params.lon, timezone: params.tzone,
-  });
-  return {
-    sunSign: chart.planets.find((p) => p.name === "Sun")?.sign ?? "",
-    moonSign: chart.moon.sign,
-    risingSign: chart.ascendant.sign,
-  };
-}
+// ─── Shared field styles ──────────────────────────────────────────────────────
 
-async function createConnection(payload: {
-  userId: string; isMe: boolean; relationshipType: string;
-  firstPerson: any; secondPerson: any;
-}): Promise<{ connectionId: string }> {
-  const fn = httpsCallable(functions, "createConnection");
-  const result = await fn(payload);
-  return result.data as { connectionId: string };
-}
+const fieldStyles = StyleSheet.create({
+  label: {
+    color: "rgba(255,255,255,0.6)",
+    fontSize: moderateScale(11),
+    marginBottom: 4,
+  },
+  inputWithIcon: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.3)",
+  },
+  textInput: {
+    color: "#FFFFFF",
+    paddingVertical: verticalScale(6),
+    fontSize: moderateScale(15),
+    flex: 1,
+  },
+  iconBtn: {
+    paddingLeft: scale(8),
+    paddingBottom: verticalScale(2),
+  },
+  locationDrop: {
+    backgroundColor: "rgba(20,20,30,0.95)",
+    borderRadius: scale(8),
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.15)",
+    marginTop: verticalScale(4),
+  },
+  locationRow: {
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(10),
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.08)",
+  },
+  locationRowText: {
+    color: "#FFFFFF",
+    fontSize: moderateScale(13),
+  },
+});
 
 // ─── Stub components (TODO: extract into dedicated files) ─────────────────────
 
@@ -107,8 +137,8 @@ function DelalunaToggle({
 }: { label: string; value: boolean; onToggle: (v: boolean) => void }) {
   return (
     <ThemedView style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-      <ThemedText style={{ color: "#FFFFFF", fontSize: moderateScale(14) }}>{label}</ThemedText>
       <Switch value={value} onValueChange={onToggle} />
+      <ThemedText style={{ color: "#FFFFFF", fontSize: moderateScale(14) }}>{label}</ThemedText>
     </ThemedView>
   );
 }
@@ -139,6 +169,7 @@ function DelalunaInputRow({
             returnKeyType={field.returnKeyType}
             submitBehavior={field.blurOnSubmit === false ? "newline" : "blurAndSubmit"}
             onSubmitEditing={field.onSubmitEditing}
+            onFocus={field.onFocus}
             onChangeText={(text) => onChange({ [field.label]: text } as PersonBirthUpdate)}
           />
         </ThemedView>
@@ -147,69 +178,404 @@ function DelalunaInputRow({
   );
 }
 
+const PRONOUN_OPTIONS = ["She/Her", "He/Him", "They/Them", "Non Binary"];
+
+function PronounsField({
+  value, onChange,
+}: { value: string; onChange: (vals: PersonBirthUpdate) => void }) {
+  return (
+    <ThemedView style={{ marginBottom: verticalScale(8) }}>
+      <ThemedText style={fieldStyles.label}>PRONOUNS</ThemedText>
+      <ThemedView style={{ flexDirection: "row", flexWrap: "wrap", gap: scale(8), marginTop: verticalScale(2) }}>
+        {PRONOUN_OPTIONS.map((option) => (
+          <TouchableOpacity
+            key={option}
+            style={[styles.pronounBtn, value === option && styles.pronounBtnSelected]}
+            onPress={() => onChange({ Pronouns: option })}
+            activeOpacity={0.8}
+          >
+            <ThemedText style={[styles.pronounTxt, value === option && styles.pronounTxtSelected]}>
+              {option}
+            </ThemedText>
+          </TouchableOpacity>
+        ))}
+      </ThemedView>
+    </ThemedView>
+  );
+}
+
+function ConnectionsBirthdayField({
+  value, onChange,
+}: { value: string; onChange: (vals: PersonBirthUpdate) => void }) {
+  const [textValue, setTextValue] = useState(value);
+  const [dateValue, setDateValue] = useState(new Date());
+  const [pickerVisible, setPickerVisible] = useState(false);
+
+  const onDateTextChange = (text: string) => {
+    if (text.length < textValue.length) {
+      setTextValue(text);
+      onChange({ Birthday: text });
+      return;
+    }
+    const digits = text.replace(/\D/g, "").slice(0, 8);
+    if (!digits) { setTextValue(""); onChange({ Birthday: "" }); return; }
+    let formatted = digits.slice(0, 2);
+    if (digits.length >= 2) formatted += "/";
+    if (digits.length >= 3) formatted += digits.slice(2, 4);
+    if (digits.length >= 4) formatted += "/";
+    if (digits.length >= 5) formatted += digits.slice(4, 8);
+    setTextValue(formatted);
+    onChange({ Birthday: formatted });
+    if (digits.length === 8) {
+      const mo = parseInt(digits.slice(0, 2));
+      const da = parseInt(digits.slice(2, 4));
+      const yr = parseInt(digits.slice(4, 8));
+      const d = new Date(yr, mo - 1, da);
+      if (!isNaN(d.getTime())) setDateValue(d);
+    }
+  };
+
+  return (
+    <ThemedView style={{ marginBottom: verticalScale(8) }}>
+      <ThemedText style={fieldStyles.label}>BIRTHDAY</ThemedText>
+      {Platform.OS === "ios" && pickerVisible ? (
+        <ThemedView style={fieldStyles.inputWithIcon}>
+          <DateTimePicker
+            value={dateValue}
+            mode="date"
+            display="spinner"
+            textColor="#ffffff"
+            themeVariant="dark"
+            style={{ flex: 1 }}
+            onChange={(_, selected) => {
+              if (selected) {
+                setDateValue(selected);
+                const mo = String(selected.getMonth() + 1).padStart(2, "0");
+                const da = String(selected.getDate()).padStart(2, "0");
+                const formatted = `${mo}/${da}/${selected.getFullYear()}`;
+                setTextValue(formatted);
+                onChange({ Birthday: formatted });
+              }
+            }}
+          />
+          <TouchableOpacity
+            style={fieldStyles.iconBtn}
+            onPress={() => setPickerVisible(false)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="keypad-outline" size={moderateScale(22)} color="rgba(111,255,233,0.7)" />
+          </TouchableOpacity>
+        </ThemedView>
+      ) : (
+        <ThemedView style={fieldStyles.inputWithIcon}>
+          <TextInput
+            style={fieldStyles.textInput}
+            value={textValue}
+            onChangeText={onDateTextChange}
+            placeholder="MM/DD/YYYY"
+            placeholderTextColor="rgba(255,255,255,0.4)"
+            keyboardType="numbers-and-punctuation"
+            maxLength={10}
+          />
+          <TouchableOpacity
+            style={fieldStyles.iconBtn}
+            onPress={() => { Keyboard.dismiss(); setPickerVisible(true); }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="calendar-outline" size={moderateScale(22)} color="rgba(255,255,255,0.55)" />
+          </TouchableOpacity>
+        </ThemedView>
+      )}
+      {Platform.OS === "android" && pickerVisible && (
+        <DateTimePicker
+          value={dateValue}
+          mode="date"
+          display="default"
+          onChange={(_, selected) => {
+            setPickerVisible(false);
+            if (selected) {
+              setDateValue(selected);
+              const mo = String(selected.getMonth() + 1).padStart(2, "0");
+              const da = String(selected.getDate()).padStart(2, "0");
+              const formatted = `${mo}/${da}/${selected.getFullYear()}`;
+              setTextValue(formatted);
+              onChange({ Birthday: formatted });
+            }
+          }}
+        />
+      )}
+    </ThemedView>
+  );
+}
+
 const ConnectionsPlaceOfBirthField = React.forwardRef<
   { dismissSuggestions: () => void; focus: () => void },
   {
     value: string;
+    birthday: string;
+    isUnknown?: boolean;
     onChange: (vals: PersonBirthUpdate) => void;
     onRequestDismiss?: () => void;
-    returnKeyType?: "next" | "done";
-    blurOnSubmit?: boolean;
-    onSubmitEditing?: () => void;
   }
->(({ value, onChange, returnKeyType, blurOnSubmit, onSubmitEditing }, ref) => {
+>(({ value, birthday, isUnknown: initialIsUnknown, onChange }, ref) => {
   const inputRef = useRef<TextInput>(null);
+  const [isUnknown, setIsUnknown] = useState(initialIsUnknown ?? false);
+  const [query, setQuery] = useState(value);
+  const [results, setResults] = useState<NominatimResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [tzLoading, setTzLoading] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   React.useImperativeHandle(ref, () => ({
-    dismissSuggestions: () => {},
+    dismissSuggestions: () => setResults([]),
     focus: () => inputRef.current?.focus(),
   }));
+
+  const handleSkip = () => {
+    setIsUnknown(true);
+    setQuery("");
+    setResults([]);
+    onChange({ "Place of Birth": "", birthLat: 0, birthLon: 0, birthTimezone: 0, isPlaceOfBirthUnknown: true });
+  };
+
+  const handleEnterLocation = () => {
+    setIsUnknown(false);
+    onChange({ "Place of Birth": "", birthLat: undefined, birthLon: undefined, birthTimezone: undefined, isPlaceOfBirthUnknown: false });
+  };
+
+  const onLocationChange = (text: string) => {
+    setQuery(text);
+    setResults([]);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    if (text.trim().length >= 2) {
+      searchTimerRef.current = setTimeout(async () => {
+        setSearching(true);
+        try {
+          setResults(await searchNominatim(text));
+        } catch {
+          setResults([]);
+        } finally {
+          setSearching(false);
+        }
+      }, 600);
+    }
+    onChange({ "Place of Birth": text, birthLat: undefined, birthLon: undefined, birthTimezone: undefined });
+  };
+
+  const selectLocation = async (r: NominatimResult) => {
+    const label = formatPlace(r);
+    const lat = parseFloat(r.lat);
+    const lon = parseFloat(r.lon);
+    setResults([]);
+    setQuery(label);
+    setTzLoading(true);
+    let birthDate = new Date();
+    if (birthday) {
+      const parts = birthday.split("/");
+      if (parts.length === 3) {
+        const [mo, da, yr] = parts.map(Number);
+        birthDate = new Date(Date.UTC(yr, mo - 1, da, 12, 0, 0));
+      }
+    }
+    const tz = await detectTimezoneOffset(lat, lon, birthDate);
+    setTzLoading(false);
+    onChange({ "Place of Birth": label, birthLat: lat, birthLon: lon, birthTimezone: tz });
+  };
+
   return (
     <ThemedView style={{ marginBottom: verticalScale(8) }}>
-      <ThemedText style={{ color: "rgba(255,255,255,0.6)", fontSize: moderateScale(11), marginBottom: 4 }}>
-        PLACE OF BIRTH
-      </ThemedText>
-      <TextInput
-        ref={inputRef}
-        style={{
-          color: "#FFFFFF",
-          borderBottomWidth: 1,
-          borderBottomColor: "rgba(255,255,255,0.3)",
-          paddingVertical: verticalScale(6),
-          fontSize: moderateScale(15),
-        }}
-        placeholder="City, Country"
-        placeholderTextColor="rgba(255,255,255,0.4)"
-        value={value}
-        returnKeyType={returnKeyType}
-        submitBehavior={blurOnSubmit === false ? "newline" : "blurAndSubmit"}
-        onSubmitEditing={onSubmitEditing}
-        onChangeText={(text) => onChange({ "Place of Birth": text })}
-      />
+      <ThemedText style={fieldStyles.label}>PLACE OF BIRTH</ThemedText>
+      {isUnknown ? (
+        <>
+          <ThemedText style={styles.unknownText}>I don't know</ThemedText>
+          <TouchableOpacity onPress={handleEnterLocation}>
+            <ThemedText style={styles.unknownLink}>Enter location</ThemedText>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <>
+          <ThemedView style={fieldStyles.inputWithIcon}>
+            <TextInput
+              ref={inputRef}
+              style={fieldStyles.textInput}
+              placeholder="City, State, Country"
+              placeholderTextColor="rgba(255,255,255,0.4)"
+              value={query}
+              autoCapitalize="words"
+              onChangeText={onLocationChange}
+            />
+            {(searching || tzLoading) && (
+              <ActivityIndicator size="small" color="rgba(255,255,255,0.6)" />
+            )}
+          </ThemedView>
+          {results.length > 0 && (
+            <ThemedView style={fieldStyles.locationDrop}>
+              {results.map((r) => (
+                <TouchableOpacity
+                  key={r.place_id}
+                  style={fieldStyles.locationRow}
+                  onPress={() => void selectLocation(r)}
+                  activeOpacity={0.7}
+                >
+                  <ThemedText style={fieldStyles.locationRowText} numberOfLines={2}>
+                    {formatPlace(r)}
+                  </ThemedText>
+                </TouchableOpacity>
+              ))}
+            </ThemedView>
+          )}
+          <TouchableOpacity onPress={handleSkip}>
+            <ThemedText style={styles.skipLink}>I don't know</ThemedText>
+          </TouchableOpacity>
+        </>
+      )}
     </ThemedView>
   );
 });
 
 function ConnectionsTimeOfBirthField({
-  value, onChange,
-}: { value: string; onChange: (vals: PersonBirthUpdate) => void; onRequestDismiss?: () => void }) {
+  value, isUnknown: initialIsUnknown, onChange,
+}: { value: string; isUnknown?: boolean; onChange: (vals: PersonBirthUpdate) => void; onRequestDismiss?: () => void }) {
+  const [textValue, setTextValue] = useState(value);
+  const [dateValue, setDateValue] = useState(new Date());
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [isUnknown, setIsUnknown] = useState(initialIsUnknown ?? false);
+
+  const handleSkip = () => {
+    setIsUnknown(true);
+    setPickerVisible(false);
+    onChange({ "Time of Birth": "12:00", isBirthTimeUnknown: true });
+  };
+
+  const handleEnterTime = () => {
+    setIsUnknown(false);
+    setTextValue("");
+    onChange({ "Time of Birth": "", isBirthTimeUnknown: false });
+  };
+
+  const onTimeTextChange = (text: string) => {
+    if (text.length < textValue.length) {
+      setTextValue(text);
+      onChange({ "Time of Birth": text });
+      return;
+    }
+    if (text.includes(":")) {
+      setTextValue(text);
+      onChange({ "Time of Birth": text });
+      const ampm = text.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+      const hhmm = text.trim().match(/^(\d{1,2}):(\d{2})$/);
+      if (ampm) {
+        let h = parseInt(ampm[1]); const min = parseInt(ampm[2]);
+        const p = ampm[3].toUpperCase();
+        if (p === "PM" && h !== 12) h += 12;
+        if (p === "AM" && h === 12) h = 0;
+        const dt = new Date(); dt.setHours(h, min, 0, 0); setDateValue(dt);
+      } else if (hhmm) {
+        const dt = new Date(); dt.setHours(parseInt(hhmm[1]), parseInt(hhmm[2]), 0, 0); setDateValue(dt);
+      }
+      return;
+    }
+    const digits = text.replace(/\D/g, "");
+    if (!digits) { setTextValue(""); onChange({ "Time of Birth": "" }); return; }
+    let formatted: string;
+    if (digits.length === 1) {
+      formatted = parseInt(digits) >= 2 ? digits + ":" : digits;
+    } else {
+      const twoDigit = parseInt(digits.slice(0, 2));
+      formatted = twoDigit > 12
+        ? digits[0] + ":" + digits.slice(1, 3)
+        : digits.slice(0, 2) + ":" + digits.slice(2, 4);
+    }
+    setTextValue(formatted);
+    onChange({ "Time of Birth": formatted });
+  };
+
   return (
     <ThemedView style={{ marginBottom: verticalScale(8) }}>
-      <ThemedText style={{ color: "rgba(255,255,255,0.6)", fontSize: moderateScale(11), marginBottom: 4 }}>
-        TIME OF BIRTH
-      </ThemedText>
-      <TextInput
-        style={{
-          color: "#FFFFFF",
-          borderBottomWidth: 1,
-          borderBottomColor: "rgba(255,255,255,0.3)",
-          paddingVertical: verticalScale(6),
-          fontSize: moderateScale(15),
-        }}
-        placeholder="HH:MM AM/PM"
-        placeholderTextColor="rgba(255,255,255,0.4)"
-        value={value}
-        onChangeText={(text) => onChange({ "Time of Birth": text })}
-      />
+      <ThemedText style={fieldStyles.label}>TIME OF BIRTH</ThemedText>
+      {isUnknown ? (
+        <>
+          <ThemedText style={styles.unknownText}>I don't know</ThemedText>
+          <TouchableOpacity onPress={handleEnterTime}>
+            <ThemedText style={styles.unknownLink}>Enter time</ThemedText>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <>
+          {Platform.OS === "ios" && pickerVisible ? (
+            <ThemedView style={fieldStyles.inputWithIcon}>
+              <DateTimePicker
+                value={dateValue}
+                mode="time"
+                display="spinner"
+                textColor="#ffffff"
+                themeVariant="dark"
+                style={{ flex: 1 }}
+                onChange={(_, selected) => {
+                  if (selected) {
+                    setDateValue(selected);
+                    const h = selected.getHours();
+                    const min = selected.getMinutes();
+                    const period = h >= 12 ? "PM" : "AM";
+                    const hour12 = h % 12 === 0 ? 12 : h % 12;
+                    const formatted = `${hour12}:${String(min).padStart(2, "0")} ${period}`;
+                    setTextValue(formatted);
+                    onChange({ "Time of Birth": formatted });
+                  }
+                }}
+              />
+              <TouchableOpacity
+                style={fieldStyles.iconBtn}
+                onPress={() => setPickerVisible(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="keypad-outline" size={moderateScale(22)} color="rgba(111,255,233,0.7)" />
+              </TouchableOpacity>
+            </ThemedView>
+          ) : (
+            <ThemedView style={fieldStyles.inputWithIcon}>
+              <TextInput
+                style={fieldStyles.textInput}
+                value={textValue}
+                onChangeText={onTimeTextChange}
+                placeholder="H:MM AM/PM"
+                placeholderTextColor="rgba(255,255,255,0.4)"
+                keyboardType="numbers-and-punctuation"
+              />
+              <TouchableOpacity
+                style={fieldStyles.iconBtn}
+                onPress={() => { Keyboard.dismiss(); setPickerVisible(true); }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="time-outline" size={moderateScale(22)} color="rgba(255,255,255,0.55)" />
+              </TouchableOpacity>
+            </ThemedView>
+          )}
+          {Platform.OS === "android" && pickerVisible && (
+            <DateTimePicker
+              value={dateValue}
+              mode="time"
+              display="default"
+              onChange={(_, selected) => {
+                setPickerVisible(false);
+                if (selected) {
+                  setDateValue(selected);
+                  const h = selected.getHours();
+                  const min = selected.getMinutes();
+                  const period = h >= 12 ? "PM" : "AM";
+                  const hour12 = h % 12 === 0 ? 12 : h % 12;
+                  const formatted = `${hour12}:${String(min).padStart(2, "0")} ${period}`;
+                  setTextValue(formatted);
+                  onChange({ "Time of Birth": formatted });
+                }
+              }}
+            />
+          )}
+          <TouchableOpacity onPress={handleSkip}>
+            <ThemedText style={styles.skipLink}>I don't know</ThemedText>
+          </TouchableOpacity>
+        </>
+      )}
     </ThemedView>
   );
 }
@@ -222,7 +588,7 @@ export default function SingleConnectionCreateScreen() {
   const { chartDetails } = useHoroscope();
   const insets = useSafeAreaInsets();
   const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
-
+  const footHeight = verticalScale(10);
   const [isMe, setIsMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("Calculating cosmic alignment...");
@@ -259,8 +625,8 @@ export default function SingleConnectionCreateScreen() {
   });
 
   const birthFields: FieldConfig[] = [
-    { label: "First Name", type: "text", placeholder: "Enter first name" },
-    { label: "Last Name", type: "text", placeholder: "Enter last name" },
+    { label: "First Name", type: "text" },
+    { label: "Last Name", type: "text" },
     { label: "Pronouns", type: "pronouns", placeholder: "Select Pronouns" },
     { label: "Birthday", type: "date", placeholder: "MM/DD/YYYY" },
     { label: "Place of Birth", type: "location" },
@@ -269,6 +635,7 @@ export default function SingleConnectionCreateScreen() {
 
   type PersonKey = "first" | "second";
 
+  const flatListRef = useRef<FlatList>(null);
   const firstNameRef = useRef<TextInput>(null);
   const firstLastNameRef = useRef<TextInput>(null);
   const firstLocationRef = useRef<{ dismissSuggestions: () => void; focus: () => void }>(null);
@@ -342,7 +709,7 @@ export default function SingleConnectionCreateScreen() {
     { key: "second", title: "Second Individual", toggle: false, fields: birthFields, onChange: setSecondPerson },
   ];
 
-  const relationshipOptions = ["consistent", "it's complicated", "toxic"];
+  const relationshipOptions = ["It's Consistent", "It's Complicated", "I Dunno"];
 
   const isEmpty = (val: any) =>
     val == null || (typeof val === "string" && val.trim().length === 0);
@@ -371,7 +738,11 @@ export default function SingleConnectionCreateScreen() {
     const required: (keyof PersonBirthData)[] = [
       "First Name", "Last Name", "Pronouns", "Birthday", "Place of Birth", "Time of Birth",
     ];
-    const missing = required.filter((f) => isEmpty(person[f]));
+    const missing = required.filter((f) => {
+      if (f === "Time of Birth" && person.isBirthTimeUnknown) return false;
+      if (f === "Place of Birth" && person.isPlaceOfBirthUnknown) return false;
+      return isEmpty(person[f]);
+    });
     if (missing.length > 0) {
       Alert.alert("Missing Information", `${label}: please enter ${missing.join(", ")}.`);
       return false;
@@ -383,6 +754,7 @@ export default function SingleConnectionCreateScreen() {
     dismissAllSuggestions();
     setLoading(true);
 
+    
     try {
       if (!isMe && !validatePerson(firstPerson, "First Person")) { setLoading(false); return; }
       if (!validatePerson(secondPerson, "Second Person")) { setLoading(false); return; }
@@ -394,12 +766,14 @@ export default function SingleConnectionCreateScreen() {
 
       const extractBirthParams = (person: PersonBirthData) => {
         if (!person.Birthday) throw new Error("Birthday is missing");
-        if (!person["Time of Birth"]) throw new Error("Time of Birth is missing");
+        if (!person["Time of Birth"] && !person.isBirthTimeUnknown) throw new Error("Time of Birth is missing");
 
         const { birthLat, birthLon, birthTimezone } = person;
-        if (birthLat == null || birthLon == null) {
-          throw new Error("Place of Birth must include latitude and longitude.");
+        if (!person.isPlaceOfBirthUnknown && (birthLat == null || birthLon == null)) {
+          throw new Error("Please select a location from the search results.");
         }
+        const lat = birthLat ?? 0;
+        const lon = birthLon ?? 0;
 
         const [month, day, year] = person.Birthday.split("/").map(Number);
 
@@ -418,68 +792,86 @@ export default function SingleConnectionCreateScreen() {
           min = Number(parts[1]) || 0;
         }
 
-        // Convert IANA timezone string to numeric UTC offset
-        let tzone = 0;
-        if (birthTimezone) {
-          try {
-            const testDate = new Date(year, month - 1, day, hour, min);
-            const parts = new Intl.DateTimeFormat("en-US", {
-              timeZone: birthTimezone,
-              timeZoneName: "shortOffset",
-            }).formatToParts(testDate);
-            const offsetStr = parts.find((p) => p.type === "timeZoneName")?.value ?? "";
-            const offsetMatch = offsetStr.match(/GMT([+-]\d+(?::\d+)?)/);
-            if (offsetMatch) {
-              const [hh, mm] = offsetMatch[1].split(":").map(Number);
-              tzone = hh + (mm ? (mm / 60) * Math.sign(hh) : 0);
-            }
-          } catch {
-            tzone = 0;
-          }
-        }
+        const tzone = birthTimezone ?? 0;
 
-        return { day, month, year, hour, min, lat: birthLat, lon: birthLon, tzone };
+        return { day, month, year, hour, min, lat, lon, tzone };
       };
 
       let enrichedFirst: any;
+      let userNatalChart: any;
+      let firstChart: NatalChart;
       if (isMe) {
-        const nameParts = (userDoc?.name ?? "").split(" ");
+        const bdayStr = userDoc?.birthday ?? "";
         enrichedFirst = {
-          "First Name": nameParts[0] ?? "",
-          "Last Name": nameParts.slice(1).join(" ") ?? "",
-          Pronouns: "",
-          // TODO: load sun/moon/rising from natalChart/details subcollection
-          "Sun Sign": "", "Moon Sign": "", "Rising Sign": "",
+          "First Name": userDoc?.firstName ?? "",
+          "Last Name": userDoc?.lastName ?? "",
+          Pronouns: userDoc?.pronouns ?? "",
+          "Sun Sign": chartDetails?.planets.find(p => p.name === 'Sun')?.sign ?? '',
+          "Moon Sign": chartDetails?.planets.find(p => p.name === 'Moon')?.sign ?? '',
+          "Rising Sign": chartDetails?.ascendant.sign ?? '',
+          Birthday: bdayStr,
+          birthtime: userDoc?.birthtime ?? "",
+          placeOfBirth: userDoc?.placeOfBirth ?? "",
+          birthLat: userDoc?.birthLat ?? null,
+          birthLon: userDoc?.birthLon ?? null,
+          birthTimezone: userDoc?.birthTimezone ?? null,
+          isBirthTimeUnknown: userDoc?.isBirthTimeUnknown ?? false,
+          isPlaceOfBirthUnknown: userDoc?.isPlaceOfBirthUnknown ?? false,
         };
+        userNatalChart = chartDetails ?? null;
+        console.log("Saving connection with data:", { enrichedFirst, userNatalChart });
       } else {
         const firstBirthParams = extractBirthParams(firstPerson);
-        const firstSigns = await getAstroSigns(firstBirthParams);
+        userNatalChart = await calculateNatalChart({
+          year: firstBirthParams.year, month: firstBirthParams.month, day: firstBirthParams.day,
+          hour: firstBirthParams.hour, minute: firstBirthParams.min,
+          lat: firstBirthParams.lat, lon: firstBirthParams.lon, timezone: firstBirthParams.tzone,
+        });
         enrichedFirst = {
           ...firstPerson,
-          "Sun Sign": firstSigns.sunSign,
-          "Moon Sign": firstSigns.moonSign,
-          "Rising Sign": firstSigns.risingSign,
+          "Sun Sign": userNatalChart?.planets.find((p: any) => p.name === "Sun")?.sign ?? "",
+          "Moon Sign": userNatalChart?.planets.find((p: any) => p.name === "Moon")?.sign ?? "",
+          "Rising Sign": userNatalChart?.ascendant.sign,
           userName: `${firstPerson["First Name"]} ${firstPerson["Last Name"]}`,
         };
+         console.log("Saving New First Person connection with data:", { enrichedFirst, userNatalChart });
       }
 
       const secondBirthParams = extractBirthParams(secondPerson);
-      const secondSigns = await getAstroSigns(secondBirthParams);
+      const secondChart = await calculateNatalChart({
+        year: secondBirthParams.year, month: secondBirthParams.month, day: secondBirthParams.day,
+        hour: secondBirthParams.hour, minute: secondBirthParams.min,
+        lat: secondBirthParams.lat, lon: secondBirthParams.lon, timezone: secondBirthParams.tzone,
+      });
       const enrichedSecond = {
         ...secondPerson,
-        "Sun Sign": secondSigns.sunSign,
-        "Moon Sign": secondSigns.moonSign,
-        "Rising Sign": secondSigns.risingSign,
+        "Sun Sign": secondChart.planets.find((p: any) => p.name === "Sun")?.sign ?? "",
+        "Moon Sign": secondChart.planets.find((p: any) => p.name === "Moon")?.sign ?? "",
+        "Rising Sign": secondChart.ascendant.sign,
       };
+      console.log("Saving New Second Person connection with data:", { enrichedSecond, secondChart });
 
-      const connectionReport = await createConnection({
+      const userPronouns = isMe ? (userDoc?.pronouns ?? "") : firstPerson.Pronouns;
+      const partnerPronouns = secondPerson.Pronouns;
+      const prompt = buildCompatibilityPrompt(
+        JSON.stringify(userNatalChart),
+        JSON.stringify(secondChart),
+        userPronouns,
+        partnerPronouns,
+        relationshipType!,
+      );
+
+      const createConnectionFn = httpsCallable(functions, 'createConnection');
+      const result = await createConnectionFn({
         userId: authUser!.uid,
-        isMe, relationshipType,
+        isMe,
+        relationshipType: relationshipType!,
         firstPerson: enrichedFirst,
         secondPerson: enrichedSecond,
-      });
+        prompt,
+      }) as { data: { connectionId: string } };
 
-      router.replace({ pathname: "/connection/[id]", params: { id: connectionReport.connectionId } });
+      router.replace({ pathname: "/connection/[id]", params: { id: result.data.connectionId } });
       return;
     } catch (err) {
       console.error("Error saving connection:", err);
@@ -491,9 +883,10 @@ export default function SingleConnectionCreateScreen() {
     setLoading(false);
   };
 
-  const nameParts = (userDoc?.name ?? "").split(" ");
-  const userFirstName = nameParts[0] ?? "";
-  const userLastName = nameParts.slice(1).join(" ") ?? "";
+  const userFullName =
+    userDoc?.fullName ||
+    [userDoc?.firstName, userDoc?.lastName].filter(Boolean).join(" ") ||
+    undefined;
 
   if (loading) {
     return <LoadingScreen progress={0} message={loadingMessage} />;
@@ -509,19 +902,21 @@ export default function SingleConnectionCreateScreen() {
       <Animated.View style={[styles.container, { opacity: fade, marginTop: headerHeight }]}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior="padding"
+          keyboardVerticalOffset={insets.bottom + 40}
         >
           <FlatList
+            ref={flatListRef}
             data={sections}
             keyExtractor={(item) => item.key}
-            style={{ backgroundColor: "transparent" }}
-            contentContainerStyle={{ paddingTop: verticalScale(5), paddingBottom: verticalScale(20) }}
+            style={{ backgroundColor: "transparent", flex: 1 }}
+            contentContainerStyle={{ paddingTop: verticalScale(5), paddingBottom: verticalScale(10) }}
             keyboardShouldPersistTaps="handled"
-            renderItem={({ item }) => (
+            renderItem={({ item, index }) => (
               <ThemedView style={styles.section}>
                 <ThemedView style={styles.userRow}>
                   <ThemedText style={styles.titleText}>{item.title}</ThemedText>
-                  {item.toggle && <DelalunaToggle label="Me" value={isMe} onToggle={setIsMe} />}
+                  {item.toggle && <DelalunaToggle label="Use my chart" value={isMe} onToggle={setIsMe} />}
                 </ThemedView>
 
                 <ThemedView style={styles.divider} />
@@ -529,7 +924,7 @@ export default function SingleConnectionCreateScreen() {
                 {item.key === "first" && isMe ? (
                   <ThemedView style={styles.meCard}>
                     <ThemedText style={styles.meName}>
-                      {userFirstName} {userLastName}
+                      {userFullName}
                     </ThemedText>
                     <HomeSignsDisplay
                       sun={chartDetails?.planets.find(p => p.name === 'Sun')?.sign ?? ''}
@@ -541,7 +936,8 @@ export default function SingleConnectionCreateScreen() {
                 ) : (
                   (() => {
                     const personKey = item.key as PersonKey;
-                    return item.fields.map((field) => {
+                    const scrollToSection = () => flatListRef.current?.scrollToIndex({ index, animated: true });
+                    return item.fields.map((field: FieldConfig) => {
                       const value = sanitizeValue(
                         personKey === "first"
                           ? firstPerson[field.label as keyof PersonBirthData]
@@ -557,28 +953,49 @@ export default function SingleConnectionCreateScreen() {
                       const returnKeyType = field.type === "text" ? (nextExists ? "next" : "done") : undefined;
                       const onSubmitEditing = field.type === "text" ? () => handleSubmitEditing(personKey, field.label) : undefined;
 
+                      if (field.label === "Pronouns") {
+                        return (
+                          <PronounsField
+                            key={field.label}
+                            value={personKey === "first" ? firstPerson.Pronouns : secondPerson.Pronouns}
+                            onChange={(vals) => item.onChange((prev: PersonBirthData) => ({ ...prev, ...vals }))}
+                          />
+                        );
+                      }
+
+                      if (field.label === "Birthday") {
+                        return (
+                          <ConnectionsBirthdayField
+                            key={field.label}
+                            value={personKey === "first" ? firstPerson.Birthday : secondPerson.Birthday}
+                            onChange={(vals) => item.onChange((prev: PersonBirthData) => ({ ...prev, ...vals }))}
+                          />
+                        );
+                      }
+
                       if (field.label === "Place of Birth") {
+                        const person = personKey === "first" ? firstPerson : secondPerson;
                         return (
                           <ConnectionsPlaceOfBirthField
                             key={field.label}
-                            value={personKey === "first" ? firstPerson["Place of Birth"] ?? "" : secondPerson["Place of Birth"] ?? ""}
+                            value={person["Place of Birth"] ?? ""}
+                            birthday={person.Birthday}
+                            isUnknown={person.isPlaceOfBirthUnknown}
                             onChange={(vals) => item.onChange((prev: PersonBirthData) => ({ ...prev, ...vals }))}
                             ref={personKey === "first" ? firstLocationRef : secondLocationRef}
                             onRequestDismiss={dismissAllSuggestions}
-                            returnKeyType={returnKeyType}
-                            blurOnSubmit={!nextExists}
-                            onSubmitEditing={() => handleSubmitEditing(personKey, field.label)}
                           />
                         );
                       }
 
                       if (field.label === "Time of Birth") {
+                        const person = personKey === "first" ? firstPerson : secondPerson;
                         return (
                           <ConnectionsTimeOfBirthField
                             key={field.label}
-                            value={personKey === "first" ? firstPerson["Time of Birth"] : secondPerson["Time of Birth"]}
+                            value={person["Time of Birth"]}
+                            isUnknown={person.isBirthTimeUnknown}
                             onChange={(vals) => item.onChange((prev: PersonBirthData) => ({ ...prev, ...vals }))}
-                            onRequestDismiss={dismissAllSuggestions}
                           />
                         );
                       }
@@ -586,7 +1003,7 @@ export default function SingleConnectionCreateScreen() {
                       return (
                         <DelalunaInputRow
                           key={field.label}
-                          fields={[{ ...field, value, inputRef, returnKeyType, blurOnSubmit: field.type === "text" ? false : undefined, onSubmitEditing }]}
+                          fields={[{ ...field, value, inputRef, returnKeyType, blurOnSubmit: field.type === "text" ? false : undefined, onSubmitEditing, onFocus: scrollToSection }]}
                           onChange={(vals) => item.onChange((prev: PersonBirthData) => ({ ...prev, ...vals }))}
                         />
                       );
@@ -599,13 +1016,14 @@ export default function SingleConnectionCreateScreen() {
                     {relationshipOptions.map((option) => {
                       const key = option.toLowerCase();
                       const iconSource =
-                        key === "consistent"
-                          ? require("@/src/assets/connections/satisfied_icon.png")
-                          : key === "it's complicated"
-                            ? require("@/src/assets/connections/neutral_icon.png")
-                            : require("@/src/assets/connections/dissatisfied_icon.png");
-
+                        key.toLowerCase().includes("consistent")
+                          ? require("@/src/assets/connections/consistent.png")
+                          : key.toLowerCase().includes("complicated")
+                            ? require("@/src/assets/connections/complicated.png")
+                            : require("@/src/assets/connections/dunno.png");
+                            
                       return (
+                        
                         <TouchableOpacity
                           key={option}
                           style={[styles.relationshipButton, relationshipType === option && styles.relationshipSelected]}
@@ -618,6 +1036,7 @@ export default function SingleConnectionCreateScreen() {
                             resizeMode="contain"
                           />
                         </TouchableOpacity>
+                        
                       );
                     })}
                   </ThemedView>
@@ -626,7 +1045,7 @@ export default function SingleConnectionCreateScreen() {
             )}
             ListFooterComponent={
               <ThemedView style={styles.footerSections}>
-                <GlassButton title="Thassit" onPress={handleSaveConnection} />
+                <GlassButton title="View Connection" onPress={handleSaveConnection} />
               </ThemedView>
             }
           />
@@ -646,10 +1065,10 @@ const styles = StyleSheet.create({
   section: {
     width: "100%",
     paddingHorizontal: scale(10),
+    paddingTop: verticalScale(15),
     paddingBottom: verticalScale(20),
     marginBottom: verticalScale(10),
     backgroundColor: "transparent",
-    gap: verticalScale(15),
   },
   userRow: {
     flexDirection: "row",
@@ -664,7 +1083,8 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: "rgba(255,255,255,0.15)",
-    marginVertical: verticalScale(6),
+    marginTop: verticalScale(5),
+    marginBottom: verticalScale(16),
   },
   meCard: {
     borderRadius: scale(10),
@@ -682,7 +1102,6 @@ const styles = StyleSheet.create({
   },
   relationshipRow: {
     flexDirection: "row",
-    height: verticalScale(85),
     marginTop: verticalScale(5),
   },
   relationshipButton: {
@@ -693,16 +1112,19 @@ const styles = StyleSheet.create({
     marginHorizontal: scale(5),
     alignItems: "center",
     justifyContent: "center",
+    paddingVertical: verticalScale(2),
   },
   relationshipSelected: {
     backgroundColor: "rgba(142,68,173,0.7)",
     borderColor: "#FFFFFF",
   },
   relationshipIcon: {
-    width: scale(65),
-    height: scale(65),
+    width: scale(75),
+    height: scale(75),
     opacity: 0.8,
     tintColor: "rgba(255,255,255,0.85)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   relationshipIconSelected: {
     opacity: 1,
@@ -711,6 +1133,47 @@ const styles = StyleSheet.create({
   footerSections: {
     paddingBottom: verticalScale(35),
     alignItems: "center",
-    gap: verticalScale(15),
+    gap: verticalScale(10),
+  },
+  pronounBtn: {
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(6),
+    borderRadius: scale(20),
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    alignItems: "center",
+  },
+  pronounBtnSelected: {
+    backgroundColor: "rgba(142,68,173,0.7)",
+    borderColor: "#FFFFFF",
+  },
+  pronounTxt: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: moderateScale(13),
+  },
+  pronounTxtSelected: {
+    color: "#FFFFFF",
+    fontWeight: "600" as const,
+  },
+  skipLink: {
+    color: "#6FFFE9",
+    fontSize: moderateScale(12),
+    textDecorationLine: "underline" as const,
+    marginTop: verticalScale(6),
+    alignSelf: "flex-end" as const,
+  },
+  unknownText: {
+    color: "#ffffff",
+    fontSize: moderateScale(14),
+    paddingVertical: verticalScale(6),
+    fontStyle: "italic" as const,
+  },
+  unknownLink: {
+    color: "#6FFFE9",
+    fontSize: moderateScale(12),
+    textDecorationLine: "underline" as const,
+    marginTop: verticalScale(2),
+    alignSelf: "flex-end" as const,
   },
 });

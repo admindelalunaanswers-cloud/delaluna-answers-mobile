@@ -11,20 +11,20 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
-import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
-import { ThemeContext } from '@/src/context/theme-context';
+import { app, auth } from '@/firebaseConfig';
 import { ThemedText } from '@/src/components/themed-text';
 import { ThemedView } from '@/src/components/themed-view';
-import { useUser } from '@/src/context/user-context';
 import { useHoroscope } from '@/src/context/horoscope-context';
+import { ThemeContext } from '@/src/context/theme-context';
+import { useUser } from '@/src/context/user-context';
 import { signOut } from '@/src/services/user.service';
-import { app, auth } from '@/firebaseConfig';
-import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
+import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
 import LoadingScreen from '../(util)/loading-screen';
 
 const functions = getFunctions(app, 'us-central1');
@@ -35,7 +35,7 @@ const CODE_LENGTH = 6;
 
 export default function VerifyEmail() {
   const { authUser, reloadAuthUser, refresh } = useUser();
-  const { horoscope, transitReadingGenerating, loading: dataLoading, horoscopeGenerating } = useHoroscope();
+  const { horoscope, loading: dataLoading, horoscopeGenerating } = useHoroscope();
   const { theme } = useContext(ThemeContext);
   const router = useRouter();
 
@@ -46,11 +46,11 @@ export default function VerifyEmail() {
   const [codeSent, setCodeSent] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
-  const [reloading, setReloading] = useState(false);
 
+  // Don't gate on transitReadingGenerating — transit reading populates the
+  // transits screen separately and can lag well behind today's horoscope.
   const horoscopeReady =
-    (!!horoscope || (!dataLoading && !horoscopeGenerating)) &&
-    !transitReadingGenerating;
+    !!horoscope || (!dataLoading && !horoscopeGenerating);
 
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
@@ -67,6 +67,7 @@ export default function VerifyEmail() {
   }, [resendCooldown]);
 
   const handleSendCode = async () => {
+    console.log("Auth: ", auth.currentUser);
     if (sending || resendCooldown > 0) return;
     if (!auth.currentUser) {
       setSendError('Not signed in. Please sign up or log in first.');
@@ -75,7 +76,10 @@ export default function VerifyEmail() {
     setSending(true);
     setSendError(null);
     try {
+      console.log("Auth: ", auth);
       await auth.currentUser.getIdToken(true); // ensure a fresh token is attached
+      console.log("Auth.currentUser: ", auth.currentUser);
+
       await sendVerificationCode({});
       setCodeSent(true);
       setResendCooldown(60);
@@ -84,17 +88,6 @@ export default function VerifyEmail() {
       setSendError(msg);
     } finally {
       setSending(false);
-    }
-  };
-
-  const handleReload = async () => {
-    setReloading(true);
-    try {
-      await reloadAuthUser();
-      await refresh();
-      if (auth.currentUser?.emailVerified) setVerified(true);
-    } catch { /* ignore */ } finally {
-      setReloading(false);
     }
   };
 
@@ -125,31 +118,53 @@ export default function VerifyEmail() {
   };
 
   const handleVerify = async (code?: string) => {
-    const finalCode = code ?? digits.join('');
-    if (finalCode.length < CODE_LENGTH) {
-      Alert.alert('Enter code', 'Please enter the full 6-digit code.');
+    if (verifying) return;
+
+    const enteredCode = code ?? digits.join('');
+
+    if (!enteredCode || enteredCode.length !== CODE_LENGTH) {
+      Alert.alert('Invalid code', 'Please enter the full 6-digit code.');
       return;
     }
+
     setVerifying(true);
     try {
-      await verifyCodeFn({ code: finalCode });
-      await reloadAuthUser();
-      await refresh();   // reload userDoc so AuthGate sees isEmailVerified: true
-      setVerified(true);
+      await verifyCodeFn({ code: enteredCode });
     } catch (e: any) {
-      const msg: string = e?.message ?? 'Verification failed.';
-      Alert.alert('Incorrect code', msg);
+      const msg = e?.message ?? 'Something went wrong.';
+      Alert.alert('Verification failed', msg);
       setDigits(Array(CODE_LENGTH).fill(''));
-      setTimeout(() => inputRefs.current[0]?.focus(), 100);
-    } finally {
+      inputRefs.current[0]?.focus();
       setVerifying(false);
+      return;
     }
+
+    // Verification succeeded — reload auth state but don't let failures
+    // undo the successful verification (the OTP doc is already deleted).
+    try {
+      await reloadAuthUser();
+      await refresh();
+    } catch {
+      // Post-verification refresh failed; navigation will still proceed.
+    }
+
+    setVerified(true);
+    setVerifying(false);
   };
 
   // Navigate once verified AND AI content is ready
   useEffect(() => {
     if (verified && horoscopeReady) router.replace('/(main)');
   }, [verified, horoscopeReady]);
+
+  // Safety net: if the horoscope is still generating 30s after verification,
+  // navigate anyway — the main app can render with partial data and the
+  // subscriptions will fill in the rest as docs arrive.
+  useEffect(() => {
+    if (!verified) return;
+    const timeout = setTimeout(() => router.replace('/(main)'), 30000);
+    return () => clearTimeout(timeout);
+  }, [verified]);
 
   if (verifying) return <LoadingScreen message="Verifying..." />;
 
@@ -167,7 +182,7 @@ export default function VerifyEmail() {
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ImageBackground
           source={theme.backgroundImage}
@@ -222,11 +237,10 @@ export default function VerifyEmail() {
                       onChangeText={text => handleDigitChange(text, i)}
                       onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, i)}
                       keyboardType="number-pad"
-                      maxLength={2}
+                      maxLength={6}
                       selectTextOnFocus
                       caretHidden
                       textAlign="center"
-                      returnKeyType="done"
                     />
                   ))}
                 </View>
@@ -254,17 +268,6 @@ export default function VerifyEmail() {
                       : sending
                       ? 'Sending…'
                       : 'Resend code'}
-                  </ThemedText>
-                </TouchableOpacity>
-
-                {/* Reload */}
-                <TouchableOpacity
-                  onPress={handleReload}
-                  disabled={reloading}
-                  style={styles.signOutButton}
-                >
-                  <ThemedText style={[styles.signOutText, reloading && { opacity: 0.45 }]}>
-                    {reloading ? 'Reloading…' : 'Already verified? Reload'}
                   </ThemedText>
                 </TouchableOpacity>
 

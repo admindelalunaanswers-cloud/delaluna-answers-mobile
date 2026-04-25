@@ -43,6 +43,7 @@ text: {
   fontSize: moderateScale(14),
   lineHeight: moderateScale(22),
   color: "#FFFFFF",
-   textAlign: "center"
+  textAlign: "center",
+  includeFontPadding: false,
 },
 });

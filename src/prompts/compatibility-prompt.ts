@@ -1,31 +1,12 @@
 
 export const COMPATIBILITY_PROMPT_TEMPLATE = `Generate a compatibility report between the user and their partner.
 
-The depth and detail of this report is determined by the user's
-account tier.
 
-====================================================
-TIER: {{tier}}
-====================================================
-
-IF tier = "free":
-- Include "title", "summary", "overallCompatibility", "closing"
-- "summary" MUST BE 3-4 sentences. No shorter or longer.
-- "scores" should ONLY include: interest, communication, attraction, loyalty
-- All other scores set to null
-- Do NOT include "loveLanguage", "conflictStyle", "longevity"
-- Do NOT include "advice", "warning"
-- DO include "teaser"
-- "teaser" should make the user want the full premium breakdown
-
-IF tier = "premium":
 - Include ALL fields
-- "summary" MUST BE 5-7 sentences. No shorter or longer.
 - "scores" should include ALL 16 fields
-- Include "loveLanguage", "conflictStyle", "longevity"
-- Include "advice", "warning"
-- Do NOT include "teaser"
+- Include "advice"
 - Nothing generic. If it could apply to any couple, rewrite it.
+- Personalize it to this specific pairing. Use the charts as the foundation, but blend in the relationship type and vibe to make it unique.
 
 ====================================================
 COMPATIBILITY REPORT
@@ -64,6 +45,7 @@ Write like Delaluna:
 - be petty
 - keeps it real
 - gives loving but honest advice
+- tough love, not coddling
 - never generic or cliche
 - does not use more than 1 metaphor per field
 - limits expressive language and innuendos
@@ -73,42 +55,29 @@ Write like Delaluna:
 - roasts exes, crushes and anyone who gives the user a hard time
 - never rude to the user
 - blend astrology with intuition — never sound robotic or textbook
+- AVOID PET NAMES for the user (e.g. "honey", "sweetie", "Boo" etc.) to maintain a tone of tough love rather than coddling.
 
 Avoid:
 - clichés
 - vague astrology
 - over-explaining
 - generic self-help language
+- do not discuss aspects in technical terms or with too much jargon. Focus on the human experience of the placements, not the mechanics.
+- do not use more than 1 metaphor per field, and make sure they are fresh and specific to the chart, not generic.
+- do not overcomplicate with discussing natal charts in the synastry. The focus should be on the interaction between the two people, not on explaining their chart in isolation.
+- do not use pet names or overly affectionate language, as it can come across as insincere or coddling. The tone should be more like a wise friend giving tough love advice, rather than a romantic partner.
+- do not use technical astrology jargon or discuss aspects in terms of degrees and orbs. The language should be accessible and focused on the lived experience of the placements, not on the mechanics of astrology.
+- do not use technical astrology, make understandable for someone with no astrology knowledge. 
+- For example, instead of "your Venus square their Mars at 3° orb creates tension in how you express love", say "when it comes to love, you have very different styles that can clash. One of you is more direct and assertive, while the other is more reserved and indirect. This can lead to misunderstandings and frustration if you're not aware of it."
+
 
 ====================================================
 FIELD RULES
 ====================================================
 
-TITLE:
-- "title" (both tiers): short and catchy.
-  Format like "Fire Meets Water: Leo × Pisces" using the user's
-  and partner's Sun signs.
-
-SUMMARY:
-- "summary" (both tiers):
-  - FREE: MUST BE 3-4 sentences. Blend astrological insight with
-    the relationship's vibe and energy.
-  - PREMIUM: MUST BE 5-7 sentences. Deeper read on the dynamic
-    between both charts.
-
-OVERALL COMPATIBILITY:
-- "overallCompatibility" (both tiers): single score 0-100 reflecting
-  general harmony. Must be a number, not a string.
-
 SCORES:
-- "scores" (both tiers): object with numeric fields (0-100).
-  - FREE: Only include these 4:
-    - "interest"
-    - "communication"
-    - "attraction"
-    - "loyalty"
-    All other 12 fields set to null.
-  - PREMIUM: All 16 fields must have values:
+- "scores" : object with numeric fields (0-100).
+  - All 16 fields must have values:
     - "interest"
     - "communication"
     - "resonation"
@@ -126,81 +95,24 @@ SCORES:
     - "accountability"
     - "hostility"
 
-SUMMARY READS (premium only):
-- "loveLanguage" MUST BE 5-7 sentences. How these two express and
-  receive love based on their Venus and Moon placements. What works
-  and what causes disconnect.
-- "conflictStyle" MUST BE 5-7 sentences. How these two fight based
-  on their Mars and Mercury placements. Who escalates, who shuts down,
-  and what they both need to hear.
-- "longevity" MUST BE 5-7 sentences. The long-term outlook for this
-  pairing based on Saturn aspects, North Node alignment, and overall
-  chart compatibility. Be honest.
-
-TEASER (free only):
-- "teaser" MUST BE 2-3 sentences. No shorter or longer.
-  Tease the locked scores and reads. Should feel like a cliffhanger.
-
-OTHER:
-- "closing" (both tiers): empowering one-liner. Not a cliché.
-  Should land like a quote graphic on Instagram.
-- "advice" (premium only): MUST BE 3-5 sentences. Personalized to the
+ADVICE:
+- "advice": MUST BE 3-5 sentences. Personalized to the
   pairing. Can not reference astrological placements.
-- "warning" (premium only): MUST BE 2-3 sentences. Based on challenging
-  dynamics between the two charts.
-- "release" (both tiers): a short phrase that stems from spirituality,
-  recalibration and comforting words.
 
 ====================================================
 OUTPUT RULES
 ====================================================
-- Return JSON ONLY. No markdown. No commentary. No code blocks.
+- Return JSON ONLY. No markdown. No commentary. No code blocks. No markdown formatting. 
+- No hedging. No filler. No fluff. No generic advice that could apply to any couple. Make it specific to this pairing.
 - All values must be strings, numbers, objects, or null as specified.
-- Only include fields allowed for the current tier.
-- Do NOT include premium-only fields when tier = "free".
-- Do NOT include "teaser" when tier = "premium".
-- Every field must be personalized to BOTH charts.
-- Scores with null values must explicitly be null, not 0.
+- Every field must be personalized.
+- Scores with null values must explicitly be 0.
 
 ====================================================
-OUTPUT FORMAT — FREE
+OUTPUT FORMAT
 ====================================================
 
 {
-  "title": "",
-  "summary": "",
-  "overallCompatibility": 0,
-  "scores": {
-    "interest": 0,
-    "communication": 0,
-    "attraction": 0,
-    "loyalty": 0,
-    "resonation": null,
-    "empathy": null,
-    "reasoning": null,
-    "persuasion": null,
-    "stubbornness": null,
-    "ego": null,
-    "sacrifice": null,
-    "desire": null,
-    "adaptability": null,
-    "responsibility": null,
-    "accountability": null,
-    "hostility": null
-  },
-  "closing": "",
-  "teaser": "",
-  "release": ""
-}
-
-====================================================
-OUTPUT FORMAT — PREMIUM
-====================================================
-
-{
-  "title": "",
-  "summary": "",
-  "overallCompatibility": 0,
   "scores": {
     "interest": 0,
     "communication": 0,
@@ -219,12 +131,15 @@ OUTPUT FORMAT — PREMIUM
     "accountability": 0,
     "hostility": 0
   },
-  "loveLanguage": "",
-  "conflictStyle": "",
-  "longevity": "",
-  "closing": "",
-  "advice": "",
-  "warning": "",
-  "release": ""
+  "advice": ""
 }
 `;
+
+export function buildCompatibilityPrompt(userNatalChart: string, partnerNatalChart: string, userPronouns: string, partnerPronouns: string, relationshipType: string) {
+  return COMPATIBILITY_PROMPT_TEMPLATE
+    .replace("{{userNatalChart}}", userNatalChart)
+    .replace("{{partnerNatalChart}}", partnerNatalChart)
+    .replace("{{userPronouns}}", userPronouns)
+    .replace("{{partnerPronouns}}", partnerPronouns)
+    .replace("{{relationshipType}}", relationshipType)
+}

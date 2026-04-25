@@ -5,6 +5,7 @@ import * as Notifications from 'expo-notifications';
 
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
@@ -12,6 +13,7 @@ import { StatusBar } from 'expo-status-bar';
 import ThemeProvider from '@/src/context/theme-context';
 import { HoroscopeProvider, useHoroscope } from '@/src/context/horoscope-context';
 import { UserProvider, useUser } from '@/src/context/user-context';
+import { RevenueCatProvider } from '@/src/context/revenuecat-context';
 import { useColorScheme } from '@/src/hooks/use-color-scheme';
 import { useTheme } from '@/src/hooks/use-theme';
 import LoadingScreen from './(util)/loading-screen';
@@ -43,7 +45,12 @@ function AuthGate() {
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener(response => {
       const screen = response.notification.request.content.data?.screen;
-      if (screen && authUser) router.push(screen as any);
+      if (screen && authUser) {
+        if (String(screen).includes('chat')) {
+          require('@/src/stores/chat-store').ChatStore.setFromNotification(true);
+        }
+        router.push(screen as any);
+      }
     });
     return () => sub.remove();
   }, [authUser?.uid]);
@@ -53,7 +60,9 @@ function AuthGate() {
 
     if (!authUser && !inAuth && !inStartup) {
       router.replace('/(startup)/welcome');
-    } else if (authUser && (inAuth || inStartup) && horoscopeReady && userDoc?.isEmailVerified !== false) {
+    } else if (authUser && !authUser.emailVerified && userDoc && !userDoc.isEmailVerified && !inAuth) {
+      router.replace('/(auth)/verify-email');
+    } else if (authUser && (inAuth || inStartup) && horoscopeReady && (userDoc?.isEmailVerified === true || authUser.emailVerified)) {
       router.replace('/(main)');
     }
   }, [authUser, userDoc, userLoading, inAuth, inStartup, horoscopeReady]);
@@ -62,7 +71,8 @@ function AuthGate() {
     !userLoading &&
     (
       (!authUser && !inAuth && !inStartup) ||
-      (!!authUser && (inAuth || inStartup) && horoscopeReady && userDoc?.isEmailVerified !== false)
+      (!!authUser && !authUser.emailVerified && !!userDoc && !userDoc.isEmailVerified && !inAuth) ||
+      (!!authUser && (inAuth || inStartup) && horoscopeReady && (userDoc?.isEmailVerified === true || authUser.emailVerified))
     );
 
   // Show a global loading screen while:
@@ -72,7 +82,7 @@ function AuthGate() {
   // Do NOT hide auth screens while horoscope is generating — sign-up manages
   // its own loading UI and 30-second safety-net timeout while on that screen.
   const showLoading =
-    userLoading ||
+    (userLoading && !inAuth && !inStartup) ||
     (!!authUser && dataLoading && !inAuth && !inStartup) ||
     (isRedirecting && !inAuth && !inStartup);
 
@@ -125,14 +135,18 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <UserProvider>
-        <ThemeProvider>
-          <HoroscopeProvider>
-            <AuthGate />
-          </HoroscopeProvider>
-        </ThemeProvider>
-      </UserProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <UserProvider>
+          <RevenueCatProvider>
+            <ThemeProvider>
+              <HoroscopeProvider>
+                <AuthGate />
+              </HoroscopeProvider>
+            </ThemeProvider>
+          </RevenueCatProvider>
+        </UserProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

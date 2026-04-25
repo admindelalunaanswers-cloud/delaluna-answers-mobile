@@ -9,5 +9,5 @@ export interface DailyCardPack {
   meaningString: string;              // merged meaning text
   reversedCount: number;              // how many reversed cards
   uprightCount: number;               // how many upright cards
-  createdAt: number;
+  createdAt: any;  // Firestore Timestamp (new) or number (legacy)
 }

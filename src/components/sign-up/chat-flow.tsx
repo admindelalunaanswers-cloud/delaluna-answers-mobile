@@ -135,14 +135,15 @@ export default function ChatFlow({
   const scheduleScroll = (delay: number) => {
     if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
     scrollTimerRef.current = setTimeout(() => {
-      scrollRef.current?.scrollToEnd({ animated: true });
+      scrollRef.current?.scrollToEnd({ animated: false });
     }, delay);
   };
 
-  // Scroll to bottom when keyboard shows/hides (gives layout time to settle)
+  // Scroll to bottom after keyboard settles (snap, no animation)
+  const [kbVisible, setKbVisible] = useState(false);
   useEffect(() => {
-    const onShow = Keyboard.addListener('keyboardDidShow', () => scheduleScroll(200));
-    const onHide = Keyboard.addListener('keyboardDidHide', () => scheduleScroll(150));
+    const onShow = Keyboard.addListener('keyboardDidShow', () => { setKbVisible(true); scheduleScroll(0); });
+    const onHide = Keyboard.addListener('keyboardDidHide', () => { setKbVisible(false); scheduleScroll(0); });
     return () => { onShow.remove(); onHide.remove(); };
   }, []);
 
@@ -190,7 +191,7 @@ export default function ChatFlow({
     }
 
     if (['text', 'email', 'secure', 'location', 'date', 'time'].includes(s.inputType)) {
-      const t = setTimeout(() => inputRef.current?.focus(), 120);
+      const t = setTimeout(() => inputRef.current?.focus(), 30);
       return () => clearTimeout(t);
     }
   }, [step]);
@@ -477,7 +478,7 @@ export default function ChatFlow({
     <>
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : kbVisible ? 'height' : undefined}
       keyboardVerticalOffset={insets.top + keyboardOffset}
     >
       {/* ── Chat history ── */}
@@ -485,7 +486,7 @@ export default function ChatFlow({
         ref={scrollRef}
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
-        onContentSizeChange={() => scheduleScroll(100)}
+        onContentSizeChange={() => scheduleScroll(50)}
       >
         {/* Completed Q&A pairs */}
         {steps.slice(0, step).map((s, i) => {
@@ -566,7 +567,7 @@ export default function ChatFlow({
                   onPress={handleNext}
                   disabled={!currentValue.trim()}
                 >
-                  <Text style={styles.sendButtonText}>→</Text>
+                  <Ionicons name="arrow-forward" size={moderateScale(20)} color="#6FFFE9" />
                 </TouchableOpacity>
               </View>
             ) : (
@@ -598,7 +599,7 @@ export default function ChatFlow({
                   onPress={handleNext}
                   disabled={!currentValue.trim()}
                 >
-                  <Text style={styles.sendButtonText}>→</Text>
+                  <Ionicons name="arrow-forward" size={moderateScale(20)} color="#6FFFE9" />
                 </TouchableOpacity>
               </View>
             )}
@@ -662,7 +663,7 @@ export default function ChatFlow({
                   onPress={handleNext}
                   disabled={!currentValue.trim()}
                 >
-                  <Text style={styles.sendButtonText}>→</Text>
+                  <Ionicons name="arrow-forward" size={moderateScale(20)} color="#6FFFE9" />
                 </TouchableOpacity>
               </View>
             ) : (
@@ -693,7 +694,7 @@ export default function ChatFlow({
                   onPress={handleNext}
                   disabled={!currentValue.trim()}
                 >
-                  <Text style={styles.sendButtonText}>→</Text>
+                  <Ionicons name="arrow-forward" size={moderateScale(20)} color="#6FFFE9" />
                 </TouchableOpacity>
               </View>
             )}
@@ -742,7 +743,7 @@ export default function ChatFlow({
               onPress={handleNext}
               disabled={!currentValue.trim()}
             >
-              <Text style={styles.sendButtonText}>→</Text>
+              <Ionicons name="arrow-forward" size={moderateScale(20)} color="#6FFFE9" />
             </TouchableOpacity>
           </View>
         )}
@@ -766,7 +767,7 @@ export default function ChatFlow({
                 onPress={handleNext}
                 disabled={!currentValue.trim()}
               >
-                <Text style={styles.sendButtonText}>→</Text>
+                <Ionicons name="arrow-forward" size={moderateScale(20)} color="#6FFFE9" />
               </TouchableOpacity>
             </View>
             {!!passwordError && <Text style={styles.errorText}>{passwordError}</Text>}
@@ -798,7 +799,7 @@ export default function ChatFlow({
               >
                 {emailChecking
                   ? <ActivityIndicator size="small" color="#6FFFE9" />
-                  : <Text style={styles.sendButtonText}>→</Text>
+                  : <Ionicons name="arrow-forward" size={moderateScale(20)} color="#6FFFE9" />
                 }
               </TouchableOpacity>
             </View>
@@ -825,7 +826,7 @@ export default function ChatFlow({
                 onPress={handleLocationNext}
                 disabled={!selectedLocation || locationSearching || locationTzLoading}
               >
-                <Text style={styles.sendButtonText}>→</Text>
+                <Ionicons name="arrow-forward" size={moderateScale(20)} color="#6FFFE9" />
               </TouchableOpacity>
             </View>
             {locationResults.length > 0 && (
@@ -1008,14 +1009,6 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     opacity: 0.35,
-  },
-  sendButtonText: {
-    color: '#6FFFE9',
-    fontSize: moderateScale(20),
-    fontWeight: '700',
-    lineHeight: moderateScale(20),
-    includeFontPadding: false,
-    textAlignVertical: 'center',
   },
   nextButton: {
     backgroundColor: 'rgba(111,255,233,0.12)',

@@ -1,6 +1,7 @@
 import * as admin from 'firebase-admin';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
 import * as nodemailer from 'nodemailer';
@@ -12,6 +13,9 @@ const emailPass = defineSecret('EMAIL_PASS');
 // ─── Init ─────────────────────────────────────────────────────────────────────
 admin.initializeApp();
 const db = admin.firestore();
+
+const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true';
+console.log(`[functions] Running in ${isEmulator ? 'EMULATOR (dev)' : 'PRODUCTION'} mode`);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -34,13 +38,18 @@ function buildTransporter(user: string, pass: string) {
 
 export const sendVerificationCode = onCall(
   { secrets: [emailUser, emailPass], invoker: 'public' },
+  
   async (request) => {
     if (!request.auth) {
+      console.log(request.auth)
       throw new HttpsError('unauthenticated', 'Must be signed in.');
     }
 
+    
+    
     const uid = request.auth.uid;
     const email = request.auth.token.email;
+    console.log("Auth: ", request.auth);
 
     if (!email) {
       throw new HttpsError('invalid-argument', 'No email on account.');
@@ -104,7 +113,7 @@ export const sendVerificationCode = onCall(
 
 // ─── verifyCode ───────────────────────────────────────────────────────────────
 
-export const verifyCode = onCall(async (request) => {
+export const verifyCode = onCall({ invoker: 'public' }, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Must be signed in.');
   }
@@ -166,7 +175,10 @@ interface ExpoPushMessage {
   sound: 'default';
   title: string;
   body: string;
+  channelId?: string;
   data?: Record<string, string>;
+  priority?: 'default' | 'normal' | 'high';
+  _contentAvailable?: boolean;
 }
 
 /**
@@ -180,8 +192,8 @@ interface ExpoPushMessage {
 export const clearDailyChatHistory = onSchedule('every day 00:00', async () => {
   const cutoff = admin.firestore.Timestamp.fromMillis(Date.now() - 24 * 60 * 60 * 1000);
 
-  const snap = await db.collectionGroup('chat')
-    .where('createdAt', '<', cutoff)
+  const snap = await db.collectionGroup('updayedChat')
+    .where('createTime', '<', cutoff)
     .get();
 
   if (snap.empty) return;
@@ -203,15 +215,22 @@ export const sendMorningReminder = onSchedule('every day 08:00', async () => {
 
   if (snap.empty) return;
 
-  const messages: ExpoPushMessage[] = snap.docs
-    .map(d => d.data().expoPushToken as string | undefined)
-    .filter((token): token is string => !!token)
-    .map(to => ({
+  // Deduplicate tokens — same device may appear in multiple user docs (dev/test accounts)
+  const uniqueTokens = [...new Set(
+    snap.docs
+      .map(d => d.data().expoPushToken as string | undefined)
+      .filter((token): token is string => !!token)
+  )];
+
+  const messages: ExpoPushMessage[] = uniqueTokens.map(to => ({
       to,
       sound: 'default' as const,
       title: '🌙 Your Daily Reading',
       body: 'Your horoscope and cards for today are ready.',
+      channelId: 'default',
       data: { screen: '/(main)' },
+      priority: 'high',
+      _contentAvailable: true,
     }));
 
   for (let i = 0; i < messages.length; i += PUSH_CHUNK_SIZE) {
@@ -226,3 +245,307 @@ export const sendMorningReminder = onSchedule('every day 08:00', async () => {
     });
   }
 });
+
+// ─── deleteConnection ─────────────────────────────────────────────────────────
+
+export const deleteConnection = onCall({ invoker: 'public' }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Must be signed in.');
+  }
+
+  const { userId, connectionId } = request.data as {
+    userId: string;
+    connectionId: string;
+  };
+
+  if (!userId || !connectionId) {
+    throw new HttpsError('invalid-argument', 'Missing userId or connectionId.');
+  }
+
+  // Only allow users to delete their own connections
+  if (request.auth.uid !== userId) {
+    throw new HttpsError('permission-denied', 'You can only delete your own connections.');
+  }
+
+  const connectionRef = db
+    .collection('users')
+    .doc(userId)
+    .collection('connections')
+    .doc(connectionId);
+
+  const snap = await connectionRef.get();
+  if (!snap.exists) {
+    throw new HttpsError('not-found', 'Connection not found.');
+  }
+
+  await connectionRef.delete();
+
+  return { deleted: true };
+});
+
+// ─── createConnection ─────────────────────────────────────────────────────────
+
+export const createConnection = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Must be signed in.');
+  }
+
+  const {
+    userId,
+    isMe,
+    relationshipType,
+    firstPerson,
+    secondPerson,
+    prompt: clientPrompt,
+    birthDetailsChangeCount,
+  } = request.data as {
+    userId: string;
+    isMe: boolean;
+    relationshipType: string;
+    firstPerson: Record<string, any>;
+    secondPerson: Record<string, any>;
+    prompt?: string;
+    birthDetailsChangeCount?: number;
+  };
+
+  if (!userId || !relationshipType || !firstPerson || !secondPerson) {
+    throw new HttpsError('invalid-argument', 'Missing required fields.');
+  }
+
+  const mapPerson = (p: Record<string, any>) => ({
+    firstName: p['First Name'] ?? '',
+    lastName: p['Last Name'] ?? '',
+    pronouns: p['Pronouns'] ?? '',
+    sun: p['Sun Sign'] ?? '',
+    moon: p['Moon Sign'] ?? '',
+    rising: p['Rising Sign'] ?? '',
+    birthday: p['Birthday'] ?? '',
+    timeOfBirth: p['Time of Birth'] ?? '',
+    placeOfBirth: p['Place of Birth'] ?? '',
+    birthLat: typeof p.birthLat === 'number' ? p.birthLat : null,
+    birthLon: typeof p.birthLon === 'number' ? p.birthLon : null,
+    birthTimezone: typeof p.birthTimezone === 'number' ? p.birthTimezone : null,
+    isBirthTimeUnknown: !!p.isBirthTimeUnknown,
+    isPlaceOfBirthUnknown: !!p.isPlaceOfBirthUnknown,
+  });
+
+  let mappedFirst = mapPerson(firstPerson);
+
+  if (isMe) {
+    const chartSnap = await db
+      .collection('users').doc(userId)
+      .collection('natalChart').doc('details')
+      .get();
+    if (chartSnap.exists) {
+      const chart = chartSnap.data()!;
+      const sunPlanet = (chart.planets as any[])?.find((p: any) => p.name === 'Sun');
+      mappedFirst = {
+        ...mappedFirst,
+        sun: sunPlanet?.sign ?? mappedFirst.sun,
+        moon: chart.moon?.sign ?? mappedFirst.moon,
+        rising: chart.ascendant?.sign ?? mappedFirst.rising,
+      };
+    }
+  }
+
+  const mappedSecond = mapPerson(secondPerson);
+
+  const prompt = clientPrompt ?? '';
+
+  const firstSlug = `${mappedFirst.firstName.toLowerCase()}_${mappedFirst.lastName.toLowerCase()}`;
+  const secondSlug = `${mappedSecond.firstName.toLowerCase()}_${mappedSecond.lastName.toLowerCase()}`;
+  const connectionId = `${firstSlug}-${secondSlug}`;
+
+  const connectionRef = db
+    .collection('users')
+    .doc(userId)
+    .collection('connections')
+    .doc(connectionId);
+
+  const existingSnap = await connectionRef.get();
+  const isNew = !existingSnap.exists;
+
+  await connectionRef.set(
+    {
+      connectionId,
+      relationshipType,
+      firstPerson: mappedFirst,
+      secondPerson: mappedSecond,
+      status: { state: 'pending' },
+      prompt,
+      birthDetailsChangeCount:
+        typeof birthDetailsChangeCount === 'number'
+          ? birthDetailsChangeCount
+          : existingSnap.data()?.birthDetailsChangeCount ?? 0,
+      // Stamp createTime only on first creation; preserve it on edits
+      ...(isNew ? { createTime: FieldValue.serverTimestamp() } : {}),
+    },
+    { merge: true },
+  );
+
+  return { connectionId };
+});
+
+// ─── Push helper ─────────────────────────────────────────────────────────────
+
+interface PushPayload {
+  title: string;
+  body: string;
+  data?: Record<string, string>;
+}
+
+/**
+ * Sends a single Expo push notification and logs the response.
+ * Logs Expo Push API errors (DeviceNotRegistered, InvalidCredentials, etc.)
+ * so we can diagnose why a push didn't arrive.
+ */
+async function sendExpoPush(
+  userId: string,
+  token: string,
+  payload: PushPayload,
+  context: string,
+): Promise<void> {
+  const message = {
+    to: token,
+    sound: 'default' as const,
+    title: payload.title,
+    body: payload.body,
+    channelId: 'default',
+    data: payload.data ?? {},
+    priority: 'high' as const,
+    _contentAvailable: true,
+  };
+
+  try {
+    const res = await fetch(EXPO_PUSH_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(message),
+    });
+
+    const json = await res.json().catch(() => null);
+    console.log(`[${context}] user=${userId} status=${res.status} response=${JSON.stringify(json)}`);
+
+    // Expo returns 200 even when individual messages have errors — check the data array
+    const ticket = json?.data?.[0] ?? json?.data;
+    if (ticket?.status === 'error') {
+      console.error(`[${context}] Push ticket error for user ${userId}:`, ticket);
+    }
+  } catch (err) {
+    console.error(`[${context}] Push send failed for user ${userId}:`, err);
+  }
+}
+
+// ─── notifyBreakdownReady ────────────────────────────────────────────────────
+
+/**
+ * When the Firebase Extension writes a `response` to the natal chart breakdown
+ * document, send a push notification to the user — works whether the app is
+ * in the foreground, background, or killed.
+ */
+export const notifyBreakdownReady = onDocumentUpdated(
+  'users/{userId}/natalChart/details',
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    const userId = event.params.userId;
+
+    console.log(`[notifyBreakdownReady] Triggered for user ${userId}`);
+
+    // Only fire when a new response appears
+    if (!after?.response) {
+      console.log(`[notifyBreakdownReady] Skip — no response field on doc`);
+      return;
+    }
+    if (before?.response === after.response) {
+      console.log(`[notifyBreakdownReady] Skip — response unchanged`);
+      return;
+    }
+
+    const userSnap = await db.collection('users').doc(userId).get();
+    const token = userSnap.data()?.expoPushToken as string | undefined;
+    if (!token) {
+      console.log(`[notifyBreakdownReady] Skip — user ${userId} has no expoPushToken`);
+      return;
+    }
+
+    await sendExpoPush(userId, token, {
+      title: 'Your Birth Chart is Ready',
+      body: 'Your natal chart breakdown is complete. Tap to explore your cosmic blueprint.',
+      data: { screen: '/(home)/birth-chart-view' },
+    }, 'notifyBreakdownReady');
+  }
+);
+
+// ─── notifyChatReply ─────────────────────────────────────────────────────────
+
+/**
+ * When the Firebase Extension writes a `response` to a chat message doc,
+ * send a push notification so the user sees the reply even if the app is
+ * backgrounded or killed.
+ */
+export const notifyChatReply = onDocumentUpdated(
+  'users/{userId}/updayedChat/{messageId}',
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    const userId = event.params.userId;
+
+    console.log(`[notifyChatReply] Triggered for user ${userId}`);
+
+    if (!after?.response) {
+      console.log(`[notifyChatReply] Skip — no response field on doc`);
+      return;
+    }
+    if (before?.response === after.response) {
+      console.log(`[notifyChatReply] Skip — response unchanged`);
+      return;
+    }
+
+    const userSnap = await db.collection('users').doc(userId).get();
+    const token = userSnap.data()?.expoPushToken as string | undefined;
+    if (!token) {
+      console.log(`[notifyChatReply] Skip — user ${userId} has no expoPushToken`);
+      return;
+    }
+
+    await sendExpoPush(userId, token, {
+      title: 'New Message',
+      body: 'Your cosmic advisor has replied. Tap to read.',
+      data: { screen: '/(main)/chat' },
+    }, 'notifyChatReply');
+  }
+);
+
+// ─── parseConnectionCompatibility ────────────────────────────────────────────
+
+export const parseConnectionCompatibility = onDocumentUpdated(
+  'users/{userId}/connections/{connectionId}',
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+
+    if (!after?.response) return;
+    if (before?.response === after.response) return;
+    if (after?.compatibility) return;
+
+    try {
+      const raw = after.response as string;
+      const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+      const parsed = JSON.parse(clean);
+
+      await event.data!.after.ref.update({
+        compatibility: parsed,
+        'status.state': 'complete',
+      });
+    } catch (err) {
+      console.error('[parseConnectionCompatibility] Parse error:', err);
+      await event.data!.after.ref.update({
+        'status.state': 'error',
+      });
+    }
+  }
+);

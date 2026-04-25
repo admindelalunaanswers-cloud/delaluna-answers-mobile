@@ -3,6 +3,9 @@
 # dependencies
 node_modules/
 
+# Firebase emulator seed data
+seed/
+
 # Expo
 .expo/
 dist/
@@ -60,3 +63,7 @@ app.apk
 .claude/
 .claude/settings.json
 .claude/settings.json
+CLAUDE.md
+CLAUDE.md
+CLAUDE.md
+CHEATSHEET.md

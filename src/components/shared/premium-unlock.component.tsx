@@ -41,9 +41,11 @@ export default function PremiumUnlock({
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.message}>{message}</Text>
 
-        <TouchableOpacity style={styles.button} onPress={onUnlock} activeOpacity={0.8}>
-          <Text style={styles.buttonText}>Unlock Now</Text>
-        </TouchableOpacity>
+        {onUnlock && (
+          <TouchableOpacity style={styles.button} onPress={onUnlock} activeOpacity={0.8}>
+            <Text style={styles.buttonText}>Unlock Now</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </LinearGradient>
   );
@@ -93,12 +95,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     marginTop: verticalScale(2),
+    alignSelf: 'stretch',
   },
   message: {
     color: 'rgba(255,255,255,0.6)',
     fontSize: moderateScale(13),
     textAlign: 'center',
     lineHeight: moderateScale(20),
+    alignSelf: 'stretch',
   },
   button: {
     marginTop: verticalScale(8),

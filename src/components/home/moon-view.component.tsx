@@ -54,18 +54,17 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: moderateScale(14),
-    lineHeight: moderateScale(25),
     color: "#FFFFFF",
     textAlign: "center",
   },
   textPhase: {
     fontSize: moderateScale(14),
-    lineHeight: moderateScale(25),
     color: "#FFFFFF",
     textAlign: "center",
     fontWeight: "600",
   },
   detailsContainer: {
+    width: "100%",
     alignItems: "center",
     gap: scale(4),
   }

@@ -1,6 +1,6 @@
 // src/services/tarotCardDraw.service.ts
 
-import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { TAROT_CARDS } from "../constants/tarotCards.registry";
 import { DailyCardPack } from "../models/daily-cards.model";
 import { DrawnTarotCard } from "../types/tarot-cards.type";
@@ -88,7 +88,7 @@ function buildDailyCardPack(date: string, cards: DrawnTarotCard[]): DailyCardPac
     tarotJSON: buildTarotJSON(cards),
     reversedCount,
     uprightCount,
-    createdAt: Date.now(),
+    createdAt: null,  // placeholder — overridden with serverTimestamp() on write
     firstView: false,
   });
 }
@@ -113,7 +113,7 @@ async function getOrCreateCardsForDate(
   const cards = drawDailySpread(userId, date, count);
   const pack = buildDailyCardPack(date, cards);
 
-  await setDoc(cardsRef, pack);
+  await setDoc(cardsRef, { ...pack, createdAt: serverTimestamp() });
 
   return pack;
 }
