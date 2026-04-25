@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
@@ -6,7 +6,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HeaderNav from '@/src/components/shared/header-nav';
-import PremiumUnlock from '@/src/components/shared/premium-unlock.component';
+import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
 import { ThemedView } from '@/src/components/themed-view';
 import { moderateScale, scale as staticScale, verticalScale } from '@/src/utils/responsive';
 import { C, R, S } from '@/src/constants/theme';
@@ -106,36 +106,17 @@ function HouseCard({
 
 export default function TransitsScreen() {
   const {
-    chartDetails,
     transitReading,
     transitReadingGenerating,
     loading,
   } = useHoroscope();
 
   const { isPro } = useRevenueCat();
+  const isPremium = isPro;
 
   const insets = useSafeAreaInsets();
   const { scale } = useResponsive();
   const headerHeight = insets.top + scale(NAV_BAR_HEIGHT);
-  const [unlocking] = useState(false);
-
-  const isPremium = isPro;
-
-  // Determine which houses to lock.
-  // Premium users see everything. Free users only see their Big 3 natal
-  // houses: House 1 (Rising/Ascendant), natal Sun house, and natal Moon house.
-  const lockedHouses = useMemo(() => {
-    if (isPro || !transitReading?.houses) return new Set<string>();
-    const unlocked = new Set<string>();
-    unlocked.add('1'); // Rising / Ascendant
-    const sunHouse = chartDetails?.planets.find(p => p.name === 'Sun')?.house;
-    const moonHouse = chartDetails?.planets.find(p => p.name === 'Moon')?.house;
-    if (sunHouse) unlocked.add(String(sunHouse));
-    if (moonHouse) unlocked.add(String(moonHouse));
-    return new Set(
-      transitReading.houses.filter(h => !unlocked.has(h.house)).map(h => h.house),
-    );
-  }, [isPro, transitReading?.houses, chartDetails?.planets]);
 
   const handleUnlock = () => {
     router.push('/(settings)/paywall');
@@ -152,49 +133,39 @@ export default function TransitsScreen() {
       {loading ? (
         <LoadingScreen />
       ) : (
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingTop: scale(12), paddingBottom: insets.bottom + scale(20) },
-          ]}
-          showsVerticalScrollIndicator={false}
+        <PaygateOverlay
+          locked={!isPremium}
+          style={{ flex: 1 }}
+          unlockTitle="Unlock Transits"
+          unlockMessage="Subscribe to see how current planetary transits are affecting every area of your life."
+          onUnlock={handleUnlock}
         >
-         
-         
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={[
+              styles.scrollContent,
+              { paddingTop: scale(12), paddingBottom: insets.bottom + scale(20) },
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
+            {transitReadingGenerating && !transitReading && (
+              <View style={styles.generatingRow}>
+                <ActivityIndicator size="small" color={C.purple} />
+                <Text style={styles.generatingText}>Generating house readings...</Text>
+              </View>
+            )}
 
-          {transitReadingGenerating && !transitReading && (
-            <View style={styles.generatingRow}>
-              <ActivityIndicator size="small" color={C.purple} />
-              <Text style={styles.generatingText}>Generating house readings...</Text>
-            </View>
-          )}
-
-          {transitReading?.houses?.map((house) => (
-            <HouseCard
-              key={house.house}
-              house={house}
-              isLocked={lockedHouses.has(house.house)}
-              retrogradesActive={transitReading.retrogradesActive}
-              onLockedPress={handleUnlock}
-            />
-          ))}
-
-          {/* Unlock CTA for free users */}
-          {!isPremium && (
-            <View style={styles.unlockWrap}>
-              {unlocking ? (
-                <ActivityIndicator color={C.purple} />
-              ) : (
-                <PremiumUnlock
-                  onUnlock={handleUnlock}
-                  title="Unlock All Transits"
-                  message="Go beyond your Big 3 and see how every transit is affecting every area of your life."
-                />
-              )}
-            </View>
-          )}
-        </ScrollView>
+            {transitReading?.houses?.map((house) => (
+              <HouseCard
+                key={house.house}
+                house={house}
+                isLocked={false}
+                retrogradesActive={transitReading.retrogradesActive}
+                onLockedPress={handleUnlock}
+              />
+            ))}
+          </ScrollView>
+        </PaygateOverlay>
       )}
     </ThemedView>
   );
@@ -307,10 +278,6 @@ const styles = StyleSheet.create({
   generatingText: {
     fontSize: moderateScale(13),
     color: C.muted,
-  },
-  unlockWrap: {
-    marginTop: verticalScale(S.md),
-    marginBottom: verticalScale(S.sm),
   },
   subtitle: {
     marginTop: verticalScale(16),

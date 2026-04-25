@@ -134,21 +134,32 @@ export default function ConnectionsScreen() {
       if (isPro) {
         Alert.alert(
           'Connection limit reached',
-          `Premium members can save up to ${PREMIUM_CONNECTION_LIMIT} connections.`,
+          `You can save up to ${PREMIUM_CONNECTION_LIMIT} connections. Remove one to add a new one.`,
         );
-        return;
+      } else {
+        Alert.alert(
+          'Connection limit reached',
+          `Free accounts can save up to ${FREE_CONNECTION_LIMIT} connections. Remove one to free up a slot, or upgrade to Premium for up to ${PREMIUM_CONNECTION_LIMIT}.`,
+          [
+            { text: 'OK', style: 'cancel' },
+            { text: 'Upgrade', onPress: presentUpgradePaywall },
+          ],
+        );
       }
-      Alert.alert(
-        'Upgrade to add more',
-        `Free accounts can keep ${FREE_CONNECTION_LIMIT} connections. Upgrade to Premium to save up to ${PREMIUM_CONNECTION_LIMIT}.`,
-        [
-          { text: 'Not now', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => void presentUpgradePaywall() },
-        ],
-      );
       return;
     }
     router.push("/connection/new");
+  };
+
+  const handleLockedPress = () => {
+    Alert.alert(
+      'Connection locked',
+      `Free accounts can access ${FREE_CONNECTION_LIMIT} connections. Remove a connection to unlock another, or upgrade to Premium.`,
+      [
+        { text: 'OK', style: 'cancel' },
+        { text: 'Upgrade', onPress: presentUpgradePaywall },
+      ],
+    );
   };
 
   useEffect(() => {
@@ -243,20 +254,17 @@ export default function ConnectionsScreen() {
             ]}
             showsVerticalScrollIndicator={false}
           >
-            {connections.map((c, index) => {
-              const isLocked = !isPro && index >= FREE_CONNECTION_LIMIT;
-              return (
-                <AnimatedConnectionItem
-                  key={c.id}
-                  index={index}
-                  connection={c}
-                  isLocked={isLocked}
-                  onOpen={handleOpenConnection}
-                  onDelete={handleDeleteConnection}
-                  onLockedPress={presentUpgradePaywall}
-                />
-              );
-            })}
+            {connections.map((c, index) => (
+              <AnimatedConnectionItem
+                key={c.id}
+                index={index}
+                connection={c}
+                isLocked={!isPro && index < connections.length - FREE_CONNECTION_LIMIT}
+                onOpen={handleOpenConnection}
+                onDelete={handleDeleteConnection}
+                onLockedPress={handleLockedPress}
+              />
+            ))}
             {/* Placeholder slots for remaining capacity */}
             {canAddNew && Array.from({ length: Math.min(accessLimit - connections.length, 3) }).map((_, i) => (
               <TouchableOpacity
