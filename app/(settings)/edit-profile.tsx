@@ -437,7 +437,6 @@ export default function EditProfileScreen() {
           moon:      natalChart.moon,
           ascendant: natalChart.ascendant,
           midheaven: natalChart.midheaven,
-          tier: 'free',
         };
 
         await Promise.all([
