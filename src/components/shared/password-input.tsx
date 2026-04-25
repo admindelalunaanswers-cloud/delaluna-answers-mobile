@@ -1,4 +1,4 @@
-import React, { forwardRef, useState } from 'react';
+import React, { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import {
   View,
   TextInput,
@@ -22,18 +22,30 @@ interface PasswordInputProps extends Omit<TextInputProps, 'secureTextEntry'> {
 const PasswordInput = forwardRef<TextInput, PasswordInputProps>(
   ({ containerStyle, style, ...props }, ref) => {
     const [isVisible, setIsVisible] = useState(false);
+    const innerRef = useRef<TextInput>(null);
+    useImperativeHandle(ref, () => innerRef.current as TextInput);
+
+    const handleToggle = () => {
+      const wasFocused = innerRef.current?.isFocused?.();
+      setIsVisible(v => !v);
+      // Toggling secureTextEntry drops focus on iOS — re-focus next frame
+      // so the keyboard stays up and no frame-jump scroll is triggered.
+      if (wasFocused) {
+        requestAnimationFrame(() => innerRef.current?.focus());
+      }
+    };
 
     return (
       <View style={[styles.wrapper, containerStyle]}>
         <TextInput
-          ref={ref}
+          ref={innerRef}
           style={[styles.input, style]}
           secureTextEntry={!isVisible}
           {...props}
         />
         <TouchableOpacity
           style={styles.toggle}
-          onPress={() => setIsVisible(v => !v)}
+          onPress={handleToggle}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           focusable={false}
         >
