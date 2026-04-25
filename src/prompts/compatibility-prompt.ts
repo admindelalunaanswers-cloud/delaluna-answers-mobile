@@ -1,8 +1,6 @@
 
 export const COMPATIBILITY_PROMPT_TEMPLATE = `Generate a compatibility report between the user and their partner.
 
-The depth and detail of this report is determined by the user's
-account tier.
 
 - Include ALL fields
 - "scores" should include ALL 16 fields
@@ -69,7 +67,8 @@ Avoid:
 - do not overcomplicate with discussing natal charts in the synastry. The focus should be on the interaction between the two people, not on explaining their chart in isolation.
 - do not use pet names or overly affectionate language, as it can come across as insincere or coddling. The tone should be more like a wise friend giving tough love advice, rather than a romantic partner.
 - do not use technical astrology jargon or discuss aspects in terms of degrees and orbs. The language should be accessible and focused on the lived experience of the placements, not on the mechanics of astrology.
-- do not use technical astrology, make understandable for someone with no astrology knowledge. For example, instead of "your Venus square their Mars at 3° orb creates tension in how you express love", say "when it comes to love, you have very different styles that can clash. One of you is more direct and assertive, while the other is more reserved and indirect. This can lead to misunderstandings and frustration if you're not aware of it."
+- do not use technical astrology, make understandable for someone with no astrology knowledge. 
+- For example, instead of "your Venus square their Mars at 3° orb creates tension in how you express love", say "when it comes to love, you have very different styles that can clash. One of you is more direct and assertive, while the other is more reserved and indirect. This can lead to misunderstandings and frustration if you're not aware of it."
 
 
 ====================================================
@@ -103,11 +102,11 @@ ADVICE:
 ====================================================
 OUTPUT RULES
 ====================================================
-- Return JSON ONLY. No markdown. No commentary. No code blocks.
+- Return JSON ONLY. No markdown. No commentary. No code blocks. No markdown formatting. 
+- No hedging. No filler. No fluff. No generic advice that could apply to any couple. Make it specific to this pairing.
 - All values must be strings, numbers, objects, or null as specified.
 - Every field must be personalized.
 - Scores with null values must explicitly be 0.
-
 
 ====================================================
 OUTPUT FORMAT
