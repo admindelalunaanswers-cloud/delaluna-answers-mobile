@@ -1,17 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
   View,
   useWindowDimensions,
 } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import HeaderNav from "@/src/components/shared/header-nav";
+import SkeletonLines from "@/src/components/shared/skeleton-lines";
 import SynastryWheel from "@/src/components/synastry/synastry-wheel.draw";
 import { calculateSynastry, type Aspect } from "@/src/services/astroEngine";
 import {
@@ -108,12 +109,11 @@ function ReadingSection({
     <View style={styles.readingCard}>
       <Text style={styles.readingLabel}>{label}</Text>
       {body ? (
-        <Text style={styles.readingBody}>{body}</Text>
+        <Animated.View entering={FadeIn.duration(450)}>
+          <Text style={styles.readingBody}>{body}</Text>
+        </Animated.View>
       ) : loading ? (
-        <View style={styles.readingLoading}>
-          <ActivityIndicator size="small" color="rgba(255,255,255,0.6)" />
-          <Text style={styles.readingLoadingText}>Generating…</Text>
-        </View>
+        <SkeletonLines lines={4} />
       ) : (
         <Text style={styles.readingPlaceholder}>Reading unavailable.</Text>
       )}
@@ -220,29 +220,31 @@ export default function SynastryAnalysisScreen() {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
-          <NamesRow nameA={nameA} nameB={nameB} />
+          <Animated.View entering={FadeIn.duration(350)}>
+            <NamesRow nameA={nameA} nameB={nameB} />
 
-          <View style={styles.wheelWrap}>
-            <SynastryWheel
-              chartA={chartA}
-              chartB={chartB}
-              highlightedAspects={topAspects}
-              size={wheelSize}
-            />
-          </View>
-
-          <View style={styles.legendRow}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: C.purpleLight }]} />
-              <Text style={styles.legendText}>{nameA}</Text>
+            <View style={styles.wheelWrap}>
+              <SynastryWheel
+                chartA={chartA}
+                chartB={chartB}
+                highlightedAspects={topAspects}
+                size={wheelSize}
+              />
             </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: C.gold }]} />
-              <Text style={styles.legendText}>{nameB}</Text>
-            </View>
-          </View>
 
-          <View style={styles.aspectsSection}>
+            <View style={styles.legendRow}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: C.purpleLight }]} />
+                <Text style={styles.legendText}>{nameA}</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: C.gold }]} />
+                <Text style={styles.legendText}>{nameB}</Text>
+              </View>
+            </View>
+          </Animated.View>
+
+          <Animated.View entering={FadeIn.duration(400).delay(150)} style={styles.aspectsSection}>
             <Text style={styles.aspectsTitle}>KEY ASPECT</Text>
             <View style={styles.aspectsList}>
               {topAspects.length === 0 ? (
@@ -251,7 +253,7 @@ export default function SynastryAnalysisScreen() {
                 topAspects.map((a, i) => <AspectRow key={`${a.planet1}-${a.planet2}-${i}`} a={a} />)
               )}
             </View>
-          </View>
+          </Animated.View>
 
           
 
