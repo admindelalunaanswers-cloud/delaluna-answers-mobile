@@ -31,7 +31,7 @@ export default function ChangeThemeScreen() {
     }
   }, []);
 
-  /** 🎨 Handle select + apply */
+  /** Handle select + apply */
   const handleSelect = (key: string) => setThemeKey(key);
 
   const handleApply = async () => {

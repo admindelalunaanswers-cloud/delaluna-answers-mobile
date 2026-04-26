@@ -67,7 +67,6 @@ export default function VerifyEmail() {
   }, [resendCooldown]);
 
   const handleSendCode = async () => {
-    console.log("Auth: ", auth.currentUser);
     if (sending || resendCooldown > 0) return;
     if (!auth.currentUser) {
       setSendError('Not signed in. Please sign up or log in first.');
@@ -76,9 +75,7 @@ export default function VerifyEmail() {
     setSending(true);
     setSendError(null);
     try {
-      console.log("Auth: ", auth);
       await auth.currentUser.getIdToken(true); // ensure a fresh token is attached
-      console.log("Auth.currentUser: ", auth.currentUser);
 
       await sendVerificationCode({});
       setCodeSent(true);

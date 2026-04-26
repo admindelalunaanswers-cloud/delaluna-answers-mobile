@@ -819,7 +819,6 @@ export default function SingleConnectionCreateScreen() {
           isPlaceOfBirthUnknown: userDoc?.isPlaceOfBirthUnknown ?? false,
         };
         userNatalChart = chartDetails ?? null;
-        console.log("Saving connection with data:", { enrichedFirst, userNatalChart });
       } else {
         const firstBirthParams = extractBirthParams(firstPerson);
         userNatalChart = await calculateNatalChart({
@@ -834,7 +833,6 @@ export default function SingleConnectionCreateScreen() {
           "Rising Sign": userNatalChart?.ascendant.sign,
           userName: `${firstPerson["First Name"]} ${firstPerson["Last Name"]}`,
         };
-         console.log("Saving New First Person connection with data:", { enrichedFirst, userNatalChart });
       }
 
       const secondBirthParams = extractBirthParams(secondPerson);
@@ -849,7 +847,6 @@ export default function SingleConnectionCreateScreen() {
         "Moon Sign": secondChart.planets.find((p: any) => p.name === "Moon")?.sign ?? "",
         "Rising Sign": secondChart.ascendant.sign,
       };
-      console.log("Saving New Second Person connection with data:", { enrichedSecond, secondChart });
 
       const userPronouns = isMe ? (userDoc?.pronouns ?? "") : firstPerson.Pronouns;
       const partnerPronouns = secondPerson.Pronouns;

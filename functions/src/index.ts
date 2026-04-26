@@ -41,7 +41,6 @@ export const sendVerificationCode = onCall(
   
   async (request) => {
     if (!request.auth) {
-      console.log(request.auth)
       throw new HttpsError('unauthenticated', 'Must be signed in.');
     }
 
@@ -205,7 +204,6 @@ export const clearDailyChatHistory = onSchedule('every day 00:00', async () => {
     await batch.commit();
   }
 
-  console.log(`[clearDailyChatHistory] Deleted ${snap.docs.length} chat messages.`);
 });
 
 export const sendMorningReminder = onSchedule('every day 08:00', async () => {
@@ -427,7 +425,6 @@ async function sendExpoPush(
     });
 
     const json = await res.json().catch(() => null);
-    console.log(`[${context}] user=${userId} status=${res.status} response=${JSON.stringify(json)}`);
 
     // Expo returns 200 even when individual messages have errors — check the data array
     const ticket = json?.data?.[0] ?? json?.data;
@@ -453,22 +450,21 @@ export const notifyBreakdownReady = onDocumentUpdated(
     const after = event.data?.after?.data();
     const userId = event.params.userId;
 
-    console.log(`[notifyBreakdownReady] Triggered for user ${userId}`);
 
     // Only fire when a new response appears
     if (!after?.response) {
-      console.log(`[notifyBreakdownReady] Skip — no response field on doc`);
+      console.info(`[notifyBreakdownReady] Skip — no response field on doc`);
       return;
     }
     if (before?.response === after.response) {
-      console.log(`[notifyBreakdownReady] Skip — response unchanged`);
+      console.info(`[notifyBreakdownReady] Skip — response unchanged`);
       return;
     }
 
     const userSnap = await db.collection('users').doc(userId).get();
     const token = userSnap.data()?.expoPushToken as string | undefined;
     if (!token) {
-      console.log(`[notifyBreakdownReady] Skip — user ${userId} has no expoPushToken`);
+      console.info(`[notifyBreakdownReady] Skip — user ${userId} has no expoPushToken`);
       return;
     }
 

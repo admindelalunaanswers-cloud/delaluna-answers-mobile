@@ -108,13 +108,6 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (transitMoon) {
-      console.log('[moon-phase]', {
-        date: todayDateId,
-        phase: transitMoon.phase,
-        sunMoonAngle: transitMoon.sunMoonAngle,
-        illumination: transitMoon.illumination,
-        sign: transitMoon.sign,
-      });
       setMoonByDate(prev => ({
         ...prev,
         [todayDateId]: { phaseName: transitMoon.phase, illumination: transitMoon.illumination, moonSign: transitMoon.sign },
