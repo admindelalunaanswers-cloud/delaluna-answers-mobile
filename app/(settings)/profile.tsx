@@ -181,6 +181,8 @@ export default function ProfileScreen() {
     );
   }
 
+  
+
   return (
     <ThemedView style={ss.container}>
       <HeaderNav
@@ -270,7 +272,19 @@ export default function ProfileScreen() {
             <Text style={ss.detailValue} numberOfLines={1}>
               {ud?.email ?? authUser?.email ?? '—'}
             </Text>
-          </View>
+          </View> 
+          <View style={ss.separator} />
+         
+          <TouchableOpacity
+           style={ss.actionButton}
+            onPress={() => router.push('/(settings)/update-theme.screen')}
+          disabled={!ud.purchasedReports || ud.purchasedReports === 0}>
+             <View style={ss.detailRow}>
+              <Text style={ss.detailLabel}>Reports purchased</Text> 
+              <Text style={ss.detailValue}>{ud.purchasedReports ?? '-'}</Text>
+            </View>
+          </TouchableOpacity>
+                 
         </View>
 
         {/* ── Birth details card ── */}
