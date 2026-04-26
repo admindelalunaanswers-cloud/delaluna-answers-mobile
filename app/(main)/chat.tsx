@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import ConsumablePlaceholder from '@/src/components/shared/consumable-placeholder.component';
 import HeaderNav from '@/src/components/shared/header-nav';
 import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
 import { ThemedView } from '@/src/components/themed-view';
@@ -138,7 +139,10 @@ export default function ChatScreen() {
   const [savedSessions, setSavedSessions] = useState<SavedChatSession[]>([]);
   const [viewingSession, setViewingSession] = useState<SavedChatSession | null>(null);
 
-  const questionLimit = DAILY_CHAT_LIMIT;
+  const [extraQuestionsPurchased, setExtraQuestionsPurchased] = useState(0);
+  const [showQuestionConsumable, setShowQuestionConsumable] = useState(false);
+
+  const questionLimit = DAILY_CHAT_LIMIT + extraQuestionsPurchased;
 
   // Count ALL questions sent today (active chat + saved sessions)
   const todayStart = new Date();
@@ -187,35 +191,6 @@ export default function ChatScreen() {
     fromNotification.current = ChatStore.popFromNotification();
   }, []);
 
-  // ─── Auto-save on leaving chat screen (navigate away) ─────────────────────
-  // Disabled: was clearing chat when tabbing away/back, breaking notification flow.
-
-  // useFocusEffect(
-  //   useCallback(() => {
-  //     return () => {
-  //       if (!authUser || fromNotification.current) {
-  //         fromNotification.current = false;
-  //         return;
-  //       }
-  //       const msgs = messagesRef.current;
-  //       if (msgs.length > 0) {
-  //         saveChatAndClear(authUser.uid, msgs).catch(console.error);
-  //       }
-  //     };
-  //   }, [authUser]),
-  // );
-
-  // ─── Auto-save when app goes to background ────────────────────────────────
-  // Disabled: was clearing chat when app backgrounded, breaking notification flow.
-
-  // useEffect(() => {
-  //   const sub = AppState.addEventListener('change', (state) => {
-  //     if (state === 'background' && authUser && messagesRef.current.length > 0) {
-  //       saveChatAndClear(authUser.uid, messagesRef.current).catch(console.error);
-  //     }
-  //   });
-  //   return () => sub.remove();
-  // }, [authUser]);
 
   // ─── Auto-send initial message from ChatStore ──────────────────────────────
 
@@ -225,7 +200,7 @@ export default function ChatScreen() {
     if (initial) {
       if (chatLocked) {
         setInputText(initial);
-        handleUpgrade();
+        setShowQuestionConsumable(true);
       } else {
         handleSend(initial);
       }
@@ -260,7 +235,7 @@ export default function ChatScreen() {
 
     if (chatLocked) {
       setInputText(msg);
-      handleUpgrade();
+      setShowQuestionConsumable(true);
       return;
     }
 
@@ -437,7 +412,7 @@ export default function ChatScreen() {
                   onPress={() => {
                     if (chatLocked) {
                       setInputText(q);
-                      handleUpgrade();
+                      setShowQuestionConsumable(true);
                     } else {
                       handleSend(q);
                     }
@@ -498,6 +473,17 @@ export default function ChatScreen() {
         </View>
       </KeyboardAvoidingView>
       </PaygateOverlay>
+
+      <ConsumablePlaceholder
+        visible={showQuestionConsumable}
+        kind="question"
+        onClose={() => setShowQuestionConsumable(false)}
+        onPurchased={() => {
+          setExtraQuestionsPurchased((n) => n + 1);
+          const pending = inputText.trim();
+          if (pending) handleSend(pending);
+        }}
+      />
     </ThemedView>
   );
 }

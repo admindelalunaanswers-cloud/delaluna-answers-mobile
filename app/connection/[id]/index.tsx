@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import LoadingScreen from "@/app/(util)/loading-screen";
 import { db } from "@/firebaseConfig";
+import ConsumablePlaceholder from "@/src/components/shared/consumable-placeholder.component";
 import HeaderNav from "@/src/components/shared/header-nav";
 import { ThemedText } from "@/src/components/themed-text";
 import { COMPATIBILITY_DEFINITIONS } from "@/src/constants/definitions";
@@ -189,6 +190,8 @@ export default function ConnectionViewScreen() {
   const [expandedKeyword, setExpandedKeyword] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState(LOADING_SAYINGS[0]);
   const [hasSynastryReading, setHasSynastryReading] = useState(false);
+  const [synastryConsumablePurchased, setSynastryConsumablePurchased] = useState(false);
+  const [showSynastryConsumable, setShowSynastryConsumable] = useState(false);
 
   // Rotate loading messages while waiting for report
   useEffect(() => {
@@ -304,13 +307,7 @@ export default function ConnectionViewScreen() {
     return params;
   };
 
-  const handleCompareBirthChart = async () => {
-    // Gate behind premium / consumable purchase (skip if already viewed)
-    if (!isPro && !hasSynastryReading) {
-      router.push('/(settings)/paywall');
-      return;
-    }
-
+  const runSynastryCompare = async () => {
     const fp = connection?.firstPerson;
     const sp = connection?.secondPerson;
 
@@ -332,11 +329,18 @@ export default function ConnectionViewScreen() {
       });
 
       router.push(`/connection/${connectionId}/synastry`);
-
     } catch (e) {
-      console.error("Error calculating synastry:", e);
       setComputingSynastry(false);
     }
+  };
+
+  const handleCompareBirthChart = async () => {
+    // Gate behind premium / consumable purchase (skip if already viewed)
+    if (!isPro && !hasSynastryReading && !synastryConsumablePurchased) {
+      setShowSynastryConsumable(true);
+      return;
+    }
+    await runSynastryCompare();
   };
 
   const handleCompareBirthCharts = async () => {
@@ -498,6 +502,16 @@ export default function ConnectionViewScreen() {
           )}
         </ScrollView>
       </View>
+
+      <ConsumablePlaceholder
+        visible={showSynastryConsumable}
+        kind="synastry"
+        onClose={() => setShowSynastryConsumable(false)}
+        onPurchased={() => {
+          setSynastryConsumablePurchased(true);
+          runSynastryCompare();
+        }}
+      />
     </View>
   );
 }

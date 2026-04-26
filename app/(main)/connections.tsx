@@ -27,6 +27,7 @@ import { db, functions } from "../../firebaseConfig";
 import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
 import { useUser } from "@/src/context/user-context";
 import { useRevenueCat } from "@/src/context/revenuecat-context";
+import ConsumablePlaceholder from "@/src/components/shared/consumable-placeholder.component";
 import HeaderNav from "@/src/components/shared/header-nav";
 import DelalunaContainer from "@/src/components/shared/delaluna-container.component";
 import { ThemedView } from "@/src/components/themed-view";
@@ -113,12 +114,15 @@ export default function ConnectionsScreen() {
 
   const [connections, setConnections] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [extraSlotsPurchased, setExtraSlotsPurchased] = useState(0);
+  const [showSlotConsumable, setShowSlotConsumable] = useState(false);
   const fade = useSharedValue(0);
   const fadeStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
 
   const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
 
-  const accessLimit = isPro ? PREMIUM_CONNECTION_LIMIT : FREE_CONNECTION_LIMIT;
+  const accessLimit =
+    (isPro ? PREMIUM_CONNECTION_LIMIT : FREE_CONNECTION_LIMIT) + extraSlotsPurchased;
   const canAddNew = connections.length < accessLimit;
 
   const presentUpgradePaywall = () => {
@@ -134,14 +138,19 @@ export default function ConnectionsScreen() {
       if (isPro) {
         Alert.alert(
           'Connection limit reached',
-          `You can save up to ${PREMIUM_CONNECTION_LIMIT} connections. Remove one to add a new one.`,
+          `You can save up to ${PREMIUM_CONNECTION_LIMIT} connections. Remove one to add a new one, or buy an extra slot.`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Buy slot', onPress: () => setShowSlotConsumable(true) },
+          ],
         );
       } else {
         Alert.alert(
           'Connection limit reached',
-          `Free accounts can save up to ${FREE_CONNECTION_LIMIT} connections. Remove one to free up a slot, or upgrade to Premium for up to ${PREMIUM_CONNECTION_LIMIT}.`,
+          `Free accounts can save up to ${FREE_CONNECTION_LIMIT} connections. Remove one, buy an extra slot, or upgrade to Premium for up to ${PREMIUM_CONNECTION_LIMIT}.`,
           [
-            { text: 'OK', style: 'cancel' },
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Buy slot', onPress: () => setShowSlotConsumable(true) },
             { text: 'Upgrade', onPress: presentUpgradePaywall },
           ],
         );
@@ -154,9 +163,10 @@ export default function ConnectionsScreen() {
   const handleLockedPress = () => {
     Alert.alert(
       'Connection locked',
-      `Free accounts can access ${FREE_CONNECTION_LIMIT} connections. Remove a connection to unlock another, or upgrade to Premium.`,
+      `Free accounts can access ${FREE_CONNECTION_LIMIT} connections. Remove a connection to unlock another, buy an extra slot, or upgrade to Premium.`,
       [
-        { text: 'OK', style: 'cancel' },
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Buy slot', onPress: () => setShowSlotConsumable(true) },
         { text: 'Upgrade', onPress: presentUpgradePaywall },
       ],
     );
@@ -297,6 +307,16 @@ export default function ConnectionsScreen() {
             </DelalunaContainer>
           </ThemedView>
         )}
+
+        <ConsumablePlaceholder
+          visible={showSlotConsumable}
+          kind="connection"
+          onClose={() => setShowSlotConsumable(false)}
+          onPurchased={() => {
+            setExtraSlotsPurchased((n) => n + 1);
+            router.push('/connection/new');
+          }}
+        />
       </ThemedView>
     </Animated.View>
   );
