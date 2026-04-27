@@ -19,14 +19,13 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import LoadingScreen from "@/app/(util)/loading-screen";
 import { db } from "@/firebaseConfig";
 import ConsumablePlaceholder from "@/src/components/shared/consumable-placeholder.component";
 import HeaderNav from "@/src/components/shared/header-nav";
 import { ThemedText } from "@/src/components/themed-text";
 import { COMPATIBILITY_DEFINITIONS } from "@/src/constants/definitions";
-import { useUser } from "@/src/context/user-context";
 import { useRevenueCat } from "@/src/context/revenuecat-context";
+import { useUser } from "@/src/context/user-context";
 import { calculateNatalChart } from "@/src/services/astroEngine";
 import { subscribeToSynastryReading } from "@/src/services/synastry-reading.service";
 import { NavigationStore } from "@/src/stores/navigation-store";
@@ -185,7 +184,7 @@ export default function ConnectionViewScreen() {
   const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
 
   const [connection, setConnection] = useState<ConnectionDoc | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedKeyword, setExpandedKeyword] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState(LOADING_SAYINGS[0]);
@@ -368,9 +367,7 @@ export default function ConnectionViewScreen() {
 
   // ─── Loading / Error states ─────────────────────────────────────────────────
 
-  if (loading) {
-    return <LoadingScreen message={loadingMessage} />;
-  }
+  
 
   if (error) {
     return (
@@ -417,24 +414,10 @@ export default function ConnectionViewScreen() {
 
           
 
-          {/* Score bars or pending state */}
-          {!report ? (
-            <View style={styles.pendingCard}>
-              {connection?.status?.state === "error" ? (
-                <Text style={styles.errorText}>Something went wrong generating the report.</Text>
-              ) : (
-                <>
-                  <LottieView
-                    source={require("@/src/assets/animations/splash-loop.json")}
-                    autoPlay
-                    loop
-                    style={styles.pendingAnimation}
-                  />
-                  <Text style={styles.pendingText}>{statusLabel}</Text>
-                </>
-              )}
-            </View>
-          ) : (
+          {/* Score bars — only render once the report exists */}
+          {connection?.status?.state === "error" && !report ? (
+            <Text style={styles.errorText}>Something went wrong generating the report.</Text>
+          ) : report ? (
             <>
               {/* Compare / View Birth Charts */}
               <TouchableOpacity
@@ -444,7 +427,7 @@ export default function ConnectionViewScreen() {
                 disabled={computingSynastry}
               >
                 <Text style={styles.compareBirthChartsBtnText}>
-                  {hasSynastryReading ? "View Birth Charts" : "Compare Birth Charts"}
+                  { "View Synastry Analysis"}
                 </Text>
               </TouchableOpacity>
 
@@ -499,7 +482,7 @@ export default function ConnectionViewScreen() {
                   );
                 })}
             </>
-          )}
+          ) : null}
         </ScrollView>
       </View>
 

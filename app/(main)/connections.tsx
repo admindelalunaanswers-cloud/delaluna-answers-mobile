@@ -1,39 +1,38 @@
-import React, { useEffect, useState, memo } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { httpsCallable } from "firebase/functions";
+import React, { memo, useEffect, useState } from "react";
 import {
+  Alert,
   Image,
+  ScrollView,
   StyleSheet,
-  View,
-  ActivityIndicator,
   Text,
   TouchableOpacity,
-  Alert,
-  ScrollView,
+  View
 } from "react-native";
+import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
 import Animated, {
-  useSharedValue,
+  Easing,
   useAnimatedStyle,
+  useSharedValue,
   withDelay,
   withTiming,
-  Easing,
 } from "react-native-reanimated";
-import { Ionicons } from "@expo/vector-icons";
-import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
-import { httpsCallable } from "firebase/functions";
-import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
-import { initialWindowSafeAreaInsets, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { db, functions } from "../../firebaseConfig";
-import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
-import { useUser } from "@/src/context/user-context";
-import { useRevenueCat } from "@/src/context/revenuecat-context";
 import ConsumablePlaceholder from "@/src/components/shared/consumable-placeholder.component";
-import HeaderNav from "@/src/components/shared/header-nav";
 import DelalunaContainer from "@/src/components/shared/delaluna-container.component";
-import { ThemedView } from "@/src/components/themed-view";
-import { ConnectionsCache, connectionDisplayName } from "@/src/services/connections-cache.service";
+import HeaderNav from "@/src/components/shared/header-nav";
 import { ThemedText } from "@/src/components/themed-text";
+import { ThemedView } from "@/src/components/themed-view";
 import { CONNECTIONS_DEFINITION } from "@/src/constants/definitions";
+import { useRevenueCat } from "@/src/context/revenuecat-context";
+import { useUser } from "@/src/context/user-context";
+import { ConnectionsCache } from "@/src/services/connections-cache.service";
+import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
+import { db, functions } from "../../firebaseConfig";
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -234,13 +233,7 @@ export default function ConnectionsScreen() {
     );
   };
 
-  if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#fff" />
-      </View>
-    );
-  }
+  
 
   const hasConnections = connections.length > 0;
 

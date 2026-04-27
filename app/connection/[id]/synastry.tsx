@@ -49,24 +49,31 @@ function AspectRow({ a }: { a: Aspect }) {
   const orbMin = Math.floor((a.orb % 1) * 60);
   return (
     <View style={styles.aspectRow}>
-      <View style={styles.aspectPlanets}>
-        <Text style={[styles.aspectPSym, { color: C.planet[a.planet1] ?? C.muted }]}>
+      <View style={styles.aspectSide}>
+        <Text style={[styles.aspectPSym, { color: C.purpleLight }]}>
           {a.symbol1}
         </Text>
+        <Text style={[styles.aspectPlanetName, { color: C.purpleLight }]} numberOfLines={1}>
+          {a.planet1}
+        </Text>
+      </View>
+
+      <View style={styles.aspectMid}>
         <Text style={[styles.aspectSym, { color }]}>{a.aspectSymbol}</Text>
-        <Text style={[styles.aspectPSym, { color: C.planet[a.planet2] ?? C.muted }]}>
+        <Text style={[styles.aspectType, { color }]}>{a.type}</Text>
+        <Text style={styles.aspectOrb}>
+          {orbDeg}°{pad(orbMin)}'
+        </Text>
+      </View>
+
+      <View style={[styles.aspectSide, styles.aspectSideRight]}>
+        <Text style={[styles.aspectPSym, { color: C.gold }]}>
           {a.symbol2}
         </Text>
-      </View>
-      <View style={styles.aspectMid}>
-        <Text style={[styles.aspectType, { color }]}>{a.type}</Text>
-        <Text style={styles.aspectNames}>
-          {a.planet1} · {a.planet2}
+        <Text style={[styles.aspectPlanetName, { color: C.gold }]} numberOfLines={1}>
+          {a.planet2}
         </Text>
       </View>
-      <Text style={styles.aspectOrb}>
-        {orbDeg}°{pad(orbMin)}'
-      </Text>
     </View>
   );
 }
@@ -382,31 +389,39 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "rgba(255,255,255,0.08)",
   },
-  aspectPlanets: {
-    flexDirection: "row",
-    alignItems: "center",
-    width: scale(68),
-    gap: scale(2),
+  aspectSide: {
+    flex: 1,
+    alignItems: "flex-start",
+    gap: verticalScale(2),
+  },
+  aspectSideRight: {
+    alignItems: "flex-end",
   },
   aspectPSym: {
-    fontSize: moderateScale(18),
-    width: scale(22),
+    fontSize: moderateScale(20),
     textAlign: "center",
   },
+  aspectPlanetName: {
+    fontSize: moderateScale(11),
+    fontWeight: "600",
+    letterSpacing: 0.3,
+  },
   aspectSym: {
-    fontSize: moderateScale(15),
-    width: scale(20),
+    fontSize: moderateScale(18),
     textAlign: "center",
     fontWeight: "700",
   },
   aspectMid: {
     flex: 1,
+    alignItems: "center",
     paddingHorizontal: scale(8),
+    gap: verticalScale(1),
   },
   aspectType: {
-    fontSize: moderateScale(12),
+    fontSize: moderateScale(11),
     fontWeight: "700",
     letterSpacing: 0.5,
+    textTransform: "uppercase",
   },
   aspectNames: {
     color: C.dimText,
@@ -415,9 +430,8 @@ const styles = StyleSheet.create({
   },
   aspectOrb: {
     color: C.moonSilver,
-    fontSize: moderateScale(11),
-    minWidth: scale(40),
-    textAlign: "right",
+    fontSize: moderateScale(10),
+    textAlign: "center",
   },
 
   // Reading cards
