@@ -16,7 +16,6 @@ import { UserProvider, useUser } from '@/src/context/user-context';
 import { RevenueCatProvider } from '@/src/context/revenuecat-context';
 import { useColorScheme } from '@/src/hooks/use-color-scheme';
 import { useTheme } from '@/src/hooks/use-theme';
-import LoadingScreen from './(util)/loading-screen';
 
 function AuthGate() {
   const { authUser, userDoc, loading: userLoading } = useUser();
@@ -66,29 +65,6 @@ function AuthGate() {
       router.replace('/(main)');
     }
   }, [authUser, userDoc, userLoading, inAuth, inStartup, horoscopeReady]);
-
-  const isRedirecting =
-    !userLoading &&
-    (
-      (!authUser && !inAuth && !inStartup) ||
-      (!!authUser && !authUser.emailVerified && !!userDoc && !userDoc.isEmailVerified && !inAuth) ||
-      (!!authUser && (inAuth || inStartup) && horoscopeReady && (userDoc?.isEmailVerified === true || authUser.emailVerified))
-    );
-
-  // Show a global loading screen while:
-  // - auth state is resolving
-  // - initial data is loading for a non-auth screen (login → main)
-  // - a redirect is in-flight
-  // Do NOT hide auth screens while horoscope is generating — sign-up manages
-  // its own loading UI and 30-second safety-net timeout while on that screen.
-  const showLoading =
-    (userLoading && !inAuth && !inStartup) ||
-    (!!authUser && dataLoading && !inAuth && !inStartup) ||
-    (isRedirecting && !inAuth && !inStartup);
-
-  if (showLoading) {
-    return <LoadingScreen message="Loading..." />;
-  }
 
   return (
     <ThemedRoot>

@@ -32,6 +32,9 @@ yarn-error.*
 firebase-debug.log
 firestore-debug.log
 
+# Firebase emulator & CLI logs
+.firebase/
+
 # Firebase Functions compiled output
 functions/lib/
 
@@ -52,18 +55,11 @@ extensions/*.secret.local
 # typescript
 *.tsbuildinfo
 
-app-example
-
 # generated native folders
 /ios
 /android
 app.apk
 /scripts
-.claude
+
+# local Claude Code config
 .claude/
-.claude/settings.json
-.claude/settings.json
-CLAUDE.md
-CLAUDE.md
-CLAUDE.md
-CHEATSHEET.md
