@@ -13,12 +13,22 @@ export interface ChatMessageDoc {
   isPending: boolean;
   isError: boolean;
   createdAt: Date;
+  connectionId?: string;
+  connectionName?: string;
 }
 
 export interface SavedChatMessage {
   userMessage: string;
   response: string | null;
   createdAt: Date;
+  connectionId?: string;
+  connectionName?: string;
+}
+
+export interface ChatConnectionContext {
+  id: string;
+  name: string;
+  contextSummary: string;
 }
 
 export interface SavedChatSession {
@@ -73,6 +83,8 @@ export function subscribeToChatHistory(
           isPending: !response && state !== 'ERROR',
           isError: state === 'ERROR',
           createdAt: (data.createTime as Timestamp)?.toDate() ?? new Date(),
+          connectionId: typeof data.connectionId === 'string' ? data.connectionId : undefined,
+          connectionName: typeof data.connectionName === 'string' ? data.connectionName : undefined,
         };
       });
       onMessages(messages);
@@ -98,16 +110,29 @@ export async function sendChatMessage(
   uid: string,
   userMessage: string,
   natalChartSummary?: string,
+  connection?: ChatConnectionContext,
 ): Promise<void> {
-  const prompt = natalChartSummary
-    ? `[NATAL CHART]\n${natalChartSummary}\n\n[QUESTION]\n${userMessage}`
-    : userMessage;
+  const sections: string[] = [];
+  if (connection) {
+    sections.push(`[CONNECTION: ${connection.name}]\n${connection.contextSummary}`);
+  }
+  if (natalChartSummary) {
+    sections.push(`[NATAL CHART]\n${natalChartSummary}`);
+  }
+  sections.push(`[QUESTION]\n${userMessage}`);
+  const prompt = sections.length === 1 ? userMessage : sections.join('\n\n');
 
-  await addDoc(collection(db, 'users', uid, 'updayedChat'), {
+  const payload: Record<string, any> = {
     userMessage,
     prompt,
     createTime: Timestamp.now(),
-  });
+  };
+  if (connection) {
+    payload.connectionId = connection.id;
+    payload.connectionName = connection.name;
+  }
+
+  await addDoc(collection(db, 'users', uid, 'updayedChat'), payload);
 }
 
 /**
@@ -118,9 +143,10 @@ export async function retryChatMessage(
   docId: string,
   userMessage: string,
   natalChartSummary?: string,
+  connection?: ChatConnectionContext,
 ): Promise<void> {
   await deleteDoc(doc(db, 'users', uid, 'updayedChat', docId));
-  await sendChatMessage(uid, userMessage, natalChartSummary);
+  await sendChatMessage(uid, userMessage, natalChartSummary, connection);
 }
 
 /**
@@ -137,11 +163,16 @@ export async function saveChatAndClear(uid: string, messages: ChatMessageDoc[]):
 
   await addDoc(collection(db, 'users', uid, 'savedChats'), {
     title: completed[0].userMessage,
-    messages: completed.map(m => ({
-      userMessage: m.userMessage,
-      response: m.response,
-      createdAt: Timestamp.fromDate(m.createdAt),
-    })),
+    messages: completed.map(m => {
+      const entry: Record<string, any> = {
+        userMessage: m.userMessage,
+        response: m.response,
+        createdAt: Timestamp.fromDate(m.createdAt),
+      };
+      if (m.connectionId) entry.connectionId = m.connectionId;
+      if (m.connectionName) entry.connectionName = m.connectionName;
+      return entry;
+    }),
     savedAt: Timestamp.now(),
   });
 
@@ -167,6 +198,8 @@ export function subscribeToChatSessions(
             userMessage: m.userMessage ?? '',
             response: m.response ?? null,
             createdAt: m.createdAt?.toDate?.() ?? new Date(),
+            connectionId: typeof m.connectionId === 'string' ? m.connectionId : undefined,
+            connectionName: typeof m.connectionName === 'string' ? m.connectionName : undefined,
           })),
           savedAt: (data.savedAt as Timestamp)?.toDate() ?? new Date(),
         };
@@ -201,13 +234,16 @@ export async function resumeChatSession(
   // These are already-completed turns: include `response` and a COMPLETED
   // status so the listener treats them as finished.
   for (const msg of session.messages) {
-    await addDoc(collection(db, 'users', uid, 'updayedChat'), {
+    const payload: Record<string, any> = {
       userMessage: msg.userMessage,
       prompt: '',
       response: msg.response ?? '',
       status: { state: 'COMPLETED' },
       createTime: Timestamp.fromDate(msg.createdAt),
-    });
+    };
+    if (msg.connectionId) payload.connectionId = msg.connectionId;
+    if (msg.connectionName) payload.connectionName = msg.connectionName;
+    await addDoc(collection(db, 'users', uid, 'updayedChat'), payload);
   }
 
   // The session is now active — drop the saved copy.

@@ -19,6 +19,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ConsumablePlaceholder from '@/src/components/shared/consumable-placeholder.component';
+import ConnectionPickerSheet, { type PickerConnection } from '@/src/components/connection-picker-sheet';
 import HeaderNav from '@/src/components/shared/header-nav';
 import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
 import { ThemedView } from '@/src/components/themed-view';
@@ -26,7 +27,8 @@ import { C, R, S } from '@/src/constants/theme';
 import { useUser } from '@/src/context/user-context';
 import { useResponsive } from '@/src/hooks/use-responsive';
 import { deleteChatSession, resumeChatSession, retryChatMessage, saveChatAndClear, sendChatMessage, subscribeToChatHistory, subscribeToChatSessions } from '@/src/services/chat.service';
-import type { ChatMessageDoc, SavedChatSession } from '@/src/services/chat.service';
+import type { ChatConnectionContext, ChatMessageDoc, SavedChatSession } from '@/src/services/chat.service';
+import { buildConnectionContextSummary } from '@/src/services/connection-context.service';
 import { buildNatalChartSummary } from '@/src/services/natal-chart-breakdown.service';
 import { ChatStore } from '@/src/stores/chat-store';
 import { HOME_STRINGS } from '@/src/constants/strings';
@@ -43,6 +45,17 @@ const SUGGESTIONS = [
   'What should I focus on this week?',
   'How can I better understand my emotions?',
   'What does my rising sign reveal about me?',
+];
+
+const CONNECTION_SUGGESTIONS = [
+  'Should I reach out today?',
+  'Why do we keep having the same fight?',
+  "What's the long-term outlook for us?",
+  'How do I bring up what\'s bothering me?',
+  'Are we actually compatible?',
+  'What is each of us bringing to this dynamic?',
+  'How do I get through to them when they shut down?',
+  'Should I give this another shot?',
 ];
 
 const VISIBLE_SUGGESTIONS = 5;
@@ -94,6 +107,9 @@ function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: C
 
   return (
     <View style={styles.messageGroup}>
+      {msg.connectionName ? (
+        <Text style={styles.aboutTag}>about {msg.connectionName}</Text>
+      ) : null}
       <View style={styles.userBubbleRow}>
         <View style={styles.userBubble}>
           <Text style={styles.userBubbleText}>{msg.userMessage}</Text>
@@ -138,6 +154,8 @@ export default function ChatScreen() {
   const [showHistory, setShowHistory] = useState(false);
   const [savedSessions, setSavedSessions] = useState<SavedChatSession[]>([]);
   const [viewingSession, setViewingSession] = useState<SavedChatSession | null>(null);
+  const [selectedConnection, setSelectedConnection] = useState<ChatConnectionContext | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const [extraQuestionsPurchased, setExtraQuestionsPurchased] = useState(0);
   const [showQuestionConsumable, setShowQuestionConsumable] = useState(false);
@@ -191,6 +209,44 @@ export default function ChatScreen() {
     fromNotification.current = ChatStore.popFromNotification();
   }, []);
 
+  // ─── Pending connection from connection detail screen ─────────────────────
+
+  useEffect(() => {
+    const pending = ChatStore.popPendingConnection();
+    if (!pending || !authUser) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const ctx = await buildConnectionContextSummary(authUser.uid, pending.id);
+        if (!cancelled && ctx) setSelectedConnection(ctx);
+      } catch (e) {
+        console.error('connection context load error', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [authUser?.uid]);
+
+  // ─── Rehydrate chip from latest message's connection metadata ─────────────
+
+  const lastConnectionId = messages.length > 0
+    ? messages[messages.length - 1].connectionId
+    : undefined;
+
+  useEffect(() => {
+    if (!authUser || !lastConnectionId) return;
+    if (selectedConnection?.id === lastConnectionId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const ctx = await buildConnectionContextSummary(authUser.uid, lastConnectionId);
+        if (!cancelled && ctx) setSelectedConnection(ctx);
+      } catch {
+        // connection may have been deleted — leave chip cleared
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [authUser?.uid, lastConnectionId]);
+
 
   // ─── Auto-send initial message from ChatStore ──────────────────────────────
 
@@ -243,24 +299,48 @@ export default function ChatScreen() {
     setInputText('');
     setIsSending(true);
     try {
-      await sendChatMessage(authUser.uid, msg, chartSummary);
+      await sendChatMessage(authUser.uid, msg, chartSummary, selectedConnection ?? undefined);
     } catch (e) {
       console.error('chat send error', e);
     } finally {
       setIsSending(false);
     }
-  }, [inputText, authUser, isSending, chatLocked, chartSummary, handleUpgrade]);
+  }, [inputText, authUser, isSending, chatLocked, chartSummary, selectedConnection, handleUpgrade]);
 
   // ─── Retry ─────────────────────────────────────────────────────────────────
 
   const handleRetry = useCallback(async (msg: ChatMessageDoc) => {
     if (!authUser) return;
     try {
-      await retryChatMessage(authUser.uid, msg.id, msg.userMessage, chartSummary);
+      // Prefer the chip's current connection; fall back to whatever was on the message.
+      let retryCtx: ChatConnectionContext | undefined =
+        selectedConnection?.id === msg.connectionId ? selectedConnection ?? undefined : undefined;
+      if (!retryCtx && msg.connectionId) {
+        const fresh = await buildConnectionContextSummary(authUser.uid, msg.connectionId);
+        if (fresh) retryCtx = fresh;
+      }
+      await retryChatMessage(authUser.uid, msg.id, msg.userMessage, chartSummary, retryCtx);
     } catch (e) {
       console.error('chat retry error', e);
     }
-  }, [authUser, chartSummary]);
+  }, [authUser, chartSummary, selectedConnection]);
+
+  // ─── Connection picker handlers ───────────────────────────────────────────
+
+  const handleSelectConnection = useCallback(async (picked: PickerConnection) => {
+    if (!authUser) return;
+    setPickerOpen(false);
+    try {
+      const ctx = await buildConnectionContextSummary(authUser.uid, picked.id);
+      if (ctx) setSelectedConnection(ctx);
+    } catch (e) {
+      console.error('connection context load error', e);
+    }
+  }, [authUser]);
+
+  const handleClearConnection = useCallback(() => {
+    setSelectedConnection(null);
+  }, []);
 
   // ─── New chat ──────────────────────────────────────────────────────────────
 
@@ -402,10 +482,17 @@ export default function ChatScreen() {
         <View style={[styles.flex, { paddingTop: headerHeight }]}>
           {showSuggestions ? (
             <View style={styles.suggestionsContainer}>
-              <Text style={styles.suggestionsLabel}>What's on your mind?</Text>
-              {Array.from({ length: VISIBLE_SUGGESTIONS }, (_, i) =>
-                SUGGESTIONS[(suggestionOffset + i) % SUGGESTIONS.length]
-              ).map((q) => (
+              <Text style={styles.suggestionsLabel}>
+                {selectedConnection
+                  ? `What do you want to know about ${selectedConnection.name}?`
+                  : "What's on your mind?"}
+              </Text>
+              {(() => {
+                const pool = selectedConnection ? CONNECTION_SUGGESTIONS : SUGGESTIONS;
+                return Array.from({ length: VISIBLE_SUGGESTIONS }, (_, i) =>
+                  pool[(suggestionOffset + i) % pool.length]
+                );
+              })().map((q) => (
                 <TouchableOpacity
                   key={q}
                   style={styles.suggestionChip}
@@ -439,6 +526,30 @@ export default function ChatScreen() {
             />
           )}
 
+          <View style={styles.contextRow}>
+            {selectedConnection ? (
+              <TouchableOpacity
+                style={styles.contextChipActive}
+                onPress={handleClearConnection}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="person-circle-outline" size={14} color={C.purpleLight} />
+                <Text style={styles.contextChipText}>Talking about {selectedConnection.name}</Text>
+                <Ionicons name="close" size={14} color={C.purpleLight} />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.contextChipAdd}
+                onPress={() => setPickerOpen(true)}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="add" size={14} color={C.muted} />
+                <Text style={styles.contextChipAddText}>About a connection</Text>
+              </TouchableOpacity>
+            )}
+          </View>
           <View style={[styles.inputBar, { paddingBottom: S.sm }]}>
             <TextInput
               style={styles.textInput}
@@ -483,6 +594,13 @@ export default function ChatScreen() {
           const pending = inputText.trim();
           if (pending) handleSend(pending);
         }}
+      />
+
+      <ConnectionPickerSheet
+        visible={pickerOpen}
+        uid={authUser?.uid}
+        onClose={() => setPickerOpen(false)}
+        onSelect={handleSelectConnection}
       />
     </ThemedView>
   );
@@ -598,6 +716,51 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.08)',
     backgroundColor: 'rgba(0,0,0,0.2)',
+  },
+  contextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: S.sm + 2,
+    paddingTop: S.sm,
+    paddingBottom: 2,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+  },
+  contextChipActive: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: S.sm + 2,
+    borderRadius: R.pill,
+    backgroundColor: 'rgba(184,163,255,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(184,163,255,0.45)',
+  },
+  contextChipText: {
+    color: C.purpleLight,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  contextChipAdd: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: S.sm + 2,
+    borderRadius: R.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  contextChipAddText: {
+    color: C.muted,
+    fontSize: 12,
+  },
+  aboutTag: {
+    alignSelf: 'flex-end',
+    color: C.purpleLight,
+    fontSize: 11,
+    fontStyle: 'italic',
+    marginBottom: 2,
   },
   textInput: {
     flex: 1,

@@ -28,6 +28,7 @@ import { useRevenueCat } from "@/src/context/revenuecat-context";
 import { useUser } from "@/src/context/user-context";
 import { calculateNatalChart } from "@/src/services/astroEngine";
 import { subscribeToSynastryReading } from "@/src/services/synastry-reading.service";
+import { ChatStore } from "@/src/stores/chat-store";
 import { NavigationStore } from "@/src/stores/navigation-store";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 
@@ -342,6 +343,14 @@ export default function ConnectionViewScreen() {
     await runSynastryCompare();
   };
 
+  const handleTalkToDelaluna = () => {
+    if (!connectionId) return;
+    const sp = connection?.secondPerson;
+    const name = sp?.firstName?.trim() || "this connection";
+    ChatStore.setPendingConnection({ id: String(connectionId), name });
+    router.push("/(main)/chat");
+  };
+
   const handleCompareBirthCharts = async () => {
     const fp = connection?.firstPerson;
     const sp = connection?.secondPerson;
@@ -429,6 +438,20 @@ export default function ConnectionViewScreen() {
                 <Text style={styles.compareBirthChartsBtnText}>
                   { "View Synastry Analysis"}
                 </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.talkToDelalunaBtn}
+                onPress={handleTalkToDelaluna}
+                activeOpacity={0.85}
+              >
+                <Ionicons
+                  name="chatbubble-ellipses-outline"
+                  size={moderateScale(14)}
+                  color="#FFFFFF"
+                  style={{ marginRight: scale(6) }}
+                />
+                <Text style={styles.talkToDelalunaBtnText}>Talk to Delaluna About It</Text>
               </TouchableOpacity>
 
               <Text style={styles.sectionLabel}>Weekly Advice</Text>
@@ -635,10 +658,25 @@ const styles = StyleSheet.create({
     borderRadius: scale(10),
     paddingVertical: verticalScale(10),
     alignItems: "center",
-    marginBottom: verticalScale(20),
+    marginBottom: verticalScale(10),
   },
   compareBirthChartsBtnText: {
     color: "#B8A3FF",
+    fontSize: moderateScale(13),
+    fontWeight: "600",
+    letterSpacing: 0.5,
+  },
+  talkToDelalunaBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#B8A3FF",
+    borderRadius: scale(10),
+    paddingVertical: verticalScale(10),
+    marginBottom: verticalScale(20),
+  },
+  talkToDelalunaBtnText: {
+    color: "#FFFFFF",
     fontSize: moderateScale(13),
     fontWeight: "600",
     letterSpacing: 0.5,
