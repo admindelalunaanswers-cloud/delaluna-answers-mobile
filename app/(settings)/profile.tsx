@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, Image, TouchableOpacity, StyleSheet, Alert, ScrollView, ActivityIndicator,
+  View, Text, Image, TouchableOpacity, StyleSheet, Alert, ScrollView, ActivityIndicator, Switch,
 } from 'react-native';
 
 import { router } from 'expo-router';
@@ -369,6 +369,39 @@ export default function ProfileScreen() {
           
         </View>
 
+        {/* ── DEV TESTING (temporary — remove before release) ── */}
+        <View style={[ss.detailsCard, { marginTop: scale(12) }]}>
+          <Text style={ss.sectionLabel}>DEV TESTING</Text>
+
+          <View style={ss.detailRow}>
+            <Text style={ss.detailLabel}>Free trial</Text>
+            <Switch
+              value={devPlan === 'freeTrial'}
+              onValueChange={(on) => setDevPlan(on ? 'freeTrial' : 'free')}
+              trackColor={{ false: 'rgba(255,255,255,0.15)', true: 'rgba(111,255,233,0.5)' }}
+              thumbColor={devPlan === 'freeTrial' ? '#6FFFE9' : '#f4f3f4'}
+            />
+          </View>
+          <View style={ss.separator} />
+          <View style={[ss.detailRow, devPlan === 'freeTrial' && ss.rowDisabled]}>
+            <Text style={ss.detailLabel}>Premium</Text>
+            <Switch
+              value={devPlan === 'premium'}
+              onValueChange={(on) => setDevPlan(on ? 'premium' : 'free')}
+              disabled={devPlan === 'freeTrial'}
+              trackColor={{ false: 'rgba(255,255,255,0.15)', true: 'rgba(255,215,0,0.5)' }}
+              thumbColor={devPlan === 'premium' ? '#FFD700' : '#f4f3f4'}
+            />
+          </View>
+          <View style={ss.separator} />
+          <View style={ss.detailRow}>
+            <Text style={ss.detailLabel}>Current plan</Text>
+            <Text style={ss.detailValue}>
+              {devPlan === 'premium' ? 'Premium' : devPlan === 'freeTrial' ? 'Free Trial' : 'Free'}
+            </Text>
+          </View>
+        </View>
+
         {/* ── Subscription actions ── */}
         {isPremium ? (
           <TouchableOpacity
@@ -495,6 +528,7 @@ const ss = StyleSheet.create({
   rowDivider:      { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.08)', marginHorizontal: scale(16) },
   rowIconDanger:   { tintColor: '#ff4d4f' },
   rowTextDanger:   { flex: 1, color: '#ff4d4f', fontSize: moderateScale(15), fontWeight: '500' },
+  rowDisabled:     { opacity: 0.4 },
 
   // Consumables
 });

@@ -69,12 +69,16 @@ const AnimatedConnectionItem = memo(
     );
 
     return (
-      <Animated.View style={animStyle}>
-        <ReanimatedSwipeable renderRightActions={renderRightActions} overshootRight={false}>
+      <Animated.View style={[animStyle, styles.itemWrapper]}>
+        <ReanimatedSwipeable
+          renderRightActions={renderRightActions}
+          overshootRight={false}
+          containerStyle={styles.swipeable}
+        >
           <ThemedView style={[styles.connectionItem, isLocked && styles.connectionItemLocked]}>
             <TouchableOpacity
               onPress={() => (isLocked ? onLockedPress() : onOpen(connection.id))}
-              style={styles.connectionItem}
+              style={styles.connectionItemInner}
               activeOpacity={0.75}
             >
               <Text
@@ -217,16 +221,19 @@ export default function ConnectionsScreen() {
         {
           text: "Yes, Remove",
           style: "destructive",
-          onPress: async () => {
-            try {
-              const deleteFn = httpsCallable(functions, "deleteConnection");
-              await deleteFn({ userId: authUser?.uid, connectionId });
-              setConnections((prev) => prev.filter((c) => c.id !== connectionId));
-              if (authUser?.uid) ConnectionsCache.remove(authUser.uid, connectionId);
-            } catch (err) {
+          onPress: () => {
+            const uid = authUser?.uid;
+            if (!uid) return;
+            const previous = connections;
+            setConnections((prev) => prev.filter((c) => c.id !== connectionId));
+            ConnectionsCache.remove(uid, connectionId);
+            const deleteFn = httpsCallable(functions, "deleteConnection");
+            deleteFn({ userId: uid, connectionId }).catch((err) => {
               console.error("Error deleting connection:", err);
+              setConnections(previous);
+              ConnectionsCache.save(uid, previous);
               Alert.alert("Error", "Failed to delete connection.");
-            }
+            });
           },
         },
       ]
@@ -319,8 +326,27 @@ const styles = StyleSheet.create({
   container: { flex: 1, width: "100%" },
   centered: { flex: 1, justifyContent: "space-around", alignItems: "center", padding: scale(15) },
   listContainer: { flexGrow: 1, paddingHorizontal: scale(15),  },
-  connectionItem: { padding: scale(16), flexDirection: "row",
-    justifyContent: "center", },
+  itemWrapper: {
+    marginVertical: verticalScale(6),
+    borderRadius: moderateScale(14),
+    overflow: "hidden",
+  },
+  swipeable: {
+    borderRadius: moderateScale(14),
+    overflow: "hidden",
+  },
+  connectionItem: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  connectionItemInner: {
+    padding: scale(16),
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    flex: 1,
+  },
   connectionItemLocked: { opacity: 0.55 },
   connectionName: { color: "#fff", fontSize: moderateScale(16) },
   connectionNameLocked: { color: "rgba(255,255,255,0.55)" },
@@ -332,8 +358,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     width: scale(90),
     height: "100%",
-    borderTopRightRadius: moderateScale(10),
-    borderBottomRightRadius: moderateScale(10),
   },
   deleteText: {
     color: "#fff",
