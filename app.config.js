@@ -12,6 +12,7 @@ module.exports = {
     ios: {
       supportsTablet: false,
       bundleIdentifier: "com.app.delaluna.answers",
+      appleTeamId: "RG6859Q9LQ",
       newArchEnabled: true,
       googleServicesFile: "./GoogleService-Info.plist",
       infoPlist: {
@@ -58,6 +59,9 @@ module.exports = {
             compileSdkVersion: 35,
             targetSdkVersion: 35,
             AGPVersion: "8.10.2",
+          },
+          ios: {
+            deploymentTarget: "15.1",
           },
         },
       ],
