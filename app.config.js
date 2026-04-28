@@ -11,7 +11,7 @@ module.exports = {
     platforms: ["ios", "android"],
     ios: {
       supportsTablet: false,
-      bundleIdentifier: "com.delalunaanswers.mobile",
+      bundleIdentifier: "com.app.delaluna.answers",
       newArchEnabled: true,
       googleServicesFile: "./GoogleService-Info.plist",
       infoPlist: {
@@ -27,7 +27,7 @@ module.exports = {
         backgroundImage: "./src/assets/images/android-icon-background.png",
         monochromeImage: "./src/assets/images/android-icon-monochrome.png",
       },
-      package: "com.delalunaanswers.mobile",
+      package: "com.app.delaluna.answers",
       googleServicesFile: "./google-services.json",
     },
     plugins: [
