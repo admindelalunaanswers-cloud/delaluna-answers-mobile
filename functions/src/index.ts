@@ -360,6 +360,8 @@ export const createConnection = onCall(async (request) => {
     .collection('connections')
     .doc(connectionId);
 
+  const reportRef = connectionRef.collection('report').doc('details');
+
   const existingSnap = await connectionRef.get();
   const isNew = !existingSnap.exists;
 
@@ -370,13 +372,25 @@ export const createConnection = onCall(async (request) => {
       firstPerson: mappedFirst,
       secondPerson: mappedSecond,
       status: { state: 'pending' },
-      prompt,
       birthDetailsChangeCount:
         typeof birthDetailsChangeCount === 'number'
           ? birthDetailsChangeCount
           : existingSnap.data()?.birthDetailsChangeCount ?? 0,
       // Stamp createTime only on first creation; preserve it on edits
       ...(isNew ? { createTime: FieldValue.serverTimestamp() } : {}),
+      // Clear any previous compatibility so the UI shows pending until the new report parses
+      compatibility: FieldValue.delete(),
+    },
+    { merge: true },
+  );
+
+  // Write the prompt to a child doc the chatbot extension watches in isolation.
+  // Single doc per connection in its own subcollection ⇒ no prior turns to inherit.
+  await reportRef.set(
+    {
+      prompt,
+      response: FieldValue.delete(),
+      requestedAt: FieldValue.serverTimestamp(),
     },
     { merge: true },
   );
@@ -519,27 +533,31 @@ export const notifyChatReply = onDocumentUpdated(
 // ─── parseConnectionCompatibility ────────────────────────────────────────────
 
 export const parseConnectionCompatibility = onDocumentUpdated(
-  'users/{userId}/connections/{connectionId}',
+  'users/{userId}/connections/{connectionId}/report/{reportId}',
   async (event) => {
     const before = event.data?.before?.data();
     const after = event.data?.after?.data();
+    const { userId, connectionId } = event.params;
 
     if (!after?.response) return;
     if (before?.response === after.response) return;
-    if (after?.compatibility) return;
+
+    const connectionRef = db
+      .collection('users').doc(userId)
+      .collection('connections').doc(connectionId);
 
     try {
       const raw = after.response as string;
       const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
       const parsed = JSON.parse(clean);
 
-      await event.data!.after.ref.update({
+      await connectionRef.update({
         compatibility: parsed,
         'status.state': 'complete',
       });
     } catch (err) {
       console.error('[parseConnectionCompatibility] Parse error:', err);
-      await event.data!.after.ref.update({
+      await connectionRef.update({
         'status.state': 'error',
       });
     }

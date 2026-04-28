@@ -49,7 +49,7 @@
     "extensions": {}
   },
   "extensions": {
-    "delete-user-data": "firebase/delete-user-data@0.1.27",
+    "delete-user-data": "firebase/delete-user-data@0.1.28",
     "firestore-genai-chatbot": "googlecloud/firestore-genai-chatbot@0.0.19",
     "firestore-genai-chatbot-1rrn": "googlecloud/firestore-genai-chatbot@0.0.19",
     "firestore-genai-chatbot-update-5i5h": "googlecloud/firestore-genai-chatbot@0.0.19",
