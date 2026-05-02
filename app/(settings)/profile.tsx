@@ -342,18 +342,30 @@ export default function ProfileScreen() {
         <View style={ss.settingsCard}>
           <TouchableOpacity
             style={ss.settingsRow}
-            onPress={() => router.push('/(auth)/forgot-password')}
+            onPress={() => router.push('/(settings)/update-password')}
             activeOpacity={0.75}
           >
-            <Image source={require('@/src/assets/actions/change-password-icon.png')} style={ss.rowIcon} />
             <Text style={ss.rowText}>Reset Password</Text>
             <Image source={require('@/src/assets/actions/arrow-right-icon.png')} style={ss.rowArrow} />
           </TouchableOpacity>
 
           <View style={ss.rowDivider} />
 
+           <TouchableOpacity style={ss.settingsRow} onPress={handleLogout} activeOpacity={0.75}>
+            <Text style={ss.rowText}>Support</Text>
+            <Image source={require('@/src/assets/actions/arrow-right-icon.png')} style={ss.rowArrow} />
+          </TouchableOpacity>
+
+          <View style={ss.rowDivider} />
+           <TouchableOpacity style={ss.settingsRow} onPress={handleLogout} activeOpacity={0.75}>
+            <Text style={ss.rowText}>Feedback</Text>
+            <Image source={require('@/src/assets/actions/arrow-right-icon.png')} style={ss.rowArrow} />
+          </TouchableOpacity>
+
+          <View style={ss.rowDivider} />
+
+
           <TouchableOpacity style={ss.settingsRow} onPress={handleLogout} activeOpacity={0.75}>
-            <Image source={require('@/src/assets/actions/log-out-icon.png')} style={ss.rowIcon} />
             <Text style={ss.rowText}>Log out</Text>
             <Image source={require('@/src/assets/actions/arrow-right-icon.png')} style={ss.rowArrow} />
           </TouchableOpacity>
