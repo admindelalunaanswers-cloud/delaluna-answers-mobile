@@ -114,6 +114,7 @@ export default function UpdatePasswordScreen() {
   };
 
   const renderField = (
+    label: string,
     placeholder: string,
     value: string,
     setValue: (s: string) => void,
@@ -122,31 +123,34 @@ export default function UpdatePasswordScreen() {
     autoComplete: 'password' | 'new-password',
     testID: string
   ) => (
-    <View style={styles.inputWrapper}>
-      <TextInput
-        testID={testID}
-        style={styles.input}
-        placeholder={placeholder}
-        placeholderTextColor="rgba(255,255,255,0.6)"
-        secureTextEntry={!visible}
-        value={value}
-        onChangeText={setValue}
-        autoCapitalize="none"
-        autoCorrect={false}
-        autoComplete={autoComplete}
-        textContentType={autoComplete === 'password' ? 'password' : 'newPassword'}
-      />
-      <TouchableOpacity
-        onPress={() => setVisible(!visible)}
-        style={styles.eyeButton}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      >
-        <Ionicons
-          name={visible ? 'eye-off-outline' : 'eye-outline'}
-          size={moderateScale(20)}
-          color="rgba(255,255,255,0.85)"
+    <View style={styles.fieldGroup}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <View style={styles.inputWrapper}>
+        <TextInput
+          testID={testID}
+          style={styles.input}
+          placeholder={placeholder}
+          placeholderTextColor="rgba(255,255,255,0.6)"
+          secureTextEntry={!visible}
+          value={value}
+          onChangeText={setValue}
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete={autoComplete}
+          textContentType={autoComplete === 'password' ? 'password' : 'newPassword'}
         />
-      </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setVisible(!visible)}
+          style={styles.eyeButton}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons
+            name={visible ? 'eye-off-outline' : 'eye-outline'}
+            size={moderateScale(20)}
+            color="rgba(255,255,255,0.85)"
+          />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
@@ -164,10 +168,13 @@ export default function UpdatePasswordScreen() {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
         showsVerticalScrollIndicator={false}
+        automaticallyAdjustKeyboardInsets
       >
         <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
           <Text style={styles.cancelButtonText}>Cancel</Text>
         </TouchableOpacity>
+
+        <View style={styles.topSpacer} />
 
         <View style={styles.header}>
           <Text style={styles.title}>Change Password</Text>
@@ -178,6 +185,7 @@ export default function UpdatePasswordScreen() {
 
         {renderField(
           'Current Password',
+          'Enter current password',
           currentPassword,
           setCurrentPassword,
           showCurrent,
@@ -188,6 +196,7 @@ export default function UpdatePasswordScreen() {
 
         {renderField(
           'New Password',
+          'Enter new password',
           newPassword,
           setNewPassword,
           showNew,
@@ -231,6 +240,7 @@ export default function UpdatePasswordScreen() {
 
         {renderField(
           'Confirm New Password',
+          'Re-enter new password',
           confirmPassword,
           setConfirmPassword,
           showConfirm,
@@ -271,6 +281,8 @@ export default function UpdatePasswordScreen() {
             <ActivityIndicator color="#fff" />
           </View>
         )}
+
+        <View style={styles.bottomSpacer} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -313,6 +325,19 @@ const styles = StyleSheet.create({
     paddingTop: verticalScale(Platform.OS === 'ios' ? 90 : 70),
     paddingBottom: verticalScale(40),
   },
+  topSpacer: { flex: 1, minHeight: verticalScale(8) },
+  bottomSpacer: { flex: 1, minHeight: verticalScale(8) },
+  fieldGroup: {
+    width: '100%',
+    marginBottom: verticalScale(14),
+  },
+  fieldLabel: {
+    color: '#fff',
+    fontSize: moderateScale(13),
+    fontWeight: '600',
+    marginBottom: verticalScale(6),
+    marginLeft: scale(2),
+  },
   cancelButton: {
     position: 'absolute',
     top: Platform.OS === 'android' ? StatusBar.currentHeight || 20 : 50,
@@ -349,7 +374,6 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(8),
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.25)',
-    marginBottom: verticalScale(16),
   },
   input: {
     flex: 1,
