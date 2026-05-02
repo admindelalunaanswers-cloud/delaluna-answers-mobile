@@ -56,11 +56,11 @@ export default function ForgotPasswordScreen() {
                         const emailInput = email.trim();
                         const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
-                        // 1. Not empt
+                        // 1. Not empty
                         // 2. Valid email format
                         // 3. Not already registered (optional, can be checked in Firebase)
                         if (!email || emailInput === '' || emailInput.length === 0 || !emailRegex.test(emailInput)) {
-                            alert('Please enter a vaild email address.');
+                            alert('Please enter a valid email address.');
                             return;
                         }
                         else {
