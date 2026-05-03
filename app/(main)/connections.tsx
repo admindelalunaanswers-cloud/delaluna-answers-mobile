@@ -30,6 +30,7 @@ import { ThemedView } from "@/src/components/themed-view";
 import { CONNECTIONS_DEFINITION } from "@/src/constants/definitions";
 import { useRevenueCat } from "@/src/context/revenuecat-context";
 import { useUser } from "@/src/context/user-context";
+import { useAdmin } from "@/src/context/admin-context";
 import { ConnectionsCache } from "@/src/services/connections-cache.service";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { db, functions } from "../../firebaseConfig";
@@ -107,12 +108,10 @@ const AnimatedConnectionItem = memo(
   }
 );
 
-const FREE_CONNECTION_LIMIT = 3;
-const PREMIUM_CONNECTION_LIMIT = 10;
-
 export default function ConnectionsScreen() {
   const { authUser } = useUser();
   const { isPro } = useRevenueCat();
+  const { freeConnectionLimit: FREE_CONNECTION_LIMIT, premiumConnectionLimit: PREMIUM_CONNECTION_LIMIT } = useAdmin();
   const insets = useSafeAreaInsets();
 
   const [connections, setConnections] = useState<any[]>([]);

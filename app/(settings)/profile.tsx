@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, Image, TouchableOpacity, StyleSheet, Alert, ScrollView, ActivityIndicator, Switch,
+  View, Text, Image, TouchableOpacity, StyleSheet, Alert, ScrollView, ActivityIndicator,
 } from 'react-native';
 
 import { router } from 'expo-router';
@@ -340,6 +340,21 @@ export default function ProfileScreen() {
 
         {/* ── Settings rows: reset password, log out, delete ── */}
         <View style={ss.settingsCard}>
+          {ud?.isAdmin && (
+            <>
+              <TouchableOpacity
+                style={ss.settingsRow}
+                onPress={() => router.push('/(settings)/admin')}
+                activeOpacity={0.75}
+              >
+                <Ionicons name="construct-outline" size={scale(18)} color="#6FFFE9" style={{ marginRight: scale(4) }} />
+                <Text style={ss.rowText}>Admin</Text>
+                <Image source={require('@/src/assets/actions/arrow-right-icon.png')} style={ss.rowArrow} />
+              </TouchableOpacity>
+              <View style={ss.rowDivider} />
+            </>
+          )}
+
           <TouchableOpacity
             style={ss.settingsRow}
             onPress={() => router.push('/(settings)/update-password')}
@@ -351,13 +366,16 @@ export default function ProfileScreen() {
 
           <View style={ss.rowDivider} />
 
-           <TouchableOpacity style={ss.settingsRow} onPress={handleLogout} activeOpacity={0.75}>
+           <TouchableOpacity style={ss.settingsRow} onPress={() => router.push('/(settings)/support')} activeOpacity={0.75}>
+            <Ionicons name="help-circle-outline" size={scale(18)} color="#ffffff" style={{ marginRight: scale(4) }} />
             <Text style={ss.rowText}>Support</Text>
             <Image source={require('@/src/assets/actions/arrow-right-icon.png')} style={ss.rowArrow} />
           </TouchableOpacity>
 
           <View style={ss.rowDivider} />
-           <TouchableOpacity style={ss.settingsRow} onPress={handleLogout} activeOpacity={0.75}>
+
+           <TouchableOpacity style={ss.settingsRow} onPress={() => router.push('/(settings)/feedback')} activeOpacity={0.75}>
+            <Ionicons name="chatbubble-ellipses-outline" size={scale(18)} color="#ffffff" style={{ marginRight: scale(4) }} />
             <Text style={ss.rowText}>Feedback</Text>
             <Image source={require('@/src/assets/actions/arrow-right-icon.png')} style={ss.rowArrow} />
           </TouchableOpacity>
@@ -366,6 +384,7 @@ export default function ProfileScreen() {
 
 
           <TouchableOpacity style={ss.settingsRow} onPress={handleLogout} activeOpacity={0.75}>
+           <Ionicons name="log-out-outline" size={scale(18)} color="#efefef" style={{ marginRight: scale(4) }} />
             <Text style={ss.rowText}>Log out</Text>
             <Image source={require('@/src/assets/actions/arrow-right-icon.png')} style={ss.rowArrow} />
           </TouchableOpacity>
@@ -379,39 +398,6 @@ export default function ProfileScreen() {
           </TouchableOpacity>
 
           
-        </View>
-
-        {/* ── DEV TESTING (temporary — remove before release) ── */}
-        <View style={[ss.detailsCard, { marginTop: scale(12) }]}>
-          <Text style={ss.sectionLabel}>DEV TESTING</Text>
-
-          <View style={ss.detailRow}>
-            <Text style={ss.detailLabel}>Free trial</Text>
-            <Switch
-              value={devPlan === 'freeTrial'}
-              onValueChange={(on) => setDevPlan(on ? 'freeTrial' : 'free')}
-              trackColor={{ false: 'rgba(255,255,255,0.15)', true: 'rgba(111,255,233,0.5)' }}
-              thumbColor={devPlan === 'freeTrial' ? '#6FFFE9' : '#f4f3f4'}
-            />
-          </View>
-          <View style={ss.separator} />
-          <View style={[ss.detailRow, devPlan === 'freeTrial' && ss.rowDisabled]}>
-            <Text style={ss.detailLabel}>Premium</Text>
-            <Switch
-              value={devPlan === 'premium'}
-              onValueChange={(on) => setDevPlan(on ? 'premium' : 'free')}
-              disabled={devPlan === 'freeTrial'}
-              trackColor={{ false: 'rgba(255,255,255,0.15)', true: 'rgba(255,215,0,0.5)' }}
-              thumbColor={devPlan === 'premium' ? '#FFD700' : '#f4f3f4'}
-            />
-          </View>
-          <View style={ss.separator} />
-          <View style={ss.detailRow}>
-            <Text style={ss.detailLabel}>Current plan</Text>
-            <Text style={ss.detailValue}>
-              {devPlan === 'premium' ? 'Premium' : devPlan === 'freeTrial' ? 'Free Trial' : 'Free'}
-            </Text>
-          </View>
         </View>
 
         {/* ── Subscription actions ── */}

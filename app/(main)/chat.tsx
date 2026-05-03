@@ -33,8 +33,7 @@ import { buildNatalChartSummary } from '@/src/services/natal-chart-breakdown.ser
 import { ChatStore } from '@/src/stores/chat-store';
 import { HOME_STRINGS } from '@/src/constants/strings';
 import { useHoroscope } from '@/src/context/horoscope-context';
-
-const DAILY_CHAT_LIMIT = 1;
+import { useAdmin } from '@/src/context/admin-context';
 
 const SUGGESTIONS = [
   HOME_STRINGS.newLove.questionFunnel,
@@ -143,6 +142,7 @@ function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: C
 export default function ChatScreen() {
   const { authUser } = useUser();
   const { chartDetails } = useHoroscope();
+  const { dailyChatLimit } = useAdmin();
   const insets = useSafeAreaInsets();
   const { scale } = useResponsive();
   const headerHeight = insets.top + scale(44);
@@ -160,7 +160,7 @@ export default function ChatScreen() {
   const [extraQuestionsPurchased, setExtraQuestionsPurchased] = useState(0);
   const [showQuestionConsumable, setShowQuestionConsumable] = useState(false);
 
-  const questionLimit = DAILY_CHAT_LIMIT + extraQuestionsPurchased;
+  const questionLimit = dailyChatLimit + extraQuestionsPurchased;
 
   // Count ALL questions sent today (active chat + saved sessions)
   const todayStart = new Date();

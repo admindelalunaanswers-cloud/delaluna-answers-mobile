@@ -14,6 +14,7 @@ import ThemeProvider from '@/src/context/theme-context';
 import { HoroscopeProvider, useHoroscope } from '@/src/context/horoscope-context';
 import { UserProvider, useUser } from '@/src/context/user-context';
 import { RevenueCatProvider } from '@/src/context/revenuecat-context';
+import { AdminProvider } from '@/src/context/admin-context';
 import { useColorScheme } from '@/src/hooks/use-color-scheme';
 import { useTheme } from '@/src/hooks/use-theme';
 
@@ -115,11 +116,13 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <UserProvider>
           <RevenueCatProvider>
-            <ThemeProvider>
-              <HoroscopeProvider>
-                <AuthGate />
-              </HoroscopeProvider>
-            </ThemeProvider>
+            <AdminProvider>
+              <ThemeProvider>
+                <HoroscopeProvider>
+                  <AuthGate />
+                </HoroscopeProvider>
+              </ThemeProvider>
+            </AdminProvider>
           </RevenueCatProvider>
         </UserProvider>
       </SafeAreaProvider>
