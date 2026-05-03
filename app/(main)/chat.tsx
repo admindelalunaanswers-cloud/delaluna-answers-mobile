@@ -34,6 +34,8 @@ import { ChatStore } from '@/src/stores/chat-store';
 import { HOME_STRINGS } from '@/src/constants/strings';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useAdmin } from '@/src/context/admin-context';
+import { useRevenueCat } from '@/src/context/revenuecat-context';
+import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
 
 const SUGGESTIONS = [
   HOME_STRINGS.newLove.questionFunnel,
@@ -142,7 +144,10 @@ function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: C
 export default function ChatScreen() {
   const { authUser } = useUser();
   const { chartDetails } = useHoroscope();
-  const { dailyChatLimit } = useAdmin();
+  const { dailyChatLimit, premiumDailyChatLimit } = useAdmin();
+  const { isPro } = useRevenueCat();
+  const { hasAccess: trialAccess } = useFreeTrialAccess();
+  const hasPremiumAccess = isPro || trialAccess;
   const insets = useSafeAreaInsets();
   const { scale } = useResponsive();
   const headerHeight = insets.top + scale(44);
@@ -160,7 +165,8 @@ export default function ChatScreen() {
   const [extraQuestionsPurchased, setExtraQuestionsPurchased] = useState(0);
   const [showQuestionConsumable, setShowQuestionConsumable] = useState(false);
 
-  const questionLimit = dailyChatLimit + extraQuestionsPurchased;
+  const baseDailyChatLimit = hasPremiumAccess ? premiumDailyChatLimit : dailyChatLimit;
+  const questionLimit = baseDailyChatLimit + extraQuestionsPurchased;
 
   // Count ALL questions sent today (active chat + saved sessions)
   const todayStart = new Date();
@@ -589,8 +595,8 @@ export default function ChatScreen() {
         visible={showQuestionConsumable}
         kind="question"
         onClose={() => setShowQuestionConsumable(false)}
-        onPurchased={() => {
-          setExtraQuestionsPurchased((n) => n + 1);
+        onPurchased={(quantity) => {
+          setExtraQuestionsPurchased((n) => n + quantity);
           const pending = inputText.trim();
           if (pending) handleSend(pending);
         }}

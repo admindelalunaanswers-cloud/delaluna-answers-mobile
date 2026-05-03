@@ -25,6 +25,7 @@ import HeaderNav from "@/src/components/shared/header-nav";
 import { ThemedText } from "@/src/components/themed-text";
 import { COMPATIBILITY_DEFINITIONS } from "@/src/constants/definitions";
 import { useRevenueCat } from "@/src/context/revenuecat-context";
+import { useFreeTrialAccess } from "@/src/hooks/use-free-trial-access";
 import { useUser } from "@/src/context/user-context";
 import { calculateNatalChart } from "@/src/services/astroEngine";
 import { subscribeToSynastryReading } from "@/src/services/synastry-reading.service";
@@ -181,6 +182,8 @@ export default function ConnectionViewScreen() {
   const { id: connectionId } = useLocalSearchParams<{ id: string }>();
   const { authUser } = useUser();
   const { isPro } = useRevenueCat();
+  const { hasAccess: trialAccess } = useFreeTrialAccess();
+  const hasPremiumAccess = isPro || trialAccess;
   const insets = useSafeAreaInsets();
   const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
 
@@ -336,7 +339,7 @@ export default function ConnectionViewScreen() {
 
   const handleCompareBirthChart = async () => {
     // Gate behind premium / consumable purchase (skip if already viewed)
-    if (!isPro && !hasSynastryReading && !synastryConsumablePurchased) {
+    if (!hasPremiumAccess && !hasSynastryReading && !synastryConsumablePurchased) {
       setShowSynastryConsumable(true);
       return;
     }
@@ -513,7 +516,7 @@ export default function ConnectionViewScreen() {
         visible={showSynastryConsumable}
         kind="synastry"
         onClose={() => setShowSynastryConsumable(false)}
-        onPurchased={() => {
+        onPurchased={(_quantity) => {
           setSynastryConsumablePurchased(true);
           runSynastryCompare();
         }}

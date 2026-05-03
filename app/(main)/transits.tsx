@@ -11,6 +11,7 @@ import { moderateScale, scale as staticScale, verticalScale } from '@/src/utils/
 import { C, R, S } from '@/src/constants/theme';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
+import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
 import { useResponsive } from '@/src/hooks/use-responsive';
 import type { TransitHouseReading } from '@/src/types/transit-reading.types';
 
@@ -112,7 +113,8 @@ export default function TransitsScreen() {
   } = useHoroscope();
 
   const { isPro } = useRevenueCat();
-  const isPremium = isPro;
+  const { hasAccess } = useFreeTrialAccess();
+  const isPremium = isPro || hasAccess;
 
   const insets = useSafeAreaInsets();
   const { scale } = useResponsive();

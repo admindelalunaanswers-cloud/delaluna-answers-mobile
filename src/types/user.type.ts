@@ -36,6 +36,8 @@ export interface UserDoc {
   lastLoggedInAt?:         Timestamp;
   expoPushToken?:          string;
   birthDetailsChangeCount?: number;  // max 3 allowed
+  /** One-time purchased connection slots — persist beyond trial end */
+  extraConnectionSlots?:   number;
 }
 
 // ─── Subcollections ───────────────────────────────────────────────────────────

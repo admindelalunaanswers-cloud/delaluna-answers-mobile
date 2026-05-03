@@ -26,6 +26,7 @@ import { useRevenueCat } from '@/src/context/revenuecat-context';
 import {
   useAdmin,
   DEFAULT_DAILY_CHAT_LIMIT,
+  DEFAULT_PREMIUM_DAILY_CHAT_LIMIT,
   DEFAULT_FREE_CONNECTION_LIMIT,
   DEFAULT_PREMIUM_CONNECTION_LIMIT,
 } from '@/src/context/admin-context';
@@ -98,9 +99,11 @@ export default function AdminScreen() {
   const { devPlan, setDevPlan, isPro } = useRevenueCat();
   const {
     dailyChatLimit,
+    premiumDailyChatLimit,
     freeConnectionLimit,
     premiumConnectionLimit,
     setDailyChatLimit,
+    setPremiumDailyChatLimit,
     setFreeConnectionLimit,
     setPremiumConnectionLimit,
     resetToDefaults,
@@ -174,10 +177,18 @@ export default function AdminScreen() {
           <Text style={ss.sectionLabel}>LIMIT OVERRIDES</Text>
 
           <Stepper
-            label="Daily chat questions"
+            label="Free daily chat questions"
             value={dailyChatLimit}
             defaultValue={DEFAULT_DAILY_CHAT_LIMIT}
             onChange={setDailyChatLimit}
+            max={50}
+          />
+          <View style={ss.separator} />
+          <Stepper
+            label="Premium daily chat questions"
+            value={premiumDailyChatLimit}
+            defaultValue={DEFAULT_PREMIUM_DAILY_CHAT_LIMIT}
+            onChange={setPremiumDailyChatLimit}
             max={50}
           />
           <View style={ss.separator} />

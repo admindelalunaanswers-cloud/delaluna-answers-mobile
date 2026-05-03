@@ -4,9 +4,10 @@
  * Values are persisted to AsyncStorage so changes survive a reload.
  *
  * Defaults match the production rules in the subscription spec:
- *   - dailyChatLimit:          1
- *   - freeConnectionLimit:     3
- *   - premiumConnectionLimit: 10
+ *   - dailyChatLimit (free):         2
+ *   - premiumDailyChatLimit:         5
+ *   - freeConnectionLimit:           1
+ *   - premiumConnectionLimit:       10
  */
 
 import React, { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
@@ -20,22 +21,25 @@ try {
 
 // ─── Defaults ─────────────────────────────────────────────────────────────────
 
-export const DEFAULT_DAILY_CHAT_LIMIT = 1;
-export const DEFAULT_FREE_CONNECTION_LIMIT = 3;
+export const DEFAULT_DAILY_CHAT_LIMIT = 2;
+export const DEFAULT_PREMIUM_DAILY_CHAT_LIMIT = 5;
+export const DEFAULT_FREE_CONNECTION_LIMIT = 1;
 export const DEFAULT_PREMIUM_CONNECTION_LIMIT = 10;
 
-const STORAGE_KEY = 'admin.limits.v1';
+const STORAGE_KEY = 'admin.limits.v2';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface AdminLimits {
   dailyChatLimit: number;
+  premiumDailyChatLimit: number;
   freeConnectionLimit: number;
   premiumConnectionLimit: number;
 }
 
 interface AdminContextValue extends AdminLimits {
   setDailyChatLimit: (n: number) => void;
+  setPremiumDailyChatLimit: (n: number) => void;
   setFreeConnectionLimit: (n: number) => void;
   setPremiumConnectionLimit: (n: number) => void;
   resetToDefaults: () => void;
@@ -45,9 +49,11 @@ interface AdminContextValue extends AdminLimits {
 
 const AdminContext = createContext<AdminContextValue>({
   dailyChatLimit: DEFAULT_DAILY_CHAT_LIMIT,
+  premiumDailyChatLimit: DEFAULT_PREMIUM_DAILY_CHAT_LIMIT,
   freeConnectionLimit: DEFAULT_FREE_CONNECTION_LIMIT,
   premiumConnectionLimit: DEFAULT_PREMIUM_CONNECTION_LIMIT,
   setDailyChatLimit: () => {},
+  setPremiumDailyChatLimit: () => {},
   setFreeConnectionLimit: () => {},
   setPremiumConnectionLimit: () => {},
   resetToDefaults: () => {},
@@ -83,6 +89,7 @@ async function safeSet(value: AdminLimits): Promise<void> {
 
 export function AdminProvider({ children }: { children: ReactNode }) {
   const [dailyChatLimit, setDailyChatLimitState] = useState(DEFAULT_DAILY_CHAT_LIMIT);
+  const [premiumDailyChatLimit, setPremiumDailyChatLimitState] = useState(DEFAULT_PREMIUM_DAILY_CHAT_LIMIT);
   const [freeConnectionLimit, setFreeConnectionLimitState] = useState(DEFAULT_FREE_CONNECTION_LIMIT);
   const [premiumConnectionLimit, setPremiumConnectionLimitState] = useState(DEFAULT_PREMIUM_CONNECTION_LIMIT);
 
@@ -93,6 +100,9 @@ export function AdminProvider({ children }: { children: ReactNode }) {
       if (cancelled || !stored) return;
       if (typeof stored.dailyChatLimit === 'number') {
         setDailyChatLimitState(clampNonNegative(stored.dailyChatLimit));
+      }
+      if (typeof stored.premiumDailyChatLimit === 'number') {
+        setPremiumDailyChatLimitState(clampNonNegative(stored.premiumDailyChatLimit));
       }
       if (typeof stored.freeConnectionLimit === 'number') {
         setFreeConnectionLimitState(clampNonNegative(stored.freeConnectionLimit));
@@ -111,27 +121,35 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   const setDailyChatLimit = useCallback((n: number) => {
     const v = clampNonNegative(n);
     setDailyChatLimitState(v);
-    persist({ dailyChatLimit: v, freeConnectionLimit, premiumConnectionLimit });
-  }, [freeConnectionLimit, premiumConnectionLimit, persist]);
+    persist({ dailyChatLimit: v, premiumDailyChatLimit, freeConnectionLimit, premiumConnectionLimit });
+  }, [premiumDailyChatLimit, freeConnectionLimit, premiumConnectionLimit, persist]);
+
+  const setPremiumDailyChatLimit = useCallback((n: number) => {
+    const v = clampNonNegative(n);
+    setPremiumDailyChatLimitState(v);
+    persist({ dailyChatLimit, premiumDailyChatLimit: v, freeConnectionLimit, premiumConnectionLimit });
+  }, [dailyChatLimit, freeConnectionLimit, premiumConnectionLimit, persist]);
 
   const setFreeConnectionLimit = useCallback((n: number) => {
     const v = clampNonNegative(n);
     setFreeConnectionLimitState(v);
-    persist({ dailyChatLimit, freeConnectionLimit: v, premiumConnectionLimit });
-  }, [dailyChatLimit, premiumConnectionLimit, persist]);
+    persist({ dailyChatLimit, premiumDailyChatLimit, freeConnectionLimit: v, premiumConnectionLimit });
+  }, [dailyChatLimit, premiumDailyChatLimit, premiumConnectionLimit, persist]);
 
   const setPremiumConnectionLimit = useCallback((n: number) => {
     const v = clampNonNegative(n);
     setPremiumConnectionLimitState(v);
-    persist({ dailyChatLimit, freeConnectionLimit, premiumConnectionLimit: v });
-  }, [dailyChatLimit, freeConnectionLimit, persist]);
+    persist({ dailyChatLimit, premiumDailyChatLimit, freeConnectionLimit, premiumConnectionLimit: v });
+  }, [dailyChatLimit, premiumDailyChatLimit, freeConnectionLimit, persist]);
 
   const resetToDefaults = useCallback(() => {
     setDailyChatLimitState(DEFAULT_DAILY_CHAT_LIMIT);
+    setPremiumDailyChatLimitState(DEFAULT_PREMIUM_DAILY_CHAT_LIMIT);
     setFreeConnectionLimitState(DEFAULT_FREE_CONNECTION_LIMIT);
     setPremiumConnectionLimitState(DEFAULT_PREMIUM_CONNECTION_LIMIT);
     persist({
       dailyChatLimit: DEFAULT_DAILY_CHAT_LIMIT,
+      premiumDailyChatLimit: DEFAULT_PREMIUM_DAILY_CHAT_LIMIT,
       freeConnectionLimit: DEFAULT_FREE_CONNECTION_LIMIT,
       premiumConnectionLimit: DEFAULT_PREMIUM_CONNECTION_LIMIT,
     });
@@ -141,9 +159,11 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     <AdminContext.Provider
       value={{
         dailyChatLimit,
+        premiumDailyChatLimit,
         freeConnectionLimit,
         premiumConnectionLimit,
         setDailyChatLimit,
+        setPremiumDailyChatLimit,
         setFreeConnectionLimit,
         setPremiumConnectionLimit,
         resetToDefaults,

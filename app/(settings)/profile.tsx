@@ -15,6 +15,7 @@ import HeaderNav from '@/src/components/shared/header-nav';
 import { useUser } from '@/src/context/user-context';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
+import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
 import { signOut } from '@/src/services/user.service';
 import { registerForPushNotifications, unregisterPushToken } from '@/src/services/notifications.service';
 import { getProfileImageSource } from '@/app/(settings)/select-avatar';
@@ -66,9 +67,9 @@ export default function ProfileScreen() {
   const {} = useHoroscope();
   const {
     isPro,
-    devPlan,
     setDevPlan,
   } = useRevenueCat();
+  const { inTrial } = useFreeTrialAccess();
   const insets = useSafeAreaInsets();
   const ud = userDoc as any;
 
@@ -214,14 +215,14 @@ export default function ProfileScreen() {
         <Text style={ss.name}>{ud?.name ?? '—'}</Text>
         <Text style={ss.email}>{ud?.email ?? authUser?.email ?? '—'}</Text>
 
-        <View style={[ss.badge, isPremium ? ss.badgePremium : devPlan === 'freeTrial' ? ss.badgeTrial : ss.badgeFree]}>
+        <View style={[ss.badge, isPremium ? ss.badgePremium : inTrial ? ss.badgeTrial : ss.badgeFree]}>
           <Ionicons
-            name={isPremium ? 'sparkles' : devPlan === 'freeTrial' ? 'time-outline' : 'lock-closed-outline'}
+            name={isPremium ? 'sparkles' : inTrial ? 'time-outline' : 'lock-closed-outline'}
             size={scale(13)}
-            color={isPremium ? '#FFD700' : devPlan === 'freeTrial' ? '#6FFFE9' : '#888'}
+            color={isPremium ? '#FFD700' : inTrial ? '#6FFFE9' : '#888'}
           />
-          <Text style={[ss.badgeText, isPremium ? ss.badgeTextPremium : devPlan === 'freeTrial' ? ss.badgeTextTrial : ss.badgeTextFree]}>
-            {isPremium ? 'PREMIUM MEMBER' : devPlan === 'freeTrial' ? 'PREMIUM TRIAL' : 'FREE MEMBER'}
+          <Text style={[ss.badgeText, isPremium ? ss.badgeTextPremium : inTrial ? ss.badgeTextTrial : ss.badgeTextFree]}>
+            {isPremium ? 'PREMIUM MEMBER' : inTrial ? 'PREMIUM TRIAL' : 'FREE MEMBER'}
           </Text>
         </View>
 

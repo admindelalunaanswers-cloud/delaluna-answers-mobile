@@ -27,6 +27,7 @@ import type { HoroscopeResult } from '@/src/types/horoscope.types';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useUser } from '@/src/context/user-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
+import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
 import { useResponsive } from '@/src/hooks/use-responsive';
 import { verticalScale } from '@/src/utils/responsive';
 
@@ -41,6 +42,7 @@ export default function HomeScreen() {
     breakdown,
   } = useHoroscope();
   const { isPro } = useRevenueCat();
+  const { hasAccess: hasPremiumAccess } = useFreeTrialAccess();
 
 
   const todayDateId = getTodayDateId();
@@ -156,7 +158,7 @@ export default function HomeScreen() {
   const dateSwitcherDates = Object.keys(cardDraw).sort();
 
   const [showFullBanner] = useState(() => Math.random() < 0.5);
-  const isPremium = isPro;
+  const isPremium = isPro || hasPremiumAccess;
   const isPaygated = selectedDate !== todayDateId && !isPremium;
 
   const handleUnlock = () => {
@@ -276,7 +278,7 @@ export default function HomeScreen() {
           <SectionTitle sectionName="warning" title="Warning" />
           <HomeTextBox sectionName="warning" content={activeHoroscope?.warning} />
         </ScrollView>
-        {!isPremium && (
+        {!hasPremiumAccess && (
           showFullBanner ? (
             <AdBannerFull
               icon="sparkles"

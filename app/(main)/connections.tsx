@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { collection, doc, increment, onSnapshot, orderBy, query, updateDoc } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import React, { memo, useEffect, useState } from "react";
 import {
@@ -29,6 +29,7 @@ import { ThemedText } from "@/src/components/themed-text";
 import { ThemedView } from "@/src/components/themed-view";
 import { CONNECTIONS_DEFINITION } from "@/src/constants/definitions";
 import { useRevenueCat } from "@/src/context/revenuecat-context";
+import { useFreeTrialAccess } from "@/src/hooks/use-free-trial-access";
 import { useUser } from "@/src/context/user-context";
 import { useAdmin } from "@/src/context/admin-context";
 import { ConnectionsCache } from "@/src/services/connections-cache.service";
@@ -78,7 +79,7 @@ const AnimatedConnectionItem = memo(
         >
           <ThemedView style={[styles.connectionItem, isLocked && styles.connectionItemLocked]}>
             <TouchableOpacity
-              onPress={() => (isLocked ? onLockedPress() : onOpen(connection.id))}
+              onPress={() => (isLocked ? onLockedPress(connection.id) : onOpen(connection.id))}
               style={styles.connectionItemInner}
               activeOpacity={0.75}
             >
@@ -109,22 +110,26 @@ const AnimatedConnectionItem = memo(
 );
 
 export default function ConnectionsScreen() {
-  const { authUser } = useUser();
+  const { authUser, userDoc } = useUser();
   const { isPro } = useRevenueCat();
+  const { hasAccess } = useFreeTrialAccess();
+  const hasPremiumAccess = isPro || hasAccess;
   const { freeConnectionLimit: FREE_CONNECTION_LIMIT, premiumConnectionLimit: PREMIUM_CONNECTION_LIMIT } = useAdmin();
   const insets = useSafeAreaInsets();
 
   const [connections, setConnections] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [extraSlotsPurchased, setExtraSlotsPurchased] = useState(0);
   const [showSlotConsumable, setShowSlotConsumable] = useState(false);
+
+  // Purchased slot count is persisted on the user doc so it survives trial end.
+  const extraSlotsPurchased = (userDoc as any)?.extraConnectionSlots ?? 0;
   const fade = useSharedValue(0);
   const fadeStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
 
   const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
 
   const accessLimit =
-    (isPro ? PREMIUM_CONNECTION_LIMIT : FREE_CONNECTION_LIMIT) + extraSlotsPurchased;
+    (hasPremiumAccess ? PREMIUM_CONNECTION_LIMIT : FREE_CONNECTION_LIMIT) + extraSlotsPurchased;
   const canAddNew = connections.length < accessLimit;
 
   const presentUpgradePaywall = () => {
@@ -137,22 +142,22 @@ export default function ConnectionsScreen() {
 
   const goToNewConnectionScreen = () => {
     if (!canAddNew) {
-      if (isPro) {
+      if (hasPremiumAccess) {
         Alert.alert(
           'Connection limit reached',
-          `You can save up to ${PREMIUM_CONNECTION_LIMIT} connections. Remove one to add a new one, or buy an extra slot.`,
+          `You can save up to ${accessLimit} connections. Remove one to add a new one, or buy an extra slot.`,
           [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Buy slot', onPress: () => setShowSlotConsumable(true) },
           ],
         );
       } else {
+        // Free (post-trial) users cannot purchase extra slots — must upgrade.
         Alert.alert(
           'Connection limit reached',
-          `Free accounts can save up to ${FREE_CONNECTION_LIMIT} connections. Remove one, buy an extra slot, or upgrade to Premium for up to ${PREMIUM_CONNECTION_LIMIT}.`,
+          `Free accounts can save up to ${accessLimit} connection${accessLimit === 1 ? '' : 's'}. Remove one or upgrade to Premium for up to ${PREMIUM_CONNECTION_LIMIT}.`,
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Buy slot', onPress: () => setShowSlotConsumable(true) },
             { text: 'Upgrade', onPress: presentUpgradePaywall },
           ],
         );
@@ -162,13 +167,17 @@ export default function ConnectionsScreen() {
     router.push("/connection/new");
   };
 
-  const handleLockedPress = () => {
+  const handleLockedPress = (connectionId?: string) => {
+    // Locked items only ever show for free (post-trial) users — they cannot
+    // buy slots, only delete or upgrade.
     Alert.alert(
       'Connection locked',
-      `Free accounts can access ${FREE_CONNECTION_LIMIT} connections. Remove a connection to unlock another, buy an extra slot, or upgrade to Premium.`,
+      `Free accounts can access ${accessLimit} connection${accessLimit === 1 ? '' : 's'}. Remove a connection to unlock the next one, or upgrade to Premium.`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Buy slot', onPress: () => setShowSlotConsumable(true) },
+        ...(connectionId
+          ? [{ text: 'Delete', style: 'destructive' as const, onPress: () => handleDeleteConnection(connectionId) }]
+          : []),
         { text: 'Upgrade', onPress: presentUpgradePaywall },
       ],
     );
@@ -268,7 +277,7 @@ export default function ConnectionsScreen() {
                 key={c.id}
                 index={index}
                 connection={c}
-                isLocked={!isPro && index < connections.length - FREE_CONNECTION_LIMIT}
+                isLocked={!hasPremiumAccess && index < connections.length - accessLimit}
                 onOpen={handleOpenConnection}
                 onDelete={handleDeleteConnection}
                 onLockedPress={handleLockedPress}
@@ -311,8 +320,16 @@ export default function ConnectionsScreen() {
           visible={showSlotConsumable}
           kind="connection"
           onClose={() => setShowSlotConsumable(false)}
-          onPurchased={() => {
-            setExtraSlotsPurchased((n) => n + 1);
+          onPurchased={async (quantity) => {
+            const uid = authUser?.uid;
+            if (!uid) return;
+            try {
+              await updateDoc(doc(db, 'users', uid), {
+                extraConnectionSlots: increment(quantity),
+              });
+            } catch (err) {
+              console.error('Failed to persist purchased slots', err);
+            }
             router.push('/connection/new');
           }}
         />

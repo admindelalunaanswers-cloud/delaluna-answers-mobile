@@ -4,8 +4,16 @@
  * (birth-chart compare, additional connections, additional questions) without
  * requiring a full subscription.
  *
+ * For 'connection' and 'question' kinds, three tier options are shown:
+ *   1 pack — $0.99
+ *   3 pack — $1.99
+ *   5 pack — $3.99
+ *
+ * For 'synastry' kind, a single fixed-price unlock is shown.
+ *
  * TODO: Wire to RevenueCat consumables once products are live. For now this
- * just simulates a successful purchase and calls `onPurchased`.
+ * just simulates a successful purchase and calls `onPurchased` with the
+ * quantity selected.
  */
 
 import React from 'react';
@@ -23,46 +31,66 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
 
-// ─── Presets ─────────────────────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 export type ConsumableKind = 'synastry' | 'connection' | 'question';
 
-interface ConsumablePreset {
+interface ConsumableTier {
   productId: string;
+  quantity: number;
+  price: string;
+}
+
+interface ConsumablePreset {
   title: string;
   message: string;
-  price: string;
-  ctaLabel: string;
+  unitLabel: string;          // singular noun, e.g. "connection" / "question"
+  unitLabelPlural: string;    // plural noun, e.g. "connections" / "questions"
   icon: keyof typeof Ionicons.glyphMap;
+  tiers: ConsumableTier[];
 }
+
+// ─── Presets ─────────────────────────────────────────────────────────────────
+
+export const CONNECTION_TIERS: ConsumableTier[] = [
+  { productId: 'connections_1', quantity: 1, price: '$0.99' },
+  { productId: 'connections_3', quantity: 3, price: '$1.99' },
+  { productId: 'connections_5', quantity: 5, price: '$3.99' },
+];
+
+export const QUESTION_TIERS: ConsumableTier[] = [
+  { productId: 'questions_1', quantity: 1, price: '$0.99' },
+  { productId: 'questions_3', quantity: 3, price: '$1.99' },
+  { productId: 'questions_5', quantity: 5, price: '$3.99' },
+];
 
 export const CONSUMABLE_PRESETS: Record<ConsumableKind, ConsumablePreset> = {
   synastry: {
-    productId: 'synastry_1',
     title: 'Compare Birth Charts',
     message:
       'Unlock a one-time synastry analysis between you and this connection.',
-    price: '$0.99',
-    ctaLabel: 'Unlock for $0.99',
+    unitLabel: 'unlock',
+    unitLabelPlural: 'unlocks',
     icon: 'sparkles',
+    tiers: [{ productId: 'synastry_1', quantity: 1, price: '$0.99' }],
   },
   connection: {
-    productId: 'connections_1',
-    title: 'Add Another Connection',
+    title: 'Add More Connections',
     message:
-      "You've reached your connection limit. Add one more without upgrading.",
-    price: '$0.99',
-    ctaLabel: 'Add for $0.99',
+      "Pick a pack to add more connections without upgrading. Once purchased, they stay unlocked.",
+    unitLabel: 'connection',
+    unitLabelPlural: 'connections',
     icon: 'people',
+    tiers: CONNECTION_TIERS,
   },
   question: {
-    productId: 'questions_1',
-    title: 'Ask Another Question',
+    title: 'Ask More Questions',
     message:
-      "You've used today's chat. Buy one more question to keep going.",
-    price: '$0.99',
-    ctaLabel: 'Ask for $0.99',
+      "You've used today's chat. Pick a pack to keep the conversation going.",
+    unitLabel: 'question',
+    unitLabelPlural: 'questions',
     icon: 'chatbubble-ellipses',
+    tiers: QUESTION_TIERS,
   },
 };
 
@@ -72,10 +100,10 @@ interface Props {
   visible: boolean;
   kind: ConsumableKind;
   onClose: () => void;
-  /** Called after a successful mock purchase. */
-  onPurchased: () => void;
-  /** Optional override of preset title/message/price. */
-  override?: Partial<ConsumablePreset>;
+  /** Called after a successful mock purchase with the quantity bought. */
+  onPurchased: (quantity: number) => void;
+  /** Optional override of preset title/message. */
+  override?: Partial<Pick<ConsumablePreset, 'title' | 'message' | 'icon'>>;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -89,8 +117,8 @@ export default function ConsumablePlaceholder({
 }: Props) {
   const preset = { ...CONSUMABLE_PRESETS[kind], ...override };
 
-  const handleBuy = () => {
-    onPurchased();
+  const handleBuy = (tier: ConsumableTier) => {
+    onPurchased(tier.quantity);
     onClose();
   };
 
@@ -131,13 +159,27 @@ export default function ConsumablePlaceholder({
               <Text style={s.title}>{preset.title}</Text>
               <Text style={s.message}>{preset.message}</Text>
 
-              <TouchableOpacity
-                style={s.buyButton}
-                onPress={handleBuy}
-                activeOpacity={0.85}
-              >
-                <Text style={s.buyText}>{preset.ctaLabel}</Text>
-              </TouchableOpacity>
+              <View style={s.tiersWrap}>
+                {preset.tiers.map((tier) => {
+                  const label =
+                    tier.quantity === 1
+                      ? `1 ${preset.unitLabel}`
+                      : `${tier.quantity} ${preset.unitLabelPlural}`;
+                  return (
+                    <TouchableOpacity
+                      key={tier.productId}
+                      style={s.tierRow}
+                      onPress={() => handleBuy(tier)}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={s.tierLabel}>{label}</Text>
+                      <View style={s.tierPricePill}>
+                        <Text style={s.tierPrice}>{tier.price}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
 
               <TouchableOpacity onPress={onClose} hitSlop={8} activeOpacity={0.7}>
                 <Text style={s.cancelText}>Not now</Text>
@@ -218,20 +260,34 @@ const s = StyleSheet.create({
     lineHeight: moderateScale(20),
     alignSelf: 'stretch',
   },
-  buyButton: {
-    marginTop: verticalScale(12),
-    backgroundColor: '#FFD700',
-    borderRadius: scale(24),
-    paddingVertical: verticalScale(12),
-    paddingHorizontal: scale(28),
+  tiersWrap: {
     width: '100%',
-    alignItems: 'center',
+    marginTop: verticalScale(10),
+    gap: verticalScale(8),
   },
-  buyText: {
-    color: '#0A061E',
-    fontSize: moderateScale(15),
+  tierRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: verticalScale(12),
+    paddingHorizontal: scale(14),
+    borderRadius: scale(12),
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(188,168,244,0.35)',
+  },
+  tierLabel: { color: '#fff', fontSize: moderateScale(14), fontWeight: '600' },
+  tierPricePill: {
+    backgroundColor: 'rgba(255,215,0,0.15)',
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(5),
+    borderRadius: scale(8),
+  },
+  tierPrice: {
+    color: '#FFD700',
+    fontSize: moderateScale(13),
     fontWeight: '800',
-    letterSpacing: 0.3,
   },
   cancelText: {
     color: 'rgba(255,255,255,0.5)',
