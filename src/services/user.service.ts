@@ -10,6 +10,7 @@ import { auth, db } from '@/firebaseConfig';
 import { FinalSignupPayload } from '@/src/types/signup.types';
 import type { HoroscopeResult } from '@/src/types/horoscope.types';
 import type { UserDoc } from '@/src/types/user.type';
+import { isAdminEmail } from '@/src/constants/admin';
 
 /**
  * Returns true if the email is already registered in Firebase Auth.
@@ -100,9 +101,12 @@ export async function createNewUserDoc(userId: string): Promise<void> {
     const docSnap = await getDoc(userDocRef);
 
     if (!docSnap.exists()) {
+      const email = auth.currentUser?.email?.toLowerCase() ?? '';
       await setDoc(userDocRef, {
         createdAt: serverTimestamp(),
         lastUpdatedAt: serverTimestamp(),
+        ...(email ? { email } : {}),
+        ...(isAdminEmail(email) ? { isAdmin: true } : {}),
       });
     }
   } catch (error) {
@@ -123,6 +127,7 @@ export async function createUserDoc(userId: string, userData: FinalSignupPayload
       ...(userData.email ? { email } : {}),
       isPremiumMember: false,
       isEmailVerified: false,
+      ...(isAdminEmail(email) ? { isAdmin: true } : {}),
     });
 
     await setDoc(userDocRef, {
