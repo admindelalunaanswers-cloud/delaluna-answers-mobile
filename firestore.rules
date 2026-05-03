@@ -2,8 +2,137 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ─── Helpers ────────────────────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // The 3 hard-coded admin emails. Users with a verified Firebase Auth email
+    // matching any of these get full read/write to all docs. We also treat
+    // `users/{uid}.isAdmin == true` as admin so cloud functions / seed data
+    // can promote a user without requiring the email check.
+    function isAdminEmail() {
+      return isSignedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower() in [
+            'jeanaicode@gmail.com',
+            'admin.delalunaanswers@gmail.com',
+            'delalunaanswers@gmail.com'
+          ];
+    }
+
+    function isAdmin() {
+      return isAdminEmail()
+        || (isSignedIn()
+            && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true);
+    }
+
+    // Fields the client may NEVER change on its own user doc — they are
+    // server-only (createdAt is set once at signup; isPremiumMember is
+    // written by the RevenueCat extension; isAdmin is set during signup
+    // based on email match and immutable from the client thereafter;
+    // isEmailVerified is flipped by the verifyCode cloud function).
+    function noProtectedFieldsChanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['createdAt', 'isPremiumMember', 'isAdmin', 'isEmailVerified']);
+    }
+
+    // ─── Admin override ─────────────────────────────────────────────────────
+    // Anything matching this rule short-circuits all other rules.
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if isAdmin();
+    }
+
+    // ─── Users ──────────────────────────────────────────────────────────────
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+
+      // First-time create: only the owner; createdAt must be a server timestamp.
+      // Non-admin emails cannot self-create with isPremiumMember/isAdmin flags.
+      allow create: if isOwner(uid)
+        && request.resource.data.createdAt == request.time
+        && (!('isPremiumMember' in request.resource.data) || request.resource.data.isPremiumMember == false)
+        && (!('isAdmin' in request.resource.data)
+            || request.resource.data.isAdmin == false
+            || isAdminEmail());
+
+      // Updates: owner can edit profile fields but cannot change protected
+      // fields. The extra checks let admins (handled above) bypass.
+      allow update: if isOwner(uid) && noProtectedFieldsChanged();
+
+      allow delete: if isOwner(uid);
+
+      // Owner-owned subcollections — birth chart, horoscopes, transits,
+      // chat (active + saved), connections, tarot draws, etc.
+      match /natalChart/{docId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      match /birthChart/{docId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      match /horoscope/{dateId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      match /transits/{dateId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      match /updayedChat/{messageId} {
+        // The active rolling chat (Firestore Extension reads/writes this; the
+        // extension uses admin SDK so it bypasses these rules).
+        allow read, write: if isOwner(uid);
+      }
+
+      match /savedChats/{sessionId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      match /cards/{dateId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      match /connections/{connectionId} {
+        allow read, create, update, delete: if isOwner(uid);
+
+        // Synastry reading + any other connection-scoped subdocs.
+        match /{document=**} {
+          allow read, write: if isOwner(uid);
+        }
+      }
+
+      // RevenueCat extension writes purchase receipts here via the admin SDK.
+      // The client is read-only.
+      match /purchases/{purchaseId} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+    }
+
+    // ─── RevenueCat extension destination ──────────────────────────────────
+    match /subscriptions/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+
+      match /{document=**} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+    }
+
+    // ─── Email-verification OTPs (server-only) ─────────────────────────────
+    // sendVerificationCode / verifyCode cloud functions read/write this with
+    // the admin SDK; clients must not see other users' codes.
+    match /emailVerification/{uid} {
+      allow read, write: if false;
     }
   }
 }
