@@ -54,7 +54,7 @@ import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
 import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
 
 // Storage
-import { getStorage, ref } from "firebase/storage";
+import { connectStorageEmulator, getStorage, ref } from "firebase/storage";
 
 // Load Expo config
 const extra = (Constants.expoConfig as any)?.extra ?? (Constants.manifest as any)?.extra;
@@ -124,13 +124,13 @@ export const functions = getFunctions(app, "us-central1");
 
 // Emulator Support (DEV only)
 // Using LAN IP for real device testing
-// __DEV__ && extra?.USE_EMULATOR ===
-export const USE_EMULATOR = false;
+export const USE_EMULATOR = __DEV__ && extra?.USE_EMULATOR === true;
 if (USE_EMULATOR) {
   const host: string = extra?.EMULATOR_HOST ?? "localhost";
   connectAuthEmulator(auth, `http://${host}:9099`);
   connectFirestoreEmulator(db, host, 8080);
   connectFunctionsEmulator(functions, host, 5001);
+  connectStorageEmulator(storage, host, 9199);
   console.log("USING EMULATOR: ", host);
 }
 
