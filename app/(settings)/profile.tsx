@@ -16,7 +16,7 @@ import { useUser } from '@/src/context/user-context';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
-import { signOut } from '@/src/services/user.service';
+import { signOut, revokeMyRefreshTokens } from '@/src/services/user.service';
 import { registerForPushNotifications, unregisterPushToken } from '@/src/services/notifications.service';
 import { getProfileImageSource } from '@/app/(settings)/select-avatar';
 import { auth } from '@/firebaseConfig';
@@ -126,6 +126,9 @@ export default function ProfileScreen() {
         onPress: async () => {
           try {
             if (authUser?.uid) await unregisterPushToken(authUser.uid);
+            // Revoke server-side before signOut clears the local token,
+            // otherwise the callable would fail unauthenticated.
+            await revokeMyRefreshTokens();
             await signOut();
           } catch { Alert.alert('Error', 'Could not log out. Please try again.'); }
         },
@@ -146,6 +149,10 @@ export default function ProfileScreen() {
               const user = auth.currentUser;
               if (!user) return;
               await unregisterPushToken(user.uid);
+              // Revoke first so any tokens already issued to other devices
+              // stop refreshing — deleteUser also kills the user record but
+              // explicit revocation closes the small window before propagation.
+              await revokeMyRefreshTokens();
               await deleteUser(user);
             } catch (err: any) {
               if (err?.code === 'auth/requires-recent-login') {

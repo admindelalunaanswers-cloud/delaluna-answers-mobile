@@ -321,6 +321,26 @@ export const syncAdminClaim = onCall(
   },
 );
 
+// ─── revokeMyRefreshTokens ───────────────────────────────────────────────────
+
+/**
+ * Revokes all refresh tokens for the calling user. The current ID token stays
+ * valid until it expires (~1h) — for stricter immediate enforcement, pair with
+ * a rules-level `request.auth.token.auth_time > revoke_time` check on
+ * high-sensitivity collections.
+ *
+ * Called from the client on user-initiated logout, account deletion, and
+ * password change so other devices/sessions cannot continue using stale
+ * refresh tokens after a credential change.
+ */
+export const revokeMyRefreshTokens = onCall({ invoker: 'public' }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Must be signed in.');
+  }
+  await admin.auth().revokeRefreshTokens(request.auth.uid);
+  return { revoked: true };
+});
+
 // ─── sendMorningReminder ──────────────────────────────────────────────────────
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';

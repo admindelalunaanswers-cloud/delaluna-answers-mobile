@@ -27,14 +27,16 @@ import {
 import { GlassButton } from '@/src/assets/buttons/glass-button';
 import { scale, moderateScale, verticalScale } from '@/src/utils/responsive';
 import { ThemeContext } from '@/src/context/theme-context';
+import { revokeMyRefreshTokens } from '@/src/services/user.service';
 
-type RuleKey = 'length' | 'uppercase' | 'lowercase' | 'number';
+type RuleKey = 'length' | 'uppercase' | 'lowercase' | 'number' | 'noWhitespace';
 
 const RULES: { key: RuleKey; label: string; test: (s: string) => boolean }[] = [
   { key: 'length', label: 'At least 8 characters', test: (s) => s.length >= 8 },
   { key: 'uppercase', label: 'One uppercase letter (A–Z)', test: (s) => /[A-Z]/.test(s) },
   { key: 'lowercase', label: 'One lowercase letter (a–z)', test: (s) => /[a-z]/.test(s) },
   { key: 'number', label: 'One number (0–9)', test: (s) => /\d/.test(s) },
+  { key: 'noWhitespace', label: 'No spaces or whitespace', test: (s) => s.length > 0 && !/\s/.test(s) },
 ];
 
 export default function UpdatePasswordScreen() {
@@ -85,6 +87,9 @@ export default function UpdatePasswordScreen() {
       const cred = EmailAuthProvider.credential(user.email, currentPassword);
       await reauthenticateWithCredential(user, cred);
       await updatePassword(user, newPassword);
+      // Invalidate any other devices that still hold tokens issued under the
+      // old password. Done while the user is still authenticated locally.
+      await revokeMyRefreshTokens();
       Alert.alert('Success', 'Your password has been changed. Please sign in again.', [
         {
           text: 'OK',

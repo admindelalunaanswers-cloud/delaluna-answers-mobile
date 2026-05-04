@@ -101,7 +101,11 @@ export default function Login() {
       setLoading(true);
       setSkipAutoRedirect(true);
 
-      const cred = await signInWithEmailAndPassword(auth, email.trim(), password.trim());
+      // Trim email only — passwords are sent verbatim. Trimming the password
+      // would silently strip legitimate characters and lock out users whose
+      // passwords contain whitespace (or whose password manager appended a
+      // newline on paste).
+      const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
 
       // Record login timestamp on every login
       updateUserDoc(cred.user.uid, {

@@ -5,10 +5,24 @@ import {
   onAuthStateChanged as fbOnAuthStateChanged,
   signOut as fbSignOut,
 } from 'firebase/auth';
-import { auth, db } from '@/firebaseConfig';
+import { httpsCallable } from 'firebase/functions';
+import { auth, db, functions } from '@/firebaseConfig';
 import { FinalSignupPayload } from '@/src/types/signup.types';
 import type { HoroscopeResult } from '@/src/types/horoscope.types';
 import type { UserDoc } from '@/src/types/user.type';
+
+/**
+ * Revoke all refresh tokens for the current user. Best-effort — failures are
+ * swallowed because the caller is on a credential-change path and we still
+ * want to complete the local action (signOut, password change, deletion).
+ */
+export async function revokeMyRefreshTokens(): Promise<void> {
+  try {
+    await httpsCallable(functions, 'revokeMyRefreshTokens')({});
+  } catch (err) {
+    console.warn('[user.service] revokeMyRefreshTokens failed:', err);
+  }
+}
 
 /**
  * Create a new Firebase Auth user
@@ -202,44 +216,3 @@ export async function updateUserDoc(userId: string, userData: Partial<UserDoc>):
   }
 }
 
-/**
- * Update only birth-related fields and trigger backend recomputation pipeline.
- * Intended for use from Edit Profile when astro-dependent fields change.
- */
-export async function updateUserBirthData(
-  userId: string,
-  payload: {
-    birthday: string;
-    birthtime: string | null;
-    birthTimezone: number;
-    birthLat: number;
-    birthLon: number;
-    placeOfBirth: string | null;
-    isBirthTimeUnknown: boolean;
-    isPlaceOfBirthUnknown: boolean;
-  }
-): Promise<void> {
-  try {
-    const userDocRef = getUserDocRef(userId);
-
-    const sanitizedData = sanitizeFirestoreData({
-      birthday: payload.birthday,
-      birthtime: payload.birthtime ?? '12:00',
-      birthTimezone: payload.birthTimezone ?? 0,
-      birthLat: payload.birthLat,
-      birthLon: payload.birthLon,
-      placeOfBirth: payload.placeOfBirth ?? null,
-      isBirthTimeUnknown: payload.isBirthTimeUnknown ?? false,
-      isPlaceOfBirthUnknown: payload.isPlaceOfBirthUnknown ?? false,
-      signupStatus: 'processing',
-    });
-
-    await setDoc(userDocRef, {
-      ...sanitizedData,
-      lastUpdatedAt: serverTimestamp(),
-    }, { merge: true });
-  } catch (error) {
-    console.error('❌ Error updating user birth data:', error);
-    throw new Error('Error updating user birth data');
-  }
-}

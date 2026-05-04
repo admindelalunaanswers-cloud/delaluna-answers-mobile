@@ -236,12 +236,24 @@ export default function ChatFlow({
     if (inputType === 'final') { onComplete(answers); return; }
     if (inputType === 'secure') {
       const pwd = currentValue;
+      if (/\s/.test(pwd)) {
+        setPasswordError('Password cannot contain spaces or whitespace.');
+        return;
+      }
       if (pwd.length < 8) {
         setPasswordError('Password must be at least 8 characters.');
         return;
       }
       if (!/[A-Z]/.test(pwd)) {
-        setPasswordError('Password must contain at least one uppercase letter.');
+        setPasswordError('Password must contain one uppercase letter (A–Z).');
+        return;
+      }
+      if (!/[a-z]/.test(pwd)) {
+        setPasswordError('Password must contain one lowercase letter (a–z).');
+        return;
+      }
+      if (!/\d/.test(pwd)) {
+        setPasswordError('Password must contain one number (0–9).');
         return;
       }
       setPasswordError(null);
