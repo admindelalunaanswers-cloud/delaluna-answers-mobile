@@ -12,25 +12,13 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == uid;
     }
 
-    // The 3 hard-coded admin emails. Users with a verified Firebase Auth email
-    // matching any of these get full read/write to all docs. We also treat
-    // `users/{uid}.isAdmin == true` as admin so cloud functions / seed data
-    // can promote a user without requiring the email check.
-    function isAdminEmail() {
-      return isSignedIn()
-        && request.auth.token.email_verified == true
-        && request.auth.token.email.lower() in [
-            'jeanaicode@gmail.com',
-            'admin.delalunaanswers@gmail.com',
-            'delalunaanswers@gmail.com'
-          ];
-    }
-
+    // Admin privilege is granted via the `admin: true` custom auth claim,
+    // set server-side by the `syncAdminClaim` Cloud Function based on a
+    // secret-backed email allowlist. The mobile client mirrors this to
+    // `users/{uid}.isAdmin` for UI hints — that field is NOT consulted
+    // here; the token claim is the only source of truth for privilege.
     function isAdmin() {
-      return isAdminEmail()
-        || (isSignedIn()
-            && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true);
+      return isSignedIn() && request.auth.token.admin == true;
     }
 
     // Fields the client may NEVER change on its own user doc — they are
@@ -54,13 +42,12 @@ service cloud.firestore {
       allow read: if isOwner(uid);
 
       // First-time create: only the owner; createdAt must be a server timestamp.
-      // Non-admin emails cannot self-create with isPremiumMember/isAdmin flags.
+      // Clients can never self-create with isPremiumMember/isAdmin set — both
+      // are written server-side (RevenueCat extension and syncAdminClaim).
       allow create: if isOwner(uid)
         && request.resource.data.createdAt == request.time
         && (!('isPremiumMember' in request.resource.data) || request.resource.data.isPremiumMember == false)
-        && (!('isAdmin' in request.resource.data)
-            || request.resource.data.isAdmin == false
-            || isAdminEmail());
+        && (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false);
 
       // Updates: owner can edit profile fields but cannot change protected
       // fields. The extra checks let admins (handled above) bypass.
@@ -133,6 +120,15 @@ service cloud.firestore {
     // the admin SDK; clients must not see other users' codes.
     match /emailVerification/{uid} {
       allow read, write: if false;
+    }
+
+    // ─── App config (min-version gate, etc.) ───────────────────────────────
+    // Public-readable so the unauthenticated splash screen can fetch the
+    // minimum supported version. Writes are admin-only (handled by the
+    // admin override at the top of this file).
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if false;
     }
   }
 }
