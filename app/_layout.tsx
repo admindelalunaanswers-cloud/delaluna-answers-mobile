@@ -16,7 +16,9 @@ import { UserProvider, useUser } from '@/src/context/user-context';
 import { RevenueCatProvider } from '@/src/context/revenuecat-context';
 import { AdminProvider } from '@/src/context/admin-context';
 import { useColorScheme } from '@/src/hooks/use-color-scheme';
+import { useMinVersion } from '@/src/hooks/use-min-version';
 import { useTheme } from '@/src/hooks/use-theme';
+import { UpdateRequiredScreen } from '@/src/components/update-required-screen';
 
 function AuthGate() {
   const { authUser, userDoc, loading: userLoading } = useUser();
@@ -102,6 +104,19 @@ function ThemedRoot({ children }: { children: ReactNode }) {
   );
 }
 
+function VersionGate({ children }: { children: ReactNode }) {
+  const { status, storeUrl, installedVersion } = useMinVersion();
+  if (status === 'update-required') {
+    return (
+      <UpdateRequiredScreen
+        storeUrl={storeUrl}
+        installedVersion={installedVersion}
+      />
+    );
+  }
+  return <>{children}</>;
+}
+
 export default function RootLayout() {
   useEffect(() => {
     let cleanup = () => {};
@@ -114,17 +129,19 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <UserProvider>
-          <RevenueCatProvider>
-            <AdminProvider>
-              <ThemeProvider>
-                <HoroscopeProvider>
-                  <AuthGate />
-                </HoroscopeProvider>
-              </ThemeProvider>
-            </AdminProvider>
-          </RevenueCatProvider>
-        </UserProvider>
+        <VersionGate>
+          <UserProvider>
+            <RevenueCatProvider>
+              <AdminProvider>
+                <ThemeProvider>
+                  <HoroscopeProvider>
+                    <AuthGate />
+                  </HoroscopeProvider>
+                </ThemeProvider>
+              </AdminProvider>
+            </RevenueCatProvider>
+          </UserProvider>
+        </VersionGate>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
