@@ -17,7 +17,7 @@ module.exports = {
     '**/?(*.)+(spec|test).[jt]s?(x)',
   ],
   moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/src/$1',
+    '^@/(.*)$': '<rootDir>/$1',
   },
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
