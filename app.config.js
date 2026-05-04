@@ -85,9 +85,6 @@ module.exports = {
       REVENUECAT_API_KEY:          process.env.APP_ENV === 'development'
                                        ? process.env.REVENUECAT_API_KEY
                                        : process.env.DELALUNA_ANSWERS_APP_STORE,
-      USE_EMULATOR:                process.env.USE_EMULATOR === 'true',
-      EMULATOR_HOST:               process.env.EMULATOR_HOST ?? 'localhost',
-
     },
     runtimeVersion: "1.0.0",
     updates: {
