@@ -5,10 +5,16 @@ import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
 import * as nodemailer from 'nodemailer';
+import { z, ZodError, ZodType } from 'zod';
 
 // ─── Secrets (set via: firebase functions:secrets:set EMAIL_USER) ─────────────
 const emailUser = defineSecret('EMAIL_USER');
 const emailPass = defineSecret('EMAIL_PASS');
+
+// Comma-separated list of admin email addresses. Held server-side only so
+// rotation does not require shipping a new mobile build. Matched
+// case-insensitively against the verified email on the caller's auth token.
+const adminEmails = defineSecret('ADMIN_EMAILS');
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 admin.initializeApp();
@@ -33,6 +39,97 @@ function buildTransporter(user: string, pass: string) {
     auth: { user, pass },
   });
 }
+
+// Validate a callable's `request.data` against a Zod schema. Throws an
+// `invalid-argument` HttpsError with the first formatted issue on failure.
+function parseInput<T>(schema: ZodType<T>, data: unknown): T {
+  try {
+    return schema.parse(data);
+  } catch (err) {
+    if (err instanceof ZodError) {
+      const issue = err.issues[0];
+      const path = issue.path.join('.') || '<root>';
+      throw new HttpsError(
+        'invalid-argument',
+        `Invalid input at "${path}": ${issue.message}`,
+      );
+    }
+    throw err;
+  }
+}
+
+// Constrain a free-form name to a Firestore-document-id-safe slug.
+// - lowercase
+// - alphanumerics + dashes only
+// - collapse runs of unsafe chars to a single dash
+// - trim leading/trailing dashes
+// - cap to 40 chars
+// Returns 'unknown' for empty results so we never produce a forbidden
+// document id (Firestore rejects '', '.', '..', and ids containing '/').
+function slugify(input: string): string {
+  const cleaned = input
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+  return cleaned || 'unknown';
+}
+
+// Cap user-supplied LLM prompts and collapse control chars / whitespace.
+// Caps at 2 KB - well under any model's context window and large enough for
+// any legitimate connection note. Replaces ASCII control chars with spaces
+// and folds whitespace runs so we don't slip terminator sequences through
+// to the Handlebars-substituted prompt template.
+function sanitizePrompt(input: string | undefined, maxLen = 2000): string {
+  if (!input) return '';
+  return input
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .slice(0, maxLen)
+    .trim();
+}
+
+
+// ─── Schemas ─────────────────────────────────────────────────────────────────
+
+const VerifyCodeSchema = z.object({
+  code: z.string().regex(/^\d{6}$/, 'Code must be a 6-digit number.'),
+});
+
+const DeleteConnectionSchema = z.object({
+  userId: z.string().min(1).max(128),
+  connectionId: z.string().min(1).max(200).regex(/^[A-Za-z0-9_\-]+$/, 'Invalid connectionId.'),
+});
+
+const PersonSchema = z.object({
+  'First Name': z.string().max(80).optional(),
+  'Last Name': z.string().max(80).optional(),
+  'Pronouns': z.string().max(40).optional(),
+  'Sun Sign': z.string().max(40).optional(),
+  'Moon Sign': z.string().max(40).optional(),
+  'Rising Sign': z.string().max(40).optional(),
+  'Birthday': z.string().max(40).optional(),
+  'Time of Birth': z.string().max(40).optional(),
+  'Place of Birth': z.string().max(200).optional(),
+  birthLat: z.number().min(-90).max(90).nullable().optional(),
+  birthLon: z.number().min(-180).max(180).nullable().optional(),
+  birthTimezone: z.number().min(-14).max(14).nullable().optional(),
+  isBirthTimeUnknown: z.boolean().optional(),
+  isPlaceOfBirthUnknown: z.boolean().optional(),
+}).passthrough();
+
+const CreateConnectionSchema = z.object({
+  userId: z.string().min(1).max(128),
+  isMe: z.boolean().optional().default(false),
+  relationshipType: z.string().min(1).max(60),
+  firstPerson: PersonSchema,
+  secondPerson: PersonSchema,
+  prompt: z.string().max(2000).optional(),
+  birthDetailsChangeCount: z.number().int().nonnegative().optional(),
+});
 
 // ─── sendVerificationCode ─────────────────────────────────────────────────────
 
@@ -118,11 +215,7 @@ export const verifyCode = onCall({ invoker: 'public' }, async (request) => {
   }
 
   const uid = request.auth.uid;
-  const { code } = request.data as { code: string };
-
-  if (!code || typeof code !== 'string' || !/^\d{6}$/.test(code)) {
-    throw new HttpsError('invalid-argument', 'Code must be a 6-digit number.');
-  }
+  const { code } = parseInput(VerifyCodeSchema, request.data);
 
   const otpRef = getOtpDocRef(uid);
   const snap = await otpRef.get();
@@ -163,6 +256,69 @@ export const verifyCode = onCall({ invoker: 'public' }, async (request) => {
 
   return { verified: true };
 });
+
+// ─── syncAdminClaim ──────────────────────────────────────────────────────────
+
+/**
+ * Idempotently reconciles the caller's admin status against the server-side
+ * email allowlist (`ADMIN_EMAILS` secret). Sets the `admin: true` custom
+ * auth claim when the verified email matches, removes it otherwise.
+ * Mirrors `users/{uid}.isAdmin` so existing UI hints still work; security
+ * rules MUST gate on `request.auth.token.admin == true`, not the doc field.
+ *
+ * The client should call this on every app start and force-refresh the ID
+ * token after a successful response (`user.getIdToken(true)`) so the new
+ * claim takes effect immediately.
+ */
+export const syncAdminClaim = onCall(
+  { secrets: [adminEmails], invoker: 'public' },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Must be signed in.');
+    }
+
+    const uid = request.auth.uid;
+    const email = (request.auth.token.email ?? '').toLowerCase();
+    const emailVerified = request.auth.token.email_verified === true;
+
+    const allowed = adminEmails
+      .value()
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+
+    const shouldBeAdmin = emailVerified && !!email && allowed.includes(email);
+
+    const userRecord = await admin.auth().getUser(uid);
+    const existingClaims = (userRecord.customClaims ?? {}) as Record<string, unknown>;
+    const isCurrentlyAdmin = existingClaims.admin === true;
+
+    if (shouldBeAdmin === isCurrentlyAdmin) {
+      return { admin: shouldBeAdmin, changed: false };
+    }
+
+    const nextClaims: Record<string, unknown> = { ...existingClaims };
+    if (shouldBeAdmin) {
+      nextClaims.admin = true;
+    } else {
+      delete nextClaims.admin;
+    }
+    await admin.auth().setCustomUserClaims(uid, nextClaims);
+
+    // Mirror to Firestore for client-side UI (e.g. showing the admin tab).
+    // Privilege itself is enforced via the auth claim, not this field.
+    await db
+      .collection('users')
+      .doc(uid)
+      .set({ isAdmin: shouldBeAdmin }, { merge: true });
+
+    console.log(
+      `[syncAdminClaim] uid=${uid} email=${email} -> admin=${shouldBeAdmin}`,
+    );
+
+    return { admin: shouldBeAdmin, changed: true };
+  },
+);
 
 // ─── sendMorningReminder ──────────────────────────────────────────────────────
 
@@ -251,14 +407,7 @@ export const deleteConnection = onCall({ invoker: 'public' }, async (request) =>
     throw new HttpsError('unauthenticated', 'Must be signed in.');
   }
 
-  const { userId, connectionId } = request.data as {
-    userId: string;
-    connectionId: string;
-  };
-
-  if (!userId || !connectionId) {
-    throw new HttpsError('invalid-argument', 'Missing userId or connectionId.');
-  }
+  const { userId, connectionId } = parseInput(DeleteConnectionSchema, request.data);
 
   // Only allow users to delete their own connections
   if (request.auth.uid !== userId) {
@@ -296,21 +445,15 @@ export const createConnection = onCall(async (request) => {
     secondPerson,
     prompt: clientPrompt,
     birthDetailsChangeCount,
-  } = request.data as {
-    userId: string;
-    isMe: boolean;
-    relationshipType: string;
-    firstPerson: Record<string, any>;
-    secondPerson: Record<string, any>;
-    prompt?: string;
-    birthDetailsChangeCount?: number;
-  };
+  } = parseInput(CreateConnectionSchema, request.data);
 
-  if (!userId || !relationshipType || !firstPerson || !secondPerson) {
-    throw new HttpsError('invalid-argument', 'Missing required fields.');
+  // Only allow users to create connections under their own user doc
+  if (request.auth.uid !== userId) {
+    throw new HttpsError('permission-denied', 'You can only create your own connections.');
   }
 
-  const mapPerson = (p: Record<string, any>) => ({
+  type ValidatedPerson = z.infer<typeof PersonSchema>;
+  const mapPerson = (p: ValidatedPerson) => ({
     firstName: p['First Name'] ?? '',
     lastName: p['Last Name'] ?? '',
     pronouns: p['Pronouns'] ?? '',
@@ -348,10 +491,10 @@ export const createConnection = onCall(async (request) => {
 
   const mappedSecond = mapPerson(secondPerson);
 
-  const prompt = clientPrompt ?? '';
+  const prompt = sanitizePrompt(clientPrompt);
 
-  const firstSlug = `${mappedFirst.firstName.toLowerCase()}_${mappedFirst.lastName.toLowerCase()}`;
-  const secondSlug = `${mappedSecond.firstName.toLowerCase()}_${mappedSecond.lastName.toLowerCase()}`;
+  const firstSlug = `${slugify(mappedFirst.firstName)}_${slugify(mappedFirst.lastName)}`;
+  const secondSlug = `${slugify(mappedSecond.firstName)}_${slugify(mappedSecond.lastName)}`;
   const connectionId = `${firstSlug}-${secondSlug}`;
 
   const connectionRef = db
