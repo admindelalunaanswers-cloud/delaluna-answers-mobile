@@ -55,6 +55,9 @@ extensions/*.secret.local
 # typescript
 *.tsbuildinfo
 
+# test coverage
+coverage/
+
 # generated native folders
 /ios
 /android
