@@ -1,41 +1,41 @@
+import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { router, useLocalSearchParams } from "expo-router";
+import { deleteDoc, doc, getDoc, updateDoc } from "firebase/firestore";
+import { httpsCallable } from "firebase/functions";
 import React, { useContext, useEffect, useRef, useState } from "react";
 import {
-  StyleSheet,
-  Animated,
-  Easing,
-  FlatList,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  Image,
-  Alert,
-  TextInput,
-  Keyboard,
-  ActivityIndicator,
+    ActivityIndicator,
+    Alert,
+    Animated,
+    Easing,
+    FlatList,
+    Image,
+    Keyboard,
+    KeyboardAvoidingView,
+    Platform,
+    StyleSheet,
+    TextInput,
+    TouchableOpacity,
 } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
-import { doc, getDoc, deleteDoc } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import { Ionicons } from "@expo/vector-icons";
 
-import HeaderNav from "@/src/components/shared/header-nav";
-import { ThemedView } from "@/src/components/themed-view";
-import { ThemedText } from "@/src/components/themed-text";
-import { GlassButton } from "@/src/assets/buttons/glass-button";
-import { ThemeContext } from "@/src/context/theme-context";
-import { calculateNatalChart, NatalChart } from "@/src/services/astroEngine";
 import { db, functions } from "@/firebaseConfig";
+import { GlassButton } from "@/src/assets/buttons/glass-button";
+import HeaderNav from "@/src/components/shared/header-nav";
+import { ThemedText } from "@/src/components/themed-text";
+import { ThemedView } from "@/src/components/themed-view";
+import { ThemeContext } from "@/src/context/theme-context";
 import { useUser } from "@/src/context/user-context";
-import { verticalScale, scale, moderateScale } from "@/src/utils/responsive";
-import {
-  NominatimResult,
-  formatPlace,
-  searchNominatim,
-  detectTimezoneOffset,
-} from "@/src/utils/location";
 import { buildCompatibilityPrompt } from "@/src/prompts/compatibility-prompt";
+import { calculateNatalChart, NatalChart } from "@/src/services/astroEngine";
+import {
+    detectTimezoneOffset,
+    formatPlace,
+    NominatimResult,
+    searchNominatim,
+} from "@/src/utils/location";
+import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 
 import LoadingScreen from "../../(util)/loading-screen";
 
@@ -181,13 +181,14 @@ function PronounsField({
 }
 
 function ConnectionsBirthdayField({
-  value, onChange,
-}: { value: string; onChange: (vals: PersonBirthUpdate) => void }) {
+  value, onChange, editable = true,
+}: { value: string; onChange: (vals: PersonBirthUpdate) => void; editable?: boolean }) {
   const [textValue, setTextValue] = useState(value);
   const [dateValue, setDateValue] = useState(new Date());
   const [pickerVisible, setPickerVisible] = useState(false);
 
   const onDateTextChange = (text: string) => {
+    if (!editable) return;
     if (text.length < textValue.length) {
       setTextValue(text);
       onChange({ Birthday: text });
@@ -252,13 +253,15 @@ function ConnectionsBirthdayField({
             placeholderTextColor="rgba(255,255,255,0.4)"
             keyboardType="numbers-and-punctuation"
             maxLength={10}
+            editable={editable}
           />
           <TouchableOpacity
             style={fieldStyles.iconBtn}
             onPress={() => { Keyboard.dismiss(); setPickerVisible(true); }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            disabled={!editable}
           >
-            <Ionicons name="calendar-outline" size={moderateScale(22)} color="rgba(255,255,255,0.55)" />
+            <Ionicons name="calendar-outline" size={moderateScale(22)} color={editable ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.2)"} />
           </TouchableOpacity>
         </ThemedView>
       )}
@@ -292,8 +295,9 @@ const ConnectionsPlaceOfBirthField = React.forwardRef<
     isUnknown?: boolean;
     onChange: (vals: PersonBirthUpdate) => void;
     onRequestDismiss?: () => void;
+    editable?: boolean;
   }
->(({ value, birthday, isUnknown: initialIsUnknown, onChange }, ref) => {
+>(({ value, birthday, isUnknown: initialIsUnknown, onChange, editable = true }, ref) => {
   const inputRef = useRef<TextInput>(null);
   const [isUnknown, setIsUnknown] = useState(initialIsUnknown ?? false);
   const [query, setQuery] = useState(value);
@@ -320,6 +324,7 @@ const ConnectionsPlaceOfBirthField = React.forwardRef<
   };
 
   const onLocationChange = (text: string) => {
+    if (!editable) return;
     setQuery(text);
     setResults([]);
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -379,12 +384,13 @@ const ConnectionsPlaceOfBirthField = React.forwardRef<
               value={query}
               autoCapitalize="words"
               onChangeText={onLocationChange}
+              editable={editable}
             />
             {(searching || tzLoading) && (
               <ActivityIndicator size="small" color="rgba(255,255,255,0.6)" />
             )}
           </ThemedView>
-          {results.length > 0 && (
+          {results.length > 0 && editable && (
             <ThemedView style={fieldStyles.locationDrop}>
               {results.map((r) => (
                 <TouchableOpacity
@@ -400,9 +406,11 @@ const ConnectionsPlaceOfBirthField = React.forwardRef<
               ))}
             </ThemedView>
           )}
-          <TouchableOpacity onPress={handleSkip}>
-            <ThemedText style={styles.skipLink}>I don't know</ThemedText>
-          </TouchableOpacity>
+          {editable && (
+            <TouchableOpacity onPress={handleSkip}>
+              <ThemedText style={styles.skipLink}>I don't know</ThemedText>
+            </TouchableOpacity>
+          )}
         </>
       )}
     </ThemedView>
@@ -410,8 +418,8 @@ const ConnectionsPlaceOfBirthField = React.forwardRef<
 });
 
 function ConnectionsTimeOfBirthField({
-  value, isUnknown: initialIsUnknown, onChange,
-}: { value: string; isUnknown?: boolean; onChange: (vals: PersonBirthUpdate) => void }) {
+  value, isUnknown: initialIsUnknown, onChange, editable = true,
+}: { value: string; isUnknown?: boolean; onChange: (vals: PersonBirthUpdate) => void; editable?: boolean }) {
   const [textValue, setTextValue] = useState(value);
   const [dateValue, setDateValue] = useState(new Date());
   const [pickerVisible, setPickerVisible] = useState(false);
@@ -430,6 +438,7 @@ function ConnectionsTimeOfBirthField({
   };
 
   const onTimeTextChange = (text: string) => {
+    if (!editable) return;
     if (text.length < textValue.length) {
       setTextValue(text);
       onChange({ "Time of Birth": text });
@@ -574,6 +583,7 @@ export default function EditConnectionScreen() {
     second: PersonBirthData;
     relationshipType: string | null;
   } | null>(null);
+  const [connection, setConnection] = useState<any>(null);
 
   const LOADING_SAYINGS = [
     "Calculating cosmic alignment...",
@@ -640,6 +650,7 @@ export default function EditConnectionScreen() {
       setSecondPerson(hydratedSecond);
       setRelationshipType(hydratedRelationship);
       setChangeCount(typeof data.birthDetailsChangeCount === "number" ? data.birthDetailsChangeCount : 0);
+      setConnection(data);
       setOriginalSnapshot({
         first: hydratedFirst,
         second: hydratedSecond,
@@ -664,12 +675,12 @@ export default function EditConnectionScreen() {
   }, [initialLoading, theme]);
 
   const birthFields: FieldConfig[] = [
-    { label: "First Name", type: "text", editable: false },
-    { label: "Last Name", type: "text", editable: false },
-    { label: "Pronouns", type: "pronouns" },
-    { label: "Birthday", type: "date", placeholder: "MM/DD/YYYY" },
-    { label: "Place of Birth", type: "location" },
-    { label: "Time of Birth", type: "time", placeholder: "H:MM AM/PM" },
+    { label: "First Name", type: "text", editable: true },
+    { label: "Last Name", type: "text", editable: true },
+    { label: "Pronouns", type: "pronouns", editable: true },
+    { label: "Birthday", type: "date", placeholder: "MM/DD/YYYY", editable: false },
+    { label: "Place of Birth", type: "location", editable: false },
+    { label: "Time of Birth", type: "time", placeholder: "H:MM AM/PM", editable: false },
   ];
 
   type PersonKey = "first" | "second";
@@ -751,10 +762,96 @@ export default function EditConnectionScreen() {
     return diff(firstPerson, originalSnapshot.first) || diff(secondPerson, originalSnapshot.second);
   })();
 
-  const remainingChanges = Math.max(0, MAX_BIRTH_DETAIL_CHANGES - changeCount);
+  const pronounsChanged = (() => {
+    if (!originalSnapshot) return false;
+    return (
+      firstPerson.Pronouns !== originalSnapshot.first.Pronouns ||
+      secondPerson.Pronouns !== originalSnapshot.second.Pronouns
+    );
+  })();
+
+  const onlyPronounsChanged = pronounsChanged && !birthDetailsChanged;
+
+  const replacePronouns = (text: string, oldPronoun: string, newPronoun: string): string => {
+    const pronounMap: Record<string, { subject: string; object: string; possessive: string; reflexive: string }> = {
+      "She/Her": { subject: "she", object: "her", possessive: "her", reflexive: "herself" },
+      "He/Him": { subject: "he", object: "him", possessive: "his", reflexive: "himself" },
+      "They/Them": { subject: "they", object: "them", possessive: "their", reflexive: "themselves" },
+      "Non Binary": { subject: "they", object: "them", possessive: "their", reflexive: "themselves" },
+    };
+
+    const oldMap = pronounMap[oldPronoun];
+    const newMap = pronounMap[newPronoun];
+    if (!oldMap || !newMap) return text;
+
+    let result = text;
+    result = result.replace(new RegExp(`\\b${oldMap.subject}\\b`, "gi"), newMap.subject);
+    result = result.replace(new RegExp(`\\b${oldMap.object}\\b`, "gi"), newMap.object);
+    result = result.replace(new RegExp(`\\b${oldMap.possessive}\\b`, "gi"), newMap.possessive);
+    result = result.replace(new RegExp(`\\b${oldMap.reflexive}\\b`, "gi"), newMap.reflexive);
+    return result;
+  };
+
+  const handleSavePronouns = async () => {
+    try {
+      const origFirst = originalSnapshot?.first;
+      const origSecond = originalSnapshot?.second;
+      let updatedData: any = {
+        firstPerson: {
+          firstName: firstPerson["First Name"],
+          lastName: firstPerson["Last Name"],
+          pronouns: firstPerson.Pronouns,
+        },
+        secondPerson: {
+          firstName: secondPerson["First Name"],
+          lastName: secondPerson["Last Name"],
+          pronouns: secondPerson.Pronouns,
+        },
+      };
+
+      if (
+        origFirst?.Pronouns &&
+        firstPerson.Pronouns !== origFirst.Pronouns &&
+        connection?.compatibility?.advice
+      ) {
+        const oldAdvice = connection.compatibility.advice;
+        updatedData.compatibility = {
+          ...connection.compatibility,
+          advice: replacePronouns(oldAdvice, origFirst.Pronouns, firstPerson.Pronouns),
+        };
+      }
+
+      if (
+        origSecond?.Pronouns &&
+        secondPerson.Pronouns !== origSecond.Pronouns &&
+        connection?.compatibility?.advice
+      ) {
+        const oldAdvice = updatedData.compatibility?.advice ?? connection.compatibility.advice;
+        updatedData.compatibility = {
+          ...connection.compatibility,
+          advice: replacePronouns(oldAdvice, origSecond.Pronouns, secondPerson.Pronouns),
+        };
+      }
+
+      const ref = doc(db, "users", authUser!.uid, "connections", connectionId!);
+      await updateDoc(ref, updatedData);
+      router.back();
+    } catch (err) {
+      console.error("Error saving pronouns:", err);
+      Alert.alert("Error", "Failed to save changes.");
+      setSaving(false);
+    }
+  };
 
   const handleSave = async () => {
     dismissAllSuggestions();
+
+    if (onlyPronounsChanged) {
+      setSaving(true);
+      await handleSavePronouns();
+      return;
+    }
+
     setSaving(true);
 
     if (!validatePerson(firstPerson, "First Person")) { setSaving(false); return; }
@@ -979,6 +1076,7 @@ export default function EditConnectionScreen() {
                           key={field.label}
                           value={personKey === "first" ? firstPerson.Birthday : secondPerson.Birthday}
                           onChange={(vals) => item.onChange((prev: PersonBirthData) => ({ ...prev, ...vals }))}
+                          editable={field.editable}
                         />
                       );
                     }
@@ -994,6 +1092,7 @@ export default function EditConnectionScreen() {
                           onChange={(vals) => item.onChange((prev: PersonBirthData) => ({ ...prev, ...vals }))}
                           ref={personKey === "first" ? firstLocationRef : secondLocationRef}
                           onRequestDismiss={dismissAllSuggestions}
+                          editable={field.editable}
                         />
                       );
                     }
@@ -1006,6 +1105,7 @@ export default function EditConnectionScreen() {
                           value={person["Time of Birth"]}
                           isUnknown={person.isBirthTimeUnknown}
                           onChange={(vals) => item.onChange((prev: PersonBirthData) => ({ ...prev, ...vals }))}
+                          editable={field.editable}
                         />
                       );
                     }
