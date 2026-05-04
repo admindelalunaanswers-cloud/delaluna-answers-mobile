@@ -1,7 +1,8 @@
 import { type ReactNode, useEffect } from 'react';
 
-import { ImageBackground } from 'react-native';
+import { Image, ImageBackground, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import * as SplashScreen from 'expo-splash-screen';
 
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -9,6 +10,9 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
+
+// Keep the native splash visible until AuthGate decides what to render.
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 import ThemeProvider from '@/src/context/theme-context';
 import { HoroscopeProvider, useHoroscope } from '@/src/context/horoscope-context';
@@ -69,10 +73,44 @@ function AuthGate() {
     }
   }, [authUser, userDoc, userLoading, inAuth, inStartup, horoscopeReady]);
 
+  // Hold rendering until auth state is known, or while we're about to redirect
+  // a signed-out user out of (main). Prevents the home screen from flashing
+  // before the redirect effect runs.
+  const shouldHoldRender =
+    userLoading ||
+    authUser === undefined ||
+    (!authUser && !inAuth && !inStartup);
+
+  // Hide the native splash only once we're ready to render the real route.
+  useEffect(() => {
+    if (!shouldHoldRender) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [shouldHoldRender]);
+
+  if (shouldHoldRender) {
+    return <SplashFallback />;
+  }
+
   return (
     <ThemedRoot>
       <Slot />
     </ThemedRoot>
+  );
+}
+
+// Mirrors the native expo-splash-screen config (white bg, centered logo at 200px)
+// so Android doesn't flash its postSplashScreenTheme background between the
+// native splash dismissing and the first route painting.
+function SplashFallback() {
+  return (
+    <View style={{ flex: 1, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center' }}>
+      <Image
+        source={require('@/src/assets/dlla-branded/delaluna_app_icon.png')}
+        style={{ width: 200, height: 200 }}
+        resizeMode="contain"
+      />
+    </View>
   );
 }
 
