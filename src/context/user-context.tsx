@@ -6,8 +6,33 @@
 import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc, onSnapshot, collection, getDocs, Unsubscribe } from 'firebase/firestore';
-import { auth, db } from '@/firebaseConfig';
+import { httpsCallable } from 'firebase/functions';
+import { auth, db, functions } from '@/firebaseConfig';
 import type { UserDoc, PurchaseDoc } from '@/src/types/user.type';
+
+/**
+ * Reconciles the caller's `admin` custom claim against the server-side
+ * email allowlist, then force-refreshes the ID token if the server says
+ * something changed. Safe to call on every sign-in — the function is
+ * idempotent and short-circuits when state already matches.
+ */
+async function syncAdminClaim(user: User): Promise<void> {
+  try {
+    const fn = httpsCallable<unknown, { admin: boolean; changed: boolean }>(
+      functions,
+      'syncAdminClaim',
+    );
+    const res = await fn({});
+    if (res.data?.changed) {
+      // Force a fresh token so the new claim is visible to security rules.
+      await user.getIdToken(true);
+    }
+  } catch (err) {
+    // Fail open — admin status is a privilege grant, not a gate. A failure
+    // here just means non-admins stay non-admin until next sign-in.
+    console.warn('[UserContext] syncAdminClaim failed:', err);
+  }
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -95,6 +120,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
       setAuthUser(user);
       if (user) {
         subscribeToUserDoc(user.uid);
+        // Fire-and-forget: reconcile the admin claim in the background so
+        // the user-doc snapshot doesn't have to wait on a callable round-trip.
+        void syncAdminClaim(user);
         try {
           setPurchases(await fetchPurchases(user.uid));
         } catch (err) {
