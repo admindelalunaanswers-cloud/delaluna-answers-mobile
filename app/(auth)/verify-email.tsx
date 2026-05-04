@@ -94,7 +94,24 @@ export default function VerifyEmail() {
   };
 
   const handleDigitChange = (text: string, index: number) => {
-    const char = text.replace(/\D/g, '').slice(-1);
+    // Strip anything that isn't a letter or digit, uppercase, take the last
+    // character. Lets users paste the whole code (handled below via length>1).
+    const cleaned = text.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+
+    // Paste of full code: distribute across boxes starting at this index.
+    if (cleaned.length > 1) {
+      const next = [...digits];
+      for (let i = 0; i < CODE_LENGTH - index && i < cleaned.length; i++) {
+        next[index + i] = cleaned[i];
+      }
+      setDigits(next);
+      const lastFilled = Math.min(index + cleaned.length, CODE_LENGTH) - 1;
+      inputRefs.current[Math.min(lastFilled + 1, CODE_LENGTH - 1)]?.focus();
+      if (next.every(d => d !== '')) handleVerify(next.join(''));
+      return;
+    }
+
+    const char = cleaned.slice(-1);
     const next = [...digits];
     next[index] = char;
     setDigits(next);
@@ -102,7 +119,6 @@ export default function VerifyEmail() {
     if (char && index < CODE_LENGTH - 1) {
       inputRefs.current[index + 1]?.focus();
     }
-    // Auto-verify when all digits filled
     if (char && next.every(d => d !== '')) {
       handleVerify(next.join(''));
     }
@@ -120,7 +136,7 @@ export default function VerifyEmail() {
     const enteredCode = code ?? digits.join('');
 
     if (!enteredCode || enteredCode.length !== CODE_LENGTH) {
-      Alert.alert('Invalid code', 'Please enter the full 6-digit code.');
+      Alert.alert('Invalid code', 'Please enter all 6 characters of the code.');
       return;
     }
 
@@ -216,7 +232,7 @@ export default function VerifyEmail() {
                 ) : (
                   <ThemedText style={styles.subtitle}>
                     {codeSent
-                      ? `We sent a 6-digit code to ${maskedEmail}`
+                      ? `We sent a 6-character code to ${maskedEmail}`
                       : sending
                       ? 'Sending code…'
                       : 'Preparing your code…'}
@@ -233,7 +249,9 @@ export default function VerifyEmail() {
                       value={d}
                       onChangeText={text => handleDigitChange(text, i)}
                       onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, i)}
-                      keyboardType="number-pad"
+                      keyboardType="ascii-capable"
+                      autoCapitalize="characters"
+                      autoCorrect={false}
                       maxLength={6}
                       selectTextOnFocus
                       caretHidden

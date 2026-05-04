@@ -60,6 +60,7 @@ extensions/*.secret.local
 /android
 app.apk
 /scripts
+/credentials.json
 
 # local Claude Code config
 .claude/
@@ -68,3 +69,4 @@ SLASH_COMMANDS.md
 CLAUDE.md
 THREAT_MODEL.md
 CLAUDE.md
+

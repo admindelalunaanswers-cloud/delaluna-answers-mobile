@@ -5,6 +5,7 @@ import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
 import * as nodemailer from 'nodemailer';
+import { randomInt } from 'crypto';
 import { z, ZodError, ZodType } from 'zod';
 
 // ─── Secrets (set via: firebase functions:secrets:set EMAIL_USER) ─────────────
@@ -25,8 +26,17 @@ console.log(`[functions] Running in ${isEmulator ? 'EMULATOR (dev)' : 'PRODUCTIO
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+// 6-character alphanumeric OTP. Uses an ambiguity-free alphabet (no
+// 0/O/1/I/L) so users transcribing from an email don't fat-finger a code,
+// and crypto.randomInt for a uniform distribution — Math.random() is not
+// suitable for security-sensitive randomness.
+const OTP_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // 31 chars
 function generateOtp(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  let out = '';
+  for (let i = 0; i < 6; i++) {
+    out += OTP_ALPHABET[randomInt(OTP_ALPHABET.length)];
+  }
+  return out;
 }
 
 function getOtpDocRef(uid: string) {
@@ -96,8 +106,12 @@ function sanitizePrompt(input: string | undefined, maxLen = 32000): string {
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
+// Accept the same alphabet generateOtp emits (case-insensitive — the verifier
+// uppercases before comparing). The literal class is the ambiguity-free set;
+// keeping it permissive on the regex side guards against future alphabet
+// tweaks without forcing a coordinated client deploy.
 const VerifyCodeSchema = z.object({
-  code: z.string().regex(/^\d{6}$/, 'Code must be a 6-digit number.'),
+  code: z.string().regex(/^[A-Za-z0-9]{6}$/, 'Code must be 6 letters or digits.'),
 });
 
 const DeleteConnectionSchema = z.object({
@@ -239,7 +253,7 @@ export const verifyCode = onCall({ invoker: 'public' }, async (request) => {
     throw new HttpsError('deadline-exceeded', 'Code has expired. Please request a new one.');
   }
 
-  if (data.code !== code) {
+  if (data.code !== code.toUpperCase()) {
     await otpRef.update({ attempts: FieldValue.increment(1) });
     const remaining = 4 - attempts;
     throw new HttpsError(
