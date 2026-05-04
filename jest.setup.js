@@ -16,23 +16,39 @@ jest.mock('firebase/auth', () => ({
   sendPasswordResetEmail: jest.fn(),
 }));
 
-jest.mock('firebase/firestore', () => ({
-  getFirestore: jest.fn(),
-  collection: jest.fn(),
-  doc: jest.fn(),
-  getDoc: jest.fn(),
-  setDoc: jest.fn(),
-  updateDoc: jest.fn(),
-  deleteDoc: jest.fn(),
-  query: jest.fn(),
-  where: jest.fn(),
-  getDocs: jest.fn(),
-  onSnapshot: jest.fn(),
-  writeBatch: jest.fn(),
-  serverTimestamp: jest.fn(() => new Date()),
-  arrayUnion: jest.fn(),
-  arrayRemove: jest.fn(),
-}));
+jest.mock('firebase/firestore', () => {
+  class FakeTimestamp {
+    constructor(seconds, nanoseconds = 0) {
+      this.seconds = seconds;
+      this.nanoseconds = nanoseconds;
+    }
+    static now() { return new FakeTimestamp(Math.floor(Date.now() / 1000)); }
+    static fromDate(d) { return new FakeTimestamp(Math.floor(d.getTime() / 1000)); }
+    toDate() { return new Date(this.seconds * 1000 + this.nanoseconds / 1e6); }
+    toMillis() { return this.seconds * 1000 + this.nanoseconds / 1e6; }
+  }
+  return {
+    getFirestore: jest.fn(),
+    collection: jest.fn((..._args) => ({ __type: 'collection', path: _args.slice(1).join('/') })),
+    doc: jest.fn((..._args) => ({ __type: 'doc', path: _args.slice(1).join('/') })),
+    getDoc: jest.fn(),
+    setDoc: jest.fn(),
+    addDoc: jest.fn(),
+    updateDoc: jest.fn(),
+    deleteDoc: jest.fn(),
+    query: jest.fn((...args) => ({ __type: 'query', args })),
+    where: jest.fn(),
+    orderBy: jest.fn(),
+    getDocs: jest.fn(),
+    onSnapshot: jest.fn(),
+    writeBatch: jest.fn(),
+    serverTimestamp: jest.fn(() => '__SERVER_TIMESTAMP__'),
+    deleteField: jest.fn(() => '__DELETE_FIELD__'),
+    arrayUnion: jest.fn(),
+    arrayRemove: jest.fn(),
+    Timestamp: FakeTimestamp,
+  };
+});
 
 jest.mock('firebase/functions', () => ({
   getFunctions: jest.fn(),
@@ -50,21 +66,54 @@ jest.mock('firebase/storage', () => ({
 // Mock React Native modules
 jest.mock('react-native/Libraries/EventEmitter/NativeEventEmitter');
 
-jest.mock('react-native-purchases', () => ({
-  Purchases: {
+jest.mock('react-native-purchases', () => {
+  const Purchases = {
+    configure: jest.fn(),
+    setLogLevel: jest.fn(),
     setup: jest.fn(),
     logIn: jest.fn(),
     logOut: jest.fn(),
+    isAnonymous: jest.fn(),
     getCustomerInfo: jest.fn(),
+    getOfferings: jest.fn(),
     purchasePackage: jest.fn(),
+    purchaseStoreProduct: jest.fn(),
     restorePurchases: jest.fn(),
+    addCustomerInfoUpdateListener: jest.fn(),
+    removeCustomerInfoUpdateListener: jest.fn(),
+  };
+  return {
+    __esModule: true,
+    default: Purchases,
+    Purchases,
+    LOG_LEVEL: { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 },
+  };
+});
+
+jest.mock('react-native-purchases-ui', () => ({
+  __esModule: true,
+  default: {
+    presentPaywall: jest.fn(),
+    presentPaywallIfNeeded: jest.fn(),
+    presentCustomerCenter: jest.fn(),
   },
-  LOG_LEVEL: {
-    DEBUG: 0,
-    INFO: 1,
-    WARN: 2,
-    ERROR: 3,
+  PAYWALL_RESULT: {
+    NOT_PRESENTED: 'NOT_PRESENTED',
+    ERROR: 'ERROR',
+    CANCELLED: 'CANCELLED',
+    PURCHASED: 'PURCHASED',
+    RESTORED: 'RESTORED',
   },
+}));
+
+jest.mock('expo-device', () => ({
+  isDevice: true,
+}));
+
+jest.mock('expo-secure-store', () => ({
+  getItemAsync: jest.fn(),
+  setItemAsync: jest.fn(),
+  deleteItemAsync: jest.fn(),
 }));
 
 // Mock Expo modules
