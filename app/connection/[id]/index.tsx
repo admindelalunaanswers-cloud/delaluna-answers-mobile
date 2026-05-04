@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc } from "firebase/firestore";
 import LottieView from "lottie-react-native";
 import React, { useEffect, useState } from "react";
 import {
@@ -95,6 +95,7 @@ interface ConnectionDoc {
   firstPerson?: PersonInfo;
   secondPerson?: PersonInfo;
   compatibility?: CompatibilityReport;
+  synastryUnlocked?: boolean;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -193,8 +194,8 @@ export default function ConnectionViewScreen() {
   const [expandedKeyword, setExpandedKeyword] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState(LOADING_SAYINGS[0]);
   const [hasSynastryReading, setHasSynastryReading] = useState(false);
-  const [synastryConsumablePurchased, setSynastryConsumablePurchased] = useState(false);
   const [showSynastryConsumable, setShowSynastryConsumable] = useState(false);
+  const synastryUnlocked = connection?.synastryUnlocked === true;
 
   // Rotate loading messages while waiting for report
   useEffect(() => {
@@ -229,6 +230,7 @@ export default function ConnectionViewScreen() {
           firstPerson: data.firstPerson,
           secondPerson: data.secondPerson,
           compatibility: data.compatibility,
+          synastryUnlocked: data.synastryUnlocked === true,
         });
         setLoading(false);
       },
@@ -339,7 +341,7 @@ export default function ConnectionViewScreen() {
 
   const handleCompareBirthChart = async () => {
     // Gate behind premium / consumable purchase (skip if already viewed)
-    if (!hasPremiumAccess && !hasSynastryReading && !synastryConsumablePurchased) {
+    if (!hasPremiumAccess && !hasSynastryReading && !synastryUnlocked) {
       setShowSynastryConsumable(true);
       return;
     }
@@ -516,8 +518,17 @@ export default function ConnectionViewScreen() {
         visible={showSynastryConsumable}
         kind="synastry"
         onClose={() => setShowSynastryConsumable(false)}
-        onPurchased={(_quantity) => {
-          setSynastryConsumablePurchased(true);
+        onPurchased={async (_quantity) => {
+          if (authUser?.uid && connectionId) {
+            try {
+              await updateDoc(
+                doc(db, "users", authUser.uid, "connections", connectionId),
+                { synastryUnlocked: true },
+              );
+            } catch (err) {
+              console.error("[synastry] failed to persist unlock", err);
+            }
+          }
           runSynastryCompare();
         }}
       />
