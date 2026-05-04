@@ -52,10 +52,6 @@ functions/lib/
 # Firebase extension secrets (contain API keys — never commit)
 extensions/*.secret.local
 
-# EAS / signing credentials (contain cert passwords — never commit)
-credentials.json
-credentials/
-
 # typescript
 *.tsbuildinfo
 
