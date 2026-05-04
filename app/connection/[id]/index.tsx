@@ -431,6 +431,16 @@ export default function ConnectionViewScreen() {
           {/* Score bars — only render once the report exists */}
           {connection?.status?.state === "error" && !report ? (
             <Text style={styles.errorText}>Something went wrong generating the report.</Text>
+          ) : !report ? (
+            <View style={styles.pendingCard}>
+              <LottieView
+                source={require("@/src/assets/animations/galaxy.json")}
+                autoPlay
+                loop
+                style={styles.pendingAnimation}
+              />
+              <Text style={styles.pendingText}>{statusLabel}</Text>
+            </View>
           ) : report ? (
             <>
               {/* Compare / View Birth Charts */}
