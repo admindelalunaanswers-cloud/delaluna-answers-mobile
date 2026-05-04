@@ -127,7 +127,7 @@ function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: C
       </View>
 
       <View style={styles.aiBubbleRow}>
-        <Image source={aiAvatarSource} style={styles.avatar} />
+        <Image source={aiAvatarSource} style={[styles.avatar, styles.aiAvatar]} />
         <View style={styles.aiBubble}>
           {msg.isPending && !isStuck ? (
             <TypingDots />
@@ -450,7 +450,7 @@ export default function ChatScreen() {
                       </View>
                       {m.response ? (
                         <View style={styles.aiBubbleRow}>
-                          <Image source={aiAvatarSource} style={styles.avatar} />
+                          <Image source={aiAvatarSource} style={[styles.avatar, styles.aiAvatar]} />
                           <View style={styles.aiBubble}>
                             <Text style={styles.aiBubbleText}>{stripBoldTitles(m.response)}</Text>
                           </View>
@@ -680,11 +680,14 @@ const styles = StyleSheet.create({
   },
 
   avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     marginHorizontal: S.sm,
     resizeMode: 'contain',
+  },
+  aiAvatar: {
+    transform: [{ scale: 0.78 }],
   },
 
   userBubbleRow: { 

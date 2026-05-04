@@ -67,6 +67,10 @@ export default function HeaderNav({
       width: scale(30),
       height: scale(30),
     },
+    avatarIcon: {
+      width: scale(40),
+      height: scale(40),
+    },
     placeholder: {
       width: scale(24),
       height: scale(24),
@@ -125,7 +129,7 @@ export default function HeaderNav({
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             {rightAvatarSource ? (
-              <Image source={rightAvatarSource} style={[styles.avatar, dynamic.icon]} />
+              <Image source={rightAvatarSource} style={[styles.avatar, dynamic.avatarIcon]} />
             ) : rightIconName ? (
               <Ionicons name={rightIconName} size={moderateScale(30)} color={tc} />
             ) : rightIconSource ? (
