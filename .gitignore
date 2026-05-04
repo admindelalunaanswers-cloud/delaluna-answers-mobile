@@ -52,6 +52,10 @@ functions/lib/
 # Firebase extension secrets (contain API keys — never commit)
 extensions/*.secret.local
 
+# EAS / signing credentials (contain cert passwords — never commit)
+credentials.json
+credentials/
+
 # typescript
 *.tsbuildinfo
 
@@ -63,3 +67,8 @@ app.apk
 
 # local Claude Code config
 .claude/
+SLASH_COMMANDS.md
+.gitignore
+CLAUDE.md
+THREAT_MODEL.md
+CLAUDE.md
