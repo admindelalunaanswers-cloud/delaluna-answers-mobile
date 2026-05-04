@@ -78,11 +78,12 @@ function slugify(input: string): string {
 }
 
 // Cap user-supplied LLM prompts and collapse control chars / whitespace.
-// Caps at 2 KB - well under any model's context window and large enough for
-// any legitimate connection note. Replaces ASCII control chars with spaces
-// and folds whitespace runs so we don't slip terminator sequences through
-// to the Handlebars-substituted prompt template.
-function sanitizePrompt(input: string | undefined, maxLen = 2000): string {
+// Caps at 32 KB - well under any model's context window and large enough
+// for the compatibility-prompt template (5.7 KB) plus two ~8 KB natal-chart
+// JSON payloads. Replaces ASCII control chars with spaces and folds
+// whitespace runs so we don't slip terminator sequences through to the
+// Handlebars-substituted prompt template.
+function sanitizePrompt(input: string | undefined, maxLen = 32000): string {
   if (!input) return '';
   return input
     // eslint-disable-next-line no-control-regex
@@ -127,7 +128,7 @@ const CreateConnectionSchema = z.object({
   relationshipType: z.string().min(1).max(60),
   firstPerson: PersonSchema,
   secondPerson: PersonSchema,
-  prompt: z.string().max(2000).optional(),
+  prompt: z.string().max(32000).optional(),
   birthDetailsChangeCount: z.number().int().nonnegative().optional(),
 });
 
