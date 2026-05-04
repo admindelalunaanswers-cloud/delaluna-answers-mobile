@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -22,7 +21,6 @@ import {
   searchNominatim,
   detectTimezoneOffset,
 } from '@/src/utils/location';
-import { checkEmailExists } from '@/src/services/user.service';
 import PasswordInput from '@/src/components/shared/password-input';
 import PolicyModal from '@/src/components/sign-up/policy-modals';
 import { privacyPolicy, termsAndConditions } from '@/src/assets/legal/legal-texts';
@@ -111,7 +109,6 @@ export default function ChatFlow({
   const [dateValue, setDateValue] = useState(new Date());
   const [dateError, setDateError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
-  const [emailChecking, setEmailChecking] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [pickerVisible, setPickerVisible] = useState(false);
 
@@ -218,27 +215,17 @@ export default function ChatFlow({
   };
 
   // ── Email validation ──────────────────────────────────────────────────────
+  // Format-only check. Existence is enforced server-side at signUp() — a
+  // probe here would be an account-enumeration oracle.
 
-  const handleEmailNext = async () => {
+  const handleEmailNext = () => {
     const email = currentValue.trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setEmailError('Please enter a valid email address.');
       return;
     }
-    setEmailChecking(true);
     setEmailError(null);
-    try {
-      const exists = await checkEmailExists(email);
-      if (exists) {
-        setEmailError('That email is already registered. Please sign in or use a different address.');
-        return;
-      }
-      advance({ ...answers, [currentStep.key]: email });
-    } catch {
-      setEmailError('Could not verify email. Please try again.');
-    } finally {
-      setEmailChecking(false);
-    }
+    advance({ ...answers, [currentStep.key]: email });
   };
 
   // ── Standard next ─────────────────────────────────────────────────────────
@@ -789,18 +776,14 @@ export default function ChatFlow({
                 autoCapitalize="none"
                 autoCorrect={false}
                 returnKeyType="next"
-                onSubmitEditing={() => void handleEmailNext()}
-                editable={!emailChecking}
+                onSubmitEditing={handleEmailNext}
               />
               <TouchableOpacity
-                style={[styles.sendButton, (!currentValue.trim() || emailChecking) && styles.sendButtonDisabled]}
-                onPress={() => void handleEmailNext()}
-                disabled={!currentValue.trim() || emailChecking}
+                style={[styles.sendButton, !currentValue.trim() && styles.sendButtonDisabled]}
+                onPress={handleEmailNext}
+                disabled={!currentValue.trim()}
               >
-                {emailChecking
-                  ? <ActivityIndicator size="small" color="#6FFFE9" />
-                  : <Ionicons name="arrow-forward" size={moderateScale(20)} color="#6FFFE9" />
-                }
+                <Ionicons name="arrow-forward" size={moderateScale(20)} color="#6FFFE9" />
               </TouchableOpacity>
             </View>
             {!!emailError && <Text style={styles.errorText}>{emailError}</Text>}

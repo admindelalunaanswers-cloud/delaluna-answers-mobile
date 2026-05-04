@@ -41,7 +41,7 @@ import { FirebaseOptions, getApp, getApps, initializeApp } from "firebase/app";
 
 // Auth
 import { Auth, connectAuthEmulator, getAuth, initializeAuth } from "firebase/auth";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { SecureAuthStorage } from "@/src/services/secure-auth-storage";
 // getReactNativePersistence is exported by the Metro/RN bundle of firebase/auth
 // but absent from the browser TypeScript definitions — require() bypasses that.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -75,11 +75,13 @@ const firebaseConfig: FirebaseOptions = {
 // Initialize Firebase
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// Auth — use AsyncStorage persistence so users stay logged in across app restarts.
+// Auth — persist tokens in SecureStore (Keychain on iOS, EncryptedSharedPreferences
+// on Android) instead of plaintext AsyncStorage. Existing users on prior builds
+// will be signed out once on first launch of this build.
 // Falls back to getAuth on hot reload when auth is already initialized.
 let auth: Auth;
 try {
-  auth = initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) });
+  auth = initializeAuth(app, { persistence: getReactNativePersistence(SecureAuthStorage) });
 } catch (e: any) {
   if (e.code === 'auth/already-initialized') {
     auth = getAuth(app);

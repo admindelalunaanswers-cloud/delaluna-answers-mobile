@@ -1,7 +1,6 @@
 import { doc, setDoc, serverTimestamp, getDoc, collection, getDocs } from 'firebase/firestore';
 import {
   createUserWithEmailAndPassword,
-  fetchSignInMethodsForEmail,
   signInWithEmailAndPassword,
   onAuthStateChanged as fbOnAuthStateChanged,
   signOut as fbSignOut,
@@ -10,19 +9,6 @@ import { auth, db } from '@/firebaseConfig';
 import { FinalSignupPayload } from '@/src/types/signup.types';
 import type { HoroscopeResult } from '@/src/types/horoscope.types';
 import type { UserDoc } from '@/src/types/user.type';
-
-/**
- * Returns true if the email is already registered in Firebase Auth.
- * Fails silently (returns false) on network errors so the UI never breaks.
- */
-export async function checkEmailExists(email: string): Promise<boolean> {
-  try {
-    const methods = await fetchSignInMethodsForEmail(auth, email);
-    return methods.length > 0;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Create a new Firebase Auth user
