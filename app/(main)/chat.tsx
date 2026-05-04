@@ -120,10 +120,10 @@ function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: C
         <Text style={styles.aboutTag}>about {msg.connectionName}</Text>
       ) : null}
       <View style={styles.userBubbleRow}>
-        <Image source={userAvatarSource} style={styles.avatar} />
         <View style={styles.userBubble}>
           <Text style={styles.userBubbleText}>{msg.userMessage}</Text>
         </View>
+        <Image source={userAvatarSource} style={styles.avatar} />
       </View>
 
       <View style={styles.aiBubbleRow}>
@@ -443,10 +443,10 @@ export default function ChatScreen() {
                     <View key={i} style={styles.historyEntry}>
                       <Text style={styles.historyTimestamp}>{formatTime(m.createdAt)}</Text>
                       <View style={styles.userBubbleRow}>
-                        <Image source={userAvatarSource} style={styles.avatar} />
                         <View style={styles.userBubble}>
                           <Text style={styles.userBubbleText}>{m.userMessage}</Text>
                         </View>
+                        <Image source={userAvatarSource} style={styles.avatar} />
                       </View>
                       {m.response ? (
                         <View style={styles.aiBubbleRow}>
@@ -684,6 +684,7 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
     marginHorizontal: S.sm,
+    resizeMode: 'contain',
   },
 
   userBubbleRow: { 

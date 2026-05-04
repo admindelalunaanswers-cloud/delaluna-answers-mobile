@@ -83,6 +83,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [loading, setLoading] = useState(REVENUECAT_ENABLED);
   const configuredRef = useRef(false);
+  const loggedInUidRef = useRef<string | null>(null);
 
   // Placeholder plan — lets the client test free / free-trial / premium
   // flows via the mock paywall, regardless of real RevenueCat state.
@@ -119,14 +120,19 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       try {
         if (authUser?.uid) {
           const { customerInfo: info } = await loginUser(authUser.uid);
+          loggedInUidRef.current = authUser.uid;
           if (!cancelled) setCustomerInfo(info);
-        } else {
-          // User signed out — reset to anonymous
+        } else if (loggedInUidRef.current) {
+          // User signed out — reset to anonymous (only if we previously logged in)
+          loggedInUidRef.current = null;
           try {
             await logoutUser();
           } catch {
             // Already anonymous — ignore
           }
+          if (!cancelled) setCustomerInfo(null);
+        } else {
+          // No prior login — SDK is already anonymous, just fetch initial info
           if (!cancelled) setCustomerInfo(null);
         }
       } catch (err) {

@@ -120,10 +120,11 @@ export default function HomeScreen() {
   // Prefetch all card front images across all days so day-switching is instant
   useEffect(() => {
     const allCards = Object.values(cardDraw).flatMap(pack => pack.cards ?? []);
-    allCards.forEach(card => {
+    const uniqueIds = Array.from(new Set(allCards.map(card => card.id)));
+    uniqueIds.forEach(id => {
       Image.prefetch(
-        `https://firebasestorage.googleapis.com/v0/b/delaluna-answers.firebasestorage.app/o/tarot-card-front%2F${card.id}.png?alt=media`
-      );
+        `https://firebasestorage.googleapis.com/v0/b/delaluna-answers.firebasestorage.app/o/tarot-card-front%2F${id}.png?alt=media`
+      ).catch(() => {});
     });
   }, [cardDraw]);
 
