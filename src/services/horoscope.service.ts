@@ -154,7 +154,7 @@ async function writeHoroscopeDoc(
 ): Promise<void> {
   const date = formatDateLabel(dateId);
   const todaysMoonStr = formatMoonSummary(moon);
-  const retrogradeStr = retrogrades.length > 0 ? retrogrades.join(', ') : 'none';
+  const retrogradeStr = retrogrades.length > 0 ? retrogrades.join(', ') : 'No planets in retrograde';
 
   const prompt = renderPrompt({
     tarotKeywords,
