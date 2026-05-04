@@ -1,41 +1,43 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
-import {
-  Animated,
-  FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  ActivityIndicator,
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import {
+    ActivityIndicator,
+    Animated,
+    FlatList,
+    Image,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import ConsumablePlaceholder from '@/src/components/shared/consumable-placeholder.component';
+import { getProfileImageSource } from '@/app/(settings)/select-avatar';
 import ConnectionPickerSheet, { type PickerConnection } from '@/src/components/connection-picker-sheet';
+import ConsumablePlaceholder from '@/src/components/shared/consumable-placeholder.component';
 import HeaderNav from '@/src/components/shared/header-nav';
 import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
 import { ThemedView } from '@/src/components/themed-view';
+import { HOME_STRINGS } from '@/src/constants/strings';
 import { C, R, S } from '@/src/constants/theme';
+import { useAdmin } from '@/src/context/admin-context';
+import { useHoroscope } from '@/src/context/horoscope-context';
+import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { useUser } from '@/src/context/user-context';
+import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
 import { useResponsive } from '@/src/hooks/use-responsive';
-import { deleteChatSession, resumeChatSession, retryChatMessage, saveChatAndClear, sendChatMessage, subscribeToChatHistory, subscribeToChatSessions } from '@/src/services/chat.service';
 import type { ChatConnectionContext, ChatMessageDoc, SavedChatSession } from '@/src/services/chat.service';
+import { deleteChatSession, resumeChatSession, retryChatMessage, saveChatAndClear, sendChatMessage, subscribeToChatHistory, subscribeToChatSessions } from '@/src/services/chat.service';
 import { buildConnectionContextSummary } from '@/src/services/connection-context.service';
 import { buildNatalChartSummary } from '@/src/services/natal-chart-breakdown.service';
 import { ChatStore } from '@/src/stores/chat-store';
-import { HOME_STRINGS } from '@/src/constants/strings';
-import { useHoroscope } from '@/src/context/horoscope-context';
-import { useAdmin } from '@/src/context/admin-context';
-import { useRevenueCat } from '@/src/context/revenuecat-context';
-import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
 
 const SUGGESTIONS = [
   HOME_STRINGS.newLove.questionFunnel,
@@ -103,8 +105,14 @@ function TypingDots() {
 }
 
 function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: ChatMessageDoc) => void }) {
+  const { userDoc } = useUser();
   const isStuck = msg.isPending && (Date.now() - msg.createdAt.getTime()) > 60_000;
   const showRetry = msg.isError || isStuck;
+
+  const userAvatarSource =
+    getProfileImageSource((userDoc as any)?.profileImageId) ??
+    getProfileImageSource('profile8');
+  const aiAvatarSource = require('@/src/assets/dlla-branded/delaluna_app_icon.png');
 
   return (
     <View style={styles.messageGroup}>
@@ -112,12 +120,14 @@ function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: C
         <Text style={styles.aboutTag}>about {msg.connectionName}</Text>
       ) : null}
       <View style={styles.userBubbleRow}>
+        <Image source={userAvatarSource} style={styles.avatar} />
         <View style={styles.userBubble}>
           <Text style={styles.userBubbleText}>{msg.userMessage}</Text>
         </View>
       </View>
 
       <View style={styles.aiBubbleRow}>
+        <Image source={aiAvatarSource} style={styles.avatar} />
         <View style={styles.aiBubble}>
           {msg.isPending && !isStuck ? (
             <TypingDots />
@@ -142,7 +152,7 @@ function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: C
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function ChatScreen() {
-  const { authUser } = useUser();
+  const { authUser, userDoc } = useUser();
   const { chartDetails } = useHoroscope();
   const { dailyChatLimit, premiumDailyChatLimit } = useAdmin();
   const { isPro } = useRevenueCat();
@@ -424,19 +434,31 @@ export default function ChatScreen() {
                 </TouchableOpacity>
               </View>
               <ScrollView contentContainerStyle={styles.historyList} showsVerticalScrollIndicator={false}>
-                {viewingSession.messages.map((m, i) => (
-                  <View key={i} style={styles.historyEntry}>
-                    <Text style={styles.historyTimestamp}>{formatTime(m.createdAt)}</Text>
-                    <View style={[styles.userBubble, { alignSelf: 'flex-end' }]}>
-                      <Text style={styles.userBubbleText}>{m.userMessage}</Text>
-                    </View>
-                    {m.response ? (
-                      <View style={[styles.aiBubble, { alignSelf: 'flex-start' }]}>
-                        <Text style={styles.aiBubbleText}>{stripBoldTitles(m.response)}</Text>
+                {(() => {
+                  const userAvatarSource =
+                    getProfileImageSource((userDoc as any)?.profileImageId) ??
+                    getProfileImageSource('profile8');
+                  const aiAvatarSource = require('@/src/assets/dlla-branded/delaluna_app_icon.png');
+                  return viewingSession.messages.map((m, i) => (
+                    <View key={i} style={styles.historyEntry}>
+                      <Text style={styles.historyTimestamp}>{formatTime(m.createdAt)}</Text>
+                      <View style={styles.userBubbleRow}>
+                        <Image source={userAvatarSource} style={styles.avatar} />
+                        <View style={styles.userBubble}>
+                          <Text style={styles.userBubbleText}>{m.userMessage}</Text>
+                        </View>
                       </View>
-                    ) : null}
-                  </View>
-                ))}
+                      {m.response ? (
+                        <View style={styles.aiBubbleRow}>
+                          <Image source={aiAvatarSource} style={styles.avatar} />
+                          <View style={styles.aiBubble}>
+                            <Text style={styles.aiBubbleText}>{stripBoldTitles(m.response)}</Text>
+                          </View>
+                        </View>
+                      ) : null}
+                    </View>
+                  ));
+                })()}
               </ScrollView>
             </>
           ) : (
@@ -657,7 +679,18 @@ const styles = StyleSheet.create({
     marginBottom: S.sm,
   },
 
-  userBubbleRow: { alignItems: 'flex-end' },
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginHorizontal: S.sm,
+  },
+
+  userBubbleRow: { 
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
+  },
   userBubble: {
     backgroundColor: C.purpleDim,
     borderRadius: R.lg,
@@ -672,7 +705,11 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  aiBubbleRow: { alignItems: 'flex-start' },
+  aiBubbleRow: { 
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
+  },
   aiBubble: {
     backgroundColor: 'rgba(255,255,255,0.07)',
     borderRadius: R.lg,

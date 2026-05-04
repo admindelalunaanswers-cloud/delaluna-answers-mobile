@@ -285,11 +285,10 @@ export default function ProfileScreen() {
          
           <TouchableOpacity
            style={ss.actionButton}
-            onPress={() => router.push('/(settings)/update-theme.screen')}
-          disabled={!ud.purchasedReports || ud.purchasedReports === 0}>
+            onPress={() => router.push('/(settings)/purchased-reports')}>
              <View style={ss.detailRow}>
-              <Text style={ss.detailLabel}>Reports purchased</Text> 
-              <Text style={ss.detailValue}>{ud.purchasedReports ?? '-'}</Text>
+              <Text style={ss.detailLabel}>Reports purchased</Text>
+              <Text style={ss.detailValue}>{ud?.purchasedReports ?? '-'}</Text>
             </View>
           </TouchableOpacity>
                  
