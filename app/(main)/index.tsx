@@ -159,7 +159,10 @@ export default function HomeScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const dateSwitcherDates = Object.keys(cardDraw).sort();
 
-  const [showFullBanner] = useState(() => Math.random() < 0.5);
+  const [adVariant] = useState<'upgrade-full' | 'upgrade-compact' | 'shop'>(() => {
+    const variants = ['upgrade-full', 'upgrade-compact', 'shop'] as const;
+    return variants[Math.floor(Math.random() * variants.length)];
+  });
   const isPremium = isPro || hasPremiumAccess;
   const isPaygated = selectedDate !== todayDateId && !isPremium;
 
@@ -280,16 +283,22 @@ export default function HomeScreen() {
           <SectionTitle sectionName="warning" title="Warning" />
           <HomeTextBox sectionName="warning" content={activeHoroscope?.warning} />
         </ScrollView>
-        {!hasPremiumAccess && (
-          showFullBanner ? (
-            <AdBannerFull
-              icon="sparkles"
-              title="Unlock Your Full Birth Chart"
-              subtitle="Premium readings, ad-free."
-              ctaLabel="Upgrade"
-              onPress={handleUnlock}
-            />
-          ) : (
+        {(() => {
+          // Premium users only see the shop ad; free users get a 3-way rotation.
+          const variant = hasPremiumAccess ? 'shop' : adVariant;
+          if (variant === 'shop') return <AdBannerShop />;
+          if (variant === 'upgrade-full') {
+            return (
+              <AdBannerFull
+                icon="sparkles"
+                title="Unlock Your Full Birth Chart"
+                subtitle="Premium readings, ad-free."
+                ctaLabel="Upgrade"
+                onPress={handleUnlock}
+              />
+            );
+          }
+          return (
             <AdBanner
               icon="sparkles"
               title="Unlock Your Full Birth Chart"
@@ -297,9 +306,8 @@ export default function HomeScreen() {
               ctaLabel="Upgrade"
               onPress={handleUnlock}
             />
-          )
-        )}
-        <AdBannerShop />
+          );
+        })()}
         </PaygateOverlay>
       </View>
     </ThemedView>
