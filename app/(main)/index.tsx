@@ -14,6 +14,7 @@ import HeaderNav from '@/src/components/shared/header-nav';
 import HomeSignsDisplay from '@/src/components/shared/signs-display.component';
 import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
 import AdBannerFull from '@/src/components/shared/ad-banner-full.component';
+import AdBannerShop from '@/src/components/shared/ad-banner-shop.component';
 import AdBanner from '@/src/components/shared/ad-banner.component';
 import SectionTitle from '@/src/components/shared/section-title.component';
 import { ThemedView } from '@/src/components/themed-view';
@@ -298,6 +299,7 @@ export default function HomeScreen() {
             />
           )
         )}
+        <AdBannerShop />
         </PaygateOverlay>
       </View>
     </ThemedView>

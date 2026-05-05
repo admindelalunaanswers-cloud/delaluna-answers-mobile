@@ -128,8 +128,12 @@ export default function ConnectionsScreen() {
 
   const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
 
-  const accessLimit =
-    (hasPremiumAccess ? PREMIUM_CONNECTION_LIMIT : FREE_CONNECTION_LIMIT) + extraSlotsPurchased;
+  // Purchased slots only count while the user has an active subscription/trial.
+  // Per spec: if the subscription lapses, ALL connections lock — including any
+  // that were unlocked via purchased slots during a prior subscription.
+  const accessLimit = hasPremiumAccess
+    ? PREMIUM_CONNECTION_LIMIT + extraSlotsPurchased
+    : FREE_CONNECTION_LIMIT;
   const canAddNew = connections.length < accessLimit;
 
   const presentUpgradePaywall = () => {
@@ -151,8 +155,18 @@ export default function ConnectionsScreen() {
             { text: 'Buy slot', onPress: () => setShowSlotConsumable(true) },
           ],
         );
+      } else if (accessLimit === 0) {
+        // Free users get no connections — the only path forward is to upgrade.
+        Alert.alert(
+          'Connections are a Premium feature',
+          `Upgrade to Premium to save up to ${PREMIUM_CONNECTION_LIMIT} connections.`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Upgrade', onPress: presentUpgradePaywall },
+          ],
+        );
       } else {
-        // Free (post-trial) users cannot purchase extra slots — must upgrade.
+        // Free (post-trial) users with a non-zero allowance cannot purchase extra slots — must upgrade.
         Alert.alert(
           'Connection limit reached',
           `Free accounts can save up to ${accessLimit} connection${accessLimit === 1 ? '' : 's'}. Remove one or upgrade to Premium for up to ${PREMIUM_CONNECTION_LIMIT}.`,
@@ -170,9 +184,12 @@ export default function ConnectionsScreen() {
   const handleLockedPress = (connectionId?: string) => {
     // Locked items only ever show for free (post-trial) users — they cannot
     // buy slots, only delete or upgrade.
+    const message = accessLimit === 0
+      ? 'Connections are a Premium feature. Upgrade to read this connection, or delete it to clean up your list.'
+      : `Free accounts can access ${accessLimit} connection${accessLimit === 1 ? '' : 's'}. Remove a connection to unlock the next one, or upgrade to Premium.`;
     Alert.alert(
       'Connection locked',
-      `Free accounts can access ${accessLimit} connection${accessLimit === 1 ? '' : 's'}. Remove a connection to unlock the next one, or upgrade to Premium.`,
+      message,
       [
         { text: 'Cancel', style: 'cancel' },
         ...(connectionId
@@ -296,7 +313,9 @@ export default function ConnectionsScreen() {
               </TouchableOpacity>
             ))}
             <Text style={styles.slotCounter}>
-              {connections.length} of {accessLimit} connections
+              {accessLimit === 0
+                ? `${connections.length} connection${connections.length === 1 ? '' : 's'} locked — upgrade to unlock`
+                : `${connections.length} of ${accessLimit} connections`}
             </Text>
           </ScrollView>
         ) : (

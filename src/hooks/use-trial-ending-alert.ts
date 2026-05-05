@@ -59,14 +59,16 @@ export function useTrialEndingAlert(): void {
       await safeSet(key, String(Date.now()));
 
       const isLastDay = daysRemaining <= 1;
-      const title = isLastDay ? 'Your free trial ends today' : 'Your free trial is ending soon';
+      const title = isLastDay
+        ? 'Your free premium access ends today'
+        : 'Your free premium access is expiring';
       const message = isLastDay
-        ? 'This is the last day of your premium trial. Upgrade now to keep ad-free access, full readings, and connections.'
-        : `Only ${daysRemaining} day${daysRemaining === 1 ? '' : 's'} left in your free trial. Upgrade to keep premium access when it ends.`;
+        ? 'This is the last day of your premium trial. Renew now to keep your benefits.'
+        : `Only ${daysRemaining} day${daysRemaining === 1 ? '' : 's'} left of your free premium access. Renew now to keep your benefits.`;
 
       Alert.alert(title, message, [
         { text: 'Maybe later', style: 'cancel' },
-        { text: 'Upgrade', onPress: () => router.push('/(settings)/paywall') },
+        { text: 'Renew now', onPress: () => router.push('/(settings)/paywall') },
       ]);
     })();
 

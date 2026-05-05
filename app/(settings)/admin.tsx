@@ -12,7 +12,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Switch,
   Alert,
 } from 'react-native';
 
@@ -22,7 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { ThemedView } from '@/src/components/themed-view';
 import HeaderNav from '@/src/components/shared/header-nav';
-import { useRevenueCat } from '@/src/context/revenuecat-context';
+import { useRevenueCat, type DevPlan } from '@/src/context/revenuecat-context';
 import {
   useAdmin,
   DEFAULT_DAILY_CHAT_LIMIT,
@@ -33,6 +32,13 @@ import {
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
 
 const NAV_BAR_HEIGHT = 44;
+
+const PLAN_OPTIONS: { value: DevPlan; label: string; sublabel?: string; color: string }[] = [
+  { value: 'auto',      label: 'Auto',       sublabel: 'Use real subscription + natural 5-day trial', color: '#BCA8F4' },
+  { value: 'free',      label: 'Free',       sublabel: 'Force locked-out free state',                  color: '#9aa0a6' },
+  { value: 'freeTrial', label: 'Free Trial', sublabel: 'Force in-trial premium access',                color: '#6FFFE9' },
+  { value: 'premium',   label: 'Premium',    sublabel: 'Force paid premium access',                    color: '#FFD700' },
+];
 
 // ─── Stepper row ──────────────────────────────────────────────────────────────
 
@@ -110,7 +116,10 @@ export default function AdminScreen() {
   } = useAdmin();
 
   const planLabel =
-    devPlan === 'premium' ? 'Premium' : devPlan === 'freeTrial' ? 'Free Trial' : 'Free';
+    devPlan === 'premium' ? 'Premium'
+      : devPlan === 'freeTrial' ? 'Free Trial'
+      : devPlan === 'free' ? 'Free (forced)'
+      : 'Auto';
 
   const handleReset = () => {
     Alert.alert(
@@ -136,30 +145,32 @@ export default function AdminScreen() {
         contentContainerStyle={[ss.content, { paddingTop: scale(24) }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Plan toggles ── */}
+        {/* ── Plan selector ── */}
         <View style={ss.detailsCard}>
           <Text style={ss.sectionLabel}>PLAN</Text>
 
-          <View style={ss.detailRow}>
-            <Text style={ss.detailLabel}>Free trial</Text>
-            <Switch
-              value={devPlan === 'freeTrial'}
-              onValueChange={(on) => setDevPlan(on ? 'freeTrial' : 'free')}
-              trackColor={{ false: 'rgba(255,255,255,0.15)', true: 'rgba(111,255,233,0.5)' }}
-              thumbColor={devPlan === 'freeTrial' ? '#6FFFE9' : '#f4f3f4'}
-            />
+          <View style={ss.radioGroup}>
+            {PLAN_OPTIONS.map((opt) => {
+              const selected = devPlan === opt.value;
+              return (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={ss.radioRow}
+                  onPress={() => setDevPlan(opt.value)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[ss.radioOuter, selected && { borderColor: opt.color }]}>
+                    {selected && <View style={[ss.radioInner, { backgroundColor: opt.color }]} />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={ss.radioLabel}>{opt.label}</Text>
+                    {opt.sublabel && <Text style={ss.radioSublabel}>{opt.sublabel}</Text>}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
           </View>
-          <View style={ss.separator} />
-          <View style={[ss.detailRow, devPlan === 'freeTrial' && ss.rowDisabled]}>
-            <Text style={ss.detailLabel}>Premium</Text>
-            <Switch
-              value={devPlan === 'premium'}
-              onValueChange={(on) => setDevPlan(on ? 'premium' : 'free')}
-              disabled={devPlan === 'freeTrial'}
-              trackColor={{ false: 'rgba(255,255,255,0.15)', true: 'rgba(255,215,0,0.5)' }}
-              thumbColor={devPlan === 'premium' ? '#FFD700' : '#f4f3f4'}
-            />
-          </View>
+
           <View style={ss.separator} />
           <View style={ss.detailRow}>
             <Text style={ss.detailLabel}>Current plan</Text>
@@ -270,6 +281,43 @@ const ss = StyleSheet.create({
     marginHorizontal: scale(16),
   },
   rowDisabled: { opacity: 0.4 },
+
+  // Radio group
+  radioGroup: {
+    paddingHorizontal: scale(16),
+    paddingBottom: verticalScale(8),
+    gap: verticalScale(4),
+  },
+  radioRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: verticalScale(10),
+    gap: scale(12),
+  },
+  radioOuter: {
+    width: scale(20),
+    height: scale(20),
+    borderRadius: scale(10),
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioInner: {
+    width: scale(10),
+    height: scale(10),
+    borderRadius: scale(5),
+  },
+  radioLabel: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: moderateScale(14),
+    fontWeight: '500',
+  },
+  radioSublabel: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: moderateScale(11),
+    marginTop: verticalScale(2),
+  },
 
   // Stepper
   stepperRow: {

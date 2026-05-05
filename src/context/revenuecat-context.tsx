@@ -25,9 +25,25 @@ import {
 } from '@/src/services/revenuecat.service';
 import { useUser } from './user-context';
 
+let AsyncStorage: any = null;
+try {
+  AsyncStorage = require('@react-native-async-storage/async-storage').default;
+} catch {
+  // Native module unavailable — devPlan will not persist.
+}
+
+const DEV_PLAN_KEY_PREFIX = 'revenuecat.devPlan.v1';
+const devPlanStorageKey = (uid: string | null | undefined) =>
+  `${DEV_PLAN_KEY_PREFIX}.${uid ?? 'anonymous'}`;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type DevPlan = 'free' | 'freeTrial' | 'premium';
+/**
+ * `auto` = no admin override; access is computed from real subscription state
+ *          + the natural 5-day trial window from `userDoc.createdAt`.
+ * `free` / `freeTrial` / `premium` = explicit admin overrides.
+ */
+export type DevPlan = 'auto' | 'free' | 'freeTrial' | 'premium';
 
 interface RevenueCatContextValue {
   /** Whether the user has the "Delaluna Answers Pro" entitlement */
@@ -71,7 +87,7 @@ const RevenueCatContext = createContext<RevenueCatContextValue>({
   presentPaywallIfNeeded: async () => false,
   presentCustomerCenter: async () => {},
   isDevMode: !REVENUECAT_ENABLED,
-  devPlan: 'free',
+  devPlan: 'auto',
   setDevPlan: () => {},
   toggleDevPro: () => {},
 });
@@ -87,21 +103,51 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
 
   // Placeholder plan — lets the client test free / free-trial / premium
   // flows via the mock paywall, regardless of real RevenueCat state.
-  const [devPlan, setDevPlanState] = useState<DevPlan>('free');
+  // Persisted per-account so admin overrides survive reload and don't leak
+  // between users on the same device.
+  const [devPlan, setDevPlanState] = useState<DevPlan>('auto');
 
   // Placeholder always drives isPro so the mock paywall works in every build.
   const isPro = devPlan === 'premium';
 
+  // Hydrate devPlan from AsyncStorage when the auth user changes.
+  useEffect(() => {
+    let cancelled = false;
+    if (!AsyncStorage) return;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(devPlanStorageKey(authUser?.uid));
+        if (cancelled) return;
+        if (raw === 'auto' || raw === 'free' || raw === 'freeTrial' || raw === 'premium') {
+          setDevPlanState(raw);
+        } else {
+          setDevPlanState('auto');
+        }
+      } catch {
+        // ignore — fall back to in-memory state
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [authUser?.uid]);
+
   const setDevPlan = useCallback((plan: DevPlan) => {
     setDevPlanState(plan);
-  }, []);
+    if (AsyncStorage) {
+      AsyncStorage.setItem(devPlanStorageKey(authUser?.uid), plan).catch(() => {});
+    }
+  }, [authUser?.uid]);
 
   const toggleDevPro = useCallback(() => {
     setDevPlanState((prev) => {
-      const cycle: DevPlan[] = ['free', 'freeTrial', 'premium'];
-      return cycle[(cycle.indexOf(prev) + 1) % cycle.length];
+      const cycle: DevPlan[] = ['auto', 'free', 'freeTrial', 'premium'];
+      const idx = cycle.indexOf(prev);
+      const next = cycle[(idx === -1 ? 0 : idx + 1) % cycle.length];
+      if (AsyncStorage) {
+        AsyncStorage.setItem(devPlanStorageKey(authUser?.uid), next).catch(() => {});
+      }
+      return next;
     });
-  }, []);
+  }, [authUser?.uid]);
 
   // ── Configure SDK once ──────────────────────────────────────────────────────
   useEffect(() => {

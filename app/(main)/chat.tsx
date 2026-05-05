@@ -584,7 +584,11 @@ export default function ChatScreen() {
           </View>
           <View style={[styles.counterBar]}>
             <Text style={styles.counterText}>
-              {questionsRemaining} of {questionLimit} questions remaining today
+              {baseDailyChatLimit === 0
+                ? questionLimit === 0
+                  ? 'Buy a question pack to chat'
+                  : `${questionsRemaining} of ${questionLimit} purchased question${questionLimit === 1 ? '' : 's'} remaining`
+                : `${questionsRemaining} of ${questionLimit} questions remaining today`}
             </Text>
           </View>
         </View>
@@ -594,6 +598,14 @@ export default function ChatScreen() {
       <ConsumablePlaceholder
         visible={showQuestionConsumable}
         kind="question"
+        override={
+          baseDailyChatLimit === 0
+            ? {
+                title: 'Ask Delaluna a Question',
+                message: 'Pick a pack to start asking — purchased questions never expire.',
+              }
+            : undefined
+        }
         onClose={() => setShowQuestionConsumable(false)}
         onPurchased={(quantity) => {
           setExtraQuestionsPurchased((n) => n + quantity);

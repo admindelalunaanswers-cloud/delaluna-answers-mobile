@@ -4,10 +4,15 @@
  * (birth-chart compare, additional connections, additional questions) without
  * requiring a full subscription.
  *
- * For 'connection' and 'question' kinds, three tier options are shown:
+ * For 'connection' kind, a single tier is shown:
+ *   1 connection — $0.99
+ * (Subscribers can stack multiple purchases to add more than one slot.)
+ *
+ * For 'question' kind, four tier options are shown:
  *   1 pack — $0.99
- *   3 pack — $1.99
+ *   3 pack — $2.49
  *   5 pack — $3.99
+ *   10 pack — $9.99
  *
  * For 'synastry' kind, a single fixed-price unlock is shown.
  *
@@ -54,14 +59,13 @@ interface ConsumablePreset {
 
 export const CONNECTION_TIERS: ConsumableTier[] = [
   { productId: 'connections_1', quantity: 1, price: '$0.99' },
-  { productId: 'connections_3', quantity: 3, price: '$1.99' },
-  { productId: 'connections_5', quantity: 5, price: '$3.99' },
 ];
 
 export const QUESTION_TIERS: ConsumableTier[] = [
   { productId: 'questions_1', quantity: 1, price: '$0.99' },
-  { productId: 'questions_3', quantity: 3, price: '$1.99' },
+  { productId: 'questions_3', quantity: 3, price: '$2.49' },
   { productId: 'questions_5', quantity: 5, price: '$3.99' },
+  { productId: 'questions_10', quantity: 10, price: '$9.99' },
 ];
 
 export const CONSUMABLE_PRESETS: Record<ConsumableKind, ConsumablePreset> = {
@@ -75,9 +79,9 @@ export const CONSUMABLE_PRESETS: Record<ConsumableKind, ConsumablePreset> = {
     tiers: [{ productId: 'synastry_1', quantity: 1, price: '$0.99' }],
   },
   connection: {
-    title: 'Add More Connections',
+    title: 'Add Another Connection',
     message:
-      "Pick a pack to add more connections without upgrading. Once purchased, they stay unlocked.",
+      'Add an extra connection slot for $0.99. Active while your subscription is active.',
     unitLabel: 'connection',
     unitLabelPlural: 'connections',
     icon: 'people',

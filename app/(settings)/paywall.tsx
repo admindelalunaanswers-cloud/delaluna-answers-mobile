@@ -56,11 +56,12 @@ interface Consumable {
 }
 
 const CONSUMABLES: Consumable[] = [
-  { id: 'chats_3', label: '3 Extra Chats', price: '$1.99' },
-  { id: 'chats_5', label: '5 Extra Chats', price: '$3.99' },
-  { id: 'connections_3', label: '3 Extra Connections', price: '$1.99' },
-  { id: 'connections_5', label: '5 Extra Connections', price: '$3.99' },
-  { id: 'synastry_1', label: 'Synastry Analysis (1 person)', price: '$0.99' },
+  { id: 'questions_1',  label: '1 Extra Question',     price: '$0.99' },
+  { id: 'questions_3',  label: '3 Extra Questions',    price: '$2.49' },
+  { id: 'questions_5',  label: '5 Extra Questions',    price: '$3.99' },
+  { id: 'questions_10', label: '10 Extra Questions',   price: '$9.99' },
+  { id: 'connections_1', label: '1 Extra Connection',  price: '$0.99' },
+  { id: 'synastry_1',   label: 'Synastry Analysis (1 person)', price: '$0.99' },
 ];
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -82,12 +83,12 @@ export default function PaywallScreen() {
 
   const handleFreeTrial = () => {
     setDevPlan('freeTrial');
-    Alert.alert('Free Trial Activated (Test)', 'You now have 3-day full access.');
+    Alert.alert('Free Trial Activated (Test)', 'You now have 5-day full premium access.');
     router.back();
   };
 
   const handleResetToFree = () => {
-    setDevPlan('free');
+    setDevPlan('auto');
     Alert.alert('Plan Reset (Test)', 'Back to the free plan.');
     router.back();
   };
@@ -113,7 +114,10 @@ export default function PaywallScreen() {
         <View style={s.currentPlanRow}>
           <Text style={s.currentPlanLabel}>Current plan:</Text>
           <Text style={[s.currentPlanValue, devPlan === 'premium' && { color: '#FFD700' }, devPlan === 'freeTrial' && { color: '#6FFFE9' }]}>
-            {devPlan === 'premium' ? 'Premium' : devPlan === 'freeTrial' ? 'Free Trial' : 'Free'}
+            {devPlan === 'premium' ? 'Premium'
+              : devPlan === 'freeTrial' ? 'Free Trial'
+              : devPlan === 'free' ? 'Free (forced)'
+              : 'Free'}
           </Text>
         </View>
 
@@ -166,7 +170,7 @@ export default function PaywallScreen() {
         {devPlan !== 'freeTrial' && devPlan !== 'premium' && (
           <TouchableOpacity style={s.trialButton} onPress={handleFreeTrial} activeOpacity={0.8}>
             <Ionicons name="time-outline" size={scale(15)} color="#6FFFE9" />
-            <Text style={s.trialText}>Start 3-Day Free Trial</Text>
+            <Text style={s.trialText}>Start 5-Day Free Trial</Text>
           </TouchableOpacity>
         )}
 
@@ -187,7 +191,7 @@ export default function PaywallScreen() {
         ))}
 
         {/* Reset to free */}
-        {devPlan !== 'free' && (
+        {devPlan !== 'auto' && devPlan !== 'free' && (
           <TouchableOpacity style={s.resetButton} onPress={handleResetToFree} activeOpacity={0.7}>
             <Text style={s.resetText}>Reset to Free Plan</Text>
           </TouchableOpacity>

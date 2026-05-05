@@ -52,7 +52,13 @@ export function useFreeTrialAccess(): FreeTrialAccess {
     if (devPlan === 'freeTrial') {
       return { hasAccess: true, inTrial: true, trialExpired: false, msRemaining: TRIAL_DURATION_MS };
     }
+    if (devPlan === 'free') {
+      // Explicit admin override — force locked-out free state regardless of
+      // the createdAt trial window.
+      return { hasAccess: false, inTrial: false, trialExpired: true, msRemaining: 0 };
+    }
 
+    // devPlan === 'auto' — no override, use real subscription + trial window.
     if (isPro) {
       return { hasAccess: true, inTrial: false, trialExpired: false, msRemaining: 0 };
     }

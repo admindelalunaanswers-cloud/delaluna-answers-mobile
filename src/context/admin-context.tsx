@@ -4,9 +4,9 @@
  * Values are persisted to AsyncStorage so changes survive a reload.
  *
  * Defaults match the production rules in the subscription spec:
- *   - dailyChatLimit (free):         2
- *   - premiumDailyChatLimit:         5
- *   - freeConnectionLimit:           1
+ *   - dailyChatLimit (free):         0   (free users must buy question packs)
+ *   - premiumDailyChatLimit:         2   (subscribers get 2 free questions/day)
+ *   - freeConnectionLimit:           0   (free users have no connection access)
  *   - premiumConnectionLimit:       10
  */
 
@@ -21,9 +21,9 @@ try {
 
 // ─── Defaults ─────────────────────────────────────────────────────────────────
 
-export const DEFAULT_DAILY_CHAT_LIMIT = 2;
-export const DEFAULT_PREMIUM_DAILY_CHAT_LIMIT = 5;
-export const DEFAULT_FREE_CONNECTION_LIMIT = 1;
+export const DEFAULT_DAILY_CHAT_LIMIT = 0;
+export const DEFAULT_PREMIUM_DAILY_CHAT_LIMIT = 2;
+export const DEFAULT_FREE_CONNECTION_LIMIT = 0;
 export const DEFAULT_PREMIUM_CONNECTION_LIMIT = 10;
 
 const STORAGE_KEY = 'admin.limits.v2';
