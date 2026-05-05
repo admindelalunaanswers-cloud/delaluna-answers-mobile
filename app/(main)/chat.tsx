@@ -6,7 +6,6 @@ import {
     ActivityIndicator,
     Animated,
     FlatList,
-    Image,
     KeyboardAvoidingView,
     Modal,
     Platform,
@@ -19,7 +18,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { getProfileImageSource } from '@/app/(settings)/select-avatar';
 import ConnectionPickerSheet, { type PickerConnection } from '@/src/components/connection-picker-sheet';
 import ConsumablePlaceholder from '@/src/components/shared/consumable-placeholder.component';
 import HeaderNav from '@/src/components/shared/header-nav';
@@ -105,14 +103,8 @@ function TypingDots() {
 }
 
 function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: ChatMessageDoc) => void }) {
-  const { userDoc } = useUser();
   const isStuck = msg.isPending && (Date.now() - msg.createdAt.getTime()) > 60_000;
   const showRetry = msg.isError || isStuck;
-
-  const userAvatarSource =
-    getProfileImageSource((userDoc as any)?.profileImageId) ??
-    getProfileImageSource('profile8');
-  const aiAvatarSource = require('@/src/assets/dlla-branded/delaluna_app_icon.png');
 
   return (
     <View style={styles.messageGroup}>
@@ -123,11 +115,9 @@ function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: C
         <View style={styles.userBubble}>
           <Text style={styles.userBubbleText}>{msg.userMessage}</Text>
         </View>
-        <Image source={userAvatarSource} style={styles.avatar} />
       </View>
 
       <View style={styles.aiBubbleRow}>
-        <Image source={aiAvatarSource} style={[styles.avatar, styles.aiAvatar]} />
         <View style={styles.aiBubble}>
           {msg.isPending && !isStuck ? (
             <TypingDots />
@@ -152,7 +142,7 @@ function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: C
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function ChatScreen() {
-  const { authUser, userDoc } = useUser();
+  const { authUser } = useUser();
   const { chartDetails } = useHoroscope();
   const { dailyChatLimit, premiumDailyChatLimit } = useAdmin();
   const { isPro } = useRevenueCat();
@@ -434,31 +424,19 @@ export default function ChatScreen() {
                 </TouchableOpacity>
               </View>
               <ScrollView contentContainerStyle={styles.historyList} showsVerticalScrollIndicator={false}>
-                {(() => {
-                  const userAvatarSource =
-                    getProfileImageSource((userDoc as any)?.profileImageId) ??
-                    getProfileImageSource('profile8');
-                  const aiAvatarSource = require('@/src/assets/dlla-branded/delaluna_app_icon.png');
-                  return viewingSession.messages.map((m, i) => (
-                    <View key={i} style={styles.historyEntry}>
-                      <Text style={styles.historyTimestamp}>{formatTime(m.createdAt)}</Text>
-                      <View style={styles.userBubbleRow}>
-                        <View style={styles.userBubble}>
-                          <Text style={styles.userBubbleText}>{m.userMessage}</Text>
-                        </View>
-                        <Image source={userAvatarSource} style={styles.avatar} />
-                      </View>
-                      {m.response ? (
-                        <View style={styles.aiBubbleRow}>
-                          <Image source={aiAvatarSource} style={[styles.avatar, styles.aiAvatar]} />
-                          <View style={styles.aiBubble}>
-                            <Text style={styles.aiBubbleText}>{stripBoldTitles(m.response)}</Text>
-                          </View>
-                        </View>
-                      ) : null}
+                {viewingSession.messages.map((m, i) => (
+                  <View key={i} style={styles.historyEntry}>
+                    <Text style={styles.historyTimestamp}>{formatTime(m.createdAt)}</Text>
+                    <View style={[styles.userBubble, { alignSelf: 'flex-end' }]}>
+                      <Text style={styles.userBubbleText}>{m.userMessage}</Text>
                     </View>
-                  ));
-                })()}
+                    {m.response ? (
+                      <View style={[styles.aiBubble, { alignSelf: 'flex-start' }]}>
+                        <Text style={styles.aiBubbleText}>{stripBoldTitles(m.response)}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ))}
               </ScrollView>
             </>
           ) : (
@@ -679,22 +657,7 @@ const styles = StyleSheet.create({
     marginBottom: S.sm,
   },
 
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginHorizontal: S.sm,
-    resizeMode: 'contain',
-  },
-  aiAvatar: {
-    transform: [{ scale: 0.78 }],
-  },
-
-  userBubbleRow: { 
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'flex-end',
-  },
+  userBubbleRow: { alignItems: 'flex-end' },
   userBubble: {
     backgroundColor: C.purpleDim,
     borderRadius: R.lg,
@@ -709,11 +672,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  aiBubbleRow: { 
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'flex-start',
-  },
+  aiBubbleRow: { alignItems: 'flex-start' },
   aiBubble: {
     backgroundColor: 'rgba(255,255,255,0.07)',
     borderRadius: R.lg,
