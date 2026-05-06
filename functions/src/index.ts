@@ -397,33 +397,94 @@ export const clearDailyChatHistory = onSchedule('every day 00:00', async () => {
 
 });
 
-export const sendMorningReminder = onSchedule('every day 08:00', async () => {
+/**
+ * Hour at which to send each user the visible morning notification, in their
+ * local time (24h). 8 = 8:00 AM local.
+ */
+const MORNING_PUSH_LOCAL_HOUR = 8;
+
+/**
+ * Hour at which to send the silent rollover trigger, in user local time.
+ * 0 = midnight local. The client treats this as a hint to regenerate today's
+ * horoscope so a fresh reading is ready by morning. Best-effort: silent
+ * pushes are throttled by iOS and won't fire if the app is force-killed.
+ */
+const ROLLOVER_PUSH_LOCAL_HOUR = 0;
+
+/**
+ * Returns the user's current local hour (0-23) given a UTC offset in minutes.
+ * Returns null if the offset is missing or invalid.
+ */
+function localHourFromOffset(nowUtc: Date, offsetMinutes: unknown): number | null {
+  if (typeof offsetMinutes !== 'number' || !Number.isFinite(offsetMinutes)) return null;
+  const localMinutes = nowUtc.getUTCHours() * 60 + nowUtc.getUTCMinutes() + offsetMinutes;
+  // Wrap into [0, 1440) and floor to the hour
+  const wrapped = ((localMinutes % 1440) + 1440) % 1440;
+  return Math.floor(wrapped / 60);
+}
+
+/**
+ * Runs every hour. For each user with a push token + saved timezone offset:
+ *  - At local midnight: sends a SILENT data-only push asking the client to
+ *    pre-generate today's horoscope so it's ready by morning.
+ *  - At local 8 AM: sends the visible "your daily reading" push.
+ *
+ * Replaces the old fixed 08:00 UTC schedule which fired at 3-4 AM ET / 1 AM PT.
+ */
+export const dailyHoroscopeNotifications = onSchedule('every 1 hours', async () => {
   const snap = await db.collection('users')
     .where('expoPushToken', '!=', null)
     .get();
 
   if (snap.empty) return;
 
-  // Deduplicate tokens — same device may appear in multiple user docs (dev/test accounts)
-  const uniqueTokens = [...new Set(
-    snap.docs
-      .map(d => d.data().expoPushToken as string | undefined)
-      .filter((token): token is string => !!token)
-  )];
+  const now = new Date();
+  const morningMessages: ExpoPushMessage[] = [];
+  const rolloverMessages: ExpoPushMessage[] = [];
+  const seenTokens = new Set<string>();
 
-  const messages: ExpoPushMessage[] = uniqueTokens.map(to => ({
-      to,
-      sound: 'default' as const,
-      title: '🌙 Your Daily Reading',
-      body: 'Your horoscope and cards for today are ready.',
-      channelId: 'default',
-      data: { screen: '/(main)' },
-      priority: 'high',
-      _contentAvailable: true,
-    }));
+  for (const userDoc of snap.docs) {
+    const data = userDoc.data();
+    const token = data.expoPushToken as string | undefined;
+    if (!token || seenTokens.has(token)) continue;
 
-  for (let i = 0; i < messages.length; i += PUSH_CHUNK_SIZE) {
-    const chunk = messages.slice(i, i + PUSH_CHUNK_SIZE);
+    const localHour = localHourFromOffset(now, data.timezoneOffsetMinutes);
+    if (localHour === null) continue;
+
+    if (localHour === MORNING_PUSH_LOCAL_HOUR) {
+      seenTokens.add(token);
+      morningMessages.push({
+        to: token,
+        sound: 'default' as const,
+        title: '🌙 Your Daily Reading',
+        body: 'Your horoscope and cards for today are ready.',
+        channelId: 'default',
+        data: { screen: '/(main)' },
+        priority: 'high',
+        _contentAvailable: true,
+      });
+    } else if (localHour === ROLLOVER_PUSH_LOCAL_HOUR) {
+      seenTokens.add(token);
+      // Silent push — no title/body, content-available so iOS wakes the app
+      // briefly. The client listens for data.action === 'rollover-horoscope'.
+      rolloverMessages.push({
+        to: token,
+        sound: 'default' as const,
+        title: '',
+        body: '',
+        channelId: 'default',
+        data: { action: 'rollover-horoscope' },
+        priority: 'high',
+        _contentAvailable: true,
+      });
+    }
+  }
+
+  const allMessages = [...morningMessages, ...rolloverMessages];
+  if (allMessages.length === 0) return;
+
+  for (let i = 0; i < allMessages.length; i += PUSH_CHUNK_SIZE) {
+    const chunk = allMessages.slice(i, i + PUSH_CHUNK_SIZE);
     await fetch(EXPO_PUSH_URL, {
       method: 'POST',
       headers: {
@@ -433,6 +494,11 @@ export const sendMorningReminder = onSchedule('every day 08:00', async () => {
       body: JSON.stringify(chunk),
     });
   }
+
+  console.info(
+    `[dailyHoroscopeNotifications] sent ${morningMessages.length} morning + ` +
+    `${rolloverMessages.length} rollover pushes`,
+  );
 });
 
 // ─── deleteConnection ─────────────────────────────────────────────────────────
