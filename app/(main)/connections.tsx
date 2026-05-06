@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { collection, doc, increment, onSnapshot, orderBy, query, updateDoc } from "firebase/firestore";
+import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import React, { memo, useEffect, useState } from "react";
 import {
@@ -22,7 +22,6 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import ConsumablePlaceholder from "@/src/components/shared/consumable-placeholder.component";
 import DelalunaContainer from "@/src/components/shared/delaluna-container.component";
 import HeaderNav from "@/src/components/shared/header-nav";
 import { ThemedText } from "@/src/components/themed-text";
@@ -112,30 +111,32 @@ const AnimatedConnectionItem = memo(
 );
 
 export default function ConnectionsScreen() {
-  const { authUser, userDoc } = useUser();
+  const { authUser } = useUser();
   const { isPro } = useRevenueCat();
-  const { hasAccess } = useFreeTrialAccess();
-  const hasPremiumAccess = isPro || hasAccess;
-  const { freeConnectionLimit: FREE_CONNECTION_LIMIT, premiumConnectionLimit: PREMIUM_CONNECTION_LIMIT } = useAdmin();
+  const { inTrial } = useFreeTrialAccess();
+  const {
+    trialConnectionLimit: TRIAL_CONNECTION_LIMIT,
+    premiumConnectionLimit: PREMIUM_CONNECTION_LIMIT,
+  } = useAdmin();
   const insets = useSafeAreaInsets();
 
   const [connections, setConnections] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [showSlotConsumable, setShowSlotConsumable] = useState(false);
 
-  // Purchased slot count is persisted on the user doc so it survives trial end.
-  const extraSlotsPurchased = (userDoc as any)?.extraConnectionSlots ?? 0;
   const fade = useSharedValue(0);
   const fadeStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
 
   const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
 
-  // Purchased slots only count while the user has an active subscription/trial.
-  // Per spec: if the subscription lapses, ALL connections lock — including any
-  // that were unlocked via purchased slots during a prior subscription.
-  const accessLimit = hasPremiumAccess
-    ? PREMIUM_CONNECTION_LIMIT + extraSlotsPurchased
-    : FREE_CONNECTION_LIMIT;
+  // Connection allowance:
+  //   - Premium subscriber: PREMIUM_CONNECTION_LIMIT (10)
+  //   - Trial (in-trial, not yet Pro): TRIAL_CONNECTION_LIMIT (3)
+  //   - Free / lapsed: 0 — every connection locks, no add-on purchases.
+  const accessLimit = isPro
+    ? PREMIUM_CONNECTION_LIMIT
+    : inTrial
+      ? TRIAL_CONNECTION_LIMIT
+      : 0;
   const canAddNew = connections.length < accessLimit;
 
   const presentUpgradePaywall = () => {
@@ -148,17 +149,7 @@ export default function ConnectionsScreen() {
 
   const goToNewConnectionScreen = () => {
     if (!canAddNew) {
-      if (hasPremiumAccess) {
-        Alert.alert(
-          'Connection limit reached',
-          `You can save up to ${accessLimit} connections. Remove one to add a new one, or buy an extra slot.`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Buy slot', onPress: () => setShowSlotConsumable(true) },
-          ],
-        );
-      } else if (accessLimit === 0) {
-        // Free users get no connections — the only path forward is to upgrade.
+      if (accessLimit === 0) {
         Alert.alert(
           'Connections are a Premium feature',
           `Upgrade to Premium to save up to ${PREMIUM_CONNECTION_LIMIT} connections.`,
@@ -167,11 +158,17 @@ export default function ConnectionsScreen() {
             { text: 'Upgrade', onPress: presentUpgradePaywall },
           ],
         );
-      } else {
-        // Free (post-trial) users with a non-zero allowance cannot purchase extra slots — must upgrade.
+      } else if (isPro) {
         Alert.alert(
           'Connection limit reached',
-          `Free accounts can save up to ${accessLimit} connection${accessLimit === 1 ? '' : 's'}. Remove one or upgrade to Premium for up to ${PREMIUM_CONNECTION_LIMIT}.`,
+          `You can save up to ${accessLimit} connections. Remove one to add a new one.`,
+          [{ text: 'OK', style: 'cancel' }],
+        );
+      } else {
+        // In-trial user at trial cap — encourage upgrade for the full 10.
+        Alert.alert(
+          'Trial connection limit reached',
+          `Trial accounts can save up to ${accessLimit} connections. Upgrade to Premium for ${PREMIUM_CONNECTION_LIMIT}.`,
           [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Upgrade', onPress: presentUpgradePaywall },
@@ -184,11 +181,12 @@ export default function ConnectionsScreen() {
   };
 
   const handleLockedPress = (connectionId?: string) => {
-    // Locked items only ever show for free (post-trial) users — they cannot
-    // buy slots, only delete or upgrade.
+    // Locked items show for free/lapsed users (accessLimit === 0) and for
+    // trial users over the trial cap. In both cases the only path forward is
+    // to upgrade or delete a connection — no individual unlock purchases.
     const message = accessLimit === 0
       ? 'Connections are a Premium feature. Upgrade to read this connection, or delete it to clean up your list.'
-      : `Free accounts can access ${accessLimit} connection${accessLimit === 1 ? '' : 's'}. Remove a connection to unlock the next one, or upgrade to Premium.`;
+      : `Trial accounts can access ${accessLimit} connection${accessLimit === 1 ? '' : 's'}. Remove a connection to unlock the next one, or upgrade to Premium.`;
     Alert.alert(
       'Connection locked',
       message,
@@ -299,7 +297,7 @@ export default function ConnectionsScreen() {
                 key={c.id}
                 index={index}
                 connection={c}
-                isLocked={!hasPremiumAccess && index < connections.length - accessLimit}
+                isLocked={index < connections.length - accessLimit}
                 onOpen={handleOpenConnection}
                 onDelete={handleDeleteConnection}
                 onLockedPress={handleLockedPress}
@@ -340,23 +338,6 @@ export default function ConnectionsScreen() {
           </ThemedView>
         )}
 
-        <ConsumablePlaceholder
-          visible={showSlotConsumable}
-          kind="connection"
-          onClose={() => setShowSlotConsumable(false)}
-          onPurchased={async (quantity) => {
-            const uid = authUser?.uid;
-            if (!uid) return;
-            try {
-              await updateDoc(doc(db, 'users', uid), {
-                extraConnectionSlots: increment(quantity),
-              });
-            } catch (err) {
-              console.error('Failed to persist purchased slots', err);
-            }
-            router.push('/connection/new');
-          }}
-        />
       </ThemedView>
     </Animated.View>
   );

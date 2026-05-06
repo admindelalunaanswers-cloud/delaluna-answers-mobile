@@ -7,6 +7,7 @@
  *   - dailyChatLimit (free):         0   (free users must buy question packs)
  *   - premiumDailyChatLimit:         2   (subscribers get 2 free questions/day)
  *   - freeConnectionLimit:           0   (free users have no connection access)
+ *   - trialConnectionLimit:          3   (trial users get 3 connections)
  *   - premiumConnectionLimit:       10
  */
 
@@ -24,6 +25,7 @@ try {
 export const DEFAULT_DAILY_CHAT_LIMIT = 0;
 export const DEFAULT_PREMIUM_DAILY_CHAT_LIMIT = 2;
 export const DEFAULT_FREE_CONNECTION_LIMIT = 0;
+export const DEFAULT_TRIAL_CONNECTION_LIMIT = 3;
 export const DEFAULT_PREMIUM_CONNECTION_LIMIT = 10;
 
 const STORAGE_KEY = 'admin.limits.v2';
@@ -34,6 +36,7 @@ export interface AdminLimits {
   dailyChatLimit: number;
   premiumDailyChatLimit: number;
   freeConnectionLimit: number;
+  trialConnectionLimit: number;
   premiumConnectionLimit: number;
 }
 
@@ -41,6 +44,7 @@ interface AdminContextValue extends AdminLimits {
   setDailyChatLimit: (n: number) => void;
   setPremiumDailyChatLimit: (n: number) => void;
   setFreeConnectionLimit: (n: number) => void;
+  setTrialConnectionLimit: (n: number) => void;
   setPremiumConnectionLimit: (n: number) => void;
   resetToDefaults: () => void;
 }
@@ -51,10 +55,12 @@ const AdminContext = createContext<AdminContextValue>({
   dailyChatLimit: DEFAULT_DAILY_CHAT_LIMIT,
   premiumDailyChatLimit: DEFAULT_PREMIUM_DAILY_CHAT_LIMIT,
   freeConnectionLimit: DEFAULT_FREE_CONNECTION_LIMIT,
+  trialConnectionLimit: DEFAULT_TRIAL_CONNECTION_LIMIT,
   premiumConnectionLimit: DEFAULT_PREMIUM_CONNECTION_LIMIT,
   setDailyChatLimit: () => {},
   setPremiumDailyChatLimit: () => {},
   setFreeConnectionLimit: () => {},
+  setTrialConnectionLimit: () => {},
   setPremiumConnectionLimit: () => {},
   resetToDefaults: () => {},
 });
@@ -91,6 +97,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   const [dailyChatLimit, setDailyChatLimitState] = useState(DEFAULT_DAILY_CHAT_LIMIT);
   const [premiumDailyChatLimit, setPremiumDailyChatLimitState] = useState(DEFAULT_PREMIUM_DAILY_CHAT_LIMIT);
   const [freeConnectionLimit, setFreeConnectionLimitState] = useState(DEFAULT_FREE_CONNECTION_LIMIT);
+  const [trialConnectionLimit, setTrialConnectionLimitState] = useState(DEFAULT_TRIAL_CONNECTION_LIMIT);
   const [premiumConnectionLimit, setPremiumConnectionLimitState] = useState(DEFAULT_PREMIUM_CONNECTION_LIMIT);
 
   // Hydrate from AsyncStorage once on mount
@@ -107,6 +114,9 @@ export function AdminProvider({ children }: { children: ReactNode }) {
       if (typeof stored.freeConnectionLimit === 'number') {
         setFreeConnectionLimitState(clampNonNegative(stored.freeConnectionLimit));
       }
+      if (typeof stored.trialConnectionLimit === 'number') {
+        setTrialConnectionLimitState(clampNonNegative(stored.trialConnectionLimit));
+      }
       if (typeof stored.premiumConnectionLimit === 'number') {
         setPremiumConnectionLimitState(clampNonNegative(stored.premiumConnectionLimit));
       }
@@ -121,36 +131,44 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   const setDailyChatLimit = useCallback((n: number) => {
     const v = clampNonNegative(n);
     setDailyChatLimitState(v);
-    persist({ dailyChatLimit: v, premiumDailyChatLimit, freeConnectionLimit, premiumConnectionLimit });
-  }, [premiumDailyChatLimit, freeConnectionLimit, premiumConnectionLimit, persist]);
+    persist({ dailyChatLimit: v, premiumDailyChatLimit, freeConnectionLimit, trialConnectionLimit, premiumConnectionLimit });
+  }, [premiumDailyChatLimit, freeConnectionLimit, trialConnectionLimit, premiumConnectionLimit, persist]);
 
   const setPremiumDailyChatLimit = useCallback((n: number) => {
     const v = clampNonNegative(n);
     setPremiumDailyChatLimitState(v);
-    persist({ dailyChatLimit, premiumDailyChatLimit: v, freeConnectionLimit, premiumConnectionLimit });
-  }, [dailyChatLimit, freeConnectionLimit, premiumConnectionLimit, persist]);
+    persist({ dailyChatLimit, premiumDailyChatLimit: v, freeConnectionLimit, trialConnectionLimit, premiumConnectionLimit });
+  }, [dailyChatLimit, freeConnectionLimit, trialConnectionLimit, premiumConnectionLimit, persist]);
 
   const setFreeConnectionLimit = useCallback((n: number) => {
     const v = clampNonNegative(n);
     setFreeConnectionLimitState(v);
-    persist({ dailyChatLimit, premiumDailyChatLimit, freeConnectionLimit: v, premiumConnectionLimit });
-  }, [dailyChatLimit, premiumDailyChatLimit, premiumConnectionLimit, persist]);
+    persist({ dailyChatLimit, premiumDailyChatLimit, freeConnectionLimit: v, trialConnectionLimit, premiumConnectionLimit });
+  }, [dailyChatLimit, premiumDailyChatLimit, trialConnectionLimit, premiumConnectionLimit, persist]);
+
+  const setTrialConnectionLimit = useCallback((n: number) => {
+    const v = clampNonNegative(n);
+    setTrialConnectionLimitState(v);
+    persist({ dailyChatLimit, premiumDailyChatLimit, freeConnectionLimit, trialConnectionLimit: v, premiumConnectionLimit });
+  }, [dailyChatLimit, premiumDailyChatLimit, freeConnectionLimit, premiumConnectionLimit, persist]);
 
   const setPremiumConnectionLimit = useCallback((n: number) => {
     const v = clampNonNegative(n);
     setPremiumConnectionLimitState(v);
-    persist({ dailyChatLimit, premiumDailyChatLimit, freeConnectionLimit, premiumConnectionLimit: v });
-  }, [dailyChatLimit, premiumDailyChatLimit, freeConnectionLimit, persist]);
+    persist({ dailyChatLimit, premiumDailyChatLimit, freeConnectionLimit, trialConnectionLimit, premiumConnectionLimit: v });
+  }, [dailyChatLimit, premiumDailyChatLimit, freeConnectionLimit, trialConnectionLimit, persist]);
 
   const resetToDefaults = useCallback(() => {
     setDailyChatLimitState(DEFAULT_DAILY_CHAT_LIMIT);
     setPremiumDailyChatLimitState(DEFAULT_PREMIUM_DAILY_CHAT_LIMIT);
     setFreeConnectionLimitState(DEFAULT_FREE_CONNECTION_LIMIT);
+    setTrialConnectionLimitState(DEFAULT_TRIAL_CONNECTION_LIMIT);
     setPremiumConnectionLimitState(DEFAULT_PREMIUM_CONNECTION_LIMIT);
     persist({
       dailyChatLimit: DEFAULT_DAILY_CHAT_LIMIT,
       premiumDailyChatLimit: DEFAULT_PREMIUM_DAILY_CHAT_LIMIT,
       freeConnectionLimit: DEFAULT_FREE_CONNECTION_LIMIT,
+      trialConnectionLimit: DEFAULT_TRIAL_CONNECTION_LIMIT,
       premiumConnectionLimit: DEFAULT_PREMIUM_CONNECTION_LIMIT,
     });
   }, [persist]);
@@ -161,10 +179,12 @@ export function AdminProvider({ children }: { children: ReactNode }) {
         dailyChatLimit,
         premiumDailyChatLimit,
         freeConnectionLimit,
+        trialConnectionLimit,
         premiumConnectionLimit,
         setDailyChatLimit,
         setPremiumDailyChatLimit,
         setFreeConnectionLimit,
+        setTrialConnectionLimit,
         setPremiumConnectionLimit,
         resetToDefaults,
       }}

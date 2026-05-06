@@ -1,12 +1,9 @@
 /**
  * consumable-placeholder.component.tsx
  * Mock one-time purchase sheet — used to gate single uses of premium features
- * (birth-chart compare, additional connections, additional questions) without
- * requiring a full subscription.
- *
- * For 'connection' kind, a single tier is shown:
- *   1 connection — $0.99
- * (Subscribers can stack multiple purchases to add more than one slot.)
+ * (birth-chart compare, additional questions) without requiring a full
+ * subscription. Connections are NOT sold à la carte: trial = 3, premium = 10,
+ * free = 0; the only path past those caps is upgrading to Premium.
  *
  * For 'question' kind, four tier options are shown:
  *   1 pack — $0.99
@@ -38,7 +35,7 @@ import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type ConsumableKind = 'synastry' | 'connection' | 'question';
+export type ConsumableKind = 'synastry' | 'question';
 
 interface ConsumableTier {
   productId: string;
@@ -57,10 +54,6 @@ interface ConsumablePreset {
 
 // ─── Presets ─────────────────────────────────────────────────────────────────
 
-export const CONNECTION_TIERS: ConsumableTier[] = [
-  { productId: 'connections_1', quantity: 1, price: '$0.99' },
-];
-
 export const QUESTION_TIERS: ConsumableTier[] = [
   { productId: 'questions_1', quantity: 1, price: '$0.99' },
   { productId: 'questions_3', quantity: 3, price: '$2.49' },
@@ -77,15 +70,6 @@ export const CONSUMABLE_PRESETS: Record<ConsumableKind, ConsumablePreset> = {
     unitLabelPlural: 'unlocks',
     icon: 'sparkles',
     tiers: [{ productId: 'synastry_1', quantity: 1, price: '$0.99' }],
-  },
-  connection: {
-    title: 'Add Another Connection',
-    message:
-      'Add an extra connection slot for $0.99. Active while your subscription is active.',
-    unitLabel: 'connection',
-    unitLabelPlural: 'connections',
-    icon: 'people',
-    tiers: CONNECTION_TIERS,
   },
   question: {
     title: 'Ask More Questions',

@@ -28,22 +28,22 @@ interface SubPlan {
   highlight?: boolean;
 }
 
+// Pricing placeholder — both tiers shown at $10 until final pricing is confirmed.
 const SUBSCRIPTIONS: SubPlan[] = [
   {
     id: 'com.delaluna.premium.monthly',
     label: 'Monthly',
     period: '1 month',
-    price: '$29.99/mo',
-    perMonth: '$29.99/mo',
-    badge: '1 WEEK FREE',
+    price: '$10/mo',
+    perMonth: '$10/mo',
     highlight: true,
   },
   {
     id: 'com.delaluna.premium.weekly',
     label: 'Weekly',
     period: '1 week',
-    price: '$9.99/wk',
-    perMonth: '$42.81/mo',
+    price: '$10/wk',
+    perMonth: '$10/wk',
   },
 ];
 
@@ -60,7 +60,6 @@ const CONSUMABLES: Consumable[] = [
   { id: 'questions_3',  label: '3 Extra Questions',    price: '$2.49' },
   { id: 'questions_5',  label: '5 Extra Questions',    price: '$3.99' },
   { id: 'questions_10', label: '10 Extra Questions',   price: '$9.99' },
-  { id: 'connections_1', label: '1 Extra Connection',  price: '$0.99' },
   { id: 'synastry_1',   label: 'Synastry Analysis (1 person)', price: '$0.99' },
 ];
 

@@ -38,8 +38,6 @@ export interface UserDoc {
   /** Device timezone offset in minutes east of UTC (e.g. EST = -300, IST = +330). Refreshed on every push registration. */
   timezoneOffsetMinutes?:  number;
   birthDetailsChangeCount?: number;  // max 3 allowed
-  /** One-time purchased connection slots — persist beyond trial end */
-  extraConnectionSlots?:   number;
 }
 
 // ─── Subcollections ───────────────────────────────────────────────────────────

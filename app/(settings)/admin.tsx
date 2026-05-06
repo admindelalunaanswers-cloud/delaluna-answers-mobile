@@ -27,6 +27,7 @@ import {
   DEFAULT_DAILY_CHAT_LIMIT,
   DEFAULT_PREMIUM_DAILY_CHAT_LIMIT,
   DEFAULT_FREE_CONNECTION_LIMIT,
+  DEFAULT_TRIAL_CONNECTION_LIMIT,
   DEFAULT_PREMIUM_CONNECTION_LIMIT,
 } from '@/src/context/admin-context';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
@@ -107,10 +108,12 @@ export default function AdminScreen() {
     dailyChatLimit,
     premiumDailyChatLimit,
     freeConnectionLimit,
+    trialConnectionLimit,
     premiumConnectionLimit,
     setDailyChatLimit,
     setPremiumDailyChatLimit,
     setFreeConnectionLimit,
+    setTrialConnectionLimit,
     setPremiumConnectionLimit,
     resetToDefaults,
   } = useAdmin();
@@ -208,6 +211,14 @@ export default function AdminScreen() {
             value={freeConnectionLimit}
             defaultValue={DEFAULT_FREE_CONNECTION_LIMIT}
             onChange={setFreeConnectionLimit}
+            max={50}
+          />
+          <View style={ss.separator} />
+          <Stepper
+            label="Trial connection limit"
+            value={trialConnectionLimit}
+            defaultValue={DEFAULT_TRIAL_CONNECTION_LIMIT}
+            onChange={setTrialConnectionLimit}
             max={50}
           />
           <View style={ss.separator} />
