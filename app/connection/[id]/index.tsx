@@ -32,6 +32,7 @@ import { subscribeToSynastryReading } from "@/src/services/synastry-reading.serv
 import { ChatStore } from "@/src/stores/chat-store";
 import { NavigationStore } from "@/src/stores/navigation-store";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
+import { renderRichText } from "@/src/utils/rich-text";
 
 const NAV_BAR_HEIGHT = 44;
 const BAR_MAX_WIDTH = Dimensions.get("window").width - scale(18) * 2;
@@ -470,7 +471,7 @@ export default function ConnectionViewScreen() {
               </TouchableOpacity>
 
               <Text style={styles.sectionLabel}>Weekly Advice</Text>
-              <Text style={styles.reportSummary}>{report.advice}</Text>
+              <Text style={styles.reportSummary}>{renderRichText(report.advice)}</Text>
 
               <Text style={styles.sectionLabel}>Weekly Forecast</Text>
               <ThemedText style={styles.reportSummary}>

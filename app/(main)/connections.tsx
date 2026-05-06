@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import DelalunaContainer from "@/src/components/shared/delaluna-container.component";
 import HeaderNav from "@/src/components/shared/header-nav";
+import PaygateOverlay from "@/src/components/shared/paygate-overlay.component";
 import { ThemedText } from "@/src/components/themed-text";
 import { ThemedView } from "@/src/components/themed-view";
 import { CONNECTIONS_DEFINITION } from "@/src/constants/definitions";
@@ -271,18 +272,26 @@ export default function ConnectionsScreen() {
   
 
   const hasConnections = connections.length > 0;
+  const isPaygated = accessLimit === 0;
 
   return (
     <Animated.View style={[styles.container, fadeStyle]}>
       <ThemedView style={styles.container}>
         <HeaderNav
           title="Connections"
-          rightIconName={hasConnections ? "add" : undefined}
-          onRightPress={hasConnections ? goToNewConnectionScreen : undefined}
+          rightIconName={hasConnections && !isPaygated ? "add" : undefined}
+          onRightPress={hasConnections && !isPaygated ? goToNewConnectionScreen : undefined}
         />
          <ThemedText type="definition" style={{ marginTop: headerHeight, paddingHorizontal: scale(10), paddingVertical: scale(25), textAlign: "center" }}>
             {CONNECTIONS_DEFINITION}
           </ThemedText>
+        <PaygateOverlay
+          locked={isPaygated}
+          style={styles.paygateContainer}
+          unlockTitle="Unlock Connections"
+          unlockMessage="Upgrade to Premium to save and read compatibility connections."
+          onUnlock={presentUpgradePaywall}
+        >
         {hasConnections ? (
           <ScrollView
             style={{ flex: 1 }}
@@ -337,6 +346,7 @@ export default function ConnectionsScreen() {
             </DelalunaContainer>
           </ThemedView>
         )}
+        </PaygateOverlay>
 
       </ThemedView>
     </Animated.View>
@@ -345,6 +355,7 @@ export default function ConnectionsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, width: "100%" },
+  paygateContainer: { flex: 1 },
   centered: { flex: 1, justifyContent: "space-around", alignItems: "center", padding: scale(15) },
   listContainer: { flexGrow: 1, paddingHorizontal: scale(15),  },
   itemWrapper: {

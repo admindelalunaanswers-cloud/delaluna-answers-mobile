@@ -38,6 +38,7 @@ import { recordError } from '@/src/services/crashlytics.service';
 import { buildConnectionContextSummary } from '@/src/services/connection-context.service';
 import { buildNatalChartSummary } from '@/src/services/natal-chart-breakdown.service';
 import { ChatStore } from '@/src/stores/chat-store';
+import { renderRichText } from '@/src/utils/rich-text';
 
 const SUGGESTIONS = [
   HOME_STRINGS.newLove.questionFunnel,
@@ -69,10 +70,6 @@ function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-/** Strip markdown bold titles like **Reality Check:** and leftover asterisks */
-function stripBoldTitles(text: string): string {
-  return text.replace(/\*\*[^*]+:\*\*\s*/g, '').replace(/\*/g, '').replace(/^ +/gm, '').trim();
-}
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -128,7 +125,7 @@ function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: C
               Something went wrong. Try again.
             </Text>
           ) : (
-            <Text style={styles.aiBubbleText}>{stripBoldTitles(msg.response ?? '')}</Text>
+            <Text style={styles.aiBubbleText}>{renderRichText(msg.response ?? '')}</Text>
           )}
         </View>
         {showRetry && (
@@ -438,7 +435,7 @@ export default function ChatScreen() {
                     </View>
                     {m.response ? (
                       <View style={[styles.aiBubble, { alignSelf: 'flex-start' }]}>
-                        <Text style={styles.aiBubbleText}>{stripBoldTitles(m.response)}</Text>
+                        <Text style={styles.aiBubbleText}>{renderRichText(m.response)}</Text>
                       </View>
                     ) : null}
                   </View>

@@ -16,6 +16,7 @@ import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
 import PremiumUnlock from '@/src/components/shared/premium-unlock.component';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
+import { renderRichText } from '@/src/utils/rich-text';
 import type { NatalChart } from '@/src/services/astroEngine';
 import type { NatalChartBreakdownResult } from '@/src/types/natal-chart-breakdown.types';
 
@@ -69,7 +70,7 @@ export default function BirthChartScreen() {
       <ThemedView key={label} style={styles.insightCard}>
         <ThemedText style={styles.insightLabel}>{label}</ThemedText>
         {title ? <ThemedText style={styles.insightTitle}>{title}</ThemedText> : null}
-        <ThemedText style={styles.insightBody}>{content}</ThemedText>
+        <ThemedText style={styles.insightBody}>{renderRichText(content)}</ThemedText>
       </ThemedView>
     );
   }
@@ -119,7 +120,7 @@ export default function BirthChartScreen() {
             {h.planets.map(p => `${p.name} in ${p.sign} ${p.degree}`).join('  ·  ')}
           </ThemedText>
         )}
-        {!h.locked && <ThemedText style={styles.cardBody}>{h.interpretation}</ThemedText>}
+        {!h.locked && <ThemedText style={styles.cardBody}>{renderRichText(h.interpretation)}</ThemedText>}
       </ThemedView>
     ));
   }
@@ -134,7 +135,7 @@ export default function BirthChartScreen() {
           </ThemedText>
           <ThemedText style={styles.cardMeta}>House {p.house}</ThemedText>
         </ThemedView>
-        <ThemedText style={styles.cardBody}>{p.interpretation}</ThemedText>
+        <ThemedText style={styles.cardBody}>{renderRichText(p.interpretation)}</ThemedText>
       </ThemedView>
     ));
   }
@@ -149,7 +150,7 @@ export default function BirthChartScreen() {
           </ThemedText>
           <ThemedText style={styles.cardMeta}>orb {a.orb}</ThemedText>
         </ThemedView>
-        <ThemedText style={styles.cardBody}>{a.interpretation}</ThemedText>
+        <ThemedText style={styles.cardBody}>{renderRichText(a.interpretation)}</ThemedText>
       </ThemedView>
     ));
   }

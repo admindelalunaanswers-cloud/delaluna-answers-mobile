@@ -12,8 +12,10 @@ import {
   Platform,
   StyleSheet,
   Switch,
+  Text,
   TextInput,
   TouchableOpacity,
+  View,
 } from "react-native";
 
 import { router } from "expo-router";
@@ -21,6 +23,7 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { httpsCallable } from "firebase/functions";
+import LottieView from "lottie-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { functions } from "@/firebaseConfig";
@@ -46,7 +49,6 @@ import { buildCompatibilityPrompt } from "@/src/prompts/compatibility-prompt";
 import { Events } from "@/src/services/analytics.service";
 import { measure } from "@/src/services/performance.service";
 import { recordError } from "@/src/services/crashlytics.service";
-import LoadingScreen from "../(util)/loading-screen";
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -896,7 +898,20 @@ export default function SingleConnectionCreateScreen() {
     undefined;
 
   if (loading) {
-    return <LoadingScreen progress={0} message={loadingMessage} />;
+    return (
+      <ThemedView style={{ flex: 1 }}>
+        <HeaderNav title="Compatibility" />
+        <View style={[styles.pendingWrapper, { marginTop: headerHeight }]}>
+          <LottieView
+            source={require("@/src/assets/animations/galaxy.json")}
+            autoPlay
+            loop
+            style={styles.pendingAnimation}
+          />
+          <Text style={styles.pendingText}>{loadingMessage}</Text>
+        </View>
+      </ThemedView>
+    );
   }
 
   return (
@@ -1068,6 +1083,23 @@ const styles = StyleSheet.create({
     width: "100%",
     backgroundColor: "transparent",
     overflow: "hidden",
+  },
+  pendingWrapper: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: verticalScale(10),
+    paddingVertical: verticalScale(24),
+  },
+  pendingAnimation: {
+    width: moderateScale(220),
+    height: moderateScale(220),
+  },
+  pendingText: {
+    color: "rgba(255,255,255,0.75)",
+    fontSize: moderateScale(14),
+    textAlign: "center",
+    paddingHorizontal: scale(24),
   },
   section: {
     width: "100%",

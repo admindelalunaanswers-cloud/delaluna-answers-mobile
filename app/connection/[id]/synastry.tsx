@@ -26,6 +26,7 @@ import { selectTopAspects } from "@/src/utils/synastry";
 import type { SynastryReadingResult } from "@/src/types/synastry-reading.types";
 import { C } from "@/src/constants/theme";
 import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
+import { renderRichText } from "@/src/utils/rich-text";
 import { ThemedView } from "@/src/components/themed-view";
 
 const NAV_BAR_HEIGHT = 44;
@@ -117,7 +118,7 @@ function ReadingSection({
       <Text style={styles.readingLabel}>{label}</Text>
       {body ? (
         <Animated.View entering={FadeIn.duration(450)}>
-          <Text style={styles.readingBody}>{body}</Text>
+          <Text style={styles.readingBody}>{renderRichText(body)}</Text>
         </Animated.View>
       ) : loading ? (
         <SkeletonLines lines={4} />

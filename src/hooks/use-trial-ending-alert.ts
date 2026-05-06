@@ -1,7 +1,7 @@
 /**
  * use-trial-ending-alert.ts
- * Shows an Alert on the last 2 days of the 5-day free trial
- * (day 4 and day 5) prompting the user to upgrade.
+ * Shows an Alert once per day for every day of the 5-day free trial,
+ * surfacing days remaining and prompting the user to upgrade.
  *
  * Dedupes by user uid + day index so the user sees the alert at most
  * once per day per device.
@@ -46,9 +46,6 @@ export function useTrialEndingAlert(): void {
     // Day index: 1 = first day of trial, 5 = last day (TRIAL_DURATION_DAYS)
     const daysRemaining = Math.ceil(msRemaining / DAY_MS);
     const dayIndex = TRIAL_DURATION_DAYS - daysRemaining + 1;
-
-    // Only nudge on the last 2 days of the trial.
-    if (dayIndex < TRIAL_DURATION_DAYS - 1) return;
 
     let cancelled = false;
     (async () => {

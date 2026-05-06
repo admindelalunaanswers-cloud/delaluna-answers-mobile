@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import HeaderNav from '@/src/components/shared/header-nav';
 import { ThemedView } from '@/src/components/themed-view';
 import { moderateScale, scale as staticScale, verticalScale } from '@/src/utils/responsive';
+import { renderRichText } from '@/src/utils/rich-text';
 import { C, R, S } from '@/src/constants/theme';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
@@ -87,7 +88,7 @@ function HouseCard({
       {/* Excerpt — always visible for unlocked houses */}
       {!isLocked && house.interpretation && !expanded && (
         <Text style={houseStyles.excerpt} numberOfLines={2}>
-          {house.interpretation}
+          {renderRichText(house.interpretation)}
         </Text>
       )}
 
@@ -95,7 +96,7 @@ function HouseCard({
       {!isLocked && expanded && (
         <>
           <View style={houseStyles.divider} />
-          <Text style={houseStyles.interpretation}>{house.interpretation}</Text>
+          <Text style={houseStyles.interpretation}>{renderRichText(house.interpretation)}</Text>
         </>
       )}
     </TouchableOpacity>

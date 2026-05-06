@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { DrawnTarotCard } from "@/src/types/tarot-cards.type";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
+import { renderRichText } from "@/src/utils/rich-text";
 
 import DelalunaContainer from "../shared/delaluna-container.component";
 import MessageInABottleComponent from "./message-in-a-bottle.component";
@@ -79,7 +80,7 @@ export default function HomeTextBox({
 
   const renderTextContent = () => {
     if (!content || Array.isArray(content)) return null;
-    return <Text style={styles.text}>{content}</Text>;
+    return <Text style={styles.text}>{renderRichText(content)}</Text>;
   };
 
   const renderListContent = () => {
