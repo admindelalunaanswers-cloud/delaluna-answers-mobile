@@ -24,6 +24,7 @@ import {
   REVENUECAT_ENABLED,
 } from '@/src/services/revenuecat.service';
 import { useUser } from './user-context';
+import { Events } from '@/src/services/analytics.service';
 
 let AsyncStorage: any = null;
 try {
@@ -218,9 +219,12 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
     try {
       const info = await restorePurchasesService();
       setCustomerInfo(info);
-      return hasEntitlement(info);
+      const ok = hasEntitlement(info);
+      Events.restorePurchases({ success: ok });
+      return ok;
     } catch (err) {
       console.error('[RevenueCat] restorePurchases error:', err);
+      Events.restorePurchases({ success: false });
       return false;
     }
   }, []);
@@ -231,12 +235,20 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       return false;
     }
     try {
+      Events.paywallViewed('manual');
       const result: PAYWALL_RESULT = await RevenueCatUI.presentPaywall();
       // Refresh customer info after paywall interaction
       await refresh();
-      return result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
+      const purchased = result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
+      if (purchased) {
+        Events.purchaseCompleted({ product_id: 'unknown' });
+      } else {
+        Events.paywallDismissed('manual');
+      }
+      return purchased;
     } catch (err) {
       console.error('[RevenueCat] presentPaywall error:', err);
+      Events.purchaseFailed({ product_id: 'unknown', reason: String((err as any)?.message ?? err) });
       return false;
     }
   }, [refresh]);
@@ -247,13 +259,21 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       return false;
     }
     try {
+      Events.paywallViewed('gated');
       const result: PAYWALL_RESULT = await RevenueCatUI.presentPaywallIfNeeded({
         requiredEntitlementIdentifier: ENTITLEMENT_ID,
       });
       await refresh();
-      return result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
+      const purchased = result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
+      if (purchased) {
+        Events.purchaseCompleted({ product_id: 'unknown' });
+      } else if (result !== PAYWALL_RESULT.NOT_PRESENTED) {
+        Events.paywallDismissed('gated');
+      }
+      return purchased;
     } catch (err) {
       console.error('[RevenueCat] presentPaywallIfNeeded error:', err);
+      Events.purchaseFailed({ product_id: 'unknown', reason: String((err as any)?.message ?? err) });
       return false;
     }
   }, [refresh]);

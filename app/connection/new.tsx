@@ -43,6 +43,7 @@ import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { ThemedText } from "@/src/components/themed-text";
 import { C } from "@/src/constants/theme";
 import { buildCompatibilityPrompt } from "@/src/prompts/compatibility-prompt";
+import { Events } from "@/src/services/analytics.service";
 import LoadingScreen from "../(util)/loading-screen";
 
 const NAV_BAR_HEIGHT = 44;
@@ -867,6 +868,8 @@ export default function SingleConnectionCreateScreen() {
         secondPerson: enrichedSecond,
         prompt,
       }) as { data: { connectionId: string } };
+
+      Events.connectionCreated();
 
       router.replace({ pathname: "/connection/[id]", params: { id: result.data.connectionId } });
       return;

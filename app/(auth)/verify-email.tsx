@@ -24,6 +24,7 @@ import { useHoroscope } from '@/src/context/horoscope-context';
 import { ThemeContext } from '@/src/context/theme-context';
 import { useUser } from '@/src/context/user-context';
 import { signOut } from '@/src/services/user.service';
+import { Events } from '@/src/services/analytics.service';
 import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
 import LoadingScreen from '../(util)/loading-screen';
 
@@ -143,6 +144,7 @@ export default function VerifyEmail() {
     setVerifying(true);
     try {
       await verifyCodeFn({ code: enteredCode });
+      Events.emailVerified();
     } catch (e: any) {
       const msg = e?.message ?? 'Something went wrong.';
       Alert.alert('Verification failed', msg);

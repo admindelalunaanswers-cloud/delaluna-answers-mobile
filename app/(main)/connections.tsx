@@ -33,6 +33,7 @@ import { useFreeTrialAccess } from "@/src/hooks/use-free-trial-access";
 import { useUser } from "@/src/context/user-context";
 import { useAdmin } from "@/src/context/admin-context";
 import { ConnectionsCache } from "@/src/services/connections-cache.service";
+import { Events } from "@/src/services/analytics.service";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { db, functions } from "../../firebaseConfig";
 
@@ -253,12 +254,14 @@ export default function ConnectionsScreen() {
             setConnections((prev) => prev.filter((c) => c.id !== connectionId));
             ConnectionsCache.remove(uid, connectionId);
             const deleteFn = httpsCallable(functions, "deleteConnection");
-            deleteFn({ userId: uid, connectionId }).catch((err) => {
-              console.error("Error deleting connection:", err);
-              setConnections(previous);
-              ConnectionsCache.save(uid, previous);
-              Alert.alert("Error", "Failed to delete connection.");
-            });
+            deleteFn({ userId: uid, connectionId })
+              .then(() => Events.connectionDeleted())
+              .catch((err) => {
+                console.error("Error deleting connection:", err);
+                setConnections(previous);
+                ConnectionsCache.save(uid, previous);
+                Alert.alert("Error", "Failed to delete connection.");
+              });
           },
         },
       ]

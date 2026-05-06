@@ -30,6 +30,7 @@ import { auth, db } from '@/firebaseConfig';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
 import { updateUserDoc } from '@/src/services/user.service';
 import { useUser } from '@/src/context/user-context';
+import { Events } from '@/src/services/analytics.service';
 
 import LoadingScreen from '../(util)/loading-screen';
 
@@ -106,6 +107,8 @@ export default function Login() {
       // passwords contain whitespace (or whose password manager appended a
       // newline on paste).
       const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+
+      Events.login('email');
 
       // Record login timestamp on every login
       updateUserDoc(cred.user.uid, {

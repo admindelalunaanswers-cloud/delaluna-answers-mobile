@@ -33,6 +33,7 @@ import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
 import { useResponsive } from '@/src/hooks/use-responsive';
 import type { ChatConnectionContext, ChatMessageDoc, SavedChatSession } from '@/src/services/chat.service';
 import { deleteChatSession, resumeChatSession, retryChatMessage, saveChatAndClear, sendChatMessage, subscribeToChatHistory, subscribeToChatSessions } from '@/src/services/chat.service';
+import { Events } from '@/src/services/analytics.service';
 import { buildConnectionContextSummary } from '@/src/services/connection-context.service';
 import { buildNatalChartSummary } from '@/src/services/natal-chart-breakdown.service';
 import { ChatStore } from '@/src/stores/chat-store';
@@ -306,6 +307,7 @@ export default function ChatScreen() {
     setIsSending(true);
     try {
       await sendChatMessage(authUser.uid, msg, chartSummary, selectedConnection ?? undefined);
+      Events.chatMessageSent({ length: msg.length });
     } catch (e) {
       console.error('chat send error', e);
     } finally {
@@ -326,6 +328,7 @@ export default function ChatScreen() {
         if (fresh) retryCtx = fresh;
       }
       await retryChatMessage(authUser.uid, msg.id, msg.userMessage, chartSummary, retryCtx);
+      Events.chatRetry();
     } catch (e) {
       console.error('chat retry error', e);
     }

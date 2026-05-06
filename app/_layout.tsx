@@ -23,7 +23,7 @@ import { useColorScheme } from '@/src/hooks/use-color-scheme';
 import { useMinVersion } from '@/src/hooks/use-min-version';
 import { useTheme } from '@/src/hooks/use-theme';
 import { UpdateRequiredScreen } from '@/src/components/update-required-screen';
-import { logScreenView, setUserId } from '@/src/services/analytics.service';
+import { logScreenView, screenLabelForPath, setUserId } from '@/src/services/analytics.service';
 
 function AuthGate() {
   const { authUser, userDoc, loading: userLoading } = useUser();
@@ -40,10 +40,11 @@ function AuthGate() {
     setUserId(authUser?.uid ?? null);
   }, [authUser?.uid]);
 
-  // Log a screen_view on every route change.
+  // Log a screen_view on every route change with a human-friendly name.
+  // screen_class keeps the raw pathname for debugging in GA4.
   useEffect(() => {
     if (!pathname) return;
-    logScreenView(pathname);
+    logScreenView(screenLabelForPath(pathname), pathname);
   }, [pathname]);
 
   // Don't redirect from auth/startup → main until horoscope and transit reading

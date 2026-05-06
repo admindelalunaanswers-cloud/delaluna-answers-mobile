@@ -33,6 +33,7 @@ import ChatFlow, { StepConfig } from '@/src/components/sign-up/chat-flow';
 import LoadingScreen from '../(util)/loading-screen';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedView } from '@/src/components/themed-view';
+import { Events } from '@/src/services/analytics.service';
 
 // ─── Fallback coordinates (Greenwich) ─────────────────────────────────────────
 
@@ -140,6 +141,8 @@ export default function SignUpChatScreen() {
         return;
       }
 
+      Events.signUp('email');
+
       // Step 2 — Update display name
       setLoadingMessage('Setting up your profile...');
       await updateProfile(userCred.user, { displayName });
@@ -177,6 +180,7 @@ export default function SignUpChatScreen() {
         timezone: payload.birthTimezone,
       };
       const natalChart = await calculateNatalChart(bd);
+      Events.birthChartGenerated({ has_time: !payload.isBirthTimeUnknown });
       const chartPlanets = natalChart.planets.map(({ name, symbol, longitude, sign, signSymbol, degree, minutes, seconds, speed, isRetrograde, house }) =>
         ({ name, symbol, longitude, sign, signSymbol, degree, minutes, seconds, speed, isRetrograde, house })
       );

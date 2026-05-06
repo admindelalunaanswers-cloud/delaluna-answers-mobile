@@ -57,6 +57,48 @@ export function setUserProperties(props: Record<string, string | null>): Promise
 
 // ─── Screen tracking ────────────────────────────────────────────────────────
 
+// Maps Expo Router pathnames to human-friendly screen names that show up in
+// GA4's "Pages and screens" report. Anything not listed falls back to the
+// raw path with the leading slash and group-segment parens stripped.
+const ROUTE_LABELS: Record<string, string> = {
+  '/(main)': 'Home',
+  '/(main)/home': 'Home',
+  '/(main)/index': 'Birth Data Input',
+  '/(main)/connections': 'Connections',
+  '/(main)/transits': 'Transits',
+  '/(main)/chat': 'Chat',
+  '/(testing)/ResultsScreen': 'Natal Chart Results',
+  '/(home)/birth-chart-view': 'Birth Chart',
+  '/connection/new': 'New Connection',
+  '/connection/SynastryScreen': 'Synastry',
+  '/(auth)/login': 'Login',
+  '/(auth)/sign-up': 'Sign Up',
+  '/(auth)/verify-email': 'Verify Email',
+  '/(auth)/forgot-password': 'Forgot Password',
+  '/(startup)/welcome': 'Welcome',
+  '/(startup)/splash': 'Splash',
+  '/(settings)/profile': 'Profile',
+  '/(settings)/edit-profile': 'Edit Profile',
+  '/(settings)/paywall': 'Paywall',
+  '/(util)/loading-screen': 'Loading',
+};
+
+function fallbackLabel(pathname: string): string {
+  return pathname
+    .replace(/\/\([^)]+\)/g, '')   // strip group segments like (main), (auth)
+    .replace(/^\/+|\/+$/g, '')     // trim leading/trailing slashes
+    .replace(/\//g, ' / ')
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase()) || 'Home';
+}
+
+export function screenLabelForPath(pathname: string): string {
+  // Strip dynamic-segment values: /connection/abc123 → /connection/[id]
+  // We don't currently have generic dynamic-route labels, so just look up
+  // the literal path; unknowns fall through to the prettifier.
+  return ROUTE_LABELS[pathname] ?? fallbackLabel(pathname);
+}
+
 // `screen_view` is a reserved GA4 event; logging it via logEvent populates the
 // same screen reports as the deprecated logScreenView helper.
 export function logScreenView(screenName: string, screenClass?: string): Promise<void | void> {

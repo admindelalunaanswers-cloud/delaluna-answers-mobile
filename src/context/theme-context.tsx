@@ -3,6 +3,7 @@ import type { ColorValue, ImageSourcePropType } from 'react-native';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebaseConfig';
+import { Events } from '@/src/services/analytics.service';
 
 // Safe AsyncStorage wrapper — silently no-ops if native module isn't in the build yet
 let AsyncStorage: { getItem(k: string): Promise<string | null>; setItem(k: string, v: string): Promise<void> };
@@ -180,6 +181,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setThemeKey = useCallback(async (key: string) => {
     if (!allThemes[key]) return;
     _setThemeKey(key);
+    Events.themeChanged(key);
     try { await AsyncStorage.setItem(GLOBAL_KEY, key); } catch {}
   }, []);
 
