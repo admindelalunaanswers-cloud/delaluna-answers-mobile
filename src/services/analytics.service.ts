@@ -20,6 +20,24 @@ import {
   setUserProperty as fbSetUserProperty,
 } from '@react-native-firebase/analytics';
 
+import { APP_ENV, isProduction } from '@/src/constants/env';
+
+// Disable collection outside production. Runs at module load — before any
+// event is logged. Note: setAnalyticsCollectionEnabled is persisted across
+// launches, so flipping it here ensures dev/preview builds stop reporting
+// even if a previous prod install on the same device had it enabled.
+//
+// We still allow the SDK's API to be called downstream — it just won't
+// upload anything. Tagging the environment is harmless either way.
+(async () => {
+  try {
+    await fbSetAnalyticsCollectionEnabled(getAnalytics(), isProduction);
+    await fbSetUserProperty(getAnalytics(), 'app_environment', APP_ENV);
+  } catch (err) {
+    if (__DEV__) console.warn('[analytics] init failed:', err);
+  }
+})();
+
 type Params = Record<string, string | number | boolean | null | undefined>;
 
 function safe<T>(fn: () => Promise<T>, label: string): Promise<T | void> {

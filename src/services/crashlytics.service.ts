@@ -28,6 +28,21 @@ import {
   setUserId as fbSetUserId,
 } from '@react-native-firebase/crashlytics';
 
+import { APP_ENV, isProduction } from '@/src/constants/env';
+
+// Disable collection outside production. The SDK persists this flag, so
+// running this at module load reliably stops dev/preview installs from
+// uploading even if they previously had it enabled. The environment
+// attribute is still set so any production crash report carries it.
+(async () => {
+  try {
+    await fbSetEnabled(getCrashlytics(), isProduction);
+    fbSetAttribute(getCrashlytics(), 'environment', APP_ENV);
+  } catch (err) {
+    if (__DEV__) console.warn('[crashlytics] init failed:', err);
+  }
+})();
+
 function safe(fn: () => unknown, label: string): void {
   try {
     Promise.resolve(fn()).catch((err) => {

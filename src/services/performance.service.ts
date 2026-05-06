@@ -18,7 +18,16 @@
 
 import { getPerformance, trace } from '@react-native-firebase/perf';
 
+import { APP_ENV } from '@/src/constants/env';
+
 type Attributes = Record<string, string>;
+
+// Performance Monitoring runs in all 3 environments (development, preview,
+// production) so we can compare. Every custom trace gets stamped with the
+// environment as an attribute — auto-collected metrics (app_start, screens,
+// HTTP) carry it via the app version string and can be filtered in the
+// console using the same dimension.
+const ENV_ATTRIBUTE = { environment: APP_ENV };
 
 function safe<T>(fn: () => Promise<T>, label: string): Promise<T | void> {
   return fn().catch((err) => {
@@ -44,10 +53,9 @@ export async function measure<T>(
   try {
     t = await trace(getPerformance(), name);
     await t.start();
-    if (opts?.attributes) {
-      for (const [k, v] of Object.entries(opts.attributes)) {
-        t.putAttribute(k, v);
-      }
+    const attrs = { ...ENV_ATTRIBUTE, ...(opts?.attributes ?? {}) };
+    for (const [k, v] of Object.entries(attrs)) {
+      t.putAttribute(k, v);
     }
   } catch (err) {
     if (__DEV__) console.warn(`[perf] start ${name} failed:`, err);
@@ -86,6 +94,9 @@ export async function startTrace(name: string) {
   try {
     const t = await trace(getPerformance(), name);
     await t.start();
+    for (const [k, v] of Object.entries(ENV_ATTRIBUTE)) {
+      t.putAttribute(k, v);
+    }
     return t;
   } catch (err) {
     if (__DEV__) console.warn(`[perf] startTrace ${name} failed:`, err);
