@@ -34,6 +34,7 @@ module.exports = {
     plugins: [
       "expo-router",
       "@react-native-firebase/app",
+      "@react-native-firebase/perf",
       [
         "expo-notifications",
         {

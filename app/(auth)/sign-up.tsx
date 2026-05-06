@@ -34,6 +34,7 @@ import LoadingScreen from '../(util)/loading-screen';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedView } from '@/src/components/themed-view';
 import { Events } from '@/src/services/analytics.service';
+import { measure } from '@/src/services/performance.service';
 
 // ─── Fallback coordinates (Greenwich) ─────────────────────────────────────────
 
@@ -179,7 +180,11 @@ export default function SignUpChatScreen() {
         lon: payload.birthLon,
         timezone: payload.birthTimezone,
       };
-      const natalChart = await calculateNatalChart(bd);
+      const natalChart = await measure(
+        'natal_chart_calc',
+        () => calculateNatalChart(bd),
+        { attributes: { has_time: String(!payload.isBirthTimeUnknown) } },
+      );
       Events.birthChartGenerated({ has_time: !payload.isBirthTimeUnknown });
       const chartPlanets = natalChart.planets.map(({ name, symbol, longitude, sign, signSymbol, degree, minutes, seconds, speed, isRetrograde, house }) =>
         ({ name, symbol, longitude, sign, signSymbol, degree, minutes, seconds, speed, isRetrograde, house })
