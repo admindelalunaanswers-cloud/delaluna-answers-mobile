@@ -4,7 +4,7 @@ import { Image, ImageBackground, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
 
-import { Slot, useRouter, useSegments } from 'expo-router';
+import { Slot, usePathname, useRouter, useSegments } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -23,15 +23,28 @@ import { useColorScheme } from '@/src/hooks/use-color-scheme';
 import { useMinVersion } from '@/src/hooks/use-min-version';
 import { useTheme } from '@/src/hooks/use-theme';
 import { UpdateRequiredScreen } from '@/src/components/update-required-screen';
+import { logScreenView, setUserId } from '@/src/services/analytics.service';
 
 function AuthGate() {
   const { authUser, userDoc, loading: userLoading } = useUser();
   const { loading: dataLoading, horoscope, horoscopeGenerating, transitReadingGenerating } = useHoroscope();
   const router = useRouter();
   const segments = useSegments();
+  const pathname = usePathname();
 
   const inAuth    = segments[0] === '(auth)';
   const inStartup = segments[0] === '(startup)';
+
+  // Attach Firebase Auth UID to GA4 user_id; clear on sign-out.
+  useEffect(() => {
+    setUserId(authUser?.uid ?? null);
+  }, [authUser?.uid]);
+
+  // Log a screen_view on every route change.
+  useEffect(() => {
+    if (!pathname) return;
+    logScreenView(pathname);
+  }, [pathname]);
 
   // Don't redirect from auth/startup → main until horoscope and transit reading
   // are available. This prevents screens rendering empty while extensions generate.

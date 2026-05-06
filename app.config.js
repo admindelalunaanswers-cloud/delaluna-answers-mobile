@@ -33,6 +33,7 @@ module.exports = {
     },
     plugins: [
       "expo-router",
+      "@react-native-firebase/app",
       [
         "expo-notifications",
         {
@@ -63,6 +64,8 @@ module.exports = {
           },
           ios: {
             deploymentTarget: "15.1",
+            useFrameworks: "static",
+            buildReactNativeFromSource: true,
           },
         },
       ],
