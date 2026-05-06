@@ -24,6 +24,11 @@ import { useMinVersion } from '@/src/hooks/use-min-version';
 import { useTheme } from '@/src/hooks/use-theme';
 import { UpdateRequiredScreen } from '@/src/components/update-required-screen';
 import { logScreenView, screenLabelForPath, setUserId } from '@/src/services/analytics.service';
+import {
+  installGlobalErrorHandler,
+  logBreadcrumb,
+  setUserId as setCrashlyticsUserId,
+} from '@/src/services/crashlytics.service';
 
 function AuthGate() {
   const { authUser, userDoc, loading: userLoading } = useUser();
@@ -35,16 +40,21 @@ function AuthGate() {
   const inAuth    = segments[0] === '(auth)';
   const inStartup = segments[0] === '(startup)';
 
-  // Attach Firebase Auth UID to GA4 user_id; clear on sign-out.
+  // Attach Firebase Auth UID to GA4 user_id and Crashlytics user;
+  // clear on sign-out.
   useEffect(() => {
     setUserId(authUser?.uid ?? null);
+    setCrashlyticsUserId(authUser?.uid ?? null);
   }, [authUser?.uid]);
 
   // Log a screen_view on every route change with a human-friendly name.
-  // screen_class keeps the raw pathname for debugging in GA4.
+  // screen_class keeps the raw pathname for debugging in GA4. Also drop a
+  // Crashlytics breadcrumb so crash reports show the user's last screens.
   useEffect(() => {
     if (!pathname) return;
-    logScreenView(screenLabelForPath(pathname), pathname);
+    const label = screenLabelForPath(pathname);
+    logScreenView(label, pathname);
+    logBreadcrumb(`screen: ${label}`);
   }, [pathname]);
 
   // Don't redirect from auth/startup → main until horoscope and transit reading
@@ -168,6 +178,10 @@ function VersionGate({ children }: { children: ReactNode }) {
   }
   return <>{children}</>;
 }
+
+// Install once at module load so it covers errors that fire before the first
+// render (e.g. during context provider setup).
+installGlobalErrorHandler();
 
 export default function RootLayout() {
   useEffect(() => {

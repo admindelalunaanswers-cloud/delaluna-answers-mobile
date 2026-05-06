@@ -35,6 +35,7 @@ module.exports = {
       "expo-router",
       "@react-native-firebase/app",
       "@react-native-firebase/perf",
+      "@react-native-firebase/crashlytics",
       [
         "expo-notifications",
         {
