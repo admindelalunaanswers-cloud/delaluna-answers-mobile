@@ -229,6 +229,37 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Pull the product identifier out of the user's currently active Pro
+  // entitlement. Falls back to 'unknown' if the entitlement isn't there yet
+  // (e.g. CustomerInfo cache lag right after purchase).
+  const resolvePurchasedProductId = useCallback(async (): Promise<string> => {
+    try {
+      const info = await getCustomerInfo();
+      return info.entitlements.active[ENTITLEMENT_ID]?.productIdentifier ?? 'unknown';
+    } catch {
+      return 'unknown';
+    }
+  }, []);
+
+  const handlePaywallResult = useCallback(
+    async (result: PAYWALL_RESULT, source: 'manual' | 'gated'): Promise<boolean> => {
+      await refresh();
+      if (result === PAYWALL_RESULT.PURCHASED) {
+        Events.purchaseCompleted({ product_id: await resolvePurchasedProductId() });
+        return true;
+      }
+      if (result === PAYWALL_RESULT.RESTORED) {
+        Events.restorePurchases({ success: true });
+        return true;
+      }
+      if (result !== PAYWALL_RESULT.NOT_PRESENTED) {
+        Events.paywallDismissed(source);
+      }
+      return false;
+    },
+    [refresh, resolvePurchasedProductId],
+  );
+
   const presentPaywall = useCallback(async (): Promise<boolean> => {
     if (!REVENUECAT_ENABLED) {
       console.log('[RevenueCat] disabled — skipping presentPaywall');
@@ -237,21 +268,13 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
     try {
       Events.paywallViewed('manual');
       const result: PAYWALL_RESULT = await RevenueCatUI.presentPaywall();
-      // Refresh customer info after paywall interaction
-      await refresh();
-      const purchased = result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
-      if (purchased) {
-        Events.purchaseCompleted({ product_id: 'unknown' });
-      } else {
-        Events.paywallDismissed('manual');
-      }
-      return purchased;
+      return await handlePaywallResult(result, 'manual');
     } catch (err) {
       console.error('[RevenueCat] presentPaywall error:', err);
       Events.purchaseFailed({ product_id: 'unknown', reason: String((err as any)?.message ?? err) });
       return false;
     }
-  }, [refresh]);
+  }, [handlePaywallResult]);
 
   const presentPaywallIfNeeded = useCallback(async (): Promise<boolean> => {
     if (!REVENUECAT_ENABLED) {
@@ -263,20 +286,13 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       const result: PAYWALL_RESULT = await RevenueCatUI.presentPaywallIfNeeded({
         requiredEntitlementIdentifier: ENTITLEMENT_ID,
       });
-      await refresh();
-      const purchased = result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
-      if (purchased) {
-        Events.purchaseCompleted({ product_id: 'unknown' });
-      } else if (result !== PAYWALL_RESULT.NOT_PRESENTED) {
-        Events.paywallDismissed('gated');
-      }
-      return purchased;
+      return await handlePaywallResult(result, 'gated');
     } catch (err) {
       console.error('[RevenueCat] presentPaywallIfNeeded error:', err);
       Events.purchaseFailed({ product_id: 'unknown', reason: String((err as any)?.message ?? err) });
       return false;
     }
-  }, [refresh]);
+  }, [handlePaywallResult]);
 
   const presentCustomerCenter = useCallback(async () => {
     if (!REVENUECAT_ENABLED) {
