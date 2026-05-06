@@ -5,6 +5,7 @@ import type { HoroscopeResult } from '@/src/types/horoscope.types';
 import type { NatalChartDetailsDoc } from '@/src/types/user.type';
 import { calculateTransits } from '@/src/services/astroEngine';
 import { getTarotCardDraw } from '@/src/services/tarot-card.service';
+import { measure } from '@/src/services/performance.service';
 import { HOROSCOPE_PROMPT_TEMPLATE } from '@/src/prompts/horoscope-prompt';
 
 const RETROGRADE_PLANETS = new Set([
@@ -276,56 +277,58 @@ export async function rolloverHoroscope(
   chart: NatalChartDetailsDoc,
   pronouns = 'they/them',
 ): Promise<void> {
-  const dateId     = getTodayDateId();
-  const twoDaysAgo = offsetDateId(dateId, -2);
-  const tomorrowId = offsetDateId(dateId, +1);
-  const natalChart = buildNatalChartSummary(chart);
+  return measure('horoscope_rollover', async () => {
+    const dateId     = getTodayDateId();
+    const twoDaysAgo = offsetDateId(dateId, -2);
+    const tomorrowId = offsetDateId(dateId, +1);
+    const natalChart = buildNatalChartSummary(chart);
 
-  // Remove the oldest doc — failure is harmless
-  deleteDoc(doc(db, 'users', uid, 'horoscope', twoDaysAgo)).catch(() => {});
+    // Remove the oldest doc — failure is harmless
+    deleteDoc(doc(db, 'users', uid, 'horoscope', twoDaysAgo)).catch(() => {});
 
-  // Check today and tomorrow in parallel
-  const [todaySnap, tomorrowSnap] = await Promise.all([
-    getDoc(doc(db, 'users', uid, 'horoscope', dateId)),
-    getDoc(doc(db, 'users', uid, 'horoscope', tomorrowId)),
-  ]);
+    // Check today and tomorrow in parallel
+    const [todaySnap, tomorrowSnap] = await Promise.all([
+      getDoc(doc(db, 'users', uid, 'horoscope', dateId)),
+      getDoc(doc(db, 'users', uid, 'horoscope', tomorrowId)),
+    ]);
 
-  const todayMissing    = !todaySnap.exists();
-  const tomorrowMissing = !tomorrowSnap.exists();
+    const todayMissing    = !todaySnap.exists();
+    const tomorrowMissing = !tomorrowSnap.exists();
 
-  if (!todayMissing && !tomorrowMissing) return;
+    if (!todayMissing && !tomorrowMissing) return;
 
-  // Tarot draw is seeded by date — same cards every call for the same day
-  const tarotDraw = await getTarotCardDraw(uid, 3).catch(() => null);
+    // Tarot draw is seeded by date — same cards every call for the same day
+    const tarotDraw = await getTarotCardDraw(uid, 3).catch(() => null);
 
-  // Generate today if missing — awaited so the user sees it immediately
-  if (todayMissing) {
-    try {
-      const t = await calculateTransits(new Date());
-      const retrogrades = t.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name);
-      await writeHoroscopeDoc(
-        uid, dateId, natalChart,
-        t.moon, retrogrades,
-        tarotDraw?.today.keywordString ?? '',
-        pronouns,
-      );
-    } catch (e) {
-      console.error('rolloverHoroscope: failed to generate today', e);
+    // Generate today if missing — awaited so the user sees it immediately
+    if (todayMissing) {
+      try {
+        const t = await calculateTransits(new Date());
+        const retrogrades = t.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name);
+        await writeHoroscopeDoc(
+          uid, dateId, natalChart,
+          t.moon, retrogrades,
+          tarotDraw?.today.keywordString ?? '',
+          pronouns,
+        );
+      } catch (e) {
+        console.error('rolloverHoroscope: failed to generate today', e);
+      }
     }
-  }
 
-  // Generate tomorrow if missing — fire and forget
-  if (tomorrowMissing) {
-    calculateTransits(dateIdToDate(tomorrowId))
-      .then(t => writeHoroscopeDoc(
-        uid, tomorrowId, natalChart,
-        t.moon,
-        t.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name),
-        tarotDraw?.tomorrow.keywordString ?? '',
-        pronouns,
-      ))
-      .catch(console.error);
-  }
+    // Generate tomorrow if missing — fire and forget
+    if (tomorrowMissing) {
+      calculateTransits(dateIdToDate(tomorrowId))
+        .then(t => writeHoroscopeDoc(
+          uid, tomorrowId, natalChart,
+          t.moon,
+          t.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name),
+          tarotDraw?.tomorrow.keywordString ?? '',
+          pronouns,
+        ))
+        .catch(console.error);
+    }
+  });
 }
 
 /**

@@ -1,3 +1,5 @@
+import { measure } from '@/src/services/performance.service';
+
 /**
  * astroEngine.ts
  * ─────────────────────────────────────────────────────────────────────────────
@@ -396,31 +398,33 @@ function buildMoonData(moon: PlanetPosition, sunLon: number): MoonData {
  * Calculate a full natal chart.
  */
 export async function calculateNatalChart(birth: BirthData): Promise<NatalChart> {
-  const jd     = birthToJD(birth);
-  const houses = await calcHouses(jd, birth.lat, birth.lon);
+  return measure('natal_chart_calc', async () => {
+    const jd     = birthToJD(birth);
+    const houses = await calcHouses(jd, birth.lat, birth.lon);
 
-  // Calculate all planets in parallel
-  const planets = await Promise.all(
-    Object.keys(PLANET_IDS).map(name => calcPlanet(jd, name, houses.cusps))
-  );
+    // Calculate all planets in parallel
+    const planets = await Promise.all(
+      Object.keys(PLANET_IDS).map(name => calcPlanet(jd, name, houses.cusps))
+    );
 
-  const sunPlanet  = planets.find(p => p.name === 'Sun')!;
-  const moonPlanet = planets.find(p => p.name === 'Moon')!;
-  const nNode      = planets.find(p => p.name === 'N. Node')!;
-  const moon       = buildMoonData(moonPlanet, sunPlanet.longitude);
+    const sunPlanet  = planets.find(p => p.name === 'Sun')!;
+    const moonPlanet = planets.find(p => p.name === 'Moon')!;
+    const nNode      = planets.find(p => p.name === 'N. Node')!;
+    const moon       = buildMoonData(moonPlanet, sunPlanet.longitude);
 
-  planets.push(deriveSouthNode(nNode, houses.cusps));
+    planets.push(deriveSouthNode(nNode, houses.cusps));
 
-  const asc = lonToSign(houses.ascendant);
-  const mc  = lonToSign(houses.mc);
+    const asc = lonToSign(houses.ascendant);
+    const mc  = lonToSign(houses.mc);
 
-  return {
-    planets,
-    houses,
-    moon,
-    ascendant:  { sign: asc.sign, signSymbol: asc.signSymbol, degree: asc.degree, minutes: asc.minutes },
-    midheaven:  { sign: mc.sign,  signSymbol: mc.signSymbol,  degree: mc.degree,  minutes: mc.minutes  },
-  };
+    return {
+      planets,
+      houses,
+      moon,
+      ascendant:  { sign: asc.sign, signSymbol: asc.signSymbol, degree: asc.degree, minutes: asc.minutes },
+      midheaven:  { sign: mc.sign,  signSymbol: mc.signSymbol,  degree: mc.degree,  minutes: mc.minutes  },
+    };
+  });
 }
 
 /**
@@ -432,19 +436,21 @@ export async function calculateTransits(
   lat: number = 0,
   lon: number = 0
 ): Promise<TransitData> {
-  const jd = dateToJD(date);
-  const houses = await calcHouses(jd, lat, lon);
+  return measure('transits_calc', async () => {
+    const jd = dateToJD(date);
+    const houses = await calcHouses(jd, lat, lon);
 
-  const planets = await Promise.all(
-    Object.keys(PLANET_IDS).map(name => calcPlanet(jd, name, houses.cusps))
-  );
+    const planets = await Promise.all(
+      Object.keys(PLANET_IDS).map(name => calcPlanet(jd, name, houses.cusps))
+    );
 
-  const sunPlanet  = planets.find(p => p.name === 'Sun')!;
-  const moonPlanet = planets.find(p => p.name === 'Moon')!;
-  const nNode      = planets.find(p => p.name === 'N. Node')!;
-  const moon       = buildMoonData(moonPlanet, sunPlanet.longitude);
+    const sunPlanet  = planets.find(p => p.name === 'Sun')!;
+    const moonPlanet = planets.find(p => p.name === 'Moon')!;
+    const nNode      = planets.find(p => p.name === 'N. Node')!;
+    const moon       = buildMoonData(moonPlanet, sunPlanet.longitude);
 
-  planets.push(deriveSouthNode(nNode, houses.cusps));
+    planets.push(deriveSouthNode(nNode, houses.cusps));
 
-  return { planets, moon, date };
+    return { planets, moon, date };
+  });
 }

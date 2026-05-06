@@ -44,6 +44,7 @@ import { ThemedText } from "@/src/components/themed-text";
 import { C } from "@/src/constants/theme";
 import { buildCompatibilityPrompt } from "@/src/prompts/compatibility-prompt";
 import { Events } from "@/src/services/analytics.service";
+import { measure } from "@/src/services/performance.service";
 import LoadingScreen from "../(util)/loading-screen";
 
 const NAV_BAR_HEIGHT = 44;
@@ -860,14 +861,18 @@ export default function SingleConnectionCreateScreen() {
       );
 
       const createConnectionFn = httpsCallable(functions, 'createConnection');
-      const result = await createConnectionFn({
-        userId: authUser!.uid,
-        isMe,
-        relationshipType: relationshipType!,
-        firstPerson: enrichedFirst,
-        secondPerson: enrichedSecond,
-        prompt,
-      }) as { data: { connectionId: string } };
+      const result = await measure(
+        'connection_create',
+        () => createConnectionFn({
+          userId: authUser!.uid,
+          isMe,
+          relationshipType: relationshipType!,
+          firstPerson: enrichedFirst,
+          secondPerson: enrichedSecond,
+          prompt,
+        }) as Promise<{ data: { connectionId: string } }>,
+        { attributes: { is_me: String(isMe) } },
+      );
 
       Events.connectionCreated();
 
