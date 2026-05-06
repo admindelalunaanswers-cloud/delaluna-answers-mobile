@@ -34,6 +34,7 @@ import { useUser } from "@/src/context/user-context";
 import { useAdmin } from "@/src/context/admin-context";
 import { ConnectionsCache } from "@/src/services/connections-cache.service";
 import { Events } from "@/src/services/analytics.service";
+import { recordError } from "@/src/services/crashlytics.service";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { db, functions } from "../../firebaseConfig";
 
@@ -258,6 +259,7 @@ export default function ConnectionsScreen() {
               .then(() => Events.connectionDeleted())
               .catch((err) => {
                 console.error("Error deleting connection:", err);
+                recordError(err, 'connection_delete');
                 setConnections(previous);
                 ConnectionsCache.save(uid, previous);
                 Alert.alert("Error", "Failed to delete connection.");

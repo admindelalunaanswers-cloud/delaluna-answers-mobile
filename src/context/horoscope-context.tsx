@@ -13,6 +13,12 @@ import { doc, getDoc } from 'firebase/firestore';
 
 import { db } from '@/firebaseConfig';
 import { calculateTransits, type MoonData, type TransitData } from '@/src/services/astroEngine';
+import { recordError } from '@/src/services/crashlytics.service';
+
+const reportError = (label: string) => (e: unknown) => {
+  console.error(label, e);
+  recordError(e, label);
+};
 import {
   fetchHoroscope,
   getTodayDateId,
@@ -225,7 +231,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     setLoading(false);
 
     // Pre-generate tomorrow's horoscope so it's ready when the day rolls over.
-    if (chart) rolloverHoroscope(uid, chart, pronouns).catch(console.error);
+    if (chart) rolloverHoroscope(uid, chart, pronouns).catch(reportError('horoscope_rollover'));
 
     const { result, pending } = horoscopeRes;
 
@@ -341,7 +347,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     }
 
     const signal = { cancelled: false };
-    load(authUser.uid, signal).catch(console.error);
+    load(authUser.uid, signal).catch(reportError('horoscope_load'));
 
     return () => {
       signal.cancelled = true;

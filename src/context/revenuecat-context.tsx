@@ -25,6 +25,7 @@ import {
 } from '@/src/services/revenuecat.service';
 import { useUser } from './user-context';
 import { Events } from '@/src/services/analytics.service';
+import { recordError } from '@/src/services/crashlytics.service';
 
 let AsyncStorage: any = null;
 try {
@@ -184,6 +185,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
         }
       } catch (err) {
         console.error('[RevenueCat] syncUser error:', err);
+        recordError(err, 'rc_sync_user');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -211,6 +213,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       setCustomerInfo(info);
     } catch (err) {
       console.error('[RevenueCat] refresh error:', err);
+      recordError(err, 'rc_refresh');
     }
   }, []);
 
@@ -224,6 +227,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       return ok;
     } catch (err) {
       console.error('[RevenueCat] restorePurchases error:', err);
+      recordError(err, 'rc_restore');
       Events.restorePurchases({ success: false });
       return false;
     }
@@ -271,6 +275,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       return await handlePaywallResult(result, 'manual');
     } catch (err) {
       console.error('[RevenueCat] presentPaywall error:', err);
+      recordError(err, 'rc_present_paywall');
       Events.purchaseFailed({ product_id: 'unknown', reason: String((err as any)?.message ?? err) });
       return false;
     }
@@ -289,6 +294,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       return await handlePaywallResult(result, 'gated');
     } catch (err) {
       console.error('[RevenueCat] presentPaywallIfNeeded error:', err);
+      recordError(err, 'rc_present_paywall_if_needed');
       Events.purchaseFailed({ product_id: 'unknown', reason: String((err as any)?.message ?? err) });
       return false;
     }
@@ -305,6 +311,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       await refresh();
     } catch (err) {
       console.error('[RevenueCat] presentCustomerCenter error:', err);
+      recordError(err, 'rc_customer_center');
     }
   }, [refresh]);
 

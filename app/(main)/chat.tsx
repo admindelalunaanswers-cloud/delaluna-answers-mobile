@@ -34,6 +34,7 @@ import { useResponsive } from '@/src/hooks/use-responsive';
 import type { ChatConnectionContext, ChatMessageDoc, SavedChatSession } from '@/src/services/chat.service';
 import { deleteChatSession, resumeChatSession, retryChatMessage, saveChatAndClear, sendChatMessage, subscribeToChatHistory, subscribeToChatSessions } from '@/src/services/chat.service';
 import { Events } from '@/src/services/analytics.service';
+import { recordError } from '@/src/services/crashlytics.service';
 import { buildConnectionContextSummary } from '@/src/services/connection-context.service';
 import { buildNatalChartSummary } from '@/src/services/natal-chart-breakdown.service';
 import { ChatStore } from '@/src/stores/chat-store';
@@ -310,6 +311,7 @@ export default function ChatScreen() {
       Events.chatMessageSent({ length: msg.length });
     } catch (e) {
       console.error('chat send error', e);
+      recordError(e, 'chat_send');
     } finally {
       setIsSending(false);
     }
@@ -331,6 +333,7 @@ export default function ChatScreen() {
       Events.chatRetry();
     } catch (e) {
       console.error('chat retry error', e);
+      recordError(e, 'chat_retry');
     }
   }, [authUser, chartSummary, selectedConnection]);
 

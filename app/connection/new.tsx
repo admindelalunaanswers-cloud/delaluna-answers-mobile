@@ -45,6 +45,7 @@ import { C } from "@/src/constants/theme";
 import { buildCompatibilityPrompt } from "@/src/prompts/compatibility-prompt";
 import { Events } from "@/src/services/analytics.service";
 import { measure } from "@/src/services/performance.service";
+import { recordError } from "@/src/services/crashlytics.service";
 import LoadingScreen from "../(util)/loading-screen";
 
 const NAV_BAR_HEIGHT = 44;
@@ -880,6 +881,7 @@ export default function SingleConnectionCreateScreen() {
       return;
     } catch (err) {
       console.error("Error saving connection:", err);
+      recordError(err, 'connection_create');
       dismissAllSuggestions();
       Keyboard.dismiss();
       Alert.alert("Error", "Something went wrong creating this connection.");
