@@ -44,8 +44,18 @@ export async function registerForPushNotifications(uid: string): Promise<void> {
   const token = await Notifications.getExpoPushTokenAsync({ projectId: EXPO_PROJECT_ID });
   console.log('[push] token:', token.data);
 
-  await setDoc(doc(db, 'users', uid), { expoPushToken: token.data }, { merge: true });
-  console.log('[push] token saved to Firestore');
+  // Capture the device's current UTC offset so the daily-reminder Cloud Function can
+  // send pushes at the user's local time. getTimezoneOffset() returns minutes WEST of
+  // UTC; negate so we store minutes EAST (e.g. EST = -300, IST = +330). Refreshed on
+  // every login so travel and DST shifts are picked up automatically.
+  const timezoneOffsetMinutes = -new Date().getTimezoneOffset();
+
+  await setDoc(
+    doc(db, 'users', uid),
+    { expoPushToken: token.data, timezoneOffsetMinutes },
+    { merge: true },
+  );
+  console.log('[push] token saved to Firestore (offset', timezoneOffsetMinutes, 'min)');
 }
 
 // ─── Unregistration ──────────────────────────────────────────────────────────
