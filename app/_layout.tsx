@@ -85,6 +85,33 @@ function AuthGate() {
     return () => sub.remove();
   }, [authUser?.uid]);
 
+  // Silent rollover push: the dailyHoroscopeNotifications scheduled function
+  // sends a content-available data push at user local midnight. When it
+  // arrives (foreground or briefly-woken background), pre-generate today's
+  // horoscope so it's ready by morning. Best-effort — iOS throttles silent
+  // pushes and may skip delivery if the app is force-killed.
+  useEffect(() => {
+    if (!authUser) return;
+    const sub = Notifications.addNotificationReceivedListener(async notification => {
+      const action = notification.request.content.data?.action;
+      if (action !== 'rollover-horoscope') return;
+      try {
+        const { doc: docRef, getDoc } = await import('firebase/firestore');
+        const { db } = await import('@/firebaseConfig');
+        const { rolloverHoroscope } = await import('@/src/services/horoscope.service');
+
+        const chartSnap = await getDoc(docRef(db, 'users', authUser.uid, 'natalChart', 'details'));
+        if (!chartSnap.exists()) return;
+        const userSnap = await getDoc(docRef(db, 'users', authUser.uid));
+        const pronouns = userSnap.data()?.pronouns ?? 'they/them';
+        await rolloverHoroscope(authUser.uid, chartSnap.data() as any, pronouns);
+      } catch (err) {
+        console.error('[push] rollover-horoscope handler failed:', err);
+      }
+    });
+    return () => sub.remove();
+  }, [authUser?.uid]);
+
   useEffect(() => {
     if (userLoading) return;
 
