@@ -16,7 +16,7 @@ import { useUser } from '@/src/context/user-context';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
-import { signOut, revokeMyRefreshTokens } from '@/src/services/user.service';
+import { signOut } from '@/src/services/user.service';
 import { registerForPushNotifications, unregisterPushToken } from '@/src/services/notifications.service';
 import { getProfileImageSource } from '@/app/(settings)/select-avatar';
 import { auth } from '@/firebaseConfig';
@@ -125,12 +125,18 @@ export default function ProfileScreen() {
         text: 'Log out', style: 'destructive',
         onPress: async () => {
           try {
-            if (authUser?.uid) await unregisterPushToken(authUser.uid);
-            // Revoke server-side before signOut clears the local token,
-            // otherwise the callable would fail unauthenticated.
-            await revokeMyRefreshTokens();
+            // Remove the push token *before* signOut — Firestore writes
+            // require an authenticated user, and we want to stop this device
+            // from receiving notifications meant for the logged-out account.
+            if (authUser?.uid) {
+              await unregisterPushToken(authUser.uid);
+            }
             await signOut();
-          } catch { Alert.alert('Error', 'Could not log out. Please try again.'); }
+            router.replace('/(startup)/welcome');
+          } catch (err) {
+            console.error('[profile] logout failed:', err);
+            Alert.alert('Error', 'Could not log out. Please try again.');
+          }
         },
       },
     ]);
@@ -145,18 +151,20 @@ export default function ProfileScreen() {
         {
           text: 'Delete', style: 'destructive',
           onPress: async () => {
+            const user = auth.currentUser;
+            if (!user) return;
             try {
-              const user = auth.currentUser;
-              if (!user) return;
-              await unregisterPushToken(user.uid);
-              // Revoke first so any tokens already issued to other devices
-              // stop refreshing — deleteUser also kills the user record but
-              // explicit revocation closes the small window before propagation.
-              await revokeMyRefreshTokens();
+              // The `delete-user-data` extension watches Auth deletes and
+              // cleans up Firestore docs, push tokens, and storage on its own.
               await deleteUser(user);
+              router.replace('/(startup)/welcome');
             } catch (err: any) {
+              console.error('[profile] delete failed:', err);
               if (err?.code === 'auth/requires-recent-login') {
-                Alert.alert('Re-authentication required', 'Please log out and log back in before deleting your account.');
+                Alert.alert(
+                  'Re-authentication required',
+                  'For your security, please log out and log back in before deleting your account.',
+                );
               } else {
                 Alert.alert('Error', 'Could not delete account. Please try again.');
               }
