@@ -267,6 +267,10 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
             if (!unsubBreakdownRef.current) {
               subscribeBreakdown(uid, newChart, signal, breakdownFetch, pronouns);
             }
+            // Generate yesterday + tomorrow now that the chart exists.
+            // Without this, new users only ever get today's horoscope until
+            // the next day's rollover.
+            requestSurroundingHoroscopes(uid, dateId, newChart, pronouns).catch(console.error);
           }
         }).catch(console.error);
       });
