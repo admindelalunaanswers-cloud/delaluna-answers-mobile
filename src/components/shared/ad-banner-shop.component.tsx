@@ -18,26 +18,26 @@ import { TitleText } from '@/src/components/typography/title-text';
 import { C, R, S } from '@/src/constants/theme';
 import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
 
-const SHOP_URL = 'https://delalunaanswers.com/shop/';
+const DELALUNA_URL = 'https://www.delalunaanswers.com';
 
 interface AdBannerShopProps {
   title?: string;
   subtitle?: string;
   ctaLabel?: string;
-  /** Override the default shop URL */
+  /** Override the default Delaluna URL */
   url?: string;
   onDismiss?: () => void;
 }
 
 /**
- * Ad banner that links to the Delaluna shop. Delaluna headshot sits in a
+ * Ad banner that links to delalunaanswers.com. Delaluna headshot sits in a
  * circular frame on the left; the whole banner is tappable.
  */
 export default function AdBannerShop({
-  title = 'Visit the Delaluna Shop',
-  subtitle = 'Crystals, candles & cosmic tools.',
-  ctaLabel = 'Shop Now',
-  url = SHOP_URL,
+  title = 'DELALUNA — TAROT READER',
+  subtitle = 'What your situation is revealing...',
+  ctaLabel = 'Talk to Me',
+  url = DELALUNA_URL,
   onDismiss,
 }: AdBannerShopProps) {
   const slideY = useRef(new Animated.Value(80)).current;
