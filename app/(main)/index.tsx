@@ -153,8 +153,9 @@ export default function HomeScreen() {
   const risingSign = chartDetails?.ascendant.sign ?? '—';
 
   const activeMoonData = moonByDate[selectedDate];
-  const noRetrogradesLabel = "No planets currently in retrograde";
-  const retrogrades = (activeHoroscope?.planetsRetrograde ?? []).filter(p => p.toLowerCase() !== 'none' || noRetrogradesLabel);
+  const noRetrogradesLabel = "No planets in retrograde";
+  const filteredRetrogrades = (activeHoroscope?.planetsRetrograde ?? []).filter(p => p.toLowerCase() !== 'none');
+  const retrogrades = filteredRetrogrades.length > 0 ? filteredRetrogrades : [noRetrogradesLabel];
 
   const scrollRef = useRef<ScrollView>(null);
   const dateSwitcherDates = Object.keys(cardDraw).sort();
@@ -283,11 +284,10 @@ export default function HomeScreen() {
           <SectionTitle sectionName="warning" title="Warning" />
           <HomeTextBox sectionName="warning" content={activeHoroscope?.warning} />
         </ScrollView>
-        {(() => {
-          // Premium users only see the shop ad; free users get a 3-way rotation.
-          const variant = hasPremiumAccess ? 'shop' : adVariant;
-          if (variant === 'shop') return <AdBannerShop />;
-          if (variant === 'upgrade-full') {
+        {!hasPremiumAccess && (() => {
+          // Free users get a 3-way rotation; premium + trial see nothing.
+          if (adVariant === 'shop') return <AdBannerShop />;
+          if (adVariant === 'upgrade-full') {
             return (
               <AdBannerFull
                 icon="sparkles"

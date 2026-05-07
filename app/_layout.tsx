@@ -1,6 +1,6 @@
-import { type ReactNode, useEffect } from 'react';
+import { type ReactNode, useEffect, useRef } from 'react';
 
-import { Image, ImageBackground, View } from 'react-native';
+import { AppState, type AppStateStatus, Image, ImageBackground, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
 
@@ -71,16 +71,48 @@ function AuthGate() {
       .catch(console.error);
   }, [authUser?.uid]);
 
-  // Navigate to the correct screen when a notification is tapped
+  // Navigate to the correct screen when a notification is tapped.
+  // Server pushes that target a dynamic route (e.g. `/connection/[id]`) include
+  // a `connectionId` data field that we substitute into the path here.
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener(response => {
-      const screen = response.notification.request.content.data?.screen;
-      if (screen && authUser) {
-        if (String(screen).includes('chat')) {
-          require('@/src/stores/chat-store').ChatStore.setFromNotification(true);
-        }
-        router.push(screen as any);
+      const data = response.notification.request.content.data ?? {};
+      const screen = data.screen;
+      if (!screen || !authUser) return;
+      let path = String(screen);
+      if (data.connectionId) path = path.replace('[id]', String(data.connectionId));
+      if (path.includes('chat')) {
+        require('@/src/stores/chat-store').ChatStore.setFromNotification(true);
       }
+      router.push(path as any);
+    });
+    return () => sub.remove();
+  }, [authUser?.uid]);
+
+  // Track app foreground/background transitions on the user doc so the
+  // chat-reply push trigger can skip notifying users who are already in the
+  // app. Resolution is rough (within ~1s of state change is fine).
+  const lastActiveWriteRef = useRef(0);
+  useEffect(() => {
+    if (!authUser) return;
+    const writeActive = async () => {
+      const now = Date.now();
+      // Throttle writes to once every 5s — AppState fires often on iOS.
+      if (now - lastActiveWriteRef.current < 5_000) return;
+      lastActiveWriteRef.current = now;
+      try {
+        const { doc: docRef, updateDoc, serverTimestamp } = await import('firebase/firestore');
+        const { db } = await import('@/firebaseConfig');
+        await updateDoc(docRef(db, 'users', authUser.uid), {
+          lastActiveAt: serverTimestamp(),
+        });
+      } catch {
+        // Best-effort; doc may not exist yet during sign-up flow.
+      }
+    };
+    writeActive();
+    const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (state === 'active') writeActive();
     });
     return () => sub.remove();
   }, [authUser?.uid]);
@@ -139,13 +171,10 @@ function AuthGate() {
     }
   }, [shouldHoldRender]);
 
-  if (shouldHoldRender) {
-    return <SplashFallback />;
-  }
-
   return (
     <ThemedRoot>
       <Slot />
+      {shouldHoldRender ? <SplashFallback /> : null}
     </ThemedRoot>
   );
 }
@@ -155,7 +184,20 @@ function AuthGate() {
 // native splash dismissing and the first route painting.
 function SplashFallback() {
   return (
-    <View style={{ flex: 1, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center' }}>
+    <View
+      pointerEvents="auto"
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: '#ffffff',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+      }}
+    >
       <Image
         source={require('@/src/assets/dlla-branded/delaluna_app_icon.png')}
         style={{ width: 200, height: 200 }}
