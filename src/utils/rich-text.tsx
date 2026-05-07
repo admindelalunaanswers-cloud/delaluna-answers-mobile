@@ -1,9 +1,10 @@
 /**
  * rich-text.tsx
  * Shared helpers for rendering AI-generated copy. The model occasionally
- * returns markdown-style bold (`**word**`) and section titles
- * (`**Reality Check:**`). We strip the title-style runs but preserve inline
- * `**word**` as bold text spans so emphasis survives in the UI.
+ * returns markdown-style bold (`**word**`), italic (`*word*`), and section
+ * titles (`**Reality Check:**`). We strip the title-style runs but preserve
+ * inline `**word**` / `*word*` as bold/italic text spans so emphasis
+ * survives in the UI.
  *
  * Used across every screen that displays an AI response (chat, horoscope,
  * natal chart breakdown, transit reading, connection / synastry copy).
@@ -21,23 +22,32 @@ export function cleanResponse(text: string): string {
 }
 
 /**
- * Render text, turning `**word**` into bold Text spans.
+ * Render text, turning `**word**` into bold and `*word*` into italic Text spans.
  * The result can be rendered as the children of a single <Text>, e.g.
  *   <Text style={styles.body}>{renderRichText(value)}</Text>
  */
 export function renderRichText(
   text: string | null | undefined,
   boldStyle: TextStyle = richTextStyles.bold,
+  italicStyle: TextStyle = richTextStyles.italic,
 ): React.ReactNode[] {
   if (!text) return [];
   const cleaned = cleanResponse(text);
-  const parts = cleaned.split(/(\*\*[^*]+\*\*)/g);
+  const parts = cleaned.split(/(\*\*[^*]+\*\*|\*[^*\n]+\*)/g);
   return parts.map((part, i) => {
-    const m = part.match(/^\*\*([^*]+)\*\*$/);
-    if (m) {
+    const bold = part.match(/^\*\*([^*]+)\*\*$/);
+    if (bold) {
       return (
         <Text key={i} style={boldStyle}>
-          {m[1]}
+          {bold[1]}
+        </Text>
+      );
+    }
+    const italic = part.match(/^\*([^*\n]+)\*$/);
+    if (italic) {
+      return (
+        <Text key={i} style={italicStyle}>
+          {italic[1]}
         </Text>
       );
     }
@@ -47,4 +57,5 @@ export function renderRichText(
 
 export const richTextStyles = StyleSheet.create({
   bold: { fontWeight: '700' },
+  italic: { fontStyle: 'italic' },
 });
