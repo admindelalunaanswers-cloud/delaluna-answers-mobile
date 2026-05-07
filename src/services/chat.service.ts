@@ -117,15 +117,14 @@ export async function sendChatMessage(
   natalChartSummary?: string,
   connection?: ChatConnectionContext,
 ): Promise<void> {
-  const sections: string[] = [`[SYSTEM]\n${SYSTEM_CONTEXT}`];
-  if (connection) {
-    sections.push(`[CONNECTION: ${connection.name}]\n${connection.contextSummary}`);
-  }
+  let prompt = SYSTEM_CONTEXT;
   if (natalChartSummary) {
-    sections.push(`[NATAL CHART]\n${natalChartSummary}`);
+    prompt += `\n\nThe user's natal chart for personalized answers:\n${natalChartSummary}`;
   }
-  sections.push(`[QUESTION]\n${userMessage}`);
-  const prompt = sections.join('\n\n');
+  if (connection) {
+    prompt += `\n\nContext on the person they're asking about — ${connection.name}:\n${connection.contextSummary}`;
+  }
+  prompt += `\n\nUser: ${userMessage}`;
 
   const payload: Record<string, any> = {
     userMessage,
