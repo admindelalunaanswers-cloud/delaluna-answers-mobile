@@ -397,19 +397,26 @@ export const clearDailyChatHistory = onSchedule('every day 00:00', async () => {
 
 });
 
-/**
- * Hour at which to send each user the visible morning notification, in their
- * local time (24h). 8 = 8:00 AM local.
- */
-const MORNING_PUSH_LOCAL_HOUR = 8;
-
-/**
- * Hour at which to send the silent rollover trigger, in user local time.
- * 0 = midnight local. The client treats this as a hint to regenerate today's
- * horoscope so a fresh reading is ready by morning. Best-effort: silent
- * pushes are throttled by iOS and won't fire if the app is force-killed.
- */
+// Silent midnight rollover hour in user local time. The client treats this as
+// a hint to regenerate today's horoscope so a fresh reading is ready by morning.
+// Best-effort: silent pushes are throttled by iOS and won't fire if the app is
+// force-killed.
 const ROLLOVER_PUSH_LOCAL_HOUR = 0;
+
+// Each user is assigned a stable per-UID hour in [HOUR_BASE, HOUR_BASE + HOUR_SPAN)
+// so we don't blast every user at exactly 8:00 AM (Expo throttles, and we'd also
+// burst Google AI generation if the rollover/horoscope generation kicks in).
+const HOUR_BASE = 6;   // earliest local hour
+const HOUR_SPAN = 5;   // 6,7,8,9,10
+const SUNDAY = 0;      // Date.getUTCDay()
+
+// Premium entitlement id used by RevenueCat (must match the entitlement
+// configured in the RC dashboard and used by useRevenueCat().isPro).
+const PREMIUM_ENTITLEMENT_ID = 'Delaluna Answers Pro';
+
+// Skip chat-reply pushes if the user was active in the last 30s — they're
+// almost certainly looking at the chat screen and don't need a notification.
+const CHAT_FOREGROUND_GRACE_MS = 30_000;
 
 /**
  * Returns the user's current local hour (0-23) given a UTC offset in minutes.
@@ -418,73 +425,119 @@ const ROLLOVER_PUSH_LOCAL_HOUR = 0;
 function localHourFromOffset(nowUtc: Date, offsetMinutes: unknown): number | null {
   if (typeof offsetMinutes !== 'number' || !Number.isFinite(offsetMinutes)) return null;
   const localMinutes = nowUtc.getUTCHours() * 60 + nowUtc.getUTCMinutes() + offsetMinutes;
-  // Wrap into [0, 1440) and floor to the hour
   const wrapped = ((localMinutes % 1440) + 1440) % 1440;
   return Math.floor(wrapped / 60);
 }
 
 /**
- * Runs every hour. For each user with a push token + saved timezone offset:
- *  - At local midnight: sends a SILENT data-only push asking the client to
- *    pre-generate today's horoscope so it's ready by morning.
- *  - At local 8 AM: sends the visible "your daily reading" push.
- *
- * Replaces the old fixed 08:00 UTC schedule which fired at 3-4 AM ET / 1 AM PT.
+ * Returns the user's current local day-of-week (0=Sunday … 6=Saturday) given
+ * a UTC offset in minutes. Returns null if the offset is missing or invalid.
  */
-export const dailyHoroscopeNotifications = onSchedule('every 1 hours', async () => {
-  const snap = await db.collection('users')
-    .where('expoPushToken', '!=', null)
+function localDayOfWeek(nowUtc: Date, offsetMinutes: unknown): number | null {
+  if (typeof offsetMinutes !== 'number' || !Number.isFinite(offsetMinutes)) return null;
+  const localMs = nowUtc.getTime() + offsetMinutes * 60 * 1000;
+  return new Date(localMs).getUTCDay();
+}
+
+/**
+ * Stable FNV-1a hash of `uid + salt` used to spread per-user push timing
+ * across the HOUR_SPAN window. Same uid always maps to the same hour, so
+ * a given user gets their daily horoscope at the same local time every day.
+ */
+function hashUid(uid: string, salt = ''): number {
+  let h = 2166136261;
+  const s = uid + salt;
+  for (let i = 0; i < s.length; i++) {
+    h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  }
+  return h >>> 0;
+}
+
+function jitterHour(uid: string, salt: string): number {
+  return HOUR_BASE + (hashUid(uid, salt) % HOUR_SPAN);
+}
+
+/**
+ * Server-side premium check. Reads the RevenueCat extension's purchaser-info
+ * mirror and returns true if the user has the active "Delaluna Answers Pro"
+ * entitlement. Returns false on any error so we never push premium content
+ * to non-premium users by mistake.
+ */
+async function isUserPremium(uid: string): Promise<boolean> {
+  try {
+    const snap = await db.doc(`subscriptions/purchaser-info/customers/${uid}`).get();
+    const data = snap.data();
+    const ent = data?.subscriber?.entitlements?.[PREMIUM_ENTITLEMENT_ID]
+      ?? data?.entitlements?.[PREMIUM_ENTITLEMENT_ID];
+    if (!ent) return false;
+    const expires = ent.expires_date ?? ent.expiresDate;
+    if (!expires) return true; // lifetime / non-subscription purchase
+    return new Date(expires).getTime() > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Enqueues a push to be delivered at or after `sendAfter`. Picked up by the
+ * hourly job (drainScheduledPushes). Resolution is roughly 1 hour — a push
+ * scheduled for 1:23 PM local will go out at the next hourly tick after that.
+ */
+async function enqueueDelayedPush(
+  userId: string,
+  sendAfter: Date,
+  payload: PushPayload,
+): Promise<void> {
+  await db.collection('scheduledPushes').add({
+    userId,
+    sendAfter: Timestamp.fromDate(sendAfter),
+    payload,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+}
+
+/**
+ * Sends any due `scheduledPushes` and deletes them. Resolves the user's
+ * current Expo push token at send time so a token rotation between enqueue
+ * and send still delivers. Returns the count sent (for logging).
+ */
+async function drainScheduledPushes(now: Date): Promise<number> {
+  const due = await db.collection('scheduledPushes')
+    .where('sendAfter', '<=', Timestamp.fromDate(now))
+    .limit(500)
     .get();
 
-  if (snap.empty) return;
+  if (due.empty) return 0;
 
-  const now = new Date();
-  const morningMessages: ExpoPushMessage[] = [];
-  const rolloverMessages: ExpoPushMessage[] = [];
-  const seenTokens = new Set<string>();
+  const messages: ExpoPushMessage[] = [];
+  const docsToDelete: FirebaseFirestore.DocumentReference[] = [];
 
-  for (const userDoc of snap.docs) {
-    const data = userDoc.data();
-    const token = data.expoPushToken as string | undefined;
-    if (!token || seenTokens.has(token)) continue;
+  for (const doc of due.docs) {
+    const { userId, payload } = doc.data() as {
+      userId: string;
+      payload: PushPayload;
+    };
+    docsToDelete.push(doc.ref);
+    if (!userId || !payload) continue;
 
-    const localHour = localHourFromOffset(now, data.timezoneOffsetMinutes);
-    if (localHour === null) continue;
+    const userSnap = await db.collection('users').doc(userId).get();
+    const token = userSnap.data()?.expoPushToken as string | undefined;
+    if (!token) continue;
 
-    if (localHour === MORNING_PUSH_LOCAL_HOUR) {
-      seenTokens.add(token);
-      morningMessages.push({
-        to: token,
-        sound: 'default' as const,
-        title: '🌙 Your Daily Reading',
-        body: 'Your horoscope and cards for today are ready.',
-        channelId: 'default',
-        data: { screen: '/(main)' },
-        priority: 'high',
-        _contentAvailable: true,
-      });
-    } else if (localHour === ROLLOVER_PUSH_LOCAL_HOUR) {
-      seenTokens.add(token);
-      // Silent push — no title/body, content-available so iOS wakes the app
-      // briefly. The client listens for data.action === 'rollover-horoscope'.
-      rolloverMessages.push({
-        to: token,
-        sound: 'default' as const,
-        title: '',
-        body: '',
-        channelId: 'default',
-        data: { action: 'rollover-horoscope' },
-        priority: 'high',
-        _contentAvailable: true,
-      });
-    }
+    messages.push({
+      to: token,
+      sound: 'default',
+      title: payload.title,
+      body: payload.body,
+      channelId: 'default',
+      data: payload.data ?? {},
+      priority: 'high',
+      _contentAvailable: true,
+    });
   }
 
-  const allMessages = [...morningMessages, ...rolloverMessages];
-  if (allMessages.length === 0) return;
-
-  for (let i = 0; i < allMessages.length; i += PUSH_CHUNK_SIZE) {
-    const chunk = allMessages.slice(i, i + PUSH_CHUNK_SIZE);
+  for (let i = 0; i < messages.length; i += PUSH_CHUNK_SIZE) {
+    const chunk = messages.slice(i, i + PUSH_CHUNK_SIZE);
     await fetch(EXPO_PUSH_URL, {
       method: 'POST',
       headers: {
@@ -495,9 +548,136 @@ export const dailyHoroscopeNotifications = onSchedule('every 1 hours', async () 
     });
   }
 
+  // Always delete drained queue docs (even if push failed) so we don't loop
+  // forever on a permanently-bad token.
+  const BATCH = 500;
+  for (let i = 0; i < docsToDelete.length; i += BATCH) {
+    const batch = db.batch();
+    docsToDelete.slice(i, i + BATCH).forEach(r => batch.delete(r));
+    await batch.commit();
+  }
+
+  return messages.length;
+}
+
+/**
+ * Runs every hour. For each user with a push token + saved timezone offset,
+ * decides which (if any) of these notifications to send based on the user's
+ * own stable per-UID jitter hour:
+ *
+ *  - Local midnight (rollover): silent data-only push so the client can
+ *    pre-generate today's horoscope before morning.
+ *  - Local horoscope hour (6-10 AM): visible daily horoscope reminder.
+ *  - Sunday at local transits hour (6-10 AM): weekly transits reminder.
+ *  - Sunday at local connections hour (6-10 AM): weekly connection updates,
+ *    Premium users with at least one connection only.
+ *
+ * Also drains the scheduledPushes queue (used by the connection-report flow
+ * to randomize delivery into the afternoon).
+ */
+export const dailyHoroscopeNotifications = onSchedule('every 1 hours', async () => {
+  const now = new Date();
+  const messages: ExpoPushMessage[] = [];
+
+  const snap = await db.collection('users')
+    .where('expoPushToken', '!=', null)
+    .get();
+
+  for (const userDoc of snap.docs) {
+    const data = userDoc.data();
+    const uid = userDoc.id;
+    const token = data.expoPushToken as string | undefined;
+    if (!token) continue;
+
+    const offset = data.timezoneOffsetMinutes;
+    const localHour = localHourFromOffset(now, offset);
+    const localDay = localDayOfWeek(now, offset);
+    if (localHour === null || localDay === null) continue;
+
+    // Silent rollover at local midnight (regardless of weekday).
+    if (localHour === ROLLOVER_PUSH_LOCAL_HOUR) {
+      messages.push({
+        to: token,
+        sound: 'default',
+        title: '',
+        body: '',
+        channelId: 'default',
+        data: { action: 'rollover-horoscope' },
+        priority: 'high',
+        _contentAvailable: true,
+      });
+      continue;
+    }
+
+    const horoHour = jitterHour(uid, 'horoscope');
+    const txHour = jitterHour(uid, 'transits');
+    const cxHour = jitterHour(uid, 'connections');
+
+    if (localHour === horoHour) {
+      messages.push({
+        to: token,
+        sound: 'default',
+        title: '🌙 Your Daily Reading',
+        body: 'Your horoscope and cards for today are ready.',
+        channelId: 'default',
+        data: { screen: '/(main)' },
+        priority: 'high',
+        _contentAvailable: true,
+      });
+    }
+
+    if (localDay === SUNDAY && localHour === txHour) {
+      messages.push({
+        to: token,
+        sound: 'default',
+        title: '✨ This Week in the Stars',
+        body: 'Your fresh weekly transits just dropped. Tap to see what the week has in store.',
+        channelId: 'default',
+        data: { screen: '/(main)/transits' },
+        priority: 'high',
+        _contentAvailable: true,
+      });
+    }
+
+    if (localDay === SUNDAY && localHour === cxHour) {
+      // Premium-gated and only relevant if the user actually has connections.
+      const [premium, cxSnap] = await Promise.all([
+        isUserPremium(uid),
+        userDoc.ref.collection('connections').limit(1).get(),
+      ]);
+      if (premium && !cxSnap.empty) {
+        messages.push({
+          to: token,
+          sound: 'default',
+          title: '💞 Weekly Connection Update',
+          body: 'New transits for your connections are ready. See what shifted this week.',
+          channelId: 'default',
+          data: { screen: '/(main)/connections' },
+          priority: 'high',
+          _contentAvailable: true,
+        });
+      }
+    }
+  }
+
+  // Send the timing-based pushes.
+  for (let i = 0; i < messages.length; i += PUSH_CHUNK_SIZE) {
+    const chunk = messages.slice(i, i + PUSH_CHUNK_SIZE);
+    await fetch(EXPO_PUSH_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(chunk),
+    });
+  }
+
+  // Drain any due delayed pushes (connection-report afternoon randomization, etc).
+  const drained = await drainScheduledPushes(now);
+
   console.info(
-    `[dailyHoroscopeNotifications] sent ${morningMessages.length} morning + ` +
-    `${rolloverMessages.length} rollover pushes`,
+    `[dailyHoroscopeNotifications] sent ${messages.length} timed + ${drained} drained pushes`,
   );
 });
 
@@ -739,7 +919,9 @@ export const notifyBreakdownReady = onDocumentUpdated(
 /**
  * When the Firebase Extension writes a `response` to a chat message doc,
  * send a push notification so the user sees the reply even if the app is
- * backgrounded or killed.
+ * backgrounded or killed. Skipped if the user is still foregrounded
+ * (lastActiveAt within CHAT_FOREGROUND_GRACE_MS) — they're presumably
+ * staring at the chat screen and the in-app live update is enough.
  */
 export const notifyChatReply = onDocumentUpdated(
   'users/{userId}/updayedChat/{messageId}',
@@ -748,21 +930,17 @@ export const notifyChatReply = onDocumentUpdated(
     const after = event.data?.after?.data();
     const userId = event.params.userId;
 
-    console.log(`[notifyChatReply] Triggered for user ${userId}`);
-
-    if (!after?.response) {
-      console.log(`[notifyChatReply] Skip — no response field on doc`);
-      return;
-    }
-    if (before?.response === after.response) {
-      console.log(`[notifyChatReply] Skip — response unchanged`);
-      return;
-    }
+    if (!after?.response) return;
+    if (before?.response === after.response) return;
 
     const userSnap = await db.collection('users').doc(userId).get();
-    const token = userSnap.data()?.expoPushToken as string | undefined;
-    if (!token) {
-      console.log(`[notifyChatReply] Skip — user ${userId} has no expoPushToken`);
+    const userData = userSnap.data();
+    const token = userData?.expoPushToken as string | undefined;
+    if (!token) return;
+
+    const lastActiveAt = userData?.lastActiveAt as Timestamp | undefined;
+    if (lastActiveAt && Date.now() - lastActiveAt.toMillis() < CHAT_FOREGROUND_GRACE_MS) {
+      console.info(`[notifyChatReply] Skip — user ${userId} foregrounded`);
       return;
     }
 
@@ -774,8 +952,43 @@ export const notifyChatReply = onDocumentUpdated(
   }
 );
 
+// ─── notifySynastryReady ─────────────────────────────────────────────────────
+
+/**
+ * Push when the synastry reading extension writes back its `response` field.
+ * Synastry is birthchart-based and never regenerates on the weekly schedule —
+ * this fires once per (re)generation only.
+ */
+export const notifySynastryReady = onDocumentUpdated(
+  'users/{userId}/connections/{connectionId}/synastryReading/{docId}',
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    const { userId, connectionId } = event.params;
+
+    if (!after?.response) return;
+    if (before?.response === after.response) return;
+
+    const userSnap = await db.collection('users').doc(userId).get();
+    const token = userSnap.data()?.expoPushToken as string | undefined;
+    if (!token) return;
+
+    await sendExpoPush(userId, token, {
+      title: 'Synastry Reading Ready',
+      body: 'Your relationship breakdown is in. Tap to see how your charts compare.',
+      data: { screen: '/connection/[id]/synastry', connectionId },
+    }, 'notifySynastryReady');
+  }
+);
+
 // ─── parseConnectionCompatibility ────────────────────────────────────────────
 
+/**
+ * Parses the AI compatibility response into the parent connection doc and
+ * enqueues a randomly-timed afternoon push (12-5 PM user local) so the user
+ * gets notified some time later in the day rather than the moment generation
+ * completes — feels less like a system notification, more like a check-in.
+ */
 export const parseConnectionCompatibility = onDocumentUpdated(
   'users/{userId}/connections/{connectionId}/report/{reportId}',
   async (event) => {
@@ -790,6 +1003,7 @@ export const parseConnectionCompatibility = onDocumentUpdated(
       .collection('users').doc(userId)
       .collection('connections').doc(connectionId);
 
+    let parseOk = false;
     try {
       const raw = after.response as string;
       const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
@@ -799,11 +1013,111 @@ export const parseConnectionCompatibility = onDocumentUpdated(
         compatibility: parsed,
         'status.state': 'complete',
       });
+      parseOk = true;
     } catch (err) {
       console.error('[parseConnectionCompatibility] Parse error:', err);
       await connectionRef.update({
         'status.state': 'error',
       });
     }
+
+    if (!parseOk) return;
+
+    // Compute a random afternoon (12-5 PM) hour in the user's local timezone
+    // and enqueue a delayed push. The hourly drain delivers it on the next
+    // tick at-or-after the chosen time.
+    const userSnap = await db.collection('users').doc(userId).get();
+    const userData = userSnap.data();
+    const offset = userData?.timezoneOffsetMinutes;
+    if (typeof offset !== 'number' || !Number.isFinite(offset)) {
+      // No timezone — send immediately so they at least find out.
+      const token = userData?.expoPushToken as string | undefined;
+      if (token) {
+        await sendExpoPush(userId, token, {
+          title: 'Connection Report Ready',
+          body: 'Your new compatibility report just dropped. Tap to read.',
+          data: { screen: '/connection/[id]', connectionId },
+        }, 'parseConnectionCompatibility');
+      }
+      return;
+    }
+
+    const now = new Date();
+    const localMs = now.getTime() + offset * 60 * 1000;
+    const local = new Date(localMs);
+    const localHour = local.getUTCHours();
+
+    // Random hour 12,13,14,15,16; random minute 0-59.
+    const targetHour = 12 + (hashUid(`${userId}:${connectionId}:${now.getUTCDate()}`) % 5);
+    const targetMin = hashUid(`${userId}:${connectionId}:min:${now.getUTCDate()}`) % 60;
+
+    // Build the target moment in user-local terms, then convert back to UTC.
+    const localTarget = new Date(local);
+    localTarget.setUTCHours(targetHour, targetMin, 0, 0);
+    if (localHour >= 17) {
+      // Already past the afternoon window — push tomorrow afternoon.
+      localTarget.setUTCDate(localTarget.getUTCDate() + 1);
+    }
+    const sendAfter = new Date(localTarget.getTime() - offset * 60 * 1000);
+
+    await enqueueDelayedPush(userId, sendAfter, {
+      title: 'Connection Report Ready',
+      body: 'Your new compatibility report just dropped. Tap to read.',
+      data: { screen: '/connection/[id]', connectionId },
+    });
   }
 );
+
+// ─── weeklyCleanup ───────────────────────────────────────────────────────────
+
+/**
+ * Runs every Sunday at 06:00 UTC (before any user's local Sunday-morning
+ * push window opens). Prunes:
+ *   - Transit docs older than 7 days (`users/{uid}/transits/{dateId}`)
+ *   - Horoscope docs outside the latest 3 days per user
+ *
+ * Synastry readings are NOT cleaned up — they're birth-chart-based and never
+ * stale. Connection report docs use a single `details` doc that overwrites
+ * itself on regeneration, so no cleanup is needed there either.
+ */
+export const weeklyCleanup = onSchedule('every sunday 06:00', async () => {
+  const now = Date.now();
+  const transitCutoff = Timestamp.fromMillis(now - 7 * 24 * 60 * 60 * 1000);
+  const horoscopeCutoff = Timestamp.fromMillis(now - 3 * 24 * 60 * 60 * 1000);
+
+  let transitDeleted = 0;
+  let horoscopeDeleted = 0;
+
+  // Transits — collectionGroup query, delete by createTime older than cutoff.
+  const oldTransits = await db.collectionGroup('transits')
+    .where('createTime', '<', transitCutoff)
+    .get();
+  if (!oldTransits.empty) {
+    const BATCH = 500;
+    for (let i = 0; i < oldTransits.docs.length; i += BATCH) {
+      const batch = db.batch();
+      oldTransits.docs.slice(i, i + BATCH).forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+    transitDeleted = oldTransits.docs.length;
+  }
+
+  // Horoscopes — keep only docs from the last 3 days. The horoscope extension
+  // orders by `createDate` so we use that field.
+  const oldHoroscopes = await db.collectionGroup('horoscope')
+    .where('createDate', '<', horoscopeCutoff)
+    .get();
+  if (!oldHoroscopes.empty) {
+    const BATCH = 500;
+    for (let i = 0; i < oldHoroscopes.docs.length; i += BATCH) {
+      const batch = db.batch();
+      oldHoroscopes.docs.slice(i, i + BATCH).forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+    horoscopeDeleted = oldHoroscopes.docs.length;
+  }
+
+  console.info(
+    `[weeklyCleanup] deleted ${transitDeleted} transit + ${horoscopeDeleted} horoscope docs`,
+  );
+});
