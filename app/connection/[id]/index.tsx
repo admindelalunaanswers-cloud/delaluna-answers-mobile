@@ -399,6 +399,31 @@ export default function ConnectionViewScreen() {
     );
   }
 
+  // While the compatibility report is still being generated (or the connection
+  // doc hasn't arrived yet), render the same centered pending UI that the
+  // "New Connection" screen uses. This avoids a visual jump between the two
+  // loading screens when the user lands here right after creating a connection.
+  if (!report && connection?.status?.state !== "error") {
+    return (
+      <View style={styles.wrapper}>
+        <HeaderNav
+          title="Compatibility"
+          leftIconName="arrow-back"
+          onLeftPress={() => router.replace("/(main)/connections")}
+        />
+        <View style={[styles.pendingFullScreen, { marginTop: headerHeight }]}>
+          <LottieView
+            source={require("@/src/assets/animations/galaxy.json")}
+            autoPlay
+            loop
+            style={styles.pendingAnimation}
+          />
+          <Text style={styles.pendingText}>{statusLabel}</Text>
+        </View>
+      </View>
+    );
+  }
+
   // ─── Main view ──────────────────────────────────────────────────────────────
 
   return (
@@ -616,6 +641,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: verticalScale(10),
     paddingVertical: verticalScale(24),
+  },
+  pendingFullScreen: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: verticalScale(10),
+    paddingVertical: verticalScale(24),
+    paddingHorizontal: scale(24),
   },
   pendingAnimation: {
     width: moderateScale(220),

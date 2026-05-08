@@ -32,6 +32,7 @@ module.exports = {
       googleServicesFile: "./google-services.json",
     },
     plugins: [
+      "./plugins/with-adi-registration",
       "expo-router",
       "@react-native-firebase/app",
       "@react-native-firebase/perf",
