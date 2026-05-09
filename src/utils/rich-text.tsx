@@ -17,7 +17,8 @@ import { StyleSheet, Text, type TextStyle } from 'react-native';
 export function cleanResponse(text: string): string {
   return text
     .replace(/\*\*[^*]+:\*\*\s*/g, '')
-    .replace(/^ +/gm, '')
+    .replace(/^[ \t]*\*[ \t]+/gm, '• ')
+    .replace(/^[ \t]+/gm, '')
     .trim();
 }
 
