@@ -78,3 +78,4 @@ docs/firebase-monitoring-overview.md
 docs/TESTING_GUIDE.md
 .gitignore
 .gitignore
+src/assets/android-asset/assets/adi-registration.properties

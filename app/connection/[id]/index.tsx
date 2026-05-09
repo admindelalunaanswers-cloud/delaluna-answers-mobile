@@ -33,6 +33,7 @@ import { ChatStore } from "@/src/stores/chat-store";
 import { NavigationStore } from "@/src/stores/navigation-store";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { renderRichText } from "@/src/utils/rich-text";
+import { ThemedView } from "@/src/components/themed-view";
 
 const NAV_BAR_HEIGHT = 44;
 const BAR_MAX_WIDTH = Dimensions.get("window").width - scale(18) * 2;
@@ -382,20 +383,18 @@ export default function ConnectionViewScreen() {
 
   // ─── Loading / Error states ─────────────────────────────────────────────────
 
-  
-
   if (error) {
     return (
-      <View style={styles.wrapper}>
+      <ThemedView style={styles.wrapper}>
         <HeaderNav
           title="Compatibility"
           leftIconName="arrow-back"
           onLeftPress={() => router.replace("/(main)/connections")}
         />
-        <View style={[styles.centered, { marginTop: headerHeight }]}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      </View>
+        <ThemedView style={[styles.centered, { marginTop: headerHeight }]}>
+          <ThemedText style={styles.errorText}>{error}</ThemedText>
+        </ThemedView>
+      </ThemedView>
     );
   }
 
@@ -403,24 +402,24 @@ export default function ConnectionViewScreen() {
   // doc hasn't arrived yet), render the same centered pending UI that the
   // "New Connection" screen uses. This avoids a visual jump between the two
   // loading screens when the user lands here right after creating a connection.
-  if (!report && connection?.status?.state !== "error") {
+  if (report && connection?.status?.state !== "error") {
     return (
-      <View style={styles.wrapper}>
-        <HeaderNav
-          title="Compatibility"
-          leftIconName="arrow-back"
-          onLeftPress={() => router.replace("/(main)/connections")}
-        />
-        <View style={[styles.pendingFullScreen, { marginTop: headerHeight }]}>
+      <ThemedView style={styles.wrapper}>
+         <Text style={styles.namesText}>{firstName} & {secondName}</Text>
+          {connection?.relationshipType && (
+            <Text style={styles.relationshipBadge}> STATUS: {connection.relationshipType.toUpperCase()}
+            </Text>
+          )}
+        <ThemedView style={styles.pendingFullScreen}>
           <LottieView
             source={require("@/src/assets/animations/galaxy.json")}
             autoPlay
             loop
             style={styles.pendingAnimation}
           />
-          <Text style={styles.pendingText}>{statusLabel}</Text>
-        </View>
-      </View>
+          <ThemedText style={styles.pendingText}>{statusLabel}</ThemedText>
+        </ThemedView>
+      </ThemedView>
     );
   }
 
@@ -449,10 +448,6 @@ export default function ConnectionViewScreen() {
             <Text style={styles.relationshipBadge}> STATUS: {connection.relationshipType.toUpperCase()}
             </Text>
           )}
-
-          
-
-          
 
           {/* Score bars — only render once the report exists */}
           {connection?.status?.state === "error" && !report ? (
@@ -651,8 +646,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(24),
   },
   pendingAnimation: {
-    width: moderateScale(220),
-    height: moderateScale(220),
+    width: "100%",
+    height: "100%",
   },
   pendingText: {
     color: "rgba(255,255,255,0.75)",
