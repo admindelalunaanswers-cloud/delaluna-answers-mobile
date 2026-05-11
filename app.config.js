@@ -28,7 +28,7 @@ module.exports = {
         backgroundImage: "./src/assets/images/android-icon-background.png",
         monochromeImage: "./src/assets/images/android-icon-monochrome.png",
       },
-      package: "com.app.delaluna.answers",
+      package: "com.mobile.delaluna.answers",
       googleServicesFile: "./google-services.json",
     },
     plugins: [
