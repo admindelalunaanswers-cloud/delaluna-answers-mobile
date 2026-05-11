@@ -879,7 +879,16 @@ export default function SingleConnectionCreateScreen() {
 
       Events.connectionCreated();
 
-      router.replace({ pathname: "/connection/[id]", params: { id: result.data.connectionId } });
+      router.replace({
+        pathname: "/connection/[id]",
+        params: {
+          id: result.data.connectionId,
+          firstFirst: enrichedFirst["First Name"] ?? "",
+          firstLast: enrichedFirst["Last Name"] ?? "",
+          secondFirst: enrichedSecond["First Name"] ?? "",
+          secondLast: enrichedSecond["Last Name"] ?? "",
+        },
+      });
       return;
     } catch (err) {
       console.error("Error saving connection:", err);

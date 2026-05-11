@@ -1,7 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { doc, onSnapshot, updateDoc } from "firebase/firestore";
-import LottieView from "lottie-react-native";
 import React, { useEffect, useState } from "react";
 import {
   Dimensions,
@@ -22,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { db } from "@/firebaseConfig";
 import ConsumablePlaceholder from "@/src/components/shared/consumable-placeholder.component";
 import HeaderNav from "@/src/components/shared/header-nav";
+import SkeletonLines from "@/src/components/shared/skeleton-lines";
 import { ThemedText } from "@/src/components/themed-text";
 import { COMPATIBILITY_DEFINITIONS } from "@/src/constants/definitions";
 import { useRevenueCat } from "@/src/context/revenuecat-context";
@@ -182,7 +182,19 @@ function ScoreBar({
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ConnectionViewScreen() {
-  const { id: connectionId } = useLocalSearchParams<{ id: string }>();
+  const {
+    id: connectionId,
+    firstFirst,
+    firstLast,
+    secondFirst,
+    secondLast,
+  } = useLocalSearchParams<{
+    id: string;
+    firstFirst?: string;
+    firstLast?: string;
+    secondFirst?: string;
+    secondLast?: string;
+  }>();
   const { authUser } = useUser();
   const { isPro } = useRevenueCat();
   const { hasAccess: trialAccess } = useFreeTrialAccess();
@@ -378,8 +390,23 @@ export default function ConnectionViewScreen() {
   };
 
   const report = connection?.compatibility;
-  const firstName = connection?.firstPerson?.firstName + " " + connection?.firstPerson?.lastName || "Person 1";
-  const secondName = connection?.secondPerson?.firstName + " " + connection?.secondPerson?.lastName || "Person 2";
+
+  const capitalize = (s?: string) => {
+    const trimmed = s?.trim();
+    if (!trimmed) return "";
+    return trimmed
+      .split(/\s+/)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(" ");
+  };
+
+  const buildName = (first?: string, last?: string, fallback = "Person") => {
+    const joined = [capitalize(first), capitalize(last)].filter(Boolean).join(" ");
+    return joined || fallback;
+  };
+
+  const firstName = buildName(firstFirst, firstLast, "Person 1");
+  const secondName = buildName(secondFirst, secondLast, "Person 2");
 
   // ─── Loading / Error states ─────────────────────────────────────────────────
 
@@ -393,31 +420,6 @@ export default function ConnectionViewScreen() {
         />
         <ThemedView style={[styles.centered, { marginTop: headerHeight }]}>
           <ThemedText style={styles.errorText}>{error}</ThemedText>
-        </ThemedView>
-      </ThemedView>
-    );
-  }
-
-  // While the compatibility report is still being generated (or the connection
-  // doc hasn't arrived yet), render the same centered pending UI that the
-  // "New Connection" screen uses. This avoids a visual jump between the two
-  // loading screens when the user lands here right after creating a connection.
-  if (report && connection?.status?.state !== "error") {
-    return (
-      <ThemedView style={styles.wrapper}>
-         <Text style={styles.namesText}>{firstName} & {secondName}</Text>
-          {connection?.relationshipType && (
-            <Text style={styles.relationshipBadge}> STATUS: {connection.relationshipType.toUpperCase()}
-            </Text>
-          )}
-        <ThemedView style={styles.pendingFullScreen}>
-          <LottieView
-            source={require("@/src/assets/animations/galaxy.json")}
-            autoPlay
-            loop
-            style={styles.pendingAnimation}
-          />
-          <ThemedText style={styles.pendingText}>{statusLabel}</ThemedText>
         </ThemedView>
       </ThemedView>
     );
@@ -453,15 +455,17 @@ export default function ConnectionViewScreen() {
           {connection?.status?.state === "error" && !report ? (
             <Text style={styles.errorText}>Something went wrong generating the report.</Text>
           ) : !report ? (
-            <View style={styles.pendingCard}>
-              <LottieView
-                source={require("@/src/assets/animations/galaxy.json")}
-                autoPlay
-                loop
-                style={styles.pendingAnimation}
-              />
+            <>
+              <View style={styles.loadingCard}>
+                <Text style={styles.loadingCardLabel}>WEEKLY ADVICE</Text>
+                <SkeletonLines lines={4} />
+              </View>
+              <View style={styles.loadingCard}>
+                <Text style={styles.loadingCardLabel}>WEEKLY FORECAST</Text>
+                <SkeletonLines lines={6} lineHeight={moderateScale(8)} />
+              </View>
               <Text style={styles.pendingText}>{statusLabel}</Text>
-            </View>
+            </>
           ) : report ? (
             <>
               {/* Compare / View Birth Charts */}
@@ -588,6 +592,11 @@ const styles = StyleSheet.create({
     paddingTop: verticalScale(20),
     paddingBottom: verticalScale(48),
   },
+  centerContent: {
+    alignItems: 'center',
+    width: '80%',
+    gap: verticalScale(12),
+  },
   namesText: {
     color: "#B8A3FF",
     fontSize: moderateScale(18),
@@ -637,17 +646,54 @@ const styles = StyleSheet.create({
     gap: verticalScale(10),
     paddingVertical: verticalScale(24),
   },
+  loadingCard: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: scale(12),
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    paddingVertical: verticalScale(16),
+    paddingHorizontal: scale(16),
+    marginBottom: verticalScale(14),
+  },
+  loadingCardLabel: {
+    color: "#ffffff",
+    fontSize: moderateScale(12),
+    fontWeight: "700",
+    letterSpacing: 1.5,
+    marginBottom: verticalScale(10),
+  },
+  namesSkeleton: {
+    alignItems: "center",
+    marginBottom: verticalScale(4),
+  },
   pendingFullScreen: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: verticalScale(10),
-    paddingVertical: verticalScale(24),
-    paddingHorizontal: scale(24),
+  },
+  pendingFullScreenAnimation: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   pendingAnimation: {
-    width: "100%",
+     width: moderateScale(550),
+    height: moderateScale(550),
+  },
+  animation: {
+     width: "100%",
     height: "100%",
+  },
+  animationStack: {
+    width: moderateScale(550),
+    height: moderateScale(550),
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pendingAnimationOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
   },
   pendingText: {
     color: "rgba(255,255,255,0.75)",

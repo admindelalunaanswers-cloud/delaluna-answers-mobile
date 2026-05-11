@@ -145,7 +145,17 @@ export default function ConnectionsScreen() {
   };
 
   const handleOpenConnection = (connectionId: string) => {
-    router.push({ pathname: "/connection/[id]", params: { id: connectionId } });
+    const conn = connections.find(c => c.connectionId === connectionId);
+    router.push({
+      pathname: "/connection/[id]",
+      params: {
+        id: connectionId,
+        firstFirst: conn?.firstPerson?.firstName ?? "",
+        firstLast: conn?.firstPerson?.lastName ?? "",
+        secondFirst: conn?.secondPerson?.firstName ?? "",
+        secondLast: conn?.secondPerson?.lastName ?? "",
+      },
+    });
   };
 
   const goToNewConnectionScreen = () => {

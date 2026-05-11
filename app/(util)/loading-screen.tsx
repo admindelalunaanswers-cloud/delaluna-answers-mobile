@@ -57,7 +57,6 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ progress, message }) => {
 
   return (
     <ImageBackground source={theme.backgroundImage} style={styles.background}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <View style={styles.centerContent}>
         <LottieView
           source={require('@/src/assets/animations/splash-loop.json')}
