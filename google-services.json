@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:497678885238:android:1497cb746e296501a5da57",
+        "mobilesdk_app_id": "1:497678885238:android:fcdd21931a84489fa5da57",
         "android_client_info": {
-          "package_name": "com.app.delaluna.answers"
+          "package_name": "com.mobile.delaluna.answers"
         }
       },
       "oauth_client": [],
