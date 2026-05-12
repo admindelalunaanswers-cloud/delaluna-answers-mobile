@@ -5,6 +5,7 @@
  */
 
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 import Purchases, {
   LOG_LEVEL,
   type CustomerInfo,
@@ -15,10 +16,13 @@ import Purchases, {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-/** RevenueCat public SDK key — test key for dev, production key from EAS env */
+/** RevenueCat public SDK key — test key for dev, platform-specific production key from EAS env */
 const API_KEY = __DEV__
-  ? 'test_HdGTsVRVGbHGXFBydudQTRISayC'
-  : (Constants.expoConfig?.extra?.REVENUECAT_API_KEY as string);
+  ? 'test_QonuDCkIeqnqTXdinEhKquDyJrc'
+  : Platform.select({
+      ios: Constants.expoConfig?.extra?.REVENUECAT_IOS_API_KEY as string,
+      android: Constants.expoConfig?.extra?.REVENUECAT_ANDROID_API_KEY as string,
+    }) ?? '';
 
 export const REVENUECAT_ENABLED = true;
 
@@ -27,9 +31,11 @@ export const ENTITLEMENT_ID = 'Delaluna Answers Pro';
 
 /** Product identifiers configured in RevenueCat dashboard */
 export const PRODUCT_IDS = {
-  weekly: 'com.delaluna.premium.weekly',
-  monthly: 'com.delaluna.premium.monthly',
-  annual: 'delaluna_premium_annual_trial',
+  weekly: 'delaluna.sub.weekly',
+  monthly: 'delaluna.sub.monthly',
+  chatPack1: 'delaluna.iap.chat_pack_1',
+  chatPack3: 'delaluna.iap.chat_pack_3',
+  chatPack5: 'delaluna.iap.chat_pack_5',
 } as const;
 
 // ─── Initialization ──────────────────────────────────────────────────────────
