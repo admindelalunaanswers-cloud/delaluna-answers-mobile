@@ -589,7 +589,7 @@ export default function ChatScreen() {
             <Text style={styles.counterText}>
               {baseDailyChatLimit === 0
                 ? questionLimit === 0
-                  ? 'Buy a question pack to chat'
+                  ? 'Buy additional questions to continue chatting'
                   : `${questionsRemaining} of ${questionLimit} purchased question${questionLimit === 1 ? '' : 's'} remaining`
                 : `${questionsRemaining} of ${questionLimit} questions remaining today`}
             </Text>

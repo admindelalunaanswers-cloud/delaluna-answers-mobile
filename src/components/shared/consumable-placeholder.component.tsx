@@ -56,9 +56,8 @@ interface ConsumablePreset {
 
 export const QUESTION_TIERS: ConsumableTier[] = [
   { productId: 'questions_1', quantity: 1, price: '$0.99' },
-  { productId: 'questions_3', quantity: 3, price: '$2.49' },
+  { productId: 'questions_3', quantity: 3, price: '$1.99' },
   { productId: 'questions_5', quantity: 5, price: '$3.99' },
-  { productId: 'questions_10', quantity: 10, price: '$9.99' },
 ];
 
 export const CONSUMABLE_PRESETS: Record<ConsumableKind, ConsumablePreset> = {
