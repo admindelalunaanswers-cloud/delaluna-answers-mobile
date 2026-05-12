@@ -251,9 +251,11 @@ export default function VerifyEmail() {
                       value={d}
                       onChangeText={text => handleDigitChange(text, i)}
                       onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, i)}
-                      keyboardType="ascii-capable"
+                      keyboardType={Platform.OS === 'ios' ? 'ascii-capable' : 'default'}
                       autoCapitalize="characters"
                       autoCorrect={false}
+                      autoComplete="off"
+                      spellCheck={false}
                       maxLength={6}
                       selectTextOnFocus
                       caretHidden
