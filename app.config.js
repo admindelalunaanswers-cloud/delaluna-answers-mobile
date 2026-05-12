@@ -89,9 +89,8 @@ module.exports = {
       FIREBASE_MESSAGING_SENDER_ID: process.env.FIREBASE_MESSAGING_SENDER_ID,
       FIREBASE_APP_ID:             process.env.FIREBASE_APP_ID,
       APP_ENV:                     process.env.APP_ENV,
-      REVENUECAT_API_KEY:          process.env.APP_ENV === 'development'
-                                       ? process.env.REVENUECAT_API_KEY
-                                       : process.env.DELALUNA_ANSWERS_APP_STORE,
+      REVENUECAT_IOS_API_KEY:      process.env.REVENUECAT_IOS_API_KEY,
+      REVENUECAT_ANDROID_API_KEY:  process.env.REVENUECAT_ANDROID_API_KEY,
     },
     runtimeVersion: "1.0.0",
     updates: {
