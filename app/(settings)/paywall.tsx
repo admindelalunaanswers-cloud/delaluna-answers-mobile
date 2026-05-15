@@ -7,11 +7,14 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Linking } from 'react-native';
 
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const PRIVACY_POLICY_URL = 'https://admindelalunaanswers-cloud.github.io/delaluna-legal/';
+const TERMS_OF_USE_URL   = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
 
 import { useRevenueCat, type DevPlan } from '@/src/context/revenuecat-context';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
@@ -171,6 +174,17 @@ export default function PaywallScreen() {
           </TouchableOpacity>
         )}
 
+        {/* ── Legal links ── */}
+        <View style={s.legalRow}>
+          <TouchableOpacity onPress={() => Linking.openURL(TERMS_OF_USE_URL)} activeOpacity={0.7}>
+            <Text style={s.legalLink}>Terms of Use</Text>
+          </TouchableOpacity>
+          <Text style={s.legalSep}>·</Text>
+          <TouchableOpacity onPress={() => Linking.openURL(PRIVACY_POLICY_URL)} activeOpacity={0.7}>
+            <Text style={s.legalLink}>Privacy Policy</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* ── Consumables ── */}
         <Text style={[s.sectionTitle, { marginTop: verticalScale(28) }]}>ONE-TIME PURCHASES</Text>
         {CONSUMABLES.map((item) => (
@@ -275,6 +289,11 @@ const s = StyleSheet.create({
   // Reset
   resetButton: { marginTop: verticalScale(20) },
   resetText: { color: 'rgba(255,100,100,0.7)', fontSize: moderateScale(13), textDecorationLine: 'underline' },
+
+  // Legal
+  legalRow: { flexDirection: 'row', alignItems: 'center', gap: scale(8), marginTop: verticalScale(16) },
+  legalLink: { color: 'rgba(255,255,255,0.45)', fontSize: moderateScale(12), textDecorationLine: 'underline' },
+  legalSep:  { color: 'rgba(255,255,255,0.25)', fontSize: moderateScale(12) },
 
   // Hint
   testingHint: { color: 'rgba(255,255,255,0.2)', fontSize: moderateScale(11), textAlign: 'center', marginTop: verticalScale(16) },

@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, Image, TouchableOpacity, StyleSheet, Alert, ScrollView, ActivityIndicator,
+  View, Text, Image, TouchableOpacity, StyleSheet, Alert, ScrollView, ActivityIndicator, Linking,
 } from 'react-native';
+
+const PRIVACY_POLICY_URL = 'https://admindelalunaanswers-cloud.github.io/delaluna-legal/';
+const TERMS_OF_USE_URL   = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
 
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -401,6 +404,22 @@ export default function ProfileScreen() {
           <TouchableOpacity style={ss.settingsRow} onPress={handleLogout} activeOpacity={0.75}>
            <Ionicons name="log-out-outline" size={scale(18)} color="#efefef" style={{ marginRight: scale(4) }} />
             <Text style={ss.rowText}>Log out</Text>
+            <Image source={require('@/src/assets/actions/arrow-right-icon.png')} style={ss.rowArrow} />
+          </TouchableOpacity>
+
+          <View style={ss.rowDivider} />
+
+          <TouchableOpacity style={ss.settingsRow} onPress={() => Linking.openURL(TERMS_OF_USE_URL)} activeOpacity={0.75}>
+            <Ionicons name="document-text-outline" size={scale(18)} color="#ffffff" style={{ marginRight: scale(4) }} />
+            <Text style={ss.rowText}>Terms of Use</Text>
+            <Image source={require('@/src/assets/actions/arrow-right-icon.png')} style={ss.rowArrow} />
+          </TouchableOpacity>
+
+          <View style={ss.rowDivider} />
+
+          <TouchableOpacity style={ss.settingsRow} onPress={() => Linking.openURL(PRIVACY_POLICY_URL)} activeOpacity={0.75}>
+            <Ionicons name="shield-checkmark-outline" size={scale(18)} color="#ffffff" style={{ marginRight: scale(4) }} />
+            <Text style={ss.rowText}>Privacy Policy</Text>
             <Image source={require('@/src/assets/actions/arrow-right-icon.png')} style={ss.rowArrow} />
           </TouchableOpacity>
 
