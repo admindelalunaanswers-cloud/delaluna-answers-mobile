@@ -8,7 +8,8 @@
  * - Listens for real-time CustomerInfo updates (renewal, expiry, etc.)
  */
 
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Platform } from 'react-native';
 import type { CustomerInfo } from 'react-native-purchases';
 import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
 
@@ -109,8 +110,13 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
   // between users on the same device.
   const [devPlan, setDevPlanState] = useState<DevPlan>('auto');
 
-  // Placeholder always drives isPro so the mock paywall works in every build.
-  const isPro = devPlan === 'premium';
+  // On Android (live) use real entitlement; on iOS use devPlan until products are approved.
+  const isPro = useMemo(() => {
+    if (Platform.OS === 'android' && customerInfo !== null) {
+      return hasEntitlement(customerInfo);
+    }
+    return devPlan === 'premium';
+  }, [customerInfo, devPlan]);
 
   // Hydrate devPlan from AsyncStorage when the auth user changes.
   useEffect(() => {

@@ -6,8 +6,8 @@
  * TODO: Replace with real RevenueCat paywall once backend is configured.
  */
 
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Linking } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Linking, Platform, ActivityIndicator } from 'react-native';
 
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -67,9 +67,23 @@ const CONSUMABLES: Consumable[] = [
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function PaywallScreen() {
-  const { devPlan, setDevPlan } = useRevenueCat();
+  const { devPlan, setDevPlan, presentPaywall } = useRevenueCat();
   const insets = useSafeAreaInsets();
   const [selectedSub, setSelectedSub] = useState(SUBSCRIPTIONS[0].id);
+
+  // Android: present the real RevenueCat native paywall and go back when dismissed.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    presentPaywall().finally(() => router.back());
+  }, [presentPaywall]);
+
+  if (Platform.OS === 'android') {
+    return (
+      <View style={[s.container, s.androidLoader]}>
+        <ActivityIndicator size="large" color="#FFD700" />
+      </View>
+    );
+  }
 
   const handleSubscribe = () => {
     setDevPlan('premium');
@@ -289,6 +303,9 @@ const s = StyleSheet.create({
   // Reset
   resetButton: { marginTop: verticalScale(20) },
   resetText: { color: 'rgba(255,100,100,0.7)', fontSize: moderateScale(13), textDecorationLine: 'underline' },
+
+  // Android loader
+  androidLoader: { justifyContent: 'center', alignItems: 'center' },
 
   // Legal
   legalRow: { flexDirection: 'row', alignItems: 'center', gap: scale(8), marginTop: verticalScale(16) },
