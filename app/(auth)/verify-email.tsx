@@ -193,7 +193,7 @@ export default function VerifyEmail() {
 
   return (
     <>
-      <StatusBar style="light" translucent backgroundColor="transparent" />
+      <StatusBar style="light" translucent />
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}

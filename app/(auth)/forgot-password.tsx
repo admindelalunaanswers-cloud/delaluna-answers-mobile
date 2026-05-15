@@ -1,4 +1,4 @@
-import { View, Text, TextInput, Button, StyleSheet, ImageBackground, TouchableOpacity, Platform, StatusBar as RNStatusBar, Alert } from 'react-native';
+import { View, Text, TextInput, Button, StyleSheet, ImageBackground, TouchableOpacity, Platform, Alert } from 'react-native';
 import React from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -26,7 +26,7 @@ export default function ForgotPasswordScreen() {
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
             style={styles.background}>
-            <StatusBar style="light" translucent backgroundColor="transparent" />
+            <StatusBar style="light" translucent />
             <View style={styles.container}>
                 <TouchableOpacity
                     style={[styles.cancelButton, { top: cancelTop }]}

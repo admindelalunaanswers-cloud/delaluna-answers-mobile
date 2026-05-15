@@ -5,8 +5,8 @@ import {
   Image,
   ImageSourcePropType,
   Platform,
-  StatusBar,
 } from "react-native";
+import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemeContext } from "@/src/context/theme-context";
@@ -86,9 +86,8 @@ export default function HeaderNav({
   return (
     <>
       <StatusBar
-        barStyle={theme.isDark ? "light-content" : "dark-content"}
+        style={theme.isDark ? "light" : "dark"}
         translucent
-        backgroundColor="transparent"
       />
 
       <ThemedView

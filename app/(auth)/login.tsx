@@ -142,7 +142,7 @@ export default function Login() {
 
   return (
     <>
-      <StatusBar style="light" translucent backgroundColor="transparent" />
+      <StatusBar style="light" translucent />
 
       <ImageBackground
         source={require('@/src/assets/start-up/welcome-background.jpg')}

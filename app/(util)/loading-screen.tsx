@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useRef, useState } from 'react';
-import { Animated, ImageBackground, StatusBar, StyleSheet, View } from 'react-native';
+import { Animated, ImageBackground, StyleSheet, View } from 'react-native';
 import LottieView from 'lottie-react-native';
 
 import { ThemeContext } from '@/src/context/theme-context';

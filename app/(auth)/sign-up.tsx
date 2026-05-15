@@ -258,7 +258,7 @@ export default function SignUpChatScreen() {
     <ImageBackground source={theme.backgroundImage} style={styles.background} resizeMode="cover">
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <ThemedView style={{ flex: 1 }}>
-          <StatusBar style="light" translucent backgroundColor="transparent" />
+          <StatusBar style="light" translucent />
 
           <BlurView intensity={10} tint="dark" style={[styles.overlay, Platform.OS === 'android' && { paddingTop: insets.top + verticalScale(12) }]}>
             <ThemedView

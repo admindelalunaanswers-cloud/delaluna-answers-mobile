@@ -500,7 +500,7 @@ export default function EditProfileScreen() {
 
   return (
     <ImageBackground source={theme.backgroundImage} style={ss.bg} resizeMode="cover">
-      <StatusBar style="light" translucent backgroundColor="transparent" />
+      <StatusBar style="light" translucent />
       <BlurView intensity={15} tint="dark" style={ss.overlay}>
 
         {/* Header */}
