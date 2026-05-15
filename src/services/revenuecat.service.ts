@@ -33,9 +33,10 @@ export const ENTITLEMENT_ID = 'Delaluna Answers Pro';
 export const PRODUCT_IDS = {
   weekly: 'delaluna.sub.weekly',
   monthly: 'delaluna.sub.monthly',
-  chatPack1: 'delaluna.iap.chat_pack_1',
-  chatPack3: 'delaluna.iap.chat_pack_3',
-  chatPack5: 'delaluna.iap.chat_pack_5',
+  chatPack1:  'delaluna.iap.chat_pack_1',
+  chatPack3:  'delaluna.iap.chat_pack_3',
+  chatPack5:  'delaluna.iap.chat_pack_5',
+  chatPack10: 'delaluna.iap.chat_pack_10',
 } as const;
 
 // ─── Initialization ──────────────────────────────────────────────────────────

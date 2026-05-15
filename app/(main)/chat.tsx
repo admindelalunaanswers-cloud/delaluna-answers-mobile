@@ -600,20 +600,9 @@ export default function ChatScreen() {
 
       <ConsumablePlaceholder
         visible={showQuestionConsumable}
-        kind="question"
-        override={
-          baseDailyChatLimit === 0
-            ? {
-                title: 'Ask Delaluna a Question',
-                message: 'Pick a pack to start asking — purchased questions never expire.',
-              }
-            : undefined
-        }
         onClose={() => setShowQuestionConsumable(false)}
         onPurchased={(quantity) => {
           setExtraQuestionsPurchased((n) => n + quantity);
-          const pending = inputText.trim();
-          if (pending) handleSend(pending);
         }}
       />
 

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { doc, onSnapshot, updateDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import React, { useEffect, useState } from "react";
 import {
   Dimensions,
@@ -19,7 +19,6 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { db } from "@/firebaseConfig";
-import ConsumablePlaceholder from "@/src/components/shared/consumable-placeholder.component";
 import HeaderNav from "@/src/components/shared/header-nav";
 import SkeletonLines from "@/src/components/shared/skeleton-lines";
 import { ThemedText } from "@/src/components/themed-text";
@@ -196,7 +195,7 @@ export default function ConnectionViewScreen() {
     secondLast?: string;
   }>();
   const { authUser } = useUser();
-  const { isPro } = useRevenueCat();
+  const { isPro, presentPaywall } = useRevenueCat();
   const { hasAccess: trialAccess } = useFreeTrialAccess();
   const hasPremiumAccess = isPro || trialAccess;
   const insets = useSafeAreaInsets();
@@ -208,7 +207,7 @@ export default function ConnectionViewScreen() {
   const [expandedKeyword, setExpandedKeyword] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState(LOADING_SAYINGS[0]);
   const [hasSynastryReading, setHasSynastryReading] = useState(false);
-  const [showSynastryConsumable, setShowSynastryConsumable] = useState(false);
+
   const synastryUnlocked = connection?.synastryUnlocked === true;
 
   // Rotate loading messages while waiting for report
@@ -354,9 +353,8 @@ export default function ConnectionViewScreen() {
   };
 
   const handleCompareBirthChart = async () => {
-    // Gate behind premium / consumable purchase (skip if already viewed)
     if (!hasPremiumAccess && !hasSynastryReading && !synastryUnlocked) {
-      setShowSynastryConsumable(true);
+      presentPaywall();
       return;
     }
     await runSynastryCompare();
@@ -549,24 +547,6 @@ export default function ConnectionViewScreen() {
         </ScrollView>
       </View>
 
-      <ConsumablePlaceholder
-        visible={showSynastryConsumable}
-        kind="synastry"
-        onClose={() => setShowSynastryConsumable(false)}
-        onPurchased={async (_quantity) => {
-          if (authUser?.uid && connectionId) {
-            try {
-              await updateDoc(
-                doc(db, "users", authUser.uid, "connections", connectionId),
-                { synastryUnlocked: true },
-              );
-            } catch (err) {
-              console.error("[synastry] failed to persist unlock", err);
-            }
-          }
-          runSynastryCompare();
-        }}
-      />
     </View>
   );
 }
