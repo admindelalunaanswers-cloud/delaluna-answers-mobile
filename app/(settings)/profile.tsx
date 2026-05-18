@@ -295,7 +295,6 @@ export default function ProfileScreen() {
           <View style={ss.separator} />
          
           <TouchableOpacity
-           style={ss.actionButton}
             onPress={() => router.push('/(settings)/purchased-reports')}>
              <View style={ss.detailRow}>
               <Text style={ss.detailLabel}>Reports purchased</Text>
@@ -384,7 +383,7 @@ export default function ProfileScreen() {
 
           <View style={ss.rowDivider} />
 
-           <TouchableOpacity style={ss.settingsRow} onPress={() => router.push('/(settings)/support')} activeOpacity={0.75}>
+           <TouchableOpacity style={ss.settingsRow} onPress={() => router.push('/(util)/support')} activeOpacity={0.75}>
             <Ionicons name="help-circle-outline" size={scale(18)} color="#ffffff" style={{ marginRight: scale(4) }} />
             <Text style={ss.rowText}>Support</Text>
             <Image source={require('@/src/assets/actions/arrow-right-icon.png')} style={ss.rowArrow} />
@@ -392,7 +391,7 @@ export default function ProfileScreen() {
 
           <View style={ss.rowDivider} />
 
-           <TouchableOpacity style={ss.settingsRow} onPress={() => router.push('/(settings)/feedback')} activeOpacity={0.75}>
+           <TouchableOpacity style={ss.settingsRow} onPress={() => router.push('/(util)/feedback')} activeOpacity={0.75}>
             <Ionicons name="chatbubble-ellipses-outline" size={scale(18)} color="#ffffff" style={{ marginRight: scale(4) }} />
             <Text style={ss.rowText}>Feedback</Text>
             <Image source={require('@/src/assets/actions/arrow-right-icon.png')} style={ss.rowArrow} />
