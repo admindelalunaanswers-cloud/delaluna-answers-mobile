@@ -1,3 +1,25 @@
+const { withAndroidManifest } = require("@expo/config-plugins");
+
+// Restricts Android distribution to phones only (< 600dp width).
+// Tablets are >= 600dp and will be filtered out on Google Play.
+const withPhoneOnly = (config) =>
+  withAndroidManifest(config, (mod) => {
+    const manifest = mod.modResults.manifest;
+    manifest["supports-screens"] = [
+      {
+        $: {
+          "android:smallScreens": "true",
+          "android:normalScreens": "true",
+          "android:largeScreens": "false",
+          "android:xlargeScreens": "false",
+          "android:requiresSmallestWidthDp": "0",
+          "android:compatibleWidthLimitDp": "600",
+        },
+      },
+    ];
+    return mod;
+  });
+
 module.exports = {
   expo: {
     name: "Delaluna Answers",
@@ -32,6 +54,7 @@ module.exports = {
       googleServicesFile: "./google-services.json",
     },
     plugins: [
+      withPhoneOnly,
       "./plugins/with-adi-registration",
       "expo-router",
       "@react-native-firebase/app",
