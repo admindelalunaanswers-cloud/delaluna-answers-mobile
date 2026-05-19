@@ -18,7 +18,6 @@ import HeaderNav from '@/src/components/shared/header-nav';
 import { useUser } from '@/src/context/user-context';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
-import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
 import { signOut } from '@/src/services/user.service';
 import { registerForPushNotifications, unregisterPushToken } from '@/src/services/notifications.service';
 import { getProfileImageSource } from '@/app/(settings)/select-avatar';
@@ -72,7 +71,6 @@ export default function ProfileScreen() {
     isPro,
     setDevPlan,
   } = useRevenueCat();
-  const { inTrial } = useFreeTrialAccess();
   const insets = useSafeAreaInsets();
   const ud = userDoc as any;
 
@@ -233,14 +231,14 @@ export default function ProfileScreen() {
         <Text style={ss.name}>{ud?.name ?? '—'}</Text>
         <Text style={ss.email}>{ud?.email ?? authUser?.email ?? '—'}</Text>
 
-        <View style={[ss.badge, isPremium ? ss.badgePremium : inTrial ? ss.badgeTrial : ss.badgeFree]}>
+        <View style={[ss.badge, isPremium ? ss.badgePremium : ss.badgeFree]}>
           <Ionicons
-            name={isPremium ? 'sparkles' : inTrial ? 'time-outline' : 'lock-closed-outline'}
+            name={isPremium ? 'sparkles' : 'lock-closed-outline'}
             size={scale(13)}
-            color={isPremium ? '#FFD700' : inTrial ? '#6FFFE9' : '#888'}
+            color={isPremium ? '#FFD700' : '#888'}
           />
-          <Text style={[ss.badgeText, isPremium ? ss.badgeTextPremium : inTrial ? ss.badgeTextTrial : ss.badgeTextFree]}>
-            {isPremium ? 'PREMIUM MEMBER' : inTrial ? 'PREMIUM TRIAL' : 'FREE MEMBER'}
+          <Text style={[ss.badgeText, isPremium ? ss.badgeTextPremium : ss.badgeTextFree]}>
+            {isPremium ? 'PREMIUM MEMBER' : 'FREE MEMBER'}
           </Text>
         </View>
 
@@ -511,11 +509,9 @@ const ss = StyleSheet.create({
   email:            { color: 'rgba(255,255,255,0.45)', fontSize: moderateScale(13), marginBottom: verticalScale(4) },
   badge:            { flexDirection: 'row', alignItems: 'center', gap: scale(6), borderRadius: scale(20), paddingHorizontal: scale(14), paddingVertical: verticalScale(6) },
   badgePremium:     { backgroundColor: 'rgba(255,215,0,0.12)' },
-  badgeTrial:       { backgroundColor: 'rgba(111,255,233,0.12)' },
   badgeFree:        { backgroundColor: 'rgba(255,255,255,0.07)' },
   badgeText:        { fontSize: moderateScale(11), fontWeight: '800', letterSpacing: 1.2 },
   badgeTextPremium: { color: '#FFD700' },
-  badgeTextTrial:   { color: '#6FFFE9' },
   badgeTextFree:    { color: '#888' },
 
   // Action row

@@ -1,7 +1,7 @@
 /**
  * Admin / Dev controls screen.
  *
- * Lets a privileged user toggle plan state (free / freeTrial / premium)
+ * Lets a privileged user toggle plan state (free / premium)
  * and override runtime limits (daily chat, free/premium connection caps).
  */
 
@@ -27,7 +27,6 @@ import {
   DEFAULT_DAILY_CHAT_LIMIT,
   DEFAULT_PREMIUM_DAILY_CHAT_LIMIT,
   DEFAULT_FREE_CONNECTION_LIMIT,
-  DEFAULT_TRIAL_CONNECTION_LIMIT,
   DEFAULT_PREMIUM_CONNECTION_LIMIT,
 } from '@/src/context/admin-context';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
@@ -35,10 +34,9 @@ import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
 const NAV_BAR_HEIGHT = 44;
 
 const PLAN_OPTIONS: { value: DevPlan; label: string; sublabel?: string; color: string }[] = [
-  { value: 'auto',      label: 'Auto',       sublabel: 'Use real subscription + natural 5-day trial', color: '#BCA8F4' },
-  { value: 'free',      label: 'Free',       sublabel: 'Force locked-out free state',                  color: '#9aa0a6' },
-  { value: 'freeTrial', label: 'Free Trial', sublabel: 'Force in-trial premium access',                color: '#6FFFE9' },
-  { value: 'premium',   label: 'Premium',    sublabel: 'Force paid premium access',                    color: '#FFD700' },
+  { value: 'auto',    label: 'Auto',    sublabel: 'Use real subscription state', color: '#BCA8F4' },
+  { value: 'free',    label: 'Free',    sublabel: 'Force locked-out free state', color: '#9aa0a6' },
+  { value: 'premium', label: 'Premium', sublabel: 'Force paid premium access',   color: '#FFD700' },
 ];
 
 // ─── Stepper row ──────────────────────────────────────────────────────────────
@@ -108,19 +106,16 @@ export default function AdminScreen() {
     dailyChatLimit,
     premiumDailyChatLimit,
     freeConnectionLimit,
-    trialConnectionLimit,
     premiumConnectionLimit,
     setDailyChatLimit,
     setPremiumDailyChatLimit,
     setFreeConnectionLimit,
-    setTrialConnectionLimit,
     setPremiumConnectionLimit,
     resetToDefaults,
   } = useAdmin();
 
   const planLabel =
     devPlan === 'premium' ? 'Premium'
-      : devPlan === 'freeTrial' ? 'Free Trial'
       : devPlan === 'free' ? 'Free (forced)'
       : 'Auto';
 
@@ -211,14 +206,6 @@ export default function AdminScreen() {
             value={freeConnectionLimit}
             defaultValue={DEFAULT_FREE_CONNECTION_LIMIT}
             onChange={setFreeConnectionLimit}
-            max={50}
-          />
-          <View style={ss.separator} />
-          <Stepper
-            label="Trial connection limit"
-            value={trialConnectionLimit}
-            defaultValue={DEFAULT_TRIAL_CONNECTION_LIMIT}
-            onChange={setTrialConnectionLimit}
             max={50}
           />
           <View style={ss.separator} />

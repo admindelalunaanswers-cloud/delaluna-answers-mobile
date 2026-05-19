@@ -3,10 +3,8 @@ import { useWindowDimensions } from 'react-native';
 
 import { IconSymbol } from '@/src/components/ui/icon-symbol';
 import { useTheme } from '@/src/hooks/use-theme';
-import { useTrialEndingAlert } from '@/src/hooks/use-trial-ending-alert';
 
 export default function TabLayout() {
-  useTrialEndingAlert();
   const { theme: { colors: C } } = useTheme();
   const { width } = useWindowDimensions();
   // Scale icon size from base 28 on 375px width, clamped between 22–36

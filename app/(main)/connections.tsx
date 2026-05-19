@@ -29,7 +29,6 @@ import { ThemedText } from "@/src/components/themed-text";
 import { ThemedView } from "@/src/components/themed-view";
 import { CONNECTIONS_DEFINITION } from "@/src/constants/definitions";
 import { useRevenueCat } from "@/src/context/revenuecat-context";
-import { useFreeTrialAccess } from "@/src/hooks/use-free-trial-access";
 import { useUser } from "@/src/context/user-context";
 import { useAdmin } from "@/src/context/admin-context";
 import { ConnectionsCache } from "@/src/services/connections-cache.service";
@@ -114,9 +113,7 @@ const AnimatedConnectionItem = memo(
 export default function ConnectionsScreen() {
   const { authUser } = useUser();
   const { isPro } = useRevenueCat();
-  const { inTrial } = useFreeTrialAccess();
   const {
-    trialConnectionLimit: TRIAL_CONNECTION_LIMIT,
     premiumConnectionLimit: PREMIUM_CONNECTION_LIMIT,
   } = useAdmin();
   const insets = useSafeAreaInsets();
@@ -129,15 +126,8 @@ export default function ConnectionsScreen() {
 
   const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
 
-  // Connection allowance:
-  //   - Premium subscriber: PREMIUM_CONNECTION_LIMIT (10)
-  //   - Trial (in-trial, not yet Pro): TRIAL_CONNECTION_LIMIT (3)
-  //   - Free / lapsed: 0 — every connection locks, no add-on purchases.
-  const accessLimit = isPro
-    ? PREMIUM_CONNECTION_LIMIT
-    : inTrial
-      ? TRIAL_CONNECTION_LIMIT
-      : 0;
+  // Connection allowance: Premium subscribers get PREMIUM_CONNECTION_LIMIT; free users get 0.
+  const accessLimit = isPro ? PREMIUM_CONNECTION_LIMIT : 0;
   const canAddNew = connections.length < accessLimit;
 
   const presentUpgradePaywall = () => {
@@ -160,26 +150,16 @@ export default function ConnectionsScreen() {
 
   const goToNewConnectionScreen = () => {
     if (!canAddNew) {
-      if (accessLimit === 0) {
-        Alert.alert(
-          'Connections are a Premium feature',
-          `Upgrade to Premium to save up to ${PREMIUM_CONNECTION_LIMIT} connections.`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Upgrade', onPress: presentUpgradePaywall },
-          ],
-        );
-      } else if (isPro) {
+      if (isPro) {
         Alert.alert(
           'Connection limit reached',
           `You can save up to ${accessLimit} connections. Remove one to add a new one.`,
           [{ text: 'OK', style: 'cancel' }],
         );
       } else {
-        // In-trial user at trial cap — encourage upgrade for the full 10.
         Alert.alert(
-          'Trial connection limit reached',
-          `Trial accounts can save up to ${accessLimit} connections. Upgrade to Premium for ${PREMIUM_CONNECTION_LIMIT}.`,
+          'Connections are a Premium feature',
+          `Upgrade to Premium to save up to ${PREMIUM_CONNECTION_LIMIT} connections.`,
           [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Upgrade', onPress: presentUpgradePaywall },
@@ -192,12 +172,7 @@ export default function ConnectionsScreen() {
   };
 
   const handleLockedPress = (connectionId?: string) => {
-    // Locked items show for free/lapsed users (accessLimit === 0) and for
-    // trial users over the trial cap. In both cases the only path forward is
-    // to upgrade or delete a connection — no individual unlock purchases.
-    const message = accessLimit === 0
-      ? 'Connections are a Premium feature. Upgrade to read this connection, or delete it to clean up your list.'
-      : `Trial accounts can access ${accessLimit} connection${accessLimit === 1 ? '' : 's'}. Remove a connection to unlock the next one, or upgrade to Premium.`;
+    const message = 'Connections are a Premium feature. Upgrade to read this connection, or delete it to clean up your list.';
     Alert.alert(
       'Connection locked',
       message,

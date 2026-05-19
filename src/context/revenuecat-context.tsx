@@ -42,11 +42,10 @@ const devPlanStorageKey = (uid: string | null | undefined) =>
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 /**
- * `auto` = no admin override; access is computed from real subscription state
- *          + the natural 5-day trial window from `userDoc.createdAt`.
- * `free` / `freeTrial` / `premium` = explicit admin overrides.
+ * `auto` = no admin override; access is computed from real subscription state.
+ * `free` / `premium` = explicit admin overrides.
  */
-export type DevPlan = 'auto' | 'free' | 'freeTrial' | 'premium';
+export type DevPlan = 'auto' | 'free' | 'premium';
 
 interface RevenueCatContextValue {
   /** Whether the user has the "Delaluna Answers Pro" entitlement */
@@ -72,7 +71,7 @@ interface RevenueCatContextValue {
   isDevMode: boolean;
   /** Current dev plan when RevenueCat is disabled. */
   devPlan: DevPlan;
-  /** Set the dev plan (free / freeTrial / premium). No-op when SDK is enabled. */
+  /** Set the dev plan (free / premium). No-op when SDK is enabled. */
   setDevPlan: (plan: DevPlan) => void;
   /** Flip the local pro flag when RevenueCat is disabled. No-op otherwise. */
   toggleDevPro: () => void;
@@ -104,10 +103,9 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
   const configuredRef = useRef(false);
   const loggedInUidRef = useRef<string | null>(null);
 
-  // Placeholder plan — lets the client test free / free-trial / premium
-  // flows via the mock paywall, regardless of real RevenueCat state.
-  // Persisted per-account so admin overrides survive reload and don't leak
-  // between users on the same device.
+  // Placeholder plan — lets the client test free / premium flows via the
+  // mock paywall, regardless of real RevenueCat state. Persisted per-account
+  // so admin overrides survive reload and don't leak between users on the same device.
   const [devPlan, setDevPlanState] = useState<DevPlan>('auto');
 
   // On Android (live) use real entitlement; on iOS use devPlan until products are approved.
@@ -126,7 +124,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       try {
         const raw = await AsyncStorage.getItem(devPlanStorageKey(authUser?.uid));
         if (cancelled) return;
-        if (raw === 'auto' || raw === 'free' || raw === 'freeTrial' || raw === 'premium') {
+        if (raw === 'auto' || raw === 'free' || raw === 'premium') {
           setDevPlanState(raw);
         } else {
           setDevPlanState('auto');
@@ -147,7 +145,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
 
   const toggleDevPro = useCallback(() => {
     setDevPlanState((prev) => {
-      const cycle: DevPlan[] = ['auto', 'free', 'freeTrial', 'premium'];
+      const cycle: DevPlan[] = ['auto', 'free', 'premium'];
       const idx = cycle.indexOf(prev);
       const next = cycle[(idx === -1 ? 0 : idx + 1) % cycle.length];
       if (AsyncStorage) {
