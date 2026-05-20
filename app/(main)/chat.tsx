@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import {
     ActivityIndicator,
     Animated,
@@ -144,7 +143,7 @@ export default function ChatScreen() {
   const { authUser } = useUser();
   const { chartDetails } = useHoroscope();
   const { dailyChatLimit, premiumDailyChatLimit } = useAdmin();
-  const { isPro } = useRevenueCat();
+  const { isPro, presentChatPackPaywall } = useRevenueCat();
   const { hasAccess: trialAccess } = useFreeTrialAccess();
   const hasPremiumAccess = isPro || trialAccess;
   const insets = useSafeAreaInsets();
@@ -177,9 +176,17 @@ export default function ChatScreen() {
   const questionsRemaining = Math.max(0, questionLimit - questionsUsed);
   const chatLocked = questionsUsed >= questionLimit;
 
-  const handleUpgrade = useCallback(() => {
-    router.push('/(settings)/paywall');
-  }, []);
+  // When the limit is hit: show the RC paywall first.
+  const handleLimitReached = useCallback(async (prefillText?: string) => {
+    if (prefillText) setInputText(prefillText);
+    const result = await presentChatPackPaywall();
+    if (result === 'unavailable') {
+      // RC is disabled or offering not configured — fall back to custom sheet
+      setShowQuestionConsumable(true);
+    }
+    // 'dismissed' → user saw and closed the RC paywall, do nothing
+    // 'purchased' → credits added via entitlement, chat unlocks automatically
+  }, [presentChatPackPaywall]);
 
   const flatListRef = useRef<FlatList>(null);
   const chatStarted = useRef(false);
@@ -260,8 +267,7 @@ export default function ChatScreen() {
     const initial = ChatStore.popInitialMessage();
     if (initial) {
       if (chatLocked) {
-        setInputText(initial);
-        setShowQuestionConsumable(true);
+        handleLimitReached(initial);
       } else {
         handleSend(initial);
       }
@@ -295,8 +301,7 @@ export default function ChatScreen() {
     if (!msg || !authUser || isSending) return;
 
     if (chatLocked) {
-      setInputText(msg);
-      setShowQuestionConsumable(true);
+      handleLimitReached(msg);
       return;
     }
 
@@ -312,7 +317,7 @@ export default function ChatScreen() {
     } finally {
       setIsSending(false);
     }
-  }, [inputText, authUser, isSending, chatLocked, chartSummary, selectedConnection, handleUpgrade]);
+  }, [inputText, authUser, isSending, chatLocked, chartSummary, selectedConnection, handleLimitReached]);
 
   // ─── Retry ─────────────────────────────────────────────────────────────────
 
@@ -396,7 +401,7 @@ export default function ChatScreen() {
         style={{ flex: 1 }}
         unlockTitle="Unlock Chat"
         unlockMessage="Subscribe to get personalized cosmic guidance through Delaluna chat."
-        onUnlock={handleUpgrade}
+        onUnlock={() => handleLimitReached()}
       >
 
       {/* ── History modal ── */}
@@ -507,8 +512,7 @@ export default function ChatScreen() {
                   style={styles.suggestionChip}
                   onPress={() => {
                     if (chatLocked) {
-                      setInputText(q);
-                      setShowQuestionConsumable(true);
+                      handleLimitReached(q);
                     } else {
                       handleSend(q);
                     }

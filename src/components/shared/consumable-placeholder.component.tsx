@@ -1,19 +1,17 @@
 /**
  * consumable-placeholder.component.tsx
- * Mock one-time purchase sheet — gates additional chat questions when the
- * daily limit is reached.
+ * IAP chat pack sheet — shown when the user hits their daily chat limit.
  *
- * Tiers:
- *   1 question  — $0.99
- *   3 questions — $2.49
- *   5 questions — $3.99
- *   10 questions — $9.99
+ * Pack product IDs:
+ *   delaluna.iap.chat_pack_1 / 3 / 5 / 10
  *
- * TODO: Wire to RevenueCat consumables once products are live.
+ * Store prices are fetched from RevenueCat on open.
+ * Falls back to placeholder prices if products are unavailable.
  */
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Modal,
   Pressable,
   StyleSheet,
@@ -23,22 +21,28 @@ import {
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
+import type { PurchasesStoreProduct } from 'react-native-purchases';
+import Purchases from 'react-native-purchases';
+
+import { PRODUCT_IDS, REVENUECAT_ENABLED, purchaseProduct } from '@/src/services/revenuecat.service';
+import { Events } from '@/src/services/analytics.service';
+import { recordError } from '@/src/services/crashlytics.service';
 import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
 
-// ─── Tiers ───────────────────────────────────────────────────────────────────
+// ─── Chat pack tiers ─────────────────────────────────────────────────────────
 
-interface ConsumableTier {
+interface TierDef {
   productId: string;
   quantity: number;
   label: string;
-  price: string;
+  fallbackPrice: string;
 }
 
-export const QUESTION_TIERS: ConsumableTier[] = [
-  { productId: 'questions_1',  quantity: 1,  label: '1 Extra Question',   price: '$0.99' },
-  { productId: 'questions_3',  quantity: 3,  label: '3 Extra Questions',  price: '$2.49' },
-  { productId: 'questions_5',  quantity: 5,  label: '5 Extra Questions',  price: '$3.99' },
-  { productId: 'questions_10', quantity: 10, label: '10 Extra Questions', price: '$9.99' },
+const TIER_DEFS: TierDef[] = [
+  { productId: PRODUCT_IDS.chatPack1,  quantity: 1,  label: '1 Question',   fallbackPrice: '$0.99' },
+  { productId: PRODUCT_IDS.chatPack3,  quantity: 3,  label: '3 Questions',  fallbackPrice: '$2.49' },
+  { productId: PRODUCT_IDS.chatPack5,  quantity: 5,  label: '5 Questions',  fallbackPrice: '$3.99' },
+  { productId: PRODUCT_IDS.chatPack10, quantity: 10, label: '10 Questions', fallbackPrice: '$9.99' },
 ];
 
 // ─── Props ───────────────────────────────────────────────────────────────────
@@ -46,28 +50,84 @@ export const QUESTION_TIERS: ConsumableTier[] = [
 interface Props {
   visible: boolean;
   onClose: () => void;
-  /** Called after a successful mock purchase with the quantity bought. */
+  /** Called after a successful purchase with the quantity bought. */
   onPurchased: (quantity: number) => void;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function ConsumablePlaceholder({ visible, onClose, onPurchased }: Props) {
-  const [selected, setSelected] = useState(QUESTION_TIERS[1].productId);
+  const [selected, setSelected] = useState(TIER_DEFS[1].productId);
+  const [storeProducts, setStoreProducts] = useState<Record<string, PurchasesStoreProduct>>({});
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [purchasing, setPurchasing] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handleBuy = () => {
-    const tier = QUESTION_TIERS.find((t) => t.productId === selected)!;
-    onPurchased(tier.quantity);
-    onClose();
-  };
+  // Fetch real store products when sheet opens
+  useEffect(() => {
+    if (!visible || !REVENUECAT_ENABLED) return;
+    let cancelled = false;
+    setLoadingProducts(true);
+    setErrorMsg(null);
+    (async () => {
+      try {
+        const productIds = TIER_DEFS.map((t) => t.productId);
+        const products = await Purchases.getProducts(productIds);
+        if (cancelled) return;
+        const map: Record<string, PurchasesStoreProduct> = {};
+        for (const p of products) map[p.identifier] = p;
+        setStoreProducts(map);
+      } catch (e) {
+        console.warn('[ConsumablePlaceholder] failed to fetch products:', e);
+        // Non-fatal — fall back to placeholder prices
+      } finally {
+        if (!cancelled) setLoadingProducts(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [visible]);
+
+  const handleBuy = useCallback(async () => {
+    const tier = TIER_DEFS.find((t) => t.productId === selected);
+    if (!tier) return;
+
+    const product = storeProducts[tier.productId];
+
+    // Fall back to mock when RC is disabled or product didn't load
+    if (!REVENUECAT_ENABLED || !product) {
+      onPurchased(tier.quantity);
+      onClose();
+      return;
+    }
+
+    setPurchasing(true);
+    setErrorMsg(null);
+    try {
+      await purchaseProduct(product);
+      Events.purchaseCompleted({ product_id: tier.productId });
+      onPurchased(tier.quantity);
+      onClose();
+    } catch (e: any) {
+      if (e?.userCancelled) return;
+      console.error('[ConsumablePlaceholder] purchase error:', e);
+      recordError(e, 'consumable_purchase');
+      Events.purchaseFailed({ product_id: tier.productId, reason: String(e?.message ?? e) });
+      setErrorMsg('Purchase failed. Please try again.');
+    } finally {
+      setPurchasing(false);
+    }
+  }, [selected, storeProducts, onPurchased, onClose]);
+
+  const priceFor = (tier: TierDef) =>
+    storeProducts[tier.productId]?.priceString ?? tier.fallbackPrice;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={s.backdrop} onPress={onClose}>
+      <Pressable style={s.backdrop} onPress={purchasing ? undefined : onClose}>
         <Pressable style={s.card} onPress={(e) => e.stopPropagation()}>
 
           {/* Close */}
-          <TouchableOpacity style={s.closeBtn} onPress={onClose} hitSlop={12} activeOpacity={0.7}>
+          <TouchableOpacity style={s.closeBtn} onPress={onClose} hitSlop={12} activeOpacity={0.7} disabled={purchasing}>
             <Ionicons name="close" size={scale(16)} color="rgba(255,255,255,0.7)" />
           </TouchableOpacity>
 
@@ -79,46 +139,60 @@ export default function ConsumablePlaceholder({ visible, onClose, onPurchased }:
           {/* Heading */}
           <Text style={s.title}>Ask More Questions</Text>
           <Text style={s.message}>
-            {"You've used today's chat. Pick a pack to keep the conversation going."}
+            {"You've used today's chat. Pick a pack to keep going."}
           </Text>
 
-          {/* Tier selector */}
-          <View style={s.tiersWrap}>
-            {QUESTION_TIERS.map((tier) => {
-              const isSelected = selected === tier.productId;
-              return (
-                <TouchableOpacity
-                  key={tier.productId}
-                  style={[s.tierRow, isSelected && s.tierRowSelected]}
-                  onPress={() => setSelected(tier.productId)}
-                  activeOpacity={0.85}
-                >
-                  <View style={[s.radioOuter, isSelected && s.radioOuterSelected]}>
-                    {isSelected && <Ionicons name="checkmark" size={scale(11)} color="#fff" />}
-                  </View>
-                  <Text style={s.tierLabel}>{tier.label}</Text>
-                  <Text style={[s.tierPrice, isSelected && s.tierPriceSelected]}>
-                    {tier.price}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          {/* Tiers */}
+          {loadingProducts ? (
+            <View style={s.loadingWrap}>
+              <ActivityIndicator color={TEAL} />
+            </View>
+          ) : (
+            <View style={s.tiersWrap}>
+              {TIER_DEFS.map((tier) => {
+                const isSelected = selected === tier.productId;
+                return (
+                  <TouchableOpacity
+                    key={tier.productId}
+                    style={[s.tierRow, isSelected && s.tierRowSelected]}
+                    onPress={() => setSelected(tier.productId)}
+                    activeOpacity={0.85}
+                    disabled={purchasing}
+                  >
+                    <View style={[s.radioOuter, isSelected && s.radioOuterSelected]}>
+                      {isSelected && <Ionicons name="checkmark" size={scale(11)} color="#fff" />}
+                    </View>
+                    <Text style={s.tierLabel}>{tier.label}</Text>
+                    <Text style={[s.tierPrice, isSelected && s.tierPriceSelected]}>
+                      {priceFor(tier)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
 
-          {/* One-time notice */}
-          <Text style={s.renewNote}>One-time purchase — no subscription</Text>
+          {errorMsg ? <Text style={s.errorText}>{errorMsg}</Text> : null}
+
+          <Text style={s.renewNote}>One-time purchase · chat only</Text>
 
           {/* CTA */}
-          <TouchableOpacity style={s.ctaButton} onPress={handleBuy} activeOpacity={0.85}>
-            <Text style={s.ctaText}>Buy now</Text>
+          <TouchableOpacity
+            style={[s.ctaButton, (purchasing || loadingProducts) && s.ctaButtonDisabled]}
+            onPress={handleBuy}
+            activeOpacity={0.85}
+            disabled={purchasing || loadingProducts}
+          >
+            {purchasing ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={s.ctaText}>Buy now</Text>
+            )}
           </TouchableOpacity>
 
-          {/* Cancel */}
-          <TouchableOpacity onPress={onClose} hitSlop={10} activeOpacity={0.7}>
+          <TouchableOpacity onPress={onClose} hitSlop={10} activeOpacity={0.7} disabled={purchasing}>
             <Text style={s.cancelText}>Not now</Text>
           </TouchableOpacity>
-
-          <Text style={s.testingHint}>Testing mode — no real charges</Text>
         </Pressable>
       </Pressable>
     </Modal>
@@ -183,6 +257,12 @@ const s = StyleSheet.create({
     lineHeight: moderateScale(20),
     alignSelf: 'stretch',
   },
+  loadingWrap: {
+    width: '100%',
+    paddingVertical: verticalScale(24),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   tiersWrap: {
     width: '100%',
     backgroundColor: PLAN_BG,
@@ -230,6 +310,12 @@ const s = StyleSheet.create({
     fontWeight: '700',
   },
   tierPriceSelected: { color: '#fff' },
+  errorText: {
+    color: '#ff6b6b',
+    fontSize: moderateScale(12),
+    textAlign: 'center',
+    alignSelf: 'stretch',
+  },
   renewNote: {
     color: 'rgba(255,255,255,0.4)',
     fontSize: moderateScale(11),
@@ -244,14 +330,13 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     marginTop: verticalScale(4),
   },
+  ctaButtonDisabled: {
+    backgroundColor: '#3d2460',
+    opacity: 0.7,
+  },
   ctaText: { color: '#fff', fontSize: moderateScale(16), fontWeight: '700' },
   cancelText: {
     color: 'rgba(255,255,255,0.45)',
     fontSize: moderateScale(13),
-  },
-  testingHint: {
-    color: 'rgba(255,255,255,0.18)',
-    fontSize: moderateScale(10),
-    textAlign: 'center',
   },
 });

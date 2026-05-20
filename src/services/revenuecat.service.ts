@@ -29,6 +29,9 @@ export const REVENUECAT_ENABLED = true;
 /** The entitlement identifier configured in RevenueCat dashboard */
 export const ENTITLEMENT_ID = 'Delaluna Answers Pro';
 
+/** Offering identifier for the chat-pack IAP paywall */
+export const CHAT_PACK_OFFERING_ID = 'in-app-purchases';
+
 /** Product identifiers configured in RevenueCat dashboard */
 export const PRODUCT_IDS = {
   weekly: 'delaluna.sub.weekly',

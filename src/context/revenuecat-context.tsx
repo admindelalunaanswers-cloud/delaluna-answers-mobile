@@ -17,10 +17,12 @@ import {
   loginUser,
   logoutUser,
   getCustomerInfo,
+  getOfferings,
   hasEntitlement,
   restorePurchases as restorePurchasesService,
   onCustomerInfoUpdate,
   ENTITLEMENT_ID,
+  CHAT_PACK_OFFERING_ID,
   REVENUECAT_ENABLED,
 } from '@/src/services/revenuecat.service';
 import { useUser } from './user-context';
@@ -61,6 +63,13 @@ interface RevenueCatContextValue {
   presentPaywall: () => Promise<boolean>;
   /** Present the paywall only if the user does NOT have the pro entitlement */
   presentPaywallIfNeeded: () => Promise<boolean>;
+  /**
+   * Present the RC paywall for the chat-pack IAP offering.
+   * - `'purchased'`  — user completed a purchase
+   * - `'dismissed'`  — paywall was shown but user closed it without buying
+   * - `'unavailable'`— RC is disabled or the offering could not be found
+   */
+  presentChatPackPaywall: () => Promise<'purchased' | 'dismissed' | 'unavailable'>;
   /** Present the RevenueCat Customer Center for subscription management */
   presentCustomerCenter: () => Promise<void>;
   /**
@@ -86,6 +95,7 @@ const RevenueCatContext = createContext<RevenueCatContextValue>({
   restorePurchases: async () => false,
   presentPaywall: async () => false,
   presentPaywallIfNeeded: async () => false,
+  presentChatPackPaywall: async () => 'unavailable' as const,
   presentCustomerCenter: async () => {},
   isDevMode: !REVENUECAT_ENABLED,
   devPlan: 'auto',
@@ -303,6 +313,26 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
     }
   }, [handlePaywallResult]);
 
+  const presentChatPackPaywall = useCallback(async (): Promise<'purchased' | 'dismissed' | 'unavailable'> => {
+    if (!REVENUECAT_ENABLED) return 'unavailable';
+    try {
+      const offerings = await getOfferings();
+      const offering = offerings.all[CHAT_PACK_OFFERING_ID] ?? null;
+      if (!offering) {
+        console.warn('[RevenueCat] in-app-purchases offering not found');
+        return 'unavailable';
+      }
+      Events.paywallViewed('manual');
+      const result: PAYWALL_RESULT = await RevenueCatUI.presentPaywall({ offering });
+      const purchased = await handlePaywallResult(result, 'manual');
+      return purchased ? 'purchased' : 'dismissed';
+    } catch (err) {
+      console.error('[RevenueCat] presentChatPackPaywall error:', err);
+      recordError(err, 'rc_chat_pack_paywall');
+      return 'unavailable';
+    }
+  }, [handlePaywallResult]);
+
   const presentCustomerCenter = useCallback(async () => {
     if (!REVENUECAT_ENABLED) {
       console.log('[RevenueCat] disabled — skipping presentCustomerCenter');
@@ -328,6 +358,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
         restorePurchases,
         presentPaywall,
         presentPaywallIfNeeded,
+        presentChatPackPaywall,
         presentCustomerCenter,
         isDevMode: !REVENUECAT_ENABLED,
         devPlan,
