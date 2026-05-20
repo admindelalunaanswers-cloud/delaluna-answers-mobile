@@ -88,23 +88,22 @@ function parseResult(data: Record<string, any>): TransitReadingResult | null {
   const raw = data?.response ?? data?.result ?? data?.output;
   if (!raw) return null;
   try {
-    const cleaned = typeof raw === 'string'
-      ? raw
-          .replace(/^```(?:json)?\s*/i, '')
-          .replace(/```\s*$/, '')
-          // Repair: occasionally the model omits `},{` between consecutive
-          // house objects, leaving `"interpretation": "..." , "house": "..."`
-          // with duplicate keys — JSON.parse keeps the last, dropping the
-          // earlier house. Insert the missing object boundary.
-          .replace(
-            /("interpretation"\s*:\s*"(?:[^"\\]|\\.)*")\s*,\s*("house"\s*:)/g,
-            '$1},{$2',
-          )
-          .trim()
-      : raw;
-    return typeof cleaned === 'string'
-      ? JSON.parse(cleaned)
-      : (cleaned as TransitReadingResult);
+    if (typeof raw !== 'string') return raw as TransitReadingResult;
+    const cleaned = raw
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/```\s*$/, '')
+      // Repair: occasionally the model omits `},{` between consecutive
+      // house objects, leaving `"interpretation": "..." , "house": "..."`
+      // with duplicate keys — JSON.parse keeps the last, dropping the
+      // earlier house. Insert the missing object boundary.
+      .replace(
+        /("interpretation"\s*:\s*"(?:[^"\\]|\\.)*")\s*,\s*("house"\s*:)/g,
+        '$1},{$2',
+      )
+      // Hermes is stricter than V8 — trailing commas before } or ] are invalid.
+      .replace(/,(\s*[}\]])/g, '$1')
+      .trim();
+    return JSON.parse(cleaned);
   } catch {
     return null;
   }

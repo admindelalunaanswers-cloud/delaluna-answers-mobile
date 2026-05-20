@@ -132,15 +132,15 @@ export default function ChatFlow({
   const scheduleScroll = (delay: number) => {
     if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
     scrollTimerRef.current = setTimeout(() => {
-      scrollRef.current?.scrollToEnd({ animated: false });
+      scrollRef.current?.scrollToEnd({ animated: true });
     }, delay);
   };
 
-  // Scroll to bottom after keyboard settles (snap, no animation)
+  // Scroll to bottom after keyboard fully settles
   const [kbVisible, setKbVisible] = useState(false);
   useEffect(() => {
-    const onShow = Keyboard.addListener('keyboardDidShow', () => { setKbVisible(true); scheduleScroll(0); });
-    const onHide = Keyboard.addListener('keyboardDidHide', () => { setKbVisible(false); scheduleScroll(0); });
+    const onShow = Keyboard.addListener('keyboardDidShow', () => { setKbVisible(true); scheduleScroll(120); });
+    const onHide = Keyboard.addListener('keyboardDidHide', () => { setKbVisible(false); scheduleScroll(120); });
     return () => { onShow.remove(); onHide.remove(); };
   }, []);
 
@@ -186,6 +186,10 @@ export default function ChatFlow({
         setSelectedLocation(null);
       }
     }
+
+    // Scroll to the new question bubble.  Use a delay long enough for both
+    // the content re-render and the subsequent keyboard-open animation to finish.
+    scheduleScroll(350);
 
     if (['text', 'email', 'secure', 'location', 'date', 'time'].includes(s.inputType)) {
       const t = setTimeout(() => inputRef.current?.focus(), 30);
@@ -485,7 +489,7 @@ export default function ChatFlow({
         ref={scrollRef}
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
-        onContentSizeChange={() => scheduleScroll(50)}
+        onContentSizeChange={() => scheduleScroll(80)}
       >
         {/* Completed Q&A pairs */}
         {steps.slice(0, step).map((s, i) => {

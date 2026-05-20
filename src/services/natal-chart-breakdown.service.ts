@@ -32,12 +32,14 @@ function parseResult(data: Record<string, any>): NatalChartBreakdownResult | nul
   const raw = data?.response ?? data?.result ?? data?.output;
   if (!raw) return null;
   try {
-    const cleaned = typeof raw === 'string'
+    const stripped = typeof raw === 'string'
       ? raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
       : raw;
-    return typeof cleaned === 'string'
-      ? JSON.parse(cleaned)
-      : (cleaned as NatalChartBreakdownResult);
+    if (typeof stripped !== 'string') return stripped as NatalChartBreakdownResult;
+    // Hermes (React Native) is stricter than V8 — trailing commas before } or ]
+    // are invalid JSON but the AI occasionally emits them. Strip them before parsing.
+    const sanitized = stripped.replace(/,(\s*[}\]])/g, '$1');
+    return JSON.parse(sanitized);
   } catch {
     return null;
   }

@@ -108,10 +108,11 @@ function parseResult(data: Record<string, any>): HoroscopeResult | null {
   const raw = data?.response ?? data?.result ?? data?.output;
   if (!raw) return null;
   try {
-    const cleaned = typeof raw === 'string'
-      ? raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
-      : null;
-    return cleaned !== null ? JSON.parse(cleaned) : (raw as HoroscopeResult);
+    if (typeof raw !== 'string') return raw as HoroscopeResult;
+    const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+    // Hermes is stricter than V8 — trailing commas before } or ] are invalid.
+    const sanitized = stripped.replace(/,(\s*[}\]])/g, '$1');
+    return JSON.parse(sanitized);
   } catch {
     return null;
   }

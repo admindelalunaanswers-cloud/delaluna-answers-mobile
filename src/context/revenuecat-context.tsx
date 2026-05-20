@@ -9,7 +9,6 @@
  */
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Platform } from 'react-native';
 import type { CustomerInfo } from 'react-native-purchases';
 import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
 
@@ -108,12 +107,12 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
   // so admin overrides survive reload and don't leak between users on the same device.
   const [devPlan, setDevPlanState] = useState<DevPlan>('auto');
 
-  // On Android (live) use real entitlement; on iOS use devPlan until products are approved.
   const isPro = useMemo(() => {
-    if (Platform.OS === 'android' && customerInfo !== null) {
-      return hasEntitlement(customerInfo);
-    }
-    return devPlan === 'premium';
+    // Admin override: explicit plan selection (from admin screen) beats real state.
+    if (devPlan !== 'auto') return devPlan === 'premium';
+    // Use real RevenueCat entitlement on all platforms.
+    if (!REVENUECAT_ENABLED || customerInfo === null) return false;
+    return hasEntitlement(customerInfo);
   }, [customerInfo, devPlan]);
 
   // Hydrate devPlan from AsyncStorage when the auth user changes.
