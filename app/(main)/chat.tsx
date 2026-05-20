@@ -381,8 +381,7 @@ export default function ChatScreen() {
   // ─── Derived ───────────────────────────────────────────────────────────────
 
   const showSuggestions = historyLoaded && messages.length === 0;
-  const hasPending = messages.some(m => m.isPending);
-  const sendDisabled = isSending || hasPending || !inputText.trim();
+  const sendDisabled = isSending || !inputText.trim();
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -585,7 +584,7 @@ export default function ChatScreen() {
               {isSending ? (
                 <ActivityIndicator size="small" color={C.white} />
               ) : (
-                <Text style={styles.sendButtonText}>{'\u2192'}</Text>
+                <Ionicons name="send" size={18} color={C.white} />
               )}
             </TouchableOpacity>
           </View>
@@ -799,12 +798,6 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     backgroundColor: C.purpleDim,
-  },
-  sendButtonText: {
-    color: C.white,
-    fontSize: 18,
-    fontWeight: '600',
-    lineHeight: 22,
   },
 
   paygateContainer: {
