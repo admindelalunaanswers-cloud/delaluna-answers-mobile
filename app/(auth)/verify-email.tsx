@@ -1,6 +1,5 @@
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   ImageBackground,
   KeyboardAvoidingView,
   Platform,
@@ -15,6 +14,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { updateEmail } from 'firebase/auth';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
 import { app, auth } from '@/firebaseConfig';
@@ -23,7 +23,7 @@ import { ThemedView } from '@/src/components/themed-view';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { ThemeContext } from '@/src/context/theme-context';
 import { useUser } from '@/src/context/user-context';
-import { signOut } from '@/src/services/user.service';
+import { signOut, updateUserDoc } from '@/src/services/user.service';
 import { Events } from '@/src/services/analytics.service';
 import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
 import LoadingScreen from '../(util)/loading-screen';
@@ -46,7 +46,13 @@ export default function VerifyEmail() {
   const [verified, setVerified] = useState(false);
   const [codeSent, setCodeSent] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
+
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [emailChangeError, setEmailChangeError] = useState<string | null>(null);
+  const [savingEmail, setSavingEmail] = useState(false);
 
   // Don't gate on transitReadingGenerating — transit reading populates the
   // transits screen separately and can lag well behind today's horoscope.
@@ -60,11 +66,11 @@ export default function VerifyEmail() {
     handleSendCode();
   }, []);
 
-  // Cooldown countdown
+  // Cooldown countdown — setTimeout so each tick schedules exactly one next tick
   useEffect(() => {
     if (resendCooldown <= 0) return;
-    const t = setInterval(() => setResendCooldown(c => Math.max(0, c - 1)), 1000);
-    return () => clearInterval(t);
+    const t = setTimeout(() => setResendCooldown(c => Math.max(0, c - 1)), 1000);
+    return () => clearTimeout(t);
   }, [resendCooldown]);
 
   const handleSendCode = async () => {
@@ -94,7 +100,33 @@ export default function VerifyEmail() {
     router.replace('/(startup)/welcome');
   };
 
+  const handleSaveEmail = async () => {
+    const trimmed = newEmail.trim().toLowerCase();
+    if (!trimmed || !trimmed.includes('@')) {
+      setEmailChangeError('Enter a valid email address.');
+      return;
+    }
+    if (!auth.currentUser) return;
+    setSavingEmail(true);
+    setEmailChangeError(null);
+    try {
+      await updateEmail(auth.currentUser, trimmed);
+      await updateUserDoc(auth.currentUser.uid, { email: trimmed });
+      await reloadAuthUser();
+      setEditingEmail(false);
+      // Resend code to the new address
+      setCodeSent(false);
+      setResendCooldown(0);
+      await handleSendCode();
+    } catch (e: any) {
+      setEmailChangeError(e?.message ?? 'Could not update email.');
+    } finally {
+      setSavingEmail(false);
+    }
+  };
+
   const handleDigitChange = (text: string, index: number) => {
+    if (verifyError) setVerifyError(null);
     // Strip anything that isn't a letter or digit, uppercase, take the last
     // character. Lets users paste the whole code (handled below via length>1).
     const cleaned = text.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
@@ -137,17 +169,18 @@ export default function VerifyEmail() {
     const enteredCode = code ?? digits.join('');
 
     if (!enteredCode || enteredCode.length !== CODE_LENGTH) {
-      Alert.alert('Invalid code', 'Please enter all 6 characters of the code.');
+      setVerifyError('Please enter all 6 characters of the code.');
       return;
     }
 
+    setVerifyError(null);
     setVerifying(true);
     try {
       await verifyCodeFn({ code: enteredCode });
       Events.emailVerified();
     } catch (e: any) {
       const msg = e?.message ?? 'Something went wrong.';
-      Alert.alert('Verification failed', msg);
+      setVerifyError(msg);
       setDigits(Array(CODE_LENGTH).fill(''));
       inputRefs.current[0]?.focus();
       setVerifying(false);
@@ -189,7 +222,6 @@ export default function VerifyEmail() {
   }
 
   const email = authUser?.email ?? '';
-  const maskedEmail = email.replace(/(.{2}).+(@.+)/, '$1…$2');
 
   return (
     <>
@@ -227,18 +259,62 @@ export default function VerifyEmail() {
                   <ThemedView style={styles.errorBox}>
                     <ThemedText style={styles.errorText}>Could not send code</ThemedText>
                     <ThemedText style={styles.errorDetail}>{sendError}</ThemedText>
-                    <TouchableOpacity onPress={handleSendCode} style={styles.retryButton}>
-                      <ThemedText style={styles.retryText}>Try again</ThemedText>
-                    </TouchableOpacity>
+                  </ThemedView>
+                ) : editingEmail ? (
+                  <ThemedView style={styles.emailEditContainer}>
+                    <TextInput
+                      style={styles.emailInput}
+                      value={newEmail}
+                      onChangeText={t => { setNewEmail(t); setEmailChangeError(null); }}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      autoComplete="email"
+                      placeholder="Enter new email"
+                      placeholderTextColor="rgba(255,255,255,0.3)"
+                    />
+                    {emailChangeError && (
+                      <ThemedText style={styles.emailChangeError}>{emailChangeError}</ThemedText>
+                    )}
+                    <View style={styles.emailEditActions}>
+                      <TouchableOpacity
+                        onPress={() => { setEditingEmail(false); setEmailChangeError(null); }}
+                        style={styles.emailCancelButton}
+                        disabled={savingEmail}
+                      >
+                        <ThemedText style={styles.emailCancelText}>Cancel</ThemedText>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={handleSaveEmail}
+                        style={[styles.emailSaveButton, savingEmail && { opacity: 0.6 }]}
+                        disabled={savingEmail}
+                      >
+                        <ThemedText style={styles.emailSaveText}>
+                          {savingEmail ? 'Saving…' : 'Save'}
+                        </ThemedText>
+                      </TouchableOpacity>
+                    </View>
                   </ThemedView>
                 ) : (
-                  <ThemedText style={styles.subtitle}>
-                    {codeSent
-                      ? `We sent a 6-character code to ${maskedEmail}`
-                      : sending
-                      ? 'Sending code…'
-                      : 'Preparing your code…'}
-                  </ThemedText>
+                  <ThemedView style={styles.emailRow}>
+                    <ThemedText style={styles.subtitle}>
+                      {codeSent
+                        ? `Code sent to`
+                        : sending
+                        ? 'Sending code…'
+                        : 'Preparing your code…'}
+                    </ThemedText>
+                    {codeSent && (
+                      <>
+                        <ThemedText style={styles.emailDisplay}>{email}</ThemedText>
+                        <TouchableOpacity
+                          onPress={() => { setNewEmail(email); setEditingEmail(true); }}
+                        >
+                          <ThemedText style={styles.changeEmailText}>Change email</ThemedText>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </ThemedView>
                 )}
 
                 {/* Code input boxes */}
@@ -263,6 +339,11 @@ export default function VerifyEmail() {
                     />
                   ))}
                 </View>
+
+                {/* Inline verification error */}
+                {verifyError && (
+                  <ThemedText style={styles.verifyError}>{verifyError}</ThemedText>
+                )}
 
                 {/* Verify button */}
                 <TouchableOpacity
@@ -356,18 +437,6 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(12),
     textAlign: 'center',
   },
-  retryButton: {
-    marginTop: verticalScale(4),
-    paddingVertical: verticalScale(6),
-    paddingHorizontal: scale(20),
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: moderateScale(20),
-  },
-  retryText: {
-    color: 'white',
-    fontSize: moderateScale(13),
-    fontWeight: '600',
-  },
   title: {
     fontSize: moderateScale(26),
     fontWeight: '700',
@@ -427,5 +496,75 @@ const styles = StyleSheet.create({
   signOutText: {
     color: 'rgba(255,255,255,0.35)',
     fontSize: moderateScale(13),
+  },
+  verifyError: {
+    color: '#ff8080',
+    fontSize: moderateScale(13),
+    textAlign: 'center',
+  },
+  emailRow: {
+    alignItems: 'center',
+    gap: scale(4),
+    marginBottom: verticalScale(8),
+  },
+  emailDisplay: {
+    color: 'white',
+    fontSize: moderateScale(14),
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  changeEmailText: {
+    color: 'rgba(111,255,233,0.9)',
+    fontSize: moderateScale(13),
+    textDecorationLine: 'underline',
+    marginTop: verticalScale(2),
+  },
+  emailEditContainer: {
+    width: '100%',
+    gap: scale(8),
+    marginBottom: verticalScale(8),
+  },
+  emailInput: {
+    width: '100%',
+    height: verticalScale(48),
+    borderRadius: moderateScale(10),
+    borderWidth: 1.5,
+    borderColor: 'rgba(111,255,233,0.4)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    color: 'white',
+    fontSize: moderateScale(14),
+    paddingHorizontal: scale(14),
+  },
+  emailChangeError: {
+    color: '#ff8080',
+    fontSize: moderateScale(12),
+    textAlign: 'center',
+  },
+  emailEditActions: {
+    flexDirection: 'row',
+    gap: scale(10),
+    justifyContent: 'center',
+  },
+  emailCancelButton: {
+    paddingVertical: verticalScale(8),
+    paddingHorizontal: scale(20),
+    borderRadius: moderateScale(20),
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  emailCancelText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: moderateScale(14),
+    fontWeight: '500',
+  },
+  emailSaveButton: {
+    paddingVertical: verticalScale(8),
+    paddingHorizontal: scale(24),
+    borderRadius: moderateScale(20),
+    backgroundColor: 'rgba(111,255,233,0.18)',
+  },
+  emailSaveText: {
+    color: 'rgba(111,255,233,0.95)',
+    fontSize: moderateScale(14),
+    fontWeight: '600',
   },
 });
