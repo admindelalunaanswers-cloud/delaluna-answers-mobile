@@ -112,8 +112,12 @@ module.exports = {
       FIREBASE_MESSAGING_SENDER_ID: process.env.FIREBASE_MESSAGING_SENDER_ID,
       FIREBASE_APP_ID:             process.env.FIREBASE_APP_ID,
       APP_ENV:                     process.env.APP_ENV,
-      REVENUECAT_IOS_API_KEY:      process.env.REVENUECAT_IOS_API_KEY,
-      REVENUECAT_ANDROID_API_KEY:  process.env.REVENUECAT_ANDROID_API_KEY,
+      REVENUECAT_AAS_API_KEY:      process.env.REVENUECAT_AAS_API_KEY,
+      REVENUECAT_GPS_API_KEY:      process.env.REVENUECAT_GPS_API_KEY,
+      REVENUECAT_TST_API_KEY:      process.env.REVENUECAT_TST_API_KEY,
+      // Server-side secret keys — use only in Cloud Functions / trusted server code, never in client SDK calls
+      REVENUECAT_KEY_V1:           process.env.REVENUECAT_KEY_V1,
+      REVENUECAT_KEY_V2:           process.env.REVENUECAT_KEY_V2,
     },
     runtimeVersion: "1.0.0",
     updates: {

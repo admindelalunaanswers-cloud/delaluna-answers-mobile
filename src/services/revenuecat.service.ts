@@ -18,10 +18,10 @@ import Purchases, {
 
 /** RevenueCat public SDK key — test key for dev, platform-specific production key from EAS env */
 const API_KEY = __DEV__
-  ? 'test_QonuDCkIeqnqTXdinEhKquDyJrc'
+  ? (Constants.expoConfig?.extra?.REVENUECAT_TST_API_KEY as string) ?? ''
   : Platform.select({
-      ios: Constants.expoConfig?.extra?.REVENUECAT_IOS_API_KEY as string,
-      android: Constants.expoConfig?.extra?.REVENUECAT_ANDROID_API_KEY as string,
+      ios: Constants.expoConfig?.extra?.REVENUECAT_AAS_API_KEY as string,
+      android: Constants.expoConfig?.extra?.REVENUECAT_GPS_API_KEY as string,
     }) ?? '';
 
 export const REVENUECAT_ENABLED = true;
