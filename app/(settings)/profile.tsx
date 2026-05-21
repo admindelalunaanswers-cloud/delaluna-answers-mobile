@@ -69,7 +69,8 @@ export default function ProfileScreen() {
   const {} = useHoroscope();
   const {
     isPro,
-    setDevPlan,
+    presentCustomerCenter,
+    restorePurchases,
   } = useRevenueCat();
   const insets = useSafeAreaInsets();
   const ud = userDoc as any;
@@ -109,12 +110,15 @@ export default function ProfileScreen() {
   };
 
   const handleManageSubscription = () => {
-    router.push('/(settings)/paywall');
+    presentCustomerCenter();
   };
 
-  const handleRestore = () => {
-    setDevPlan('premium');
-    Alert.alert('Restored', 'Premium access restored.');
+  const handleRestore = async () => {
+    const ok = await restorePurchases();
+    Alert.alert(
+      ok ? 'Purchases restored' : 'Nothing to restore',
+      ok ? 'Your premium access has been restored.' : 'No active purchases were found for this account.',
+    );
   };
 
   // ── Log out / delete ──────────────────────────────────────────────────────────
