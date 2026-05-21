@@ -52,11 +52,16 @@ interface Props {
   onClose: () => void;
   /** Called after a successful purchase with the quantity bought. */
   onPurchased: (quantity: number) => void;
+  /**
+   * Optional: called after a successful purchase so the RevenueCat context
+   * can re-sync CustomerInfo. Pass `refresh` from `useRevenueCat()`.
+   */
+  onRefresh?: () => Promise<void>;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export default function ConsumablePlaceholder({ visible, onClose, onPurchased }: Props) {
+export default function ConsumablePlaceholder({ visible, onClose, onPurchased, onRefresh }: Props) {
   const [selected, setSelected] = useState(TIER_DEFS[1].productId);
   const [storeProducts, setStoreProducts] = useState<Record<string, PurchasesStoreProduct>>({});
   const [loadingProducts, setLoadingProducts] = useState(false);
@@ -105,6 +110,7 @@ export default function ConsumablePlaceholder({ visible, onClose, onPurchased }:
     try {
       await purchaseProduct(product);
       Events.purchaseCompleted({ product_id: tier.productId });
+      await onRefresh?.();
       onPurchased(tier.quantity);
       onClose();
     } catch (e: any) {
@@ -116,7 +122,7 @@ export default function ConsumablePlaceholder({ visible, onClose, onPurchased }:
     } finally {
       setPurchasing(false);
     }
-  }, [selected, storeProducts, onPurchased, onClose]);
+  }, [selected, storeProducts, onPurchased, onClose, onRefresh]);
 
   const priceFor = (tier: TierDef) =>
     storeProducts[tier.productId]?.priceString ?? tier.fallbackPrice;

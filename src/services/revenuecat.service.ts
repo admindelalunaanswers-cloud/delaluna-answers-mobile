@@ -57,19 +57,25 @@ let _configured = false;
 /**
  * Configure the RevenueCat SDK. Call once at app startup.
  * Safe to call multiple times — subsequent calls are no-ops.
+ *
+ * Returns `true` if the SDK was actually initialised (or was already
+ * initialised on a prior call), `false` if it was skipped (disabled or
+ * missing API key). Callers that need to call into the SDK (e.g. `logIn`,
+ * `getCustomerInfo`) must check this return value before proceeding.
  */
-export function configureRevenueCat(): void {
-  if (_configured) return;
+export function configureRevenueCat(): boolean {
+  if (_configured) return !!API_KEY && REVENUECAT_ENABLED;
 
   if (!REVENUECAT_ENABLED) {
     _configured = true;
     console.log('[RevenueCat] disabled — skipping SDK configuration');
-    return;
+    return false;
   }
 
   if (!API_KEY) {
+    _configured = true; // prevent repeated warn-and-bail on every re-render
     console.warn('[RevenueCat] no API key found — skipping configuration');
-    return;
+    return false;
   }
 
   if (__DEV__) {
@@ -79,6 +85,7 @@ export function configureRevenueCat(): void {
   Purchases.configure({ apiKey: API_KEY });
   _configured = true;
   console.log('[RevenueCat] SDK configured');
+  return true;
 }
 
 // ─── User identification ─────────────────────────────────────────────────────
@@ -126,7 +133,7 @@ export function hasEntitlement(
   customerInfo: CustomerInfo,
   entitlementId: string = ENTITLEMENT_ID,
 ): boolean {
-  return typeof customerInfo.entitlements.active[entitlementId] !== 'undefined';
+  return customerInfo.entitlements.active[entitlementId]?.isActive === true;
 }
 
 /**

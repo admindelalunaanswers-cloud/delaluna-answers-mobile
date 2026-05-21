@@ -111,6 +111,8 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [loading, setLoading] = useState(REVENUECAT_ENABLED);
   const configuredRef = useRef(false);
+  /** True only when configureRevenueCat() actually initialised the SDK. */
+  const sdkReadyRef = useRef(false);
   const loggedInUidRef = useRef<string | null>(null);
 
   // Placeholder plan — lets the client test free / premium flows via the
@@ -169,12 +171,15 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (configuredRef.current) return;
     configuredRef.current = true;
-    configureRevenueCat();
+    sdkReadyRef.current = configureRevenueCat();
+    // If the SDK could not be initialised (missing key in this build),
+    // clear the loading flag so the app doesn't hang on a spinner.
+    if (!sdkReadyRef.current) setLoading(false);
   }, []);
 
   // ── Link to Firebase user & fetch initial customer info ─────────────────────
   useEffect(() => {
-    if (!REVENUECAT_ENABLED) return;
+    if (!REVENUECAT_ENABLED || !sdkReadyRef.current) return;
 
     let cancelled = false;
 
@@ -211,7 +216,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
 
   // ── Listen for real-time updates ────────────────────────────────────────────
   useEffect(() => {
-    if (!REVENUECAT_ENABLED) return;
+    if (!REVENUECAT_ENABLED || !sdkReadyRef.current) return;
     const unsubscribe = onCustomerInfoUpdate((info) => {
       setCustomerInfo(info);
     });
@@ -329,6 +334,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
 
       // Resolve quantity from the most recent non-subscription transaction
       const info = await getCustomerInfo();
+      setCustomerInfo(info);
       const recent = info.nonSubscriptionTransactions
         .slice()
         .sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime())[0];
