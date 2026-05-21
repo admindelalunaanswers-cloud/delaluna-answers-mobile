@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import HeaderNav from '@/src/components/shared/header-nav';
 import { ThemedView } from '@/src/components/themed-view';
 import { moderateScale, scale as staticScale, verticalScale } from '@/src/utils/responsive';
+import { getContentPadding } from '@/src/utils/layout';
 import { renderRichText } from '@/src/utils/rich-text';
 import { C, R, S } from '@/src/constants/theme';
 import { useHoroscope } from '@/src/context/horoscope-context';
@@ -118,7 +119,7 @@ export default function TransitsScreen() {
   const isPremium = isPro || hasAccess;
 
   const insets = useSafeAreaInsets();
-  const { scale } = useResponsive();
+  const { scale, width: screenWidth } = useResponsive();
   const headerHeight = insets.top + scale(NAV_BAR_HEIGHT);
 
   // Free users get only the 3 houses containing their Big 3 (Sun, Moon, Rising).
@@ -175,7 +176,7 @@ export default function TransitsScreen() {
           style={styles.scroll}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingTop: scale(12), paddingBottom: insets.bottom + scale(20) },
+            { paddingTop: scale(12), paddingBottom: insets.bottom + scale(20), paddingHorizontal: getContentPadding(screenWidth) },
           ]}
           showsVerticalScrollIndicator={false}
         >
@@ -283,7 +284,7 @@ const styles = StyleSheet.create({
     paddingBottom: verticalScale(S.sm),
   },
   scroll:        { flex: 1 },
-  scrollContent: { paddingHorizontal: staticScale(16) },
+  scrollContent: { /* paddingHorizontal applied dynamically via getContentPadding(screenWidth) */ },
   housesHeader: {
     flexDirection: 'row',
     alignItems: 'center',

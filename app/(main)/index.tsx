@@ -31,6 +31,7 @@ import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
 import { useResponsive } from '@/src/hooks/use-responsive';
 import { verticalScale } from '@/src/utils/responsive';
+import { getContentPadding } from '@/src/utils/layout';
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -143,7 +144,7 @@ export default function HomeScreen() {
   };
 
   const insets = useSafeAreaInsets();
-  const { scale } = useResponsive();
+  const { scale, width: screenWidth } = useResponsive();
   const headerHeight = insets.top + scale(NAV_BAR_HEIGHT);
 
   // ─── Derived values ─────────────────────────────────────────────────────────
@@ -208,7 +209,7 @@ export default function HomeScreen() {
         <ScrollView
           ref={scrollRef}
           style={styles.scroll}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: verticalScale(2) }]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: verticalScale(2), paddingHorizontal: getContentPadding(screenWidth) }]}
           showsVerticalScrollIndicator={false}
         >
           <SectionTitle sectionName="quote" title="Quote" />
@@ -327,7 +328,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 16,
+    // paddingHorizontal is applied dynamically via getContentPadding(screenWidth)
+    // so content stays in a phone-width column even on iPad — see render above.
     paddingTop: 12,
   },
   generatingRow: {

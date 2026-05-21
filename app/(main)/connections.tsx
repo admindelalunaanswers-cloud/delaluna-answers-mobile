@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View
 } from "react-native";
 import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
@@ -35,6 +36,7 @@ import { ConnectionsCache } from "@/src/services/connections-cache.service";
 import { Events } from "@/src/services/analytics.service";
 import { recordError } from "@/src/services/crashlytics.service";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
+import { getContentPadding } from "@/src/utils/layout";
 import { db, functions } from "../../firebaseConfig";
 
 const NAV_BAR_HEIGHT = 44;
@@ -117,6 +119,7 @@ export default function ConnectionsScreen() {
     premiumConnectionLimit: PREMIUM_CONNECTION_LIMIT,
   } = useAdmin();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
 
   const [connections, setConnections] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -282,7 +285,7 @@ export default function ConnectionsScreen() {
             style={{ flex: 1 }}
             contentContainerStyle={[
               styles.listContainer,
-              { paddingBottom: insets.bottom + verticalScale(60) },
+              { paddingBottom: insets.bottom + verticalScale(60), paddingHorizontal: getContentPadding(screenWidth) },
             ]}
             showsVerticalScrollIndicator={false}
           >
@@ -342,7 +345,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, width: "100%" },
   paygateContainer: { flex: 1 },
   centered: { flex: 1, justifyContent: "space-around", alignItems: "center", padding: scale(15) },
-  listContainer: { flexGrow: 1, paddingHorizontal: scale(15),  },
+  listContainer: { flexGrow: 1 }, // paddingHorizontal applied dynamically via getContentPadding(screenWidth)
   itemWrapper: {
     marginVertical: verticalScale(6),
     borderRadius: moderateScale(14),

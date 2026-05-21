@@ -28,6 +28,7 @@ import { ThemeContext } from '@/src/context/theme-context';
 import { ThemedText } from '@/src/components/themed-text';
 import { auth, db } from '@/firebaseConfig';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
+import { MAX_CONTENT_WIDTH } from '@/src/utils/layout';
 import { updateUserDoc } from '@/src/services/user.service';
 import { useUser } from '@/src/context/user-context';
 import { Events } from '@/src/services/analytics.service';
@@ -255,6 +256,8 @@ export default function Login() {
 const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
+    // Center the card on wide screens (iPad) rather than stretching edge to edge
+    alignItems: 'center',
   },
   logoContainer: {
     flex: 1,
@@ -269,6 +272,7 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '100%',
+    maxWidth: MAX_CONTENT_WIDTH,
     backgroundColor: 'rgba(255,255,255,0.1)',
     borderTopLeftRadius: moderateScale(25),
     borderTopRightRadius: moderateScale(25),

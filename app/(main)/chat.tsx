@@ -30,6 +30,7 @@ import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { useUser } from '@/src/context/user-context';
 import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
 import { useResponsive } from '@/src/hooks/use-responsive';
+import { getContentPadding, MAX_CONTENT_WIDTH } from '@/src/utils/layout';
 import type { ChatConnectionContext, ChatMessageDoc, SavedChatSession } from '@/src/services/chat.service';
 import { deleteChatSession, resumeChatSession, retryChatMessage, saveChatAndClear, sendChatMessage, subscribeToChatHistory, subscribeToChatSessions } from '@/src/services/chat.service';
 import { Events } from '@/src/services/analytics.service';
@@ -147,7 +148,7 @@ export default function ChatScreen() {
   const { hasAccess: trialAccess } = useFreeTrialAccess();
   const hasPremiumAccess = isPro || trialAccess;
   const insets = useSafeAreaInsets();
-  const { scale } = useResponsive();
+  const { scale, width: screenWidth } = useResponsive();
   const headerHeight = insets.top + scale(44);
 
   const [messages, setMessages] = useState<ChatMessageDoc[]>([]);
@@ -531,7 +532,13 @@ export default function ChatScreen() {
               renderItem={({ item }) => <MessageBubble msg={item} onRetry={handleRetry} />}
               contentContainerStyle={[
                 styles.messageList,
-                { paddingBottom: insets.bottom + S.md },
+                {
+                  paddingBottom: insets.bottom + S.md,
+                  paddingHorizontal: getContentPadding(screenWidth),
+                  maxWidth: MAX_CONTENT_WIDTH,
+                  alignSelf: 'center',
+                  width: '100%',
+                },
               ]}
               showsVerticalScrollIndicator={false}
               onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}

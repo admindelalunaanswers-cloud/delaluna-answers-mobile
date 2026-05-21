@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemeContext } from "@/src/context/theme-context";
 import { useResponsive } from "@/src/hooks/use-responsive";
+import { MAX_CONTENT_WIDTH } from "@/src/utils/layout";
 import { ThemedText } from "../themed-text";
 import { ThemedView } from "../themed-view";
 
@@ -160,6 +161,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    // Prevent the nav content from spreading to iPad edges — keep it phone-width centered
+    width: "100%",
+    maxWidth: MAX_CONTENT_WIDTH,
+    alignSelf: "center",
   },
   sideContainer: {
     alignItems: "center",
