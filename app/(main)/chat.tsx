@@ -144,7 +144,7 @@ export default function ChatScreen() {
   const { authUser } = useUser();
   const { chartDetails } = useHoroscope();
   const { dailyChatLimit, premiumDailyChatLimit } = useAdmin();
-  const { isPro, presentChatPackPaywall } = useRevenueCat();
+  const { isPro, presentChatPackPaywall, refresh: refreshRevenueCat } = useRevenueCat();
   const { hasAccess: trialAccess } = useFreeTrialAccess();
   const hasPremiumAccess = isPro || trialAccess;
   const insets = useSafeAreaInsets();
@@ -614,6 +614,7 @@ export default function ChatScreen() {
         onPurchased={(quantity) => {
           setExtraQuestionsPurchased((n) => n + quantity);
         }}
+        onRefresh={refreshRevenueCat}
       />
 
       <ConnectionPickerSheet
