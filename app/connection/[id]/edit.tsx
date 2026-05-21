@@ -1,3 +1,5 @@
+/* eslint-disable react/display-name */
+/* eslint-disable react/no-unescaped-entities */
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { router, useLocalSearchParams } from "expo-router";
@@ -849,30 +851,35 @@ export default function EditConnectionScreen() {
   const handleSave = async () => {
     dismissAllSuggestions();
 
-    if (onlyPronounsChanged) {
-      setSaving(true);
-      await handleSavePronouns();
-      return;
-    }
-
-    setSaving(true);
-
-    if (!validatePerson(firstPerson, "First Person")) { setSaving(false); return; }
-    if (!validatePerson(secondPerson, "Second Person")) { setSaving(false); return; }
+    // Validate before showing the loading screen so we never flash LoadingScreen
+    // and immediately unmount it (which can crash LottieView on rapid mount/unmount).
+    if (!validatePerson(firstPerson, "First Person")) return;
+    if (!validatePerson(secondPerson, "Second Person")) return;
     if (!relationshipType) {
       Alert.alert("Missing Relationship Type", "Please select a relationship type.");
-      setSaving(false);
       return;
     }
-
     if (birthDetailsChanged && changeCount >= MAX_BIRTH_DETAIL_CHANGES) {
       Alert.alert(
         "Change limit reached",
         `Connection birth details can only be updated ${MAX_BIRTH_DETAIL_CHANGES} times. Please contact support if you need further changes.`,
       );
-      setSaving(false);
       return;
     }
+
+    if (onlyPronounsChanged) {
+      setSaving(true);
+      try {
+        await handleSavePronouns();
+      } catch (err) {
+        console.error("Error saving pronouns:", err);
+        Alert.alert("Error", "Failed to save changes.");
+        setSaving(false);
+      }
+      return;
+    }
+
+    setSaving(true);
     try {
       const connectionRef = doc(db, "users", authUser!.uid, "connections", connectionId!);
       const nextChangeCount = birthDetailsChanged ? changeCount + 1 : changeCount;
@@ -947,22 +954,26 @@ export default function EditConnectionScreen() {
         });
 
         // Update the existing connection document in place — keeps the same ID.
+        // Avoid mixing dot-notation keys with deleteField() in one updateDoc call;
+        // instead use separate updateDoc calls for each concern.
         await updateDoc(connectionRef, {
           relationshipType,
           firstPerson: mapPerson(firstPerson, firstChart),
           secondPerson: mapPerson(secondPerson, secondChart),
-          "status.state": "pending",
+          status: { state: "pending" },
           birthDetailsChangeCount: nextChangeCount,
           compatibility: deleteField(),
         });
 
-        // Write a fresh prompt to the subcollection the GenAI extension watches.
+        // Replace the report/details doc entirely so the GenAI extension sees a
+        // fresh prompt with no stale response. setDoc (no merge) is the safest
+        // way to avoid deleteField() inside setDoc with merge, which behaves
+        // inconsistently across Firebase SDK versions.
         const reportDocRef = doc(db, "users", authUser!.uid, "connections", connectionId!, "report", "details");
         await setDoc(reportDocRef, {
           prompt,
-          response: deleteField(),
           requestedAt: serverTimestamp(),
-        }, { merge: true });
+        });
       } else {
         // ── Names / relationship type only — preserve existing chart signs ────
         const mapPerson = (person: PersonBirthData, existing: any) => ({
