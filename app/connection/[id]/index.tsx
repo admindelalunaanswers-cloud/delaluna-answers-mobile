@@ -24,7 +24,6 @@ import SkeletonLines from "@/src/components/shared/skeleton-lines";
 import { ThemedText } from "@/src/components/themed-text";
 import { COMPATIBILITY_DEFINITIONS } from "@/src/constants/definitions";
 import { useRevenueCat } from "@/src/context/revenuecat-context";
-import { useFreeTrialAccess } from "@/src/hooks/use-free-trial-access";
 import { useUser } from "@/src/context/user-context";
 import { calculateNatalChart } from "@/src/services/astroEngine";
 import { subscribeToSynastryReading } from "@/src/services/synastry-reading.service";
@@ -195,9 +194,8 @@ export default function ConnectionViewScreen() {
     secondLast?: string;
   }>();
   const { authUser } = useUser();
-  const { isPro, presentPaywall } = useRevenueCat();
-  const { hasAccess: trialAccess } = useFreeTrialAccess();
-  const hasPremiumAccess = isPro || trialAccess;
+  const { isPro, loading: rcLoading, presentPaywall } = useRevenueCat();
+  const hasPremiumAccess = rcLoading || isPro;
   const insets = useSafeAreaInsets();
   const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
 

@@ -28,7 +28,6 @@ import type { HoroscopeResult } from '@/src/types/horoscope.types';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useUser } from '@/src/context/user-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
-import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
 import { useResponsive } from '@/src/hooks/use-responsive';
 import { verticalScale } from '@/src/utils/responsive';
 import { getContentPadding } from '@/src/utils/layout';
@@ -43,8 +42,8 @@ export default function HomeScreen() {
     transitMoon,
     breakdown,
   } = useHoroscope();
-  const { isPro } = useRevenueCat();
-  const { hasAccess: hasPremiumAccess } = useFreeTrialAccess();
+  const { isPro, loading: rcLoading } = useRevenueCat();
+  const hasPremiumAccess = rcLoading || isPro;
 
 
   const todayDateId = getTodayDateId();
@@ -165,7 +164,7 @@ export default function HomeScreen() {
     const variants = ['upgrade-full', 'upgrade-compact', 'shop'] as const;
     return variants[Math.floor(Math.random() * variants.length)];
   });
-  const isPremium = isPro || hasPremiumAccess;
+  const isPremium = hasPremiumAccess;
   const isPaygated = selectedDate !== todayDateId && !isPremium;
 
   const handleUnlock = () => {

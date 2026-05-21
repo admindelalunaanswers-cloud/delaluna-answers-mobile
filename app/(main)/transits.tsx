@@ -13,7 +13,6 @@ import { renderRichText } from '@/src/utils/rich-text';
 import { C, R, S } from '@/src/constants/theme';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
-import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
 import { useResponsive } from '@/src/hooks/use-responsive';
 import type { TransitHouseReading } from '@/src/types/transit-reading.types';
 
@@ -114,9 +113,8 @@ export default function TransitsScreen() {
     loading,
   } = useHoroscope();
 
-  const { isPro } = useRevenueCat();
-  const { hasAccess } = useFreeTrialAccess();
-  const isPremium = isPro || hasAccess;
+  const { isPro, loading: rcLoading } = useRevenueCat();
+  const isPremium = rcLoading || isPro;
 
   const insets = useSafeAreaInsets();
   const { scale, width: screenWidth } = useResponsive();

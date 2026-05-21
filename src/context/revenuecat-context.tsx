@@ -199,8 +199,9 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
           }
           if (!cancelled) setCustomerInfo(null);
         } else {
-          // No prior login — SDK is already anonymous, just fetch initial info
-          if (!cancelled) setCustomerInfo(null);
+          // No prior login — SDK is anonymous; fetch real customer info
+          const info = await getCustomerInfo();
+          if (!cancelled) setCustomerInfo(info);
         }
       } catch (err) {
         console.error('[RevenueCat] syncUser error:', err);
@@ -330,7 +331,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       }
       Events.paywallViewed('manual');
       const result: PAYWALL_RESULT = await RevenueCatUI.presentPaywall({ offering });
-      if (result !== PAYWALL_RESULT.PURCHASED) return 'dismissed';
+      if (result !== PAYWALL_RESULT.PURCHASED && result !== PAYWALL_RESULT.RESTORED) return 'dismissed';
 
       // Resolve quantity from the most recent non-subscription transaction
       const info = await getCustomerInfo();

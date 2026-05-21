@@ -165,19 +165,6 @@ export async function getCurrentPackages(): Promise<PurchasesPackage[]> {
 // ─── Purchasing ──────────────────────────────────────────────────────────────
 
 /**
- * Purchase a specific package from an offering.
- * Returns the updated CustomerInfo after purchase.
- * Throws on error (caller should check `e.userCancelled`).
- */
-export async function purchasePackage(
-  pkg: PurchasesPackage,
-): Promise<CustomerInfo> {
-  const { customerInfo } = await Purchases.purchasePackage(pkg);
-  console.log('[RevenueCat] purchasePackage complete:', pkg.identifier);
-  return customerInfo;
-}
-
-/**
  * Purchase a store product directly.
  */
 export async function purchaseProduct(

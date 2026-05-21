@@ -13,7 +13,6 @@ import NatalWheelTab from '@/src/components/natalChart/natal-chart-wheel.tab';
 import NatalTable from '@/src/components/natalChart/natal-chart-table.tab';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
-import { useFreeTrialAccess } from '@/src/hooks/use-free-trial-access';
 import PremiumUnlock from '@/src/components/shared/premium-unlock.component';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
 import { renderRichText } from '@/src/utils/rich-text';
@@ -41,9 +40,8 @@ export default function BirthChartScreen() {
   const [chartTab, setChartTab]         = useState<ChartTab>('Natal Wheel');
   const [breakdownTab, setBreakdownTab] = useState<BreakdownTab>('Insights');
 
-  const { isPro } = useRevenueCat();
-  const { hasAccess } = useFreeTrialAccess();
-  const isPremium = isPro || hasAccess;
+  const { isPro, loading: rcLoading } = useRevenueCat();
+  const isPremium = rcLoading || isPro;
 
   const insets       = useSafeAreaInsets();
   const headerHeight = insets.top + scale(NAV_BAR_HEIGHT);
