@@ -1,8 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { router, useLocalSearchParams } from "expo-router";
-import { deleteDoc, doc, getDoc, updateDoc } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
+import { deleteDoc, deleteField, doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import React, { useContext, useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
@@ -20,7 +19,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { db, functions } from "@/firebaseConfig";
+import { db } from "@/firebaseConfig";
 import { GlassButton } from "@/src/assets/buttons/glass-button";
 import HeaderNav from "@/src/components/shared/header-nav";
 import { ThemedText } from "@/src/components/themed-text";
@@ -40,7 +39,7 @@ import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import LoadingScreen from "../../(util)/loading-screen";
 
 const NAV_BAR_HEIGHT = 44;
-const MAX_BIRTH_DETAIL_CHANGES = 2;
+const MAX_BIRTH_DETAIL_CHANGES = 3;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -578,6 +577,7 @@ export default function EditConnectionScreen() {
   const [saving, setSaving] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("Calculating cosmic alignment...");
   const [changeCount, setChangeCount] = useState(0);
+  const remainingChanges = MAX_BIRTH_DETAIL_CHANGES - changeCount;
   const [originalSnapshot, setOriginalSnapshot] = useState<{
     first: PersonBirthData;
     second: PersonBirthData;
@@ -678,9 +678,9 @@ export default function EditConnectionScreen() {
     { label: "First Name", type: "text", editable: true },
     { label: "Last Name", type: "text", editable: true },
     { label: "Pronouns", type: "pronouns", editable: true },
-    { label: "Birthday", type: "date", placeholder: "MM/DD/YYYY", editable: false },
-    { label: "Place of Birth", type: "location", editable: false },
-    { label: "Time of Birth", type: "time", placeholder: "H:MM AM/PM", editable: false },
+    { label: "Birthday", type: "date", placeholder: "MM/DD/YYYY", editable: remainingChanges > 0 },
+    { label: "Place of Birth", type: "location", editable: remainingChanges > 0 },
+    { label: "Time of Birth", type: "time", placeholder: "H:MM AM/PM", editable: remainingChanges > 0 },
   ];
 
   type PersonKey = "first" | "second";
@@ -796,13 +796,16 @@ export default function EditConnectionScreen() {
     try {
       const origFirst = originalSnapshot?.first;
       const origSecond = originalSnapshot?.second;
+      // Spread existing Firestore person map first so sun/moon/rising fields are preserved.
       let updatedData: any = {
         firstPerson: {
+          ...(connection?.firstPerson ?? {}),
           firstName: firstPerson["First Name"],
           lastName: firstPerson["Last Name"],
           pronouns: firstPerson.Pronouns,
         },
         secondPerson: {
+          ...(connection?.secondPerson ?? {}),
           firstName: secondPerson["First Name"],
           lastName: secondPerson["Last Name"],
           pronouns: secondPerson.Pronouns,
@@ -871,82 +874,120 @@ export default function EditConnectionScreen() {
       return;
     }
     try {
-      const extractBirthParams = (person: PersonBirthData) => {
-        if (!person.Birthday) throw new Error("Birthday is missing");
-        if (!person["Time of Birth"] && !person.isBirthTimeUnknown) throw new Error("Time of Birth is missing");
-        const { birthLat, birthLon, birthTimezone } = person;
-        if (!person.isPlaceOfBirthUnknown && (birthLat == null || birthLon == null)) {
-          throw new Error("Please select a location from the search results.");
-        }
-        const lat = birthLat ?? 0;
-        const lon = birthLon ?? 0;
-        const [month, day, year] = person.Birthday.split("/").map(Number);
-        let hour = 0, min = 0;
-        const match = person["Time of Birth"].trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-        if (match) {
-          let h = Number(match[1]);
-          min = Number(match[2]);
-          const period = match[3].toUpperCase();
-          if (period === "PM" && h !== 12) h += 12;
-          if (period === "AM" && h === 12) h = 0;
-          hour = h;
-        } else {
-          const parts = person["Time of Birth"].split(":");
-          hour = Number(parts[0]) || 0;
-          min = Number(parts[1]) || 0;
-        }
-        const tzone = birthTimezone ?? 0;
-        return { day, month, year, hour, min, lat, lon, tzone };
-      };
-
-      const firstParams = extractBirthParams(firstPerson);
-      const firstChart: NatalChart = await calculateNatalChart({
-        year: firstParams.year, month: firstParams.month, day: firstParams.day,
-        hour: firstParams.hour, minute: firstParams.min,
-        lat: firstParams.lat, lon: firstParams.lon, timezone: firstParams.tzone,
-      });
-      const enrichedFirst = {
-        ...firstPerson,
-        "Sun Sign": firstChart.planets.find((p: any) => p.name === "Sun")?.sign ?? "",
-        "Moon Sign": firstChart.planets.find((p: any) => p.name === "Moon")?.sign ?? "",
-        "Rising Sign": firstChart.ascendant.sign,
-      };
-
-      const secondParams = extractBirthParams(secondPerson);
-      const secondChart: NatalChart = await calculateNatalChart({
-        year: secondParams.year, month: secondParams.month, day: secondParams.day,
-        hour: secondParams.hour, minute: secondParams.min,
-        lat: secondParams.lat, lon: secondParams.lon, timezone: secondParams.tzone,
-      });
-      const enrichedSecond = {
-        ...secondPerson,
-        "Sun Sign": secondChart.planets.find((p: any) => p.name === "Sun")?.sign ?? "",
-        "Moon Sign": secondChart.planets.find((p: any) => p.name === "Moon")?.sign ?? "",
-        "Rising Sign": secondChart.ascendant.sign,
-      };
-
-      const prompt = buildCompatibilityPrompt(
-        JSON.stringify(firstChart),
-        JSON.stringify(secondChart),
-        firstPerson.Pronouns,
-        secondPerson.Pronouns,
-        relationshipType,
-      );
-
+      const connectionRef = doc(db, "users", authUser!.uid, "connections", connectionId!);
       const nextChangeCount = birthDetailsChanged ? changeCount + 1 : changeCount;
 
-      const createConnectionFn = httpsCallable(functions, "createConnection");
-      const result = await createConnectionFn({
-        userId: authUser!.uid,
-        isMe: false,
-        relationshipType,
-        firstPerson: enrichedFirst,
-        secondPerson: enrichedSecond,
-        prompt,
-        birthDetailsChangeCount: nextChangeCount,
-      }) as { data: { connectionId: string } };
+      if (birthDetailsChanged) {
+        // ── Recalculate charts and regenerate the compatibility report ────────
+        const extractBirthParams = (person: PersonBirthData) => {
+          if (!person.Birthday) throw new Error("Birthday is missing");
+          if (!person["Time of Birth"] && !person.isBirthTimeUnknown) throw new Error("Time of Birth is missing");
+          const { birthLat, birthLon, birthTimezone } = person;
+          if (!person.isPlaceOfBirthUnknown && (birthLat == null || birthLon == null)) {
+            throw new Error("Please select a location from the search results.");
+          }
+          const lat = birthLat ?? 0;
+          const lon = birthLon ?? 0;
+          const [month, day, year] = person.Birthday.split("/").map(Number);
+          let hour = 0, min = 0;
+          const match = person["Time of Birth"].trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+          if (match) {
+            let h = Number(match[1]);
+            min = Number(match[2]);
+            const period = match[3].toUpperCase();
+            if (period === "PM" && h !== 12) h += 12;
+            if (period === "AM" && h === 12) h = 0;
+            hour = h;
+          } else {
+            const parts = person["Time of Birth"].split(":");
+            hour = Number(parts[0]) || 0;
+            min = Number(parts[1]) || 0;
+          }
+          const tzone = birthTimezone ?? 0;
+          return { day, month, year, hour, min, lat, lon, tzone };
+        };
 
-      router.replace({ pathname: "/connection/[id]", params: { id: result.data.connectionId } });
+        const firstParams = extractBirthParams(firstPerson);
+        const firstChart: NatalChart = await calculateNatalChart({
+          year: firstParams.year, month: firstParams.month, day: firstParams.day,
+          hour: firstParams.hour, minute: firstParams.min,
+          lat: firstParams.lat, lon: firstParams.lon, timezone: firstParams.tzone,
+        });
+
+        const secondParams = extractBirthParams(secondPerson);
+        const secondChart: NatalChart = await calculateNatalChart({
+          year: secondParams.year, month: secondParams.month, day: secondParams.day,
+          hour: secondParams.hour, minute: secondParams.min,
+          lat: secondParams.lat, lon: secondParams.lon, timezone: secondParams.tzone,
+        });
+
+        const prompt = buildCompatibilityPrompt(
+          JSON.stringify(firstChart),
+          JSON.stringify(secondChart),
+          firstPerson.Pronouns,
+          secondPerson.Pronouns,
+          relationshipType,
+        );
+
+        const mapPerson = (person: PersonBirthData, chart: NatalChart) => ({
+          firstName: person["First Name"],
+          lastName: person["Last Name"],
+          pronouns: person.Pronouns,
+          sun: chart.planets.find((p: any) => p.name === "Sun")?.sign ?? "",
+          moon: chart.planets.find((p: any) => p.name === "Moon")?.sign ?? "",
+          rising: chart.ascendant.sign,
+          birthday: person.Birthday,
+          timeOfBirth: person["Time of Birth"],
+          placeOfBirth: person["Place of Birth"],
+          birthLat: person.birthLat ?? null,
+          birthLon: person.birthLon ?? null,
+          birthTimezone: person.birthTimezone ?? null,
+          isBirthTimeUnknown: !!person.isBirthTimeUnknown,
+          isPlaceOfBirthUnknown: !!person.isPlaceOfBirthUnknown,
+        });
+
+        // Update the existing connection document in place — keeps the same ID.
+        await updateDoc(connectionRef, {
+          relationshipType,
+          firstPerson: mapPerson(firstPerson, firstChart),
+          secondPerson: mapPerson(secondPerson, secondChart),
+          "status.state": "pending",
+          birthDetailsChangeCount: nextChangeCount,
+          compatibility: deleteField(),
+        });
+
+        // Write a fresh prompt to the subcollection the GenAI extension watches.
+        const reportDocRef = doc(db, "users", authUser!.uid, "connections", connectionId!, "report", "details");
+        await setDoc(reportDocRef, {
+          prompt,
+          response: deleteField(),
+          requestedAt: serverTimestamp(),
+        }, { merge: true });
+      } else {
+        // ── Names / relationship type only — preserve existing chart signs ────
+        const mapPerson = (person: PersonBirthData, existing: any) => ({
+          ...existing,
+          firstName: person["First Name"],
+          lastName: person["Last Name"],
+          pronouns: person.Pronouns,
+          birthday: person.Birthday,
+          timeOfBirth: person["Time of Birth"],
+          placeOfBirth: person["Place of Birth"],
+          birthLat: person.birthLat ?? null,
+          birthLon: person.birthLon ?? null,
+          birthTimezone: person.birthTimezone ?? null,
+          isBirthTimeUnknown: !!person.isBirthTimeUnknown,
+          isPlaceOfBirthUnknown: !!person.isPlaceOfBirthUnknown,
+        });
+
+        await updateDoc(connectionRef, {
+          relationshipType,
+          firstPerson: mapPerson(firstPerson, connection?.firstPerson ?? {}),
+          secondPerson: mapPerson(secondPerson, connection?.secondPerson ?? {}),
+        });
+      }
+
+      router.back();
     } catch (err) {
       console.error("Error saving connection:", err);
       Alert.alert("Error", "Something went wrong saving this connection.");
