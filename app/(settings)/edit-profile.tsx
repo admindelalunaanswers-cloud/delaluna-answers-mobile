@@ -594,7 +594,7 @@ export default function EditProfileScreen() {
               <Text style={ss.fieldLabel}>Birth Time</Text>
               {isBirthTimeUnknown ? (
                 <View style={ss.inputRow}>
-                  <Text style={ss.mutedText}>I don't know my birth time</Text>
+                  <Text style={ss.mutedText}>I don&apos;t know my birth time</Text>
                   <TouchableOpacity onPress={() => setIsBirthTimeUnknown(false)}>
                     <Text style={ss.linkText}>Change</Text>
                   </TouchableOpacity>
@@ -613,7 +613,7 @@ export default function EditProfileScreen() {
                     style={{ marginRight: scale(8) }}
                   />
                   <TouchableOpacity onPress={() => { setIsBirthTimeUnknown(true); setBirthtime(''); }}>
-                    <Text style={ss.dimLinkText}>I don't know</Text>
+                    <Text style={ss.dimLinkText}>I don&apos;t know</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -622,7 +622,7 @@ export default function EditProfileScreen() {
               <Text style={ss.fieldLabel}>Place of Birth</Text>
               {isPlaceOfBirthUnknown ? (
                 <View style={ss.inputRow}>
-                  <Text style={ss.mutedText}>I don't know my birth place</Text>
+                  <Text style={ss.mutedText}>I don&apos;t know my birth place</Text>
                   <TouchableOpacity onPress={() => {
                     setIsPlaceOfBirthUnknown(false);
                     setLocationQuery('');
@@ -651,7 +651,7 @@ export default function EditProfileScreen() {
                       setSelectedLocation(null);
                       setLocationResults([]);
                     }}>
-                      <Text style={ss.dimLinkText}>I don't know</Text>
+                      <Text style={ss.dimLinkText}>I don&apos;t know</Text>
                     </TouchableOpacity>
                   </View>
 
@@ -736,7 +736,7 @@ export default function EditProfileScreen() {
           <View style={ss.confirmCard}>
             <Text style={ss.confirmTitle}>Recalculate natal chart?</Text>
             <Text style={ss.confirmBody}>
-              You've updated birth details that affect your natal chart. Saving will
+              You&apos;ve updated birth details that affect your natal chart. Saving will
               recalculate your chart and regenerate all your readings.{'\n\n'}
               {3 - (ud?.birthDetailsChangeCount ?? 0)} of 3 birth detail {3 - (ud?.birthDetailsChangeCount ?? 0) === 1 ? 'change' : 'changes'} remaining.
             </Text>

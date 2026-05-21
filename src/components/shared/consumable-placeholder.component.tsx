@@ -40,7 +40,7 @@ interface TierDef {
 
 const TIER_DEFS: TierDef[] = [
   { productId: PRODUCT_IDS.chatPack1,  quantity: 1,  label: '1 Question',   fallbackPrice: '$0.99' },
-  { productId: PRODUCT_IDS.chatPack3,  quantity: 3,  label: '3 Questions',  fallbackPrice: '$2.49' },
+  { productId: PRODUCT_IDS.chatPack3,  quantity: 3,  label: '3 Questions',  fallbackPrice: '$2.99' },
   { productId: PRODUCT_IDS.chatPack5,  quantity: 5,  label: '5 Questions',  fallbackPrice: '$3.99' },
   { productId: PRODUCT_IDS.chatPack10, quantity: 10, label: '10 Questions', fallbackPrice: '$9.99' },
 ];

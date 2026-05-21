@@ -3,9 +3,6 @@ import {
   View, Text, Image, TouchableOpacity, StyleSheet, Alert, ScrollView, ActivityIndicator, Linking,
 } from 'react-native';
 
-const PRIVACY_POLICY_URL = 'https://admindelalunaanswers-cloud.github.io/delaluna-legal/';
-const TERMS_OF_USE_URL   = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
-
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +20,9 @@ import { registerForPushNotifications, unregisterPushToken } from '@/src/service
 import { getProfileImageSource } from '@/app/(settings)/select-avatar';
 import { auth } from '@/firebaseConfig';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
+
+const PRIVACY_POLICY_URL = 'https://admindelalunaanswers-cloud.github.io/delaluna-legal/';
+const TERMS_OF_USE_URL   = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 

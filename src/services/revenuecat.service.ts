@@ -42,6 +42,14 @@ export const PRODUCT_IDS = {
   chatPack10: 'delaluna.iap.chat_pack_10',
 } as const;
 
+/** Maps each chat-pack product ID to the number of questions it grants */
+export const CHAT_PACK_QUANTITIES: Record<string, number> = {
+  [PRODUCT_IDS.chatPack1]:  1,
+  [PRODUCT_IDS.chatPack3]:  3,
+  [PRODUCT_IDS.chatPack5]:  5,
+  [PRODUCT_IDS.chatPack10]: 10,
+};
+
 // ─── Initialization ──────────────────────────────────────────────────────────
 
 let _configured = false;

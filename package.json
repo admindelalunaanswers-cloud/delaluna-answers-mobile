@@ -79,6 +79,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@react-native-community/cli": "^20.1.1",
     "@testing-library/jest-native": "^5.4.3",
     "@testing-library/react-native": "^13.3.3",
@@ -87,12 +88,16 @@
     "@types/react": "~19.1.0",
     "babel-jest": "^30.3.0",
     "babel-preset-expo": "~54.0.10",
-    "eslint": "^9.25.0",
+    "eslint": "^9.39.4",
     "eslint-config-expo": "~10.0.0",
+    "eslint-plugin-react": "^7.37.5",
+    "globals": "^17.6.0",
     "jest": "^30.3.0",
+    "jiti": "^2.7.0",
     "react-test-renderer": "19.1.0",
     "ts-jest": "^29.4.9",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "typescript-eslint": "^8.59.4"
   },
   "private": true
 }

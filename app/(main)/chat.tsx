@@ -181,11 +181,11 @@ export default function ChatScreen() {
     if (prefillText) setInputText(prefillText);
     const result = await presentChatPackPaywall();
     if (result === 'unavailable') {
-      // RC is disabled or offering not configured — fall back to custom sheet
       setShowQuestionConsumable(true);
+    } else if (typeof result === 'object' && result.purchased) {
+      setExtraQuestionsPurchased((n) => n + result.quantity);
     }
-    // 'dismissed' → user saw and closed the RC paywall, do nothing
-    // 'purchased' → credits added via entitlement, chat unlocks automatically
+    // 'dismissed' → user closed the RC paywall, do nothing
   }, [presentChatPackPaywall]);
 
   const flatListRef = useRef<FlatList>(null);

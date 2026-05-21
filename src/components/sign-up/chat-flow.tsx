@@ -721,7 +721,7 @@ export default function ChatFlow({
               />
             )}
             <TouchableOpacity style={[styles.choiceButton, { alignSelf: 'center' }]} onPress={handleSkipTime}>
-              <Text style={styles.choiceText}>I don't know</Text>
+              <Text style={styles.choiceText}>I don&apos;t know</Text>
             </TouchableOpacity>
             {!!dateError && <Text style={styles.errorText}>{dateError}</Text>}
           </View>
@@ -846,7 +846,7 @@ export default function ChatFlow({
               </ScrollView>
             )}
             <TouchableOpacity style={[styles.choiceButton, { alignSelf: 'center' }]} onPress={skipLocation}>
-              <Text style={styles.choiceText}>I don't know</Text>
+              <Text style={styles.choiceText}>I don&apos;t know</Text>
             </TouchableOpacity>
           </View>
         )}
