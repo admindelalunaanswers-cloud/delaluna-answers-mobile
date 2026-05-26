@@ -1107,24 +1107,37 @@ export const weeklyCleanup = onSchedule('every sunday 06:00', async () => {
 
   const allToDelete: FirebaseFirestore.DocumentReference[] = [];
 
-  // For each user, list all three subcollections in parallel and collect stale refs.
-  await Promise.all(userRefs.map(async (userRef) => {
-    const [cardRefs, horoRefs, transitRefs] = await Promise.all([
-      userRef.collection('cards').listDocuments(),
-      userRef.collection('horoscope').listDocuments(),
-      userRef.collection('transits').listDocuments(),
-    ]);
+  // Process users in chunks of 25 to avoid saturating Firestore quota.
+  // Each user's work is wrapped in try/catch so a single transient error
+  // does not abort collection for all other users.
+  const CONCURRENCY_LIMIT = 25;
+  let failedUsers = 0;
 
-    const oldCards      = cardRefs.filter(r => r.id < cutoffDateId);
-    const oldHoroscopes = horoRefs.filter(r => r.id < cutoffDateId);
-    const oldTransits   = transitRefs.filter(r => r.id < cutoffDateId);
+  for (let i = 0; i < userRefs.length; i += CONCURRENCY_LIMIT) {
+    const chunk = userRefs.slice(i, i + CONCURRENCY_LIMIT);
+    await Promise.all(chunk.map(async (userRef) => {
+      try {
+        const [cardRefs, horoRefs, transitRefs] = await Promise.all([
+          userRef.collection('cards').listDocuments(),
+          userRef.collection('horoscope').listDocuments(),
+          userRef.collection('transits').listDocuments(),
+        ]);
 
-    cardsDeleted      += oldCards.length;
-    horoscopesDeleted += oldHoroscopes.length;
-    transitsDeleted   += oldTransits.length;
+        const oldCards      = cardRefs.filter(r => r.id < cutoffDateId);
+        const oldHoroscopes = horoRefs.filter(r => r.id < cutoffDateId);
+        const oldTransits   = transitRefs.filter(r => r.id < cutoffDateId);
 
-    allToDelete.push(...oldCards, ...oldHoroscopes, ...oldTransits);
-  }));
+        cardsDeleted      += oldCards.length;
+        horoscopesDeleted += oldHoroscopes.length;
+        transitsDeleted   += oldTransits.length;
+
+        allToDelete.push(...oldCards, ...oldHoroscopes, ...oldTransits);
+      } catch (err) {
+        failedUsers++;
+        console.error(`[weeklyCleanup] Failed to list docs for user ${userRef.id}:`, err);
+      }
+    }));
+  }
 
   // Batch-delete in chunks of 500 (Firestore write-batch limit).
   const BATCH_SIZE = 500;
@@ -1135,7 +1148,8 @@ export const weeklyCleanup = onSchedule('every sunday 06:00', async () => {
   }
 
   console.info(
-    `[weeklyCleanup] deleted ${cardsDeleted} cards, ` +
-    `${horoscopesDeleted} horoscopes, ${transitsDeleted} transits`,
+    `[weeklyCleanup] queued ${cardsDeleted} cards, ` +
+    `${horoscopesDeleted} horoscopes, ${transitsDeleted} transits for deletion` +
+    (failedUsers > 0 ? `; ${failedUsers} user(s) failed to list` : ''),
   );
 });
