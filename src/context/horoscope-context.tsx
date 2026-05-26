@@ -395,12 +395,24 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
 
   const refresh = async () => {
     if (!authUser) return;
+
+    // Cancel all live listeners before re-fetching so stale callbacks don't
+    // overwrite the incoming fresh data.
     unsubHoroscopeRef.current?.(); unsubHoroscopeRef.current = null;
     unsubBreakdownRef.current?.(); unsubBreakdownRef.current = null;
     unsubTransitRef.current?.();   unsubTransitRef.current = null;
+
+    // Clear data and reset all generating flags to a known clean state.
+    // Without this, a previous `breakdownGenerating = true` from an earlier
+    // load could persist if the new load short-circuits (e.g. result already
+    // in cache), leaving the UI stuck on a spinner indefinitely.
     setHoroscope(null);
+    setHoroscopeGenerating(false);
     setBreakdown(null);
+    setBreakdownGenerating(false);
     setTransitReading(null);
+    setTransitReadingGenerating(false);
+
     const signal = { cancelled: false };
     await load(authUser.uid, signal);
   };

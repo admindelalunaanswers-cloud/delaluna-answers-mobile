@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 
 import { db } from '@/firebaseConfig';
 import type { NatalChartBreakdownResult } from '@/src/types/natal-chart-breakdown.types';
@@ -70,14 +70,20 @@ export async function requestBreakdown(
   chart: NatalChartDetailsDoc,
   pronouns = 'they/them',
 ): Promise<void> {
+  const docRef = doc(db, 'users', uid, 'natalChart', BREAKDOWN_DOC);
+
+  // Delete before writing so the Extension's onDocumentCreated trigger always fires.
+  // Using setDoc on an existing document only fires onDocumentWritten — if the
+  // Extension uses onCreate (the most common AI-generation pattern), it would
+  // silently skip the re-request and leave the breakdown permanently stuck.
+  // deleteDoc on a non-existent document is a safe no-op, so this works for
+  // both new users (first generation) and existing users (profile updates).
+  await deleteDoc(docRef);
+
   const natalChart  = buildNatalChartSummary(chart);
   const prompt      = buildNatalChartPrompt(natalChart, pronouns);
-  const requestedAt = serverTimestamp();
 
-  await setDoc(
-    doc(db, 'users', uid, 'natalChart', BREAKDOWN_DOC),
-    { prompt, natalChart, requestedAt },
-  );
+  await setDoc(docRef, { prompt, natalChart, requestedAt: serverTimestamp() });
 }
 
 /**

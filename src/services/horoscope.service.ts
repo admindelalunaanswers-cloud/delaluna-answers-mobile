@@ -167,7 +167,15 @@ async function writeHoroscopeDoc(
     pronouns,
   });
 
-  await setDoc(doc(db, 'users', uid, 'horoscope', dateId), {
+  const docRef = doc(db, 'users', uid, 'horoscope', dateId);
+
+  // Delete before writing so the Extension's onDocumentCreated trigger always
+  // fires. Overwriting an existing document only triggers onDocumentWritten;
+  // if the Extension uses onCreate, the re-request would be silently ignored.
+  // deleteDoc on a non-existent document is a safe no-op.
+  await deleteDoc(docRef);
+
+  await setDoc(docRef, {
     prompt,
     tarotKeywords,
     natalChart,

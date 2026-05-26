@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 
 import { db } from '@/firebaseConfig';
 import type { TransitReadingResult } from '@/src/types/transit-reading.types';
@@ -149,7 +149,13 @@ export async function requestTransitReading(
 
   const prompt = renderPrompt({ natalChart, currentTransits, date, pronouns });
 
-  await setDoc(doc(db, 'users', uid, 'transits', dateId), {
+  const docRef = doc(db, 'users', uid, 'transits', dateId);
+
+  // Delete before writing so the Extension's onDocumentCreated trigger always
+  // fires — same reasoning as breakdown and horoscope services.
+  await deleteDoc(docRef);
+
+  await setDoc(docRef, {
     prompt,
     natalChart,
     currentTransits,
