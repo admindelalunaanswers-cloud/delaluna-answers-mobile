@@ -1072,52 +1072,70 @@ export const parseConnectionCompatibility = onDocumentUpdated(
 
 /**
  * Runs every Sunday at 06:00 UTC (before any user's local Sunday-morning
- * push window opens). Prunes:
- *   - Transit docs older than 7 days (`users/{uid}/transits/{dateId}`)
- *   - Horoscope docs outside the latest 3 days per user
+ * push window opens). Prunes documents older than 7 days from:
+ *   - users/{uid}/cards/{YYYY-MM-DD}
+ *   - users/{uid}/horoscope/{YYYY-MM-DD}
+ *   - users/{uid}/transits/{YYYY-MM-DD}
  *
- * Synastry readings are NOT cleaned up — they're birth-chart-based and never
- * stale. Connection report docs use a single `details` doc that overwrites
- * itself on regeneration, so no cleanup is needed there either.
+ * All three subcollections use a YYYY-MM-DD document ID. YYYY-MM-DD strings
+ * sort lexicographically in the same order as calendar dates, so a simple
+ * string comparison against the cutoff date is sufficient — no timestamp
+ * fields or collectionGroup index queries needed.
+ *
+ * Synastry readings, connection reports, and natal chart docs are NOT touched
+ * — they are birth-chart-based and never stale.
  */
 export const weeklyCleanup = onSchedule('every sunday 06:00', async () => {
-  const now = Date.now();
-  const transitCutoff = Timestamp.fromMillis(now - 7 * 24 * 60 * 60 * 1000);
-  const horoscopeCutoff = Timestamp.fromMillis(now - 3 * 24 * 60 * 60 * 1000);
+  // Cutoff: 7 days before today, formatted as YYYY-MM-DD.
+  // Any doc whose ID is strictly less than this string is eligible for deletion.
+  const cutoff = new Date();
+  cutoff.setUTCDate(cutoff.getUTCDate() - 7);
+  const cutoffDateId = [
+    cutoff.getUTCFullYear(),
+    String(cutoff.getUTCMonth() + 1).padStart(2, '0'),
+    String(cutoff.getUTCDate()).padStart(2, '0'),
+  ].join('-');
 
-  let transitDeleted = 0;
-  let horoscopeDeleted = 0;
+  console.info(`[weeklyCleanup] cutoff date: ${cutoffDateId}`);
 
-  // Transits — collectionGroup query, delete by createTime older than cutoff.
-  const oldTransits = await db.collectionGroup('transits')
-    .where('createTime', '<', transitCutoff)
-    .get();
-  if (!oldTransits.empty) {
-    const BATCH = 500;
-    for (let i = 0; i < oldTransits.docs.length; i += BATCH) {
-      const batch = db.batch();
-      oldTransits.docs.slice(i, i + BATCH).forEach(d => batch.delete(d.ref));
-      await batch.commit();
-    }
-    transitDeleted = oldTransits.docs.length;
-  }
+  // List all user document references (no data reads — paths only).
+  const userRefs = await db.collection('users').listDocuments();
 
-  // Horoscopes — keep only docs from the last 3 days. The horoscope extension
-  // orders by `createDate` so we use that field.
-  const oldHoroscopes = await db.collectionGroup('horoscope')
-    .where('createDate', '<', horoscopeCutoff)
-    .get();
-  if (!oldHoroscopes.empty) {
-    const BATCH = 500;
-    for (let i = 0; i < oldHoroscopes.docs.length; i += BATCH) {
-      const batch = db.batch();
-      oldHoroscopes.docs.slice(i, i + BATCH).forEach(d => batch.delete(d.ref));
-      await batch.commit();
-    }
-    horoscopeDeleted = oldHoroscopes.docs.length;
+  let cardsDeleted = 0;
+  let horoscopesDeleted = 0;
+  let transitsDeleted = 0;
+
+  const allToDelete: FirebaseFirestore.DocumentReference[] = [];
+
+  // For each user, list all three subcollections in parallel and collect stale refs.
+  await Promise.all(userRefs.map(async (userRef) => {
+    const [cardRefs, horoRefs, transitRefs] = await Promise.all([
+      userRef.collection('cards').listDocuments(),
+      userRef.collection('horoscope').listDocuments(),
+      userRef.collection('transits').listDocuments(),
+    ]);
+
+    const oldCards      = cardRefs.filter(r => r.id < cutoffDateId);
+    const oldHoroscopes = horoRefs.filter(r => r.id < cutoffDateId);
+    const oldTransits   = transitRefs.filter(r => r.id < cutoffDateId);
+
+    cardsDeleted      += oldCards.length;
+    horoscopesDeleted += oldHoroscopes.length;
+    transitsDeleted   += oldTransits.length;
+
+    allToDelete.push(...oldCards, ...oldHoroscopes, ...oldTransits);
+  }));
+
+  // Batch-delete in chunks of 500 (Firestore write-batch limit).
+  const BATCH_SIZE = 500;
+  for (let i = 0; i < allToDelete.length; i += BATCH_SIZE) {
+    const batch = db.batch();
+    allToDelete.slice(i, i + BATCH_SIZE).forEach(ref => batch.delete(ref));
+    await batch.commit();
   }
 
   console.info(
-    `[weeklyCleanup] deleted ${transitDeleted} transit + ${horoscopeDeleted} horoscope docs`,
+    `[weeklyCleanup] deleted ${cardsDeleted} cards, ` +
+    `${horoscopesDeleted} horoscopes, ${transitsDeleted} transits`,
   );
 });
