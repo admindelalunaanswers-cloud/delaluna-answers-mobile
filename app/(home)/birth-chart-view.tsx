@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet } from 'react-native';
+import type { ScrollView as ScrollViewType } from 'react-native';
 
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -39,6 +40,23 @@ export default function BirthChartScreen() {
 
   const [chartTab, setChartTab]         = useState<ChartTab>('Natal Wheel');
   const [breakdownTab, setBreakdownTab] = useState<BreakdownTab>('Insights');
+
+  // Scroll-position persistence: one ref for the ScrollView, one map for saved offsets
+  const scrollRef      = useRef<ScrollViewType>(null);
+  const scrollOffsets  = useRef<Partial<Record<BreakdownTab, number>>>({});
+
+  function switchBreakdownTab(tab: BreakdownTab) {
+    // Save current position before leaving
+    scrollOffsets.current[breakdownTab] = scrollOffsets.current[breakdownTab] ?? 0;
+    // Switch tab
+    setBreakdownTab(tab);
+    // Restore saved position for the target tab (default 0)
+    const savedY = scrollOffsets.current[tab] ?? 0;
+    // requestAnimationFrame lets the new content render before we scroll
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: savedY, animated: false });
+    });
+  }
 
   const { isPro, loading: rcLoading } = useRevenueCat();
   const isPremium = rcLoading || isPro;
@@ -237,7 +255,7 @@ export default function BirthChartScreen() {
                   <Pressable
                     key={tab}
                     style={[styles.breakdownTab, isActive && styles.breakdownTabActive]}
-                    onPress={() => setBreakdownTab(tab)}
+                    onPress={() => switchBreakdownTab(tab)}
                   >
                     <ThemedView style={styles.breakdownTabInner}>
                       <ThemedText style={[styles.breakdownTabText, isActive && styles.breakdownTabTextActive]}>
@@ -254,12 +272,17 @@ export default function BirthChartScreen() {
           </ThemedView>
 
           <ScrollView
+            ref={scrollRef}
             style={styles.breakdownScroll}
             contentContainerStyle={[
               styles.breakdownContent,
               { paddingBottom: insets.bottom + verticalScale(16) },
             ]}
             showsVerticalScrollIndicator={false}
+            onScroll={e => {
+              scrollOffsets.current[breakdownTab] = e.nativeEvent.contentOffset.y;
+            }}
+            scrollEventThrottle={16}
           >
             {renderBreakdownContent()}
           </ScrollView>
