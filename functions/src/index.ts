@@ -403,14 +403,11 @@ export const clearDailyChatHistory = onSchedule('every day 00:00', async () => {
 // force-killed.
 const ROLLOVER_PUSH_LOCAL_HOUR = 0;
 
-// Each notification type is assigned its own non-overlapping hour window so that
-// on Sundays — when all three notifications fire — they land at genuinely different
-// times of day rather than colliding in the same hourly tick:
-//   Horoscope   [6,  10]  morning      — every day
-//   Transits   [11,  15]  midday       — Sundays only
-//   Connections [16, 20]  afternoon    — Sundays only (premium + connections)
-const HOUR_BASE = 6;   // horoscope window start (also the default for jitterHour)
-const HOUR_SPAN = 5;   // window width shared by all three types
+// Each user is assigned a stable per-UID hour in [HOUR_BASE, HOUR_BASE + HOUR_SPAN)
+// so we don't blast every user at exactly 8:00 AM (Expo throttles, and we'd also
+// burst Google AI generation if the rollover/horoscope generation kicks in).
+const HOUR_BASE = 6;   // earliest local hour
+const HOUR_SPAN = 5;   // 6,7,8,9,10
 const SUNDAY = 0;      // Date.getUTCDay()
 
 // Premium entitlement id used by RevenueCat (must match the entitlement
@@ -456,8 +453,8 @@ function hashUid(uid: string, salt = ''): number {
   return h >>> 0;
 }
 
-function jitterHour(uid: string, salt: string, base = HOUR_BASE, span = HOUR_SPAN): number {
-  return base + (hashUid(uid, salt) % span);
+function jitterHour(uid: string, salt: string): number {
+  return HOUR_BASE + (hashUid(uid, salt) % HOUR_SPAN);
 }
 
 /**
@@ -612,9 +609,9 @@ export const dailyHoroscopeNotifications = onSchedule('every 1 hours', async () 
       continue;
     }
 
-    const horoHour = jitterHour(uid, 'horoscope');          // [6,  10] morning
-    const txHour   = jitterHour(uid, 'transits',   11, 5);  // [11, 15] midday   — Sundays
-    const cxHour   = jitterHour(uid, 'connections', 16, 5); // [16, 20] afternoon — Sundays
+    const horoHour = jitterHour(uid, 'horoscope');
+    const txHour = jitterHour(uid, 'transits');
+    const cxHour = jitterHour(uid, 'connections');
 
     if (localHour === horoHour) {
       messages.push({
