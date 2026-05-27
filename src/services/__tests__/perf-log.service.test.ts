@@ -93,6 +93,12 @@ describe('logScreenLoad', () => {
     await Promise.resolve();
     // no unhandled rejection
   });
+
+  it('does not throw when setDoc rejects', async () => {
+    (setDoc as jest.Mock).mockRejectedValueOnce(new Error('permission-denied'));
+    expect(() => logScreenLoad('/(main)/chat', 100)).not.toThrow();
+    await Promise.resolve();
+  });
 });
 
 // ─── logOperation ─────────────────────────────────────────────────────────────

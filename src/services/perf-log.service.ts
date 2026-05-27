@@ -21,7 +21,8 @@ import { db } from '@/firebaseConfig';
 import { APP_ENV } from '@/src/constants/env';
 import { screenLabelForPath } from '@/src/services/analytics.service';
 
-// ─── Session context (built once at module load) ─────────────────────────────
+// ─── Session context ────────────────────────────────────────────────────────
+// sessionId is generated once at module load; other fields are gathered at call time.
 
 function makeSessionId(): string {
   // Not security-sensitive — used only for grouping analytics events.
@@ -70,12 +71,12 @@ function safeWrite(fn: () => Promise<void>, label: string): void {
 }
 
 function screenRefs(pathname: string) {
-  const slug = screenSlugForPath(pathname);
+  const label = screenLabelForPath(pathname);
+  const slug = label.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
   return {
-    slug,
-    label:      screenLabelForPath(pathname),
-    screenDoc:  doc(db, 'performanceLogs', slug),
-    eventsCol:  collection(db, 'performanceLogs', slug, 'events'),
+    label,
+    screenDoc: doc(db, 'performanceLogs', slug),
+    eventsCol: collection(db, 'performanceLogs', slug, 'events'),
   };
 }
 
@@ -109,8 +110,8 @@ export function logScreenLoad(
 }
 
 /**
- * Log the duration of a named async operation (AI call, data fetch, etc.)
- * tied to the screen that triggered it.
+ * Log the duration of a timed operation (AI generation, data fetch, etc.)
+ * tied to the screen that triggered it. Stored as metricType 'ai_call'.
  */
 export function logOperation(
   screenPath: string,
