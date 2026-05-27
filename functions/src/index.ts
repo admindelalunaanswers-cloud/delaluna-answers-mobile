@@ -403,11 +403,14 @@ export const clearDailyChatHistory = onSchedule('every day 00:00', async () => {
 // force-killed.
 const ROLLOVER_PUSH_LOCAL_HOUR = 0;
 
-// Each user is assigned a stable per-UID hour in [HOUR_BASE, HOUR_BASE + HOUR_SPAN)
-// so we don't blast every user at exactly 8:00 AM (Expo throttles, and we'd also
-// burst Google AI generation if the rollover/horoscope generation kicks in).
-const HOUR_BASE = 6;   // earliest local hour
-const HOUR_SPAN = 5;   // 6,7,8,9,10
+// Each notification type is assigned its own non-overlapping hour window so that
+// on Sundays — when all three notifications fire — they land at genuinely different
+// times of day rather than colliding in the same hourly tick:
+//   Horoscope   [6,  10]  morning      — every day
+//   Transits   [11,  15]  midday       — Sundays only
+//   Connections [16, 20]  afternoon    — Sundays only (premium + connections)
+const HOUR_BASE = 6;   // horoscope window start (also the default for jitterHour)
+const HOUR_SPAN = 5;   // window width shared by all three types
 const SUNDAY = 0;      // Date.getUTCDay()
 
 // Premium entitlement id used by RevenueCat (must match the entitlement
@@ -453,8 +456,8 @@ function hashUid(uid: string, salt = ''): number {
   return h >>> 0;
 }
 
-function jitterHour(uid: string, salt: string): number {
-  return HOUR_BASE + (hashUid(uid, salt) % HOUR_SPAN);
+function jitterHour(uid: string, salt: string, base = HOUR_BASE, span = HOUR_SPAN): number {
+  return base + (hashUid(uid, salt) % span);
 }
 
 /**
@@ -609,9 +612,9 @@ export const dailyHoroscopeNotifications = onSchedule('every 1 hours', async () 
       continue;
     }
 
-    const horoHour = jitterHour(uid, 'horoscope');
-    const txHour = jitterHour(uid, 'transits');
-    const cxHour = jitterHour(uid, 'connections');
+    const horoHour = jitterHour(uid, 'horoscope');          // [6,  10] morning
+    const txHour   = jitterHour(uid, 'transits',   11, 5);  // [11, 15] midday   — Sundays
+    const cxHour   = jitterHour(uid, 'connections', 16, 5); // [16, 20] afternoon — Sundays
 
     if (localHour === horoHour) {
       messages.push({
@@ -1151,5 +1154,182 @@ export const weeklyCleanup = onSchedule('every sunday 06:00', async () => {
     `[weeklyCleanup] queued ${cardsDeleted} cards, ` +
     `${horoscopesDeleted} horoscopes, ${transitsDeleted} transits for deletion` +
     (failedUsers > 0 ? `; ${failedUsers} user(s) failed to list` : ''),
+  );
+});
+
+// ─── Shared helpers for aggregatePerfLogs ────────────────────────────────────
+
+function formatDateId(d: Date): string {
+  return [
+    d.getUTCFullYear(),
+    String(d.getUTCMonth() + 1).padStart(2, '0'),
+    String(d.getUTCDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+/**
+ * Returns the p-th percentile of a pre-sorted array of numbers.
+ * Uses nearest-rank method. Returns 0 for empty arrays.
+ * Exported for unit testing.
+ */
+export function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  const idx = Math.ceil((p / 100) * sorted.length) - 1;
+  return sorted[Math.max(0, idx)];
+}
+
+// ─── aggregatePerfLogs ───────────────────────────────────────────────────────
+
+/**
+ * Runs every day at 02:00 UTC.
+ *
+ * For each screen in performanceLogs/:
+ *   1. Reads yesterday's raw events (timestamp in [start-of-yesterday, start-of-today))
+ *   2. Computes p50/p95 for screen_load and each ai_call operation name
+ *   3. Counts errors
+ *   4. Writes performanceLogs/{slug}/daily/{YYYY-MM-DD}
+ *   5. Deletes raw events older than 7 days
+ *   6. Deletes daily docs older than 90 days
+ *
+ * Processes screens in concurrent chunks of 10; wraps each in try/catch so
+ * one bad screen does not abort the rest.
+ */
+export const aggregatePerfLogs = onSchedule('every day 02:00', async () => {
+  const now = new Date();
+
+  // Yesterday for the daily summary key
+  const yesterday = new Date(now);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  const yesterdayId = formatDateId(yesterday);
+
+  // Time window: [start of yesterday, start of today)
+  const startOfYesterday = new Date(Date.UTC(
+    yesterday.getUTCFullYear(), yesterday.getUTCMonth(), yesterday.getUTCDate(),
+  ));
+  const startOfToday = new Date(Date.UTC(
+    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
+  ));
+
+  // Raw event deletion cutoff (7 days ago)
+  const rawCutoff = new Date(now);
+  rawCutoff.setUTCDate(rawCutoff.getUTCDate() - 7);
+
+  // Daily summary deletion cutoff (90 days ago as YYYY-MM-DD string)
+  const dailyCutoff = new Date(now);
+  dailyCutoff.setUTCDate(dailyCutoff.getUTCDate() - 90);
+  const dailyCutoffId = formatDateId(dailyCutoff);
+
+  const screenRefs = await db.collection('performanceLogs').listDocuments();
+  if (screenRefs.length === 0) {
+    console.info('[aggregatePerfLogs] No screen docs — nothing to aggregate');
+    return;
+  }
+
+  let totalAggregated = 0;
+  let failedScreens   = 0;
+
+  const CONCURRENCY = 10;
+  for (let i = 0; i < screenRefs.length; i += CONCURRENCY) {
+    const chunk = screenRefs.slice(i, i + CONCURRENCY);
+
+    await Promise.all(chunk.map(async (screenRef) => {
+      const slug = screenRef.id;
+      try {
+        // ── 1. Query yesterday's events ──────────────────────────────────
+        const eventsSnap = await screenRef.collection('events')
+          .where('timestamp', '>=', Timestamp.fromDate(startOfYesterday))
+          .where('timestamp', '<',  Timestamp.fromDate(startOfToday))
+          .get();
+
+        if (!eventsSnap.empty) {
+          const events = eventsSnap.docs.map(d => d.data());
+
+          // ── 2. Compute screen_load stats ─────────────────────────────
+          const loadDurations = events
+            .filter(e => e.metricType === 'screen_load' && typeof e.durationMs === 'number')
+            .map(e => e.durationMs as number)
+            .sort((a, b) => a - b);
+
+          const screenLoad = loadDurations.length > 0 ? {
+            count:  loadDurations.length,
+            sumMs:  loadDurations.reduce((s, v) => s + v, 0),
+            minMs:  loadDurations[0],
+            maxMs:  loadDurations[loadDurations.length - 1],
+            p50Ms:  percentile(loadDurations, 50),
+            p95Ms:  percentile(loadDurations, 95),
+          } : null;
+
+          // ── 3. Compute per-operation ai_call stats ───────────────────
+          const opEvents = events.filter(e => e.metricType === 'ai_call' && e.operationName);
+          const opNames  = [...new Set(opEvents.map(e => e.operationName as string))];
+
+          const operations: Record<string, {
+            count: number; sumMs: number; p50Ms: number; p95Ms: number;
+          }> = {};
+
+          for (const opName of opNames) {
+            const durations = opEvents
+              .filter(e => e.operationName === opName && typeof e.durationMs === 'number')
+              .map(e => e.durationMs as number)
+              .sort((a, b) => a - b);
+            operations[opName] = {
+              count: durations.length,
+              sumMs: durations.reduce((s, v) => s + v, 0),
+              p50Ms: percentile(durations, 50),
+              p95Ms: percentile(durations, 95),
+            };
+          }
+
+          // ── 4. Count errors ──────────────────────────────────────────
+          const errorCount = events.filter(e => e.metricType === 'error').length;
+
+          // ── 5. Write daily summary ───────────────────────────────────
+          await screenRef.collection('daily').doc(yesterdayId).set({
+            screen:       eventsSnap.docs[0].data().screen ?? slug,
+            date:         yesterdayId,
+            ...(screenLoad ? { screenLoad } : {}),
+            operations,
+            errorCount,
+            totalEvents:  events.length,
+            updatedAt:    FieldValue.serverTimestamp(),
+          });
+
+          totalAggregated += events.length;
+        }
+
+        // ── 6. Delete raw events older than 7 days ───────────────────
+        const oldEventsSnap = await screenRef.collection('events')
+          .where('timestamp', '<', Timestamp.fromDate(rawCutoff))
+          .limit(500)
+          .get();
+
+        if (!oldEventsSnap.empty) {
+          const BATCH_SIZE = 500;
+          for (let j = 0; j < oldEventsSnap.docs.length; j += BATCH_SIZE) {
+            const batch = db.batch();
+            oldEventsSnap.docs.slice(j, j + BATCH_SIZE).forEach(d => batch.delete(d.ref));
+            await batch.commit();
+          }
+        }
+
+        // ── 7. Delete daily docs older than 90 days ──────────────────
+        const dailyRefs = await screenRef.collection('daily').listDocuments();
+        const oldDaily  = dailyRefs.filter(r => r.id < dailyCutoffId);
+        if (oldDaily.length > 0) {
+          const batch = db.batch();
+          oldDaily.forEach(r => batch.delete(r));
+          await batch.commit();
+        }
+
+      } catch (err) {
+        failedScreens++;
+        console.error(`[aggregatePerfLogs] Failed for screen "${slug}":`, err);
+      }
+    }));
+  }
+
+  console.info(
+    `[aggregatePerfLogs] done — ${totalAggregated} events aggregated` +
+    (failedScreens > 0 ? `, ${failedScreens} screen(s) failed` : ''),
   );
 });
