@@ -35,11 +35,16 @@ function parseResult(data: Record<string, any>): NatalChartBreakdownResult | nul
     const stripped = typeof raw === 'string'
       ? raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
       : raw;
-    if (typeof stripped !== 'string') return stripped as NatalChartBreakdownResult;
     // Hermes (React Native) is stricter than V8 — trailing commas before } or ]
     // are invalid JSON but the AI occasionally emits them. Strip them before parsing.
-    const sanitized = stripped.replace(/,(\s*[}\]])/g, '$1');
-    return JSON.parse(sanitized);
+    const parsed: NatalChartBreakdownResult = typeof stripped !== 'string'
+      ? stripped
+      : JSON.parse(stripped.replace(/,(\s*[}\]])/g, '$1'));
+    // Reject empty or structurally incomplete responses (e.g. {} written by
+    // the Extension on error). An empty object is truthy and would otherwise
+    // be accepted, causing the birth chart view to render blank content.
+    if (!parsed || !Array.isArray(parsed.houses) || parsed.houses.length === 0) return null;
+    return parsed;
   } catch {
     return null;
   }

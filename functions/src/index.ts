@@ -792,6 +792,7 @@ export const createConnection = onCall(async (request) => {
   await connectionRef.set(
     {
       connectionId,
+      isMe: !!isMe,
       relationshipType,
       firstPerson: mappedFirst,
       secondPerson: mappedSecond,
