@@ -29,6 +29,7 @@ import { useHoroscope } from '@/src/context/horoscope-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { useUser } from '@/src/context/user-context';
 import { useResponsive } from '@/src/hooks/use-responsive';
+import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
 import { getContentPadding, MAX_CONTENT_WIDTH } from '@/src/utils/layout';
 import type { ChatConnectionContext, ChatMessageDoc, SavedChatSession } from '@/src/services/chat.service';
 import { deleteChatSession, resumeChatSession, retryChatMessage, saveChatAndClear, sendChatMessage, subscribeToChatHistory, subscribeToChatSessions } from '@/src/services/chat.service';
@@ -144,6 +145,7 @@ export default function ChatScreen() {
   const { chartDetails } = useHoroscope();
   const { dailyChatLimit, premiumDailyChatLimit } = useAdmin();
   const { isPro, loading: rcLoading, presentChatPackPaywall, refresh: refreshRevenueCat } = useRevenueCat();
+  const { markReady, logOp, logError: logPerfError } = useScreenPerfLog('/(main)/chat');
   const hasPremiumAccess = rcLoading || isPro;
   const insets = useSafeAreaInsets();
   const { scale, width: screenWidth } = useResponsive();
@@ -291,6 +293,11 @@ export default function ChatScreen() {
     }
   }, [messages.length]);
 
+  // Mark screen ready once the initial data is available
+  useEffect(() => {
+    if (!rcLoading) markReady();
+  }, [rcLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ─── Send ──────────────────────────────────────────────────────────────────
 
   const chartSummary = chartDetails ? buildNatalChartSummary(chartDetails) : undefined;
@@ -307,10 +314,13 @@ export default function ChatScreen() {
     chatStarted.current = true;
     setInputText('');
     setIsSending(true);
+    const t = Date.now();
     try {
       await sendChatMessage(authUser.uid, msg, chartSummary, selectedConnection ?? undefined);
+      logOp('chat_send', Date.now() - t);
       Events.chatMessageSent({ length: msg.length });
     } catch (e) {
+      logPerfError(e instanceof Error ? e.message : String(e));
       console.error('chat send error', e);
       recordError(e, 'chat_send');
     } finally {
