@@ -32,13 +32,13 @@ Avoid:
 `;
 
 const OUTPUT_RULES = `
-====================================================
-OUTPUT RULES
-====================================================
-- Return JSON ONLY. No markdown. No commentary.
-- All values must be strings, arrays, booleans, or objects as specified.
-- "houses" MUST contain exactly 12 objects.
-- Every field must be personalized to the user's natal chart.
+==================================================== OUTPUT RULES ==================================================== 
+- Return JSON ONLY. No markdown. No commentary. 
+- All values must be strings or arrays as specified. 
+- "houses" MUST contain exactly 12 objects. 
+- Every field must be personalized to this user's natal chart and current transits. Nothing generic. 
+- The output MUST be strictly valid JSON. Every object in the "houses" array MUST be wrapped on its own and separated from the next object by a comma. 
+- The final object must not have a trailing comma after it, 
 `;
 
 // ─── Template constant ────────────────────────────────────────────────────────
@@ -110,9 +110,7 @@ OTHER:
 ${OUTPUT_RULES}
 ====================================================
 OUTPUT FORMAT
-====================================================
-
-{
+==================================================== {
   "quote": "",
   "houses": [
     {
