@@ -142,5 +142,29 @@ service cloud.firestore {
       allow read: if true;
       allow write: if false;
     }
+
+    // ─── Perf logs ──────────────────────────────────────────────────────────
+    // performanceLogs/{screenSlug}        ← screen metadata (lastEventAt)
+    // performanceLogs/{screenSlug}/events ← raw client events (write-only for client)
+    // performanceLogs/{screenSlug}/daily  ← CF aggregations (admin-read only)
+    match /performanceLogs/{screenSlug} {
+      // Any signed-in user may merge lastEventAt onto the parent doc.
+      allow write: if isSignedIn();
+      allow read:  if isAdmin();
+
+      match /events/{eventId} {
+        // Client may only create their own events — no updates or deletes.
+        allow create: if isSignedIn()
+          && request.resource.data.userId == request.auth.uid;
+        allow read:   if isAdmin();
+        allow update, delete: if false;
+      }
+
+      match /daily/{date} {
+        // Written exclusively by CF admin SDK (bypasses rules).
+        allow read:  if isAdmin();
+        allow write: if false;
+      }
+    }
   }
 }
