@@ -5,7 +5,7 @@ import { useRevenueCat } from '@/src/context/revenuecat-context';
 import {
   logScreenLoad,
   logOperation,
-  logError,
+  logError as logErrorToFirestore,
 } from '@/src/services/perf-log.service';
 
 /**
@@ -51,12 +51,12 @@ export function useScreenPerfLog(screenPath: string) {
     });
   }, [screenPath]);
 
-  const logErr = useCallback((message: string) => {
-    logError(screenPath, message, {
+  const logError = useCallback((message: string) => {
+    logErrorToFirestore(screenPath, message, {
       userId: ctxRef.current.authUser?.uid,
       isPro:  ctxRef.current.isPro,
     });
   }, [screenPath]);
 
-  return { markReady, logOp, logError: logErr };
+  return { markReady, logOp, logError };
 }

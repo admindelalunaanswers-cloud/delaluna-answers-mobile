@@ -52,11 +52,11 @@ describe('useScreenPerfLog', () => {
       });
 
       expect(perfLog.logScreenLoad).toHaveBeenCalledTimes(1);
-      expect(perfLog.logScreenLoad).toHaveBeenCalledWith(
-        '/(main)/chat',
-        expect.any(Number),
-        { userId: 'uid-test', isPro: false },
-      );
+      const [path, duration, opts] = (perfLog.logScreenLoad as jest.Mock).mock.calls[0];
+      expect(path).toBe('/(main)/chat');
+      expect(duration).toBeGreaterThanOrEqual(500);
+      expect(duration).toBeLessThan(600);
+      expect(opts).toEqual({ userId: 'uid-test', isPro: false });
     });
 
     it('fires only once even when called multiple times (idempotent)', () => {
@@ -134,6 +134,20 @@ describe('useScreenPerfLog', () => {
       const first = result.current.markReady;
       rerender({});
       expect(result.current.markReady).toBe(first);
+    });
+
+    it('logOp reference does not change across re-renders', () => {
+      const { result, rerender } = renderHook(() => useScreenPerfLog('/(main)/chat'));
+      const first = result.current.logOp;
+      rerender({});
+      expect(result.current.logOp).toBe(first);
+    });
+
+    it('logError reference does not change across re-renders', () => {
+      const { result, rerender } = renderHook(() => useScreenPerfLog('/(main)/chat'));
+      const first = result.current.logError;
+      rerender({});
+      expect(result.current.logError).toBe(first);
     });
   });
 });
