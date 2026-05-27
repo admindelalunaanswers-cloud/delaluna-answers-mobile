@@ -31,6 +31,7 @@ import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { useResponsive } from '@/src/hooks/use-responsive';
 import { verticalScale } from '@/src/utils/responsive';
 import { getContentPadding } from '@/src/utils/layout';
+import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -43,6 +44,7 @@ export default function HomeScreen() {
     breakdown,
   } = useHoroscope();
   const { isPro, loading: rcLoading } = useRevenueCat();
+  const { markReady } = useScreenPerfLog('/(main)/index');
   const hasPremiumAccess = rcLoading || isPro;
 
 
@@ -128,6 +130,11 @@ export default function HomeScreen() {
       ).catch(() => {});
     });
   }, [cardDraw]);
+
+  // Mark screen ready once initial data is available
+  useEffect(() => {
+    if (!rcLoading) markReady();
+  }, [rcLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeCards = cardDraw[selectedDate] ?? null;
   const activeHoroscope = horoscopeByDate[selectedDate] ?? null;
