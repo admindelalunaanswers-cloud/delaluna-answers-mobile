@@ -25,6 +25,7 @@ import { ThemeContext } from '@/src/context/theme-context';
 import { useUser } from '@/src/context/user-context';
 import { signOut, updateUserDoc } from '@/src/services/user.service';
 import { Events } from '@/src/services/analytics.service';
+import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
 import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
 import LoadingScreen from '../(util)/loading-screen';
 
@@ -59,7 +60,14 @@ export default function VerifyEmail() {
   const horoscopeReady =
     !!horoscope || (!dataLoading && !horoscopeGenerating);
 
+  const { markReady } = useScreenPerfLog('/(auth)/verify-email');
+
   const inputRefs = useRef<(TextInput | null)[]>([]);
+
+  // Mark screen ready on mount — OTP form renders immediately
+  useEffect(() => {
+    markReady();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-send code on mount
   useEffect(() => {

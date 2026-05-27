@@ -34,6 +34,7 @@ import LoadingScreen from '../(util)/loading-screen';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedView } from '@/src/components/themed-view';
 import { Events } from '@/src/services/analytics.service';
+import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
 
 // ─── Fallback coordinates (Greenwich) ─────────────────────────────────────────
 
@@ -74,9 +75,16 @@ export default function SignUpChatScreen() {
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
 
+  const { markReady } = useScreenPerfLog('/(auth)/sign-up');
+
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const modalCardWidth = width > 640 ? '55%' : width > 480 ? '70%' : '86%';
+
+  // Mark screen ready on mount — form renders immediately, no async data needed
+  useEffect(() => {
+    markReady();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Timeout safety net
   useEffect(() => {

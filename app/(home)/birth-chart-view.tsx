@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet } from 'react-native';
 import type { ScrollView as ScrollViewType } from 'react-native';
 
@@ -14,6 +14,7 @@ import NatalWheelTab from '@/src/components/natalChart/natal-chart-wheel.tab';
 import NatalTable from '@/src/components/natalChart/natal-chart-table.tab';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
+import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
 import PremiumUnlock from '@/src/components/shared/premium-unlock.component';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
 import { renderRichText } from '@/src/utils/rich-text';
@@ -59,7 +60,12 @@ export default function BirthChartScreen() {
   }
 
   const { isPro, loading: rcLoading } = useRevenueCat();
+  const { markReady } = useScreenPerfLog('/(home)/birth-chart-view');
   const isPremium = rcLoading || isPro;
+
+  useEffect(() => {
+    if (!rcLoading) markReady();
+  }, [rcLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const insets       = useSafeAreaInsets();
   const headerHeight = insets.top + scale(NAV_BAR_HEIGHT);

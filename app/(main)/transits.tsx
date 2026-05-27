@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +13,7 @@ import { renderRichText } from '@/src/utils/rich-text';
 import { C, R, S } from '@/src/constants/theme';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
+import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
 import { useResponsive } from '@/src/hooks/use-responsive';
 import type { TransitHouseReading } from '@/src/types/transit-reading.types';
 
@@ -114,7 +115,12 @@ export default function TransitsScreen() {
   } = useHoroscope();
 
   const { isPro, loading: rcLoading } = useRevenueCat();
+  const { markReady } = useScreenPerfLog('/(main)/transits');
   const isPremium = rcLoading || isPro;
+
+  useEffect(() => {
+    if (!rcLoading && !loading) markReady();
+  }, [rcLoading, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const insets = useSafeAreaInsets();
   const { scale, width: screenWidth } = useResponsive();
