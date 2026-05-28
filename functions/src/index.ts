@@ -362,7 +362,7 @@ const PUSH_CHUNK_SIZE = 100;
 
 interface ExpoPushMessage {
   to: string;
-  sound: 'default';
+  sound: 'default' | null;
   title: string;
   body: string;
   channelId?: string;
@@ -398,9 +398,7 @@ export const clearDailyChatHistory = onSchedule('every day 00:00', async () => {
 });
 
 // Silent midnight rollover hour in user local time. The client treats this as
-// a hint to regenerate today's horoscope so a fresh reading is ready by morning.
-// Best-effort: silent pushes are throttled by iOS and won't fire if the app is
-// force-killed.
+// a hint to pre-generate today's horoscope so it's ready by morning.
 const ROLLOVER_PUSH_LOCAL_HOUR = 0;
 
 // Each user is assigned a stable per-UID hour in [HOUR_BASE, HOUR_BASE + HOUR_SPAN)
@@ -594,14 +592,14 @@ export const dailyHoroscopeNotifications = onSchedule('every 1 hours', async () 
     const localDay = localDayOfWeek(now, offset);
     if (localHour === null || localDay === null) continue;
 
-    // Silent rollover at local midnight (regardless of weekday).
+    // Truly silent data-only push at midnight — wakes the app to pre-generate
+    // today's horoscope before morning. No sound, no banner.
     if (localHour === ROLLOVER_PUSH_LOCAL_HOUR) {
       messages.push({
         to: token,
-        sound: 'default',
+        sound: null,
         title: '',
         body: '',
-        channelId: 'default',
         data: { action: 'rollover-horoscope' },
         priority: 'high',
         _contentAvailable: true,
