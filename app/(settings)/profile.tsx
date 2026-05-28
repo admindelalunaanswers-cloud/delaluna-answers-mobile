@@ -1,25 +1,35 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, Image, TouchableOpacity, StyleSheet, Alert, ScrollView, ActivityIndicator, Linking,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Linking,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
-import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { deleteUser } from 'firebase/auth';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
+import { router } from 'expo-router';
+import { deleteUser, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ThemedView } from '@/src/components/themed-view';
-import HeaderNav from '@/src/components/shared/header-nav';
-import { useUser } from '@/src/context/user-context';
-import { useHoroscope } from '@/src/context/horoscope-context';
-import { useRevenueCat } from '@/src/context/revenuecat-context';
-import { signOut } from '@/src/services/user.service';
-import { registerForPushNotifications, unregisterPushToken } from '@/src/services/notifications.service';
 import { getProfileImageSource } from '@/app/(settings)/select-avatar';
 import { auth } from '@/firebaseConfig';
-import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
+import HeaderNav from '@/src/components/shared/header-nav';
+import { ThemedView } from '@/src/components/themed-view';
+import { useHoroscope } from '@/src/context/horoscope-context';
+import { useRevenueCat } from '@/src/context/revenuecat-context';
+import { useUser } from '@/src/context/user-context';
+import { registerForPushNotifications, unregisterPushToken } from '@/src/services/notifications.service';
+import { signOut } from '@/src/services/user.service';
+import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
 
 const PRIVACY_POLICY_URL = 'https://admindelalunaanswers-cloud.github.io/delaluna-legal/';
 const TERMS_OF_USE_URL   = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
@@ -78,6 +88,9 @@ export default function ProfileScreen() {
   const [busy] = useState(false);
   const [notifPermission, setNotifPermission] = useState<string | null>(null);
   const [enablingNotifs, setEnablingNotifs] = useState(false);
+  const [showReauthModal, setShowReauthModal] = useState(false);
+  const [reauthPassword, setReauthPassword] = useState('');
+  const [reauthLoading, setReauthLoading] = useState(false);
 
   const isPremium = isPro;
   const profileImageSource = getProfileImageSource(ud?.profileImageId) ?? getProfileImageSource('profile8')!;
@@ -148,36 +161,33 @@ export default function ProfileScreen() {
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete account',
-      'This will permanently delete your account and all your data. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete', style: 'destructive',
-          onPress: async () => {
-            const user = auth.currentUser;
-            if (!user) return;
-            try {
-              // The `delete-user-data` extension watches Auth deletes and
-              // cleans up Firestore docs, push tokens, and storage on its own.
-              await deleteUser(user);
-              router.replace('/(startup)/welcome');
-            } catch (err: any) {
-              console.error('[profile] delete failed:', err);
-              if (err?.code === 'auth/requires-recent-login') {
-                Alert.alert(
-                  'Re-authentication required',
-                  'For your security, please log out and log back in before deleting your account.',
-                );
-              } else {
-                Alert.alert('Error', 'Could not delete account. Please try again.');
-              }
-            }
-          },
-        },
-      ]
-    );
+    setReauthPassword('');
+    setShowReauthModal(true);
+  };
+
+  const handleReauthAndDelete = async () => {
+    const user = auth.currentUser;
+    if (!user || !user.email) return;
+    setReauthLoading(true);
+    try {
+      const cred = EmailAuthProvider.credential(user.email, reauthPassword);
+      await reauthenticateWithCredential(user, cred);
+      await deleteUser(user);
+      setShowReauthModal(false);
+      router.replace('/(startup)/welcome');
+    } catch (err: any) {
+      console.error('[profile] reauth-delete failed:', err);
+      const code = err?.code ?? '';
+      const message =
+        code === 'auth/wrong-password' || code === 'auth/invalid-credential'
+          ? 'Incorrect password. Please try again.'
+          : code === 'auth/too-many-requests'
+          ? 'Too many attempts. Please try again later.'
+          : 'Could not verify your identity. Please try again.';
+      Alert.alert('Error', message);
+    } finally {
+      setReauthLoading(false);
+    }
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────────
@@ -473,6 +483,53 @@ export default function ProfileScreen() {
 
         <View style={{ height: verticalScale(32) }} />
       </ScrollView>
+
+      <Modal
+        visible={showReauthModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowReauthModal(false)}
+      >
+        <View style={ss.reauthOverlay}>
+          <View style={ss.reauthCard}>
+            <Text style={ss.reauthTitle}>Delete your account?</Text>
+            <Text style={ss.reauthBody}>
+              This will permanently delete your account and all your data. This cannot be undone.{'\n\n'}Enter your password to confirm.
+            </Text>
+            <TextInput
+              style={ss.reauthInput}
+              placeholder="Password"
+              placeholderTextColor="rgba(255,255,255,0.4)"
+              secureTextEntry
+              value={reauthPassword}
+              onChangeText={setReauthPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="password"
+              textContentType="password"
+            />
+            <View style={ss.reauthActions}>
+              <TouchableOpacity
+                onPress={() => setShowReauthModal(false)}
+                style={[ss.reauthBtn, ss.reauthBtnGhost]}
+                disabled={reauthLoading}
+              >
+                <Text style={ss.reauthBtnGhostText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleReauthAndDelete}
+                style={[ss.reauthBtn, ss.reauthBtnDanger, (reauthLoading || !reauthPassword) && ss.reauthBtnDisabled]}
+                disabled={reauthLoading || !reauthPassword}
+              >
+                {reauthLoading
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Text style={ss.reauthBtnDangerText}>Delete account</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ThemedView>
   );
 }
