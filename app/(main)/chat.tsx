@@ -656,11 +656,11 @@ const styles = StyleSheet.create({
   },
   suggestionChip: {
     borderWidth: 1,
-    borderColor: 'rgba(188,168,244,0.35)',
+    borderColor: C.inactiveTabs + '59',
     borderRadius: R.pill,
     paddingVertical: 10,
     paddingHorizontal: S.md,
-    backgroundColor: 'rgba(188,168,244,0.07)',
+    backgroundColor: C.inactiveTabs + '12',
     width: '100%',
   },
   suggestionText: {
@@ -697,7 +697,7 @@ const styles = StyleSheet.create({
 
   aiBubbleRow: { alignItems: 'flex-start' },
   aiBubble: {
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: C.white + '12',
     borderRadius: R.lg,
     borderBottomLeftRadius: R.sm,
     paddingHorizontal: S.md,
@@ -743,8 +743,8 @@ const styles = StyleSheet.create({
     paddingTop: S.sm,
     gap: S.sm,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderTopColor: C.white + '14',
+    backgroundColor: C.cosmos + '33',
   },
   contextRow: {
     flexDirection: 'row',
@@ -752,7 +752,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: S.sm + 2,
     paddingTop: S.sm,
     paddingBottom: 2,
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    backgroundColor: C.cosmos + '33',
   },
   contextChipActive: {
     flexDirection: 'row',
@@ -761,9 +761,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: S.sm + 2,
     borderRadius: R.pill,
-    backgroundColor: 'rgba(184,163,255,0.18)',
+    backgroundColor: C.purpleLight + '2E',
     borderWidth: 1,
-    borderColor: 'rgba(184,163,255,0.45)',
+    borderColor: C.purpleLight + '73',
   },
   contextChipText: {
     color: C.purpleLight,
@@ -778,7 +778,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: S.sm + 2,
     borderRadius: R.pill,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: C.white + '2E',
   },
   contextChipAddText: {
     color: C.muted,
@@ -795,7 +795,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 40,
     maxHeight: 120,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: C.white + '14',
     borderRadius: R.xl,
     paddingHorizontal: S.md,
     paddingVertical: S.sm,
@@ -831,7 +831,7 @@ const styles = StyleSheet.create({
   counterBar: {
     alignItems: 'center',
     paddingVertical: S.xs,
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    backgroundColor: C.cosmos + '33',
   },
   counterText: {
     color: C.muted,
@@ -840,7 +840,7 @@ const styles = StyleSheet.create({
 
   historyModal: {
     flex: 1,
-    backgroundColor: '#0d0d1a',
+    backgroundColor: C.nebula,
   },
   historyHeader: {
     flexDirection: 'row',
@@ -849,7 +849,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: S.md,
     paddingVertical: S.md,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
+    borderBottomColor: C.white + '14',
   },
   historyTitle: {
     color: C.white,
@@ -882,7 +882,7 @@ const styles = StyleSheet.create({
   sessionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: C.white + '0D',
     borderRadius: R.md,
     paddingHorizontal: S.md,
     paddingVertical: S.sm + 2,
@@ -908,7 +908,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: S.sm,
     paddingVertical: 6,
     borderRadius: R.pill,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: C.white + '1F',
   },
   resumeButtonText: {
     color: C.white,
