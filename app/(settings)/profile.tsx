@@ -29,6 +29,7 @@ import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { useUser } from '@/src/context/user-context';
 import { registerForPushNotifications, unregisterPushToken } from '@/src/services/notifications.service';
 import { signOut } from '@/src/services/user.service';
+import { C } from '@/src/constants/theme';
 import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
 
 const PRIVACY_POLICY_URL = 'https://admindelalunaanswers-cloud.github.io/delaluna-legal/';
@@ -434,16 +435,12 @@ export default function ProfileScreen() {
             <Image source={require('@/src/assets/actions/arrow-right-icon.png')} style={ss.rowArrow} />
           </TouchableOpacity>
 
-          <View style={ss.rowDivider} />
-
-          <TouchableOpacity style={ss.settingsRow} onPress={handleDeleteAccount} activeOpacity={0.75}>
-            <Image source={require('@/src/assets/actions/delete-account-icon.png')} style={[ss.rowIcon, ss.rowIconDanger]} />
-            <Text style={ss.rowTextDanger}>Delete account</Text>
-            <Image source={require('@/src/assets/actions/arrow-right-icon.png')} style={[ss.rowArrow, ss.rowIconDanger]} />
-          </TouchableOpacity>
-
-          
         </View>
+
+        <TouchableOpacity style={ss.deleteButton} onPress={handleDeleteAccount} activeOpacity={0.8}>
+          <Ionicons name="trash-outline" size={scale(16)} color={C.white} />
+          <Text style={ss.deleteButtonText}>Delete account</Text>
+        </TouchableOpacity>
 
         {/* ── Subscription actions ── */}
         {isPremium ? (
@@ -618,5 +615,93 @@ const ss = StyleSheet.create({
   rowTextDanger:   { flex: 1, color: '#ff4d4f', fontSize: moderateScale(15), fontWeight: '500' },
   rowDisabled:     { opacity: 0.4 },
 
-  // Consumables
+  // Delete account button
+  deleteButton: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: scale(8),
+    marginTop: verticalScale(8),
+    paddingVertical: verticalScale(14),
+    borderRadius: scale(16),
+    backgroundColor: C.retro,
+  },
+  deleteButtonText: {
+    color: C.white,
+    fontSize: moderateScale(15),
+    fontWeight: '600',
+  },
+
+  // Reauth modal
+  reauthOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    paddingHorizontal: scale(24),
+  },
+  reauthCard: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: scale(20),
+    padding: scale(24),
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  reauthTitle: {
+    color: C.white,
+    fontSize: moderateScale(18),
+    fontWeight: '700',
+    marginBottom: verticalScale(10),
+    textAlign: 'center',
+  },
+  reauthBody: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: moderateScale(14),
+    lineHeight: moderateScale(20),
+    marginBottom: verticalScale(16),
+    textAlign: 'center',
+  },
+  reauthInput: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: scale(12),
+    paddingHorizontal: scale(14),
+    paddingVertical: verticalScale(12),
+    color: C.white,
+    fontSize: moderateScale(15),
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    marginBottom: verticalScale(16),
+  },
+  reauthActions: {
+    flexDirection: 'row',
+    gap: scale(10),
+  },
+  reauthBtn: {
+    flex: 1,
+    paddingVertical: verticalScale(12),
+    borderRadius: scale(12),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reauthBtnGhost: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  reauthBtnGhostText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: moderateScale(14),
+    fontWeight: '600',
+  },
+  reauthBtnDanger: {
+    backgroundColor: C.retro,
+  },
+  reauthBtnDisabled: {
+    opacity: 0.5,
+  },
+  reauthBtnDangerText: {
+    color: C.white,
+    fontSize: moderateScale(14),
+    fontWeight: '700',
+  },
 });
