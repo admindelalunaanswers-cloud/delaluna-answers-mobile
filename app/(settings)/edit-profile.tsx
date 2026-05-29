@@ -31,7 +31,7 @@ import { calculateNatalChart, calculateTransits, BirthData } from '@/src/service
 import { requestBreakdown } from '@/src/services/natal-chart-breakdown.service';
 import { requestHoroscope, getTodayDateId } from '@/src/services/horoscope.service';
 import { requestTransitReading, getThisWeekDateId } from '@/src/services/transit-reading.service';
-import { updateUserChartInConnections } from '@/src/services/connection.service';
+import { updateUserChartInConnections, refreshSynastryReadingsForUser } from '@/src/services/connection.service';
 import type { NatalChartDetailsDoc } from '@/src/types/user.type';
 import { auth, db } from '@/firebaseConfig';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
@@ -474,8 +474,8 @@ export default function EditProfileScreen() {
           await requestHoroscope(uid, dateId, chartDetailsDoc, natalChart.moon, [], pronouns);
         }
 
-        // Update firstPerson snapshot in any connection created with "Use my chart".
-        // Fire-and-forget — failure doesn't block the save UX.
+        // Update firstPerson snapshot and synastry readings in any connection
+        // created with "Use my chart". Fire-and-forget — failure doesn't block the save UX.
         updateUserChartInConnections(uid, {
           firstName:            firstName.trim(),
           lastName:             lastName.trim(),
@@ -489,6 +489,8 @@ export default function EditProfileScreen() {
           isBirthTimeUnknown,
           isPlaceOfBirthUnknown,
         }, chartDetailsDoc).catch(console.error);
+
+        refreshSynastryReadingsForUser(uid, natalChart, firstName.trim()).catch(console.error);
       }
 
       await refresh();
