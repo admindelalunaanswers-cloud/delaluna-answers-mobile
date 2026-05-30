@@ -480,13 +480,21 @@ async function isUserPremium(uid: string): Promise<boolean> {
  * Enqueues a push to be delivered at or after `sendAfter`. Picked up by the
  * hourly job (drainScheduledPushes). Resolution is roughly 1 hour — a push
  * scheduled for 1:23 PM local will go out at the next hourly tick after that.
+ *
+ * Pass `docId` to make the enqueue idempotent — a deterministic ID means a
+ * Cloud Function retry overwrites the existing entry instead of creating a
+ * second one, preventing duplicate notifications.
  */
 async function enqueueDelayedPush(
   userId: string,
   sendAfter: Date,
   payload: PushPayload,
+  docId?: string,
 ): Promise<void> {
-  await db.collection('scheduledPushes').add({
+  const ref = docId
+    ? db.collection('scheduledPushes').doc(docId)
+    : db.collection('scheduledPushes').doc();
+  await ref.set({
     userId,
     sendAfter: Timestamp.fromDate(sendAfter),
     payload,
@@ -899,9 +907,14 @@ export const notifyBreakdownReady = onDocumentUpdated(
     }
 
     const userSnap = await db.collection('users').doc(userId).get();
-    const token = userSnap.data()?.expoPushToken as string | undefined;
+    const userData = userSnap.data();
+    const token = userData?.expoPushToken as string | undefined;
     if (!token) {
       console.info(`[notifyBreakdownReady] Skip — user ${userId} has no expoPushToken`);
+      return;
+    }
+    if (!userData?.isEmailVerified) {
+      console.info(`[notifyBreakdownReady] Skip — user ${userId} email not verified`);
       return;
     }
 
@@ -1059,11 +1072,16 @@ export const parseConnectionCompatibility = onDocumentUpdated(
     }
     const sendAfter = new Date(localTarget.getTime() - offset * 60 * 1000);
 
+    // Key: one queued entry per connection per day. A CF retry overwrites
+    // the same doc (set is idempotent) instead of creating a second entry.
+    const dateKey = now.toISOString().slice(0, 10);
+    const pushDocId = `${userId}_${connectionId}_${dateKey}`;
+
     await enqueueDelayedPush(userId, sendAfter, {
       title: 'Connection Report Ready',
       body: 'Your new compatibility report just dropped. Tap to read.',
       data: { screen: '/connection/[id]', connectionId },
-    });
+    }, pushDocId);
   }
 );
 
