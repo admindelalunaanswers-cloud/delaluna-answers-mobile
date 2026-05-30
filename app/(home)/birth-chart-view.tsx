@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { ScrollView as ScrollViewType } from 'react-native';
 
 import { router } from 'expo-router';
@@ -16,6 +16,7 @@ import { useHoroscope } from '@/src/context/horoscope-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
 import PremiumUnlock from '@/src/components/shared/premium-unlock.component';
+import SkeletonLines from '@/src/components/shared/skeleton-lines';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
 import { renderRichText } from '@/src/utils/rich-text';
 import type { NatalChart } from '@/src/services/astroEngine';
@@ -179,7 +180,19 @@ export default function BirthChartScreen() {
 
   function renderBreakdownContent() {
     if (isBreakdownLoading) {
-      return <ActivityIndicator color="#BCA8F4" style={{ marginTop: verticalScale(24) }} />;
+      return (
+        <>
+          {Array.from({ length: 5 }, (_, i) => (
+            <View key={i} style={styles.card}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(8) }}>
+                <SkeletonLines lines={1} widths={[scale(120)]} lineHeight={moderateScale(12)} color="rgba(255,255,255,0.15)" />
+                <SkeletonLines lines={1} widths={[scale(48)]} lineHeight={moderateScale(10)} color="rgba(255,255,255,0.09)" />
+              </View>
+              <SkeletonLines lines={3} widths={['100%', '88%', '66%']} lineHeight={moderateScale(11)} spacing={verticalScale(6)} color="rgba(255,255,255,0.1)" />
+            </View>
+          ))}
+        </>
+      );
     }
     if (!activeBreakdown) {
       return <ThemedText style={styles.errorText}>Breakdown not ready yet.</ThemedText>;

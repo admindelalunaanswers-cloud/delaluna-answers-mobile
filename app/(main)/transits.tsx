@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HeaderNav from '@/src/components/shared/header-nav';
+import SkeletonLines from '@/src/components/shared/skeleton-lines';
 import { ThemedView } from '@/src/components/themed-view';
 import { moderateScale, scale as staticScale, verticalScale } from '@/src/utils/responsive';
 import { getContentPadding } from '@/src/utils/layout';
@@ -17,11 +18,32 @@ import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
 import { useResponsive } from '@/src/hooks/use-responsive';
 import type { TransitHouseReading } from '@/src/types/transit-reading.types';
 
-import LoadingScreen from '../(util)/loading-screen';
 import { ThemedText } from '@/src/components/themed-text';
 import { HOUSE_KEYWORDS, TRANSITS_DEFINITION } from '@/src/constants/definitions';
 
 const NAV_BAR_HEIGHT = 44;
+
+// ─── Skeleton House Card ──────────────────────────────────────────────────────
+
+function SkeletonHouseCard() {
+  return (
+    <View style={houseStyles.card}>
+      <View style={houseStyles.header}>
+        <View style={houseStyles.headerLeft}>
+          <SkeletonLines lines={1} widths={[staticScale(60)]} lineHeight={moderateScale(12)} color="rgba(255,210,80,0.18)" />
+          <SkeletonLines lines={1} widths={[staticScale(72)]} lineHeight={moderateScale(10)} color="rgba(255,255,255,0.1)" />
+        </View>
+        <SkeletonLines lines={1} widths={[staticScale(14)]} lineHeight={moderateScale(14)} color="rgba(255,255,255,0.1)" />
+      </View>
+      <View style={houseStyles.planetsRow}>
+        {[staticScale(80), staticScale(96), staticScale(72)].map((w, i) => (
+          <SkeletonLines key={i} lines={1} widths={[w]} lineHeight={moderateScale(24)} color="rgba(255,255,255,0.07)" />
+        ))}
+      </View>
+      <SkeletonLines lines={2} widths={['100%', '72%']} lineHeight={moderateScale(11)} spacing={verticalScale(6)} color="rgba(255,255,255,0.12)" />
+    </View>
+  );
+}
 
 // ─── House Card ──────────────────────────────────────────────────────────────
 
@@ -174,7 +196,19 @@ export default function TransitsScreen() {
         </ThemedText>
       </ThemedView>
       {loading ? (
-        <LoadingScreen />
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingTop: scale(12), paddingBottom: insets.bottom + scale(20), paddingHorizontal: getContentPadding(screenWidth) },
+          ]}
+          showsVerticalScrollIndicator={false}
+          scrollEnabled={false}
+        >
+          {Array.from({ length: 12 }, (_, i) => (
+            <SkeletonHouseCard key={i} />
+          ))}
+        </ScrollView>
       ) : (
         <ScrollView
           style={styles.scroll}
@@ -185,10 +219,7 @@ export default function TransitsScreen() {
           showsVerticalScrollIndicator={false}
         >
           {transitReadingGenerating && !transitReading && (
-            <View style={styles.generatingRow}>
-              <ActivityIndicator size="small" color={C.purple} />
-              <Text style={styles.generatingText}>Generating house readings...</Text>
-            </View>
+            Array.from({ length: 12 }, (_, i) => <SkeletonHouseCard key={i} />)
           )}
 
           {transitReading && orderedHouses.map((house) => (

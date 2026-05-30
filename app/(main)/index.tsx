@@ -173,6 +173,7 @@ export default function HomeScreen() {
   });
   const isPremium = hasPremiumAccess;
   const isPaygated = selectedDate !== todayDateId && !isPremium;
+  const isGenerating = !activeHoroscope;
 
   const handleUnlock = () => {
     router.push('/(settings)/paywall');
@@ -219,19 +220,19 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
         >
           <SectionTitle sectionName="quote" title="Quote" />
-          <HomeTextBox sectionName="quote" content={activeHoroscope?.quote} />
+          <HomeTextBox sectionName="quote" content={activeHoroscope?.quote} generating={isGenerating} />
 
           <SectionTitle sectionName="advice" title="Advice" />
-          <HomeTextBox sectionName="advice" content={activeHoroscope?.advice} />
+          <HomeTextBox sectionName="advice" content={activeHoroscope?.advice} generating={isGenerating} />
 
           <SectionTitle sectionName="dos" title="Do's" />
-          <HomeTextBox sectionName="dos" content={activeHoroscope?.do ?? []} />
+          <HomeTextBox sectionName="dos" content={activeHoroscope?.do ?? []} generating={isGenerating} />
 
           <SectionTitle sectionName="donts" title="Don'ts" />
-          <HomeTextBox sectionName="donts" content={activeHoroscope?.dont ?? []} />
+          <HomeTextBox sectionName="donts" content={activeHoroscope?.dont ?? []} generating={isGenerating} />
 
           <SectionTitle sectionName="affirmation" title="Affirmation" />
-          <HomeTextBox sectionName="affirmation" content={activeHoroscope?.affirmation} />
+          <HomeTextBox sectionName="affirmation" content={activeHoroscope?.affirmation} generating={isGenerating} />
 
           <SectionTitle sectionName="tarot" title="Today's Cards" />
           <HomeTextBox
@@ -240,6 +241,7 @@ export default function HomeScreen() {
             cards={activeCards?.cards}
             firstView={activeCards?.firstView}
             onReveal={handleCardReveal}
+            generating={isGenerating}
           />
 
           <SectionTitle sectionName="message" title="Message in a Bottle" />
@@ -251,14 +253,15 @@ export default function HomeScreen() {
             content={activeHoroscope?.moon}
             contentTwo={activeHoroscope?.moonPhaseDetails}
             moonData={activeMoonData}
+            generating={isGenerating}
           />
 
           <SectionTitle sectionName="retrograde" title="Planets in Retrograde" />
-          <HomeTextBox sectionName="retrograde" content={retrogrades} />
+          <HomeTextBox sectionName="retrograde" content={isGenerating ? [] : retrogrades} generating={isGenerating} />
 
           <SectionTitle sectionName="newLove" title="New Love" />
           <Text style={styles.sectionDefinition}>{HOME_STRINGS.newLove.definition}</Text>
-          <HomeTextBox sectionName="newLove" content={activeHoroscope?.newLove ?? []} />
+          <HomeTextBox sectionName="newLove" content={activeHoroscope?.newLove ?? []} generating={isGenerating} />
           <TouchableOpacity
             style={styles.questionButton}
             onPress={() => { ChatStore.setInitialMessage(HOME_STRINGS.newLove.questionFunnel); router.push('/(main)/chat'); }}
@@ -269,7 +272,7 @@ export default function HomeScreen() {
 
           <SectionTitle sectionName="returns" title="Returns" />
           <Text style={styles.sectionDefinition}>{HOME_STRINGS.returns.definition}</Text>
-          <HomeTextBox sectionName="returns" content={activeHoroscope?.returns ?? []} />
+          <HomeTextBox sectionName="returns" content={activeHoroscope?.returns ?? []} generating={isGenerating} />
           <TouchableOpacity
             style={styles.questionButton}
             onPress={() => { ChatStore.setInitialMessage(HOME_STRINGS.returns.questionFunnel1); router.push('/(main)/chat'); }}
@@ -286,10 +289,10 @@ export default function HomeScreen() {
           </TouchableOpacity>
 
           <SectionTitle sectionName="luckyNumbers" title="Lucky Numbers" />
-          <HomeTextBox sectionName="luckyNumbers" content={activeHoroscope?.luckyNumbers ?? []} />
+          <HomeTextBox sectionName="luckyNumbers" content={activeHoroscope?.luckyNumbers ?? []} generating={isGenerating} />
 
           <SectionTitle sectionName="warning" title="Warning" />
-          <HomeTextBox sectionName="warning" content={activeHoroscope?.warning} />
+          <HomeTextBox sectionName="warning" content={activeHoroscope?.warning} generating={isGenerating} />
         </ScrollView>
         {!hasPremiumAccess && (() => {
           // Free users get a 3-way rotation; premium + trial see nothing.
