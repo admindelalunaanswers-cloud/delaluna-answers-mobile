@@ -63,13 +63,17 @@ function AuthGate() {
     (!!horoscope || (!dataLoading && !horoscopeGenerating)) &&
     !transitReadingGenerating;
 
-  // Register push token once the user is signed in
+  // Register push token only after email is verified — the breakdown Cloud
+  // Function reads this token and would otherwise notify users still on the
+  // verification screen.
   useEffect(() => {
     if (!authUser) return;
+    const isVerified = authUser.emailVerified || userDoc?.isEmailVerified === true;
+    if (!isVerified) return;
     import('@/src/services/notifications.service')
       .then(({ registerForPushNotifications }) => registerForPushNotifications(authUser.uid))
       .catch(console.error);
-  }, [authUser?.uid]);
+  }, [authUser?.uid, authUser?.emailVerified, userDoc?.isEmailVerified]);
 
   // Navigate to the correct screen when a notification is tapped.
   // Server pushes that target a dynamic route (e.g. `/connection/[id]`) include
