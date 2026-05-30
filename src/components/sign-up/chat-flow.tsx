@@ -311,11 +311,21 @@ export default function ChatFlow({
         let h = parseInt(ampmMatch[1]);
         const min = parseInt(ampmMatch[2]);
         const period = ampmMatch[3].toUpperCase();
+        if (h < 1 || h > 12 || min > 59) {
+          setDateError('Please enter a valid time (e.g. 3:45 PM or 15:45).');
+          return;
+        }
         if (period === 'PM' && h !== 12) h += 12;
         if (period === 'AM' && h === 12) h = 0;
         value = `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
       } else if (hhmmMatch) {
-        value = `${String(parseInt(hhmmMatch[1])).padStart(2, '0')}:${hhmmMatch[2]}`;
+        const h = parseInt(hhmmMatch[1]);
+        const min = parseInt(hhmmMatch[2]);
+        if (h > 23 || min > 59) {
+          setDateError('Please enter a valid time (e.g. 3:45 PM or 15:45).');
+          return;
+        }
+        value = `${String(h).padStart(2, '0')}:${hhmmMatch[2]}`;
       } else {
         setDateError('Please enter a valid time (e.g. 3:45 PM or 15:45).');
         return;
@@ -370,11 +380,17 @@ export default function ChatFlow({
       return;
     }
 
-    // Colon already present: update freely and sync dateValue
+    // Colon already present: clamp minutes to 59 and sync dateValue
     if (text.includes(':')) {
-      setCurrentValue(text);
-      const ampm = text.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-      const hhmm = text.trim().match(/^(\d{1,2}):(\d{2})$/);
+      const colonIdx = text.indexOf(':');
+      const afterColon = text.slice(colonIdx + 1);
+      const minDigits = afterColon.match(/^(\d{2})/);
+      const clamped = minDigits && parseInt(minDigits[1]) > 59
+        ? text.slice(0, colonIdx + 1) + '59' + afterColon.slice(2)
+        : text;
+      setCurrentValue(clamped);
+      const ampm = clamped.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+      const hhmm = clamped.trim().match(/^(\d{1,2}):(\d{2})$/);
       if (ampm) {
         let h = parseInt(ampm[1]); const min = parseInt(ampm[2]);
         const p = ampm[3].toUpperCase();

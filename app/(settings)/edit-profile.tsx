@@ -117,6 +117,7 @@ export default function EditProfileScreen() {
   const { refresh: refreshHoroscope } = useHoroscope();
   const ud = userDoc as any;
   const formInitialized = useRef(false);
+  const pendingBirthtimeRef = useRef<string>('');
 
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Saving changes...');
@@ -131,6 +132,7 @@ export default function EditProfileScreen() {
   // Birth fields
   const [birthday, setBirthday]                         = useState('');
   const [birthtime, setBirthtime]                       = useState('');
+  const [birthtimeText, setBirthtimeText]               = useState('');
   const [birthLat, setBirthLat]                         = useState(FALLBACK_LAT);
   const [birthLon, setBirthLon]                         = useState(FALLBACK_LON);
   const [birthTimezone, setBirthTimezone]               = useState(0);
@@ -176,6 +178,7 @@ export default function EditProfileScreen() {
 
     const bt = ud.birthtime ?? '';
     setBirthtime(bt);
+    setBirthtimeText(bt ? formatTimeDisplay(bt) : '');
 
     const lat = ud.birthLat ?? FALLBACK_LAT;
     const lon = ud.birthLon ?? FALLBACK_LON;
@@ -299,12 +302,55 @@ export default function EditProfileScreen() {
     } else {
       const h   = String(selected.getHours()).padStart(2, '0');
       const min = String(selected.getMinutes()).padStart(2, '0');
-      setBirthtime(`${h}:${min}`);
+      const hhmm = `${h}:${min}`;
+      setBirthtime(hhmm);
+      setBirthtimeText(formatTimeDisplay(hhmm));
       setPickerDate(selected);
     }
   };
 
   const confirmPickerIOS = () => setPickerVisible(false);
+
+  // ── Time text input ────────────────────────────────────────────────────────
+
+  const onTimeTextChange = (text: string) => {
+    if (text.length < birthtimeText.length) { setBirthtimeText(text); return; }
+
+    if (text.includes(':')) {
+      const colonIdx = text.indexOf(':');
+      const afterColon = text.slice(colonIdx + 1);
+      const minDigits = afterColon.match(/^(\d{2})/);
+      const clamped = minDigits && parseInt(minDigits[1]) > 59
+        ? text.slice(0, colonIdx + 1) + '59' + afterColon.slice(2)
+        : text;
+      setBirthtimeText(clamped);
+      const ampm = clamped.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+      const hhmm = clamped.trim().match(/^(\d{1,2}):(\d{2})$/);
+      if (ampm) {
+        let h = parseInt(ampm[1]); const min = parseInt(ampm[2]);
+        const p = ampm[3].toUpperCase();
+        if (p === 'PM' && h !== 12) h += 12;
+        if (p === 'AM' && h === 12) h = 0;
+        const dt = new Date(); dt.setHours(h, min, 0, 0); setPickerDate(dt);
+      } else if (hhmm) {
+        const dt = new Date(); dt.setHours(parseInt(hhmm[1]), parseInt(hhmm[2]), 0, 0); setPickerDate(dt);
+      }
+      return;
+    }
+
+    const digits = text.replace(/\D/g, '');
+    if (!digits) { setBirthtimeText(''); return; }
+    if (digits.length === 1) {
+      setBirthtimeText(parseInt(digits) >= 2 ? digits + ':' : digits);
+    } else {
+      const twoDigit = parseInt(digits.slice(0, 2));
+      if (twoDigit > 12) {
+        setBirthtimeText(digits[0] + ':' + digits.slice(1, 3));
+      } else {
+        setBirthtimeText(digits.slice(0, 2) + ':' + digits.slice(2, 4));
+      }
+    }
+  };
 
   // ── Save logic ─────────────────────────────────────────────────────────────
 
@@ -326,9 +372,40 @@ export default function EditProfileScreen() {
       return;
     }
 
+    // Parse and validate manually-entered birth time
+    let resolvedBirthtime = birthtime;
+    if (!isBirthTimeUnknown && birthtimeText.trim()) {
+      const ampmMatch = birthtimeText.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+      const hhmmMatch = birthtimeText.trim().match(/^(\d{1,2}):(\d{2})$/);
+      if (ampmMatch) {
+        let h = parseInt(ampmMatch[1]);
+        const min = parseInt(ampmMatch[2]);
+        const period = ampmMatch[3].toUpperCase();
+        if (h < 1 || h > 12 || min > 59) {
+          Alert.alert('Invalid time', 'Please enter a valid time (e.g. 3:45 PM or 15:45).');
+          return;
+        }
+        if (period === 'PM' && h !== 12) h += 12;
+        if (period === 'AM' && h === 12) h = 0;
+        resolvedBirthtime = `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+      } else if (hhmmMatch) {
+        const h = parseInt(hhmmMatch[1]);
+        const min = parseInt(hhmmMatch[2]);
+        if (h > 23 || min > 59) {
+          Alert.alert('Invalid time', 'Please enter a valid time (e.g. 3:45 PM or 15:45).');
+          return;
+        }
+        resolvedBirthtime = `${String(h).padStart(2, '0')}:${hhmmMatch[2]}`;
+      } else {
+        Alert.alert('Invalid time', 'Please enter a valid time (e.g. 3:45 PM or 15:45).');
+        return;
+      }
+    }
+    pendingBirthtimeRef.current = resolvedBirthtime;
+
     const next: ChartFields = {
       birthday,
-      birthtime: isBirthTimeUnknown ? '12:00' : birthtime,
+      birthtime: isBirthTimeUnknown ? '12:00' : resolvedBirthtime,
       birthLat:  isPlaceOfBirthUnknown ? FALLBACK_LAT : birthLat,
       birthLon:  isPlaceOfBirthUnknown ? FALLBACK_LON : birthLon,
       birthTimezone: isPlaceOfBirthUnknown ? 0 : birthTimezone,
@@ -366,7 +443,7 @@ export default function EditProfileScreen() {
     const effectiveLat  = isPlaceOfBirthUnknown ? FALLBACK_LAT : birthLat;
     const effectiveLon  = isPlaceOfBirthUnknown ? FALLBACK_LON : birthLon;
     const effectiveTz   = isPlaceOfBirthUnknown ? 0 : birthTimezone;
-    const effectiveTime = isBirthTimeUnknown ? null : (birthtime || null);
+    const effectiveTime = isBirthTimeUnknown ? null : (pendingBirthtimeRef.current || birthtime || null);
 
     try {
       const displayName  = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ');
@@ -620,18 +697,20 @@ export default function EditProfileScreen() {
                 </View>
               ) : (
                 <View style={ss.inputRow}>
-                  <TouchableOpacity style={{ flex: 1 }} onPress={openTimePicker} activeOpacity={0.75}>
-                    <Text style={birthtime ? ss.inputText : ss.inputPlaceholder}>
-                      {birthtime ? formatTimeDisplay(birthtime) : 'Select time…'}
-                    </Text>
-                  </TouchableOpacity>
-                  <Ionicons
-                    name="time-outline"
-                    size={scale(18)}
-                    color="rgba(255,255,255,0.45)"
-                    style={{ marginRight: scale(8) }}
+                  <TextInput
+                    style={[ss.inputText, { flex: 1 }]}
+                    value={birthtimeText}
+                    onChangeText={onTimeTextChange}
+                    placeholder="H:MM AM/PM"
+                    placeholderTextColor="rgba(255,255,255,0.35)"
+                    keyboardType="numbers-and-punctuation"
+                    autoCorrect={false}
+                    autoCapitalize="none"
                   />
-                  <TouchableOpacity onPress={() => { setIsBirthTimeUnknown(true); setBirthtime(''); }}>
+                  <TouchableOpacity onPress={openTimePicker} style={{ marginRight: scale(8) }}>
+                    <Ionicons name="time-outline" size={scale(18)} color="rgba(255,255,255,0.45)" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => { setIsBirthTimeUnknown(true); setBirthtime(''); setBirthtimeText(''); }}>
                     <Text style={ss.dimLinkText}>I don&apos;t know</Text>
                   </TouchableOpacity>
                 </View>

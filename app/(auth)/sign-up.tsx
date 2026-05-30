@@ -1,40 +1,39 @@
-import React, { useContext, useEffect, useState } from 'react';
-import {
-  View,
-  TouchableOpacity,
-  Text,
-  StyleSheet,
-  ImageBackground,
-  Platform,
-  Modal,
-  useWindowDimensions,
-  TouchableWithoutFeedback,
-  Keyboard,
-  Alert,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
+import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { updateProfile } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import React, { useEffect, useState } from 'react';
+import {
+  Alert,
+  ImageBackground,
+  Keyboard,
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  useWindowDimensions
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ThemeContext } from '@/src/context/theme-context';
-import { signUp, createUserDoc } from '@/src/services/user.service';
-import { FinalSignupPayload } from '@/src/types/signup.types';
-import { calculateNatalChart, calculateTransits, BirthData } from '@/src/services/astroEngine';
-import { requestBreakdown } from '@/src/services/natal-chart-breakdown.service';
-import { requestHoroscope, getTodayDateId } from '@/src/services/horoscope.service';
-import { requestTransitReading, getThisWeekDateId } from '@/src/services/transit-reading.service';
-import type { NatalChartDetailsDoc } from '@/src/types/user.type';
 import { db } from '@/firebaseConfig';
-import { verticalScale, scale, moderateScale } from '@/src/utils/responsive';
 import ChatFlow, { StepConfig } from '@/src/components/sign-up/chat-flow';
-import LoadingScreen from '../(util)/loading-screen';
-import { Ionicons } from '@expo/vector-icons';
 import { ThemedView } from '@/src/components/themed-view';
-import { Events } from '@/src/services/analytics.service';
+import { themes } from '@/src/context/theme-context';
 import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
+import { Events } from '@/src/services/analytics.service';
+import { BirthData, calculateNatalChart, calculateTransits } from '@/src/services/astroEngine';
+import { getTodayDateId, requestHoroscope } from '@/src/services/horoscope.service';
+import { requestBreakdown } from '@/src/services/natal-chart-breakdown.service';
+import { getThisWeekDateId, requestTransitReading } from '@/src/services/transit-reading.service';
+import { createUserDoc, signUp } from '@/src/services/user.service';
+import { FinalSignupPayload } from '@/src/types/signup.types';
+import type { NatalChartDetailsDoc } from '@/src/types/user.type';
+import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
+import { Ionicons } from '@expo/vector-icons';
+import LoadingScreen from '../(util)/loading-screen';
 
 // ─── Fallback coordinates (Greenwich) ─────────────────────────────────────────
 
@@ -67,7 +66,7 @@ function parseAuthError(err: any): string {
 
 export default function SignUpChatScreen() {
   const router = useRouter();
-  const { theme } = useContext(ThemeContext);
+  const theme = themes.default;
   const [step, setStep] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Setting up your account...');

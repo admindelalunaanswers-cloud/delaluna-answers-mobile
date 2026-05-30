@@ -305,15 +305,18 @@ export default function ProfileScreen() {
               {ud?.email ?? authUser?.email ?? '—'}
             </Text>
           </View> 
-          <View style={ss.separator} />
-         
-          <TouchableOpacity
-            onPress={() => router.push('/(settings)/purchased-reports')}>
-             <View style={ss.detailRow}>
-              <Text style={ss.detailLabel}>Reports purchased</Text>
-              <Text style={ss.detailValue}>{ud?.purchasedReports ?? '-'}</Text>
-            </View>
-          </TouchableOpacity>
+          {false && (
+            <>
+              <View style={ss.separator} />
+              <TouchableOpacity
+                onPress={() => router.push('/(settings)/purchased-reports')}>
+                <View style={ss.detailRow}>
+                  <Text style={ss.detailLabel}>Reports purchased</Text>
+                  <Text style={ss.detailValue}>{ud?.purchasedReports ?? '-'}</Text>
+                </View>
+              </TouchableOpacity>
+            </>
+          )}
                  
         </View>
 
