@@ -154,8 +154,11 @@ service cloud.firestore {
 
       match /events/{eventId} {
         // Client may only create their own events — no updates or deletes.
+        // userId may be null when auth context hasn't resolved at log time;
+        // the non-null check prevents spoofing another user's UID.
         allow create: if isSignedIn()
-          && request.resource.data.userId == request.auth.uid;
+          && (request.resource.data.userId == request.auth.uid
+              || request.resource.data.userId == null);
         allow read:   if isAdmin();
         allow update, delete: if false;
       }
