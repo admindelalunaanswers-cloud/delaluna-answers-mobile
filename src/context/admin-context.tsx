@@ -4,7 +4,7 @@
  * Values are persisted to AsyncStorage so changes survive a reload.
  *
  * Defaults match the production rules in the subscription spec:
- *   - dailyChatLimit (free):         0   (free users must buy question packs)
+ *   - dailyChatLimit (free):         2   (free users get 2 questions/day)
  *   - premiumDailyChatLimit:         2   (subscribers get 2 free questions/day)
  *   - freeConnectionLimit:           0   (free users have no connection access)
  *   - trialConnectionLimit:          3   (trial users get 3 connections)
@@ -22,7 +22,7 @@ try {
 
 // ─── Defaults ─────────────────────────────────────────────────────────────────
 
-export const DEFAULT_DAILY_CHAT_LIMIT = 0;
+export const DEFAULT_DAILY_CHAT_LIMIT = 2;
 export const DEFAULT_PREMIUM_DAILY_CHAT_LIMIT = 2;
 export const DEFAULT_FREE_CONNECTION_LIMIT = 0;
 export const DEFAULT_TRIAL_CONNECTION_LIMIT = 3;
