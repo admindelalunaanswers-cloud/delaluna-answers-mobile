@@ -354,7 +354,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(16),
     marginBottom: verticalScale(8),
   },
-  goBackText: { color: '#6FFFE9', fontSize: moderateScale(20), fontWeight: '500', textAlign: 'center', },
+  goBackText: { 
+    color: '#6FFFE9', fontSize: moderateScale(20), fontWeight: '500', textAlign: 'center', },
   cancelText: { color: '#6FFFE9', fontSize: moderateScale(18), fontWeight: '500' },
   chatFlowWrapper: { flex: 1, width: '100%' },
   modalOverlay: {
