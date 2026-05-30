@@ -137,10 +137,9 @@ export default function ChatFlow({
   };
 
   // Scroll to bottom after keyboard fully settles
-  const [kbVisible, setKbVisible] = useState(false);
   useEffect(() => {
-    const onShow = Keyboard.addListener('keyboardDidShow', () => { setKbVisible(true); scheduleScroll(120); });
-    const onHide = Keyboard.addListener('keyboardDidHide', () => { setKbVisible(false); scheduleScroll(120); });
+    const onShow = Keyboard.addListener('keyboardDidShow', () => scheduleScroll(120));
+    const onHide = Keyboard.addListener('keyboardDidHide', () => scheduleScroll(120));
     return () => { onShow.remove(); onHide.remove(); };
   }, []);
 
@@ -778,6 +777,8 @@ export default function ChatFlow({
                 placeholder={placeholder ?? 'Password…'}
                 placeholderTextColor="rgba(255,255,255,0.4)"
                 autoCapitalize="none"
+                autoComplete="new-password"
+                textContentType="newPassword"
                 returnKeyType="next"
                 onSubmitEditing={handleNext}
               />
