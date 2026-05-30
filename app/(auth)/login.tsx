@@ -202,6 +202,8 @@ export default function Login() {
                       value={password}
                       onChangeText={setPassword}
                       secureTextEntry={!showPassword}
+                      autoComplete="current-password"
+                      textContentType="password"
                       returnKeyType="done"
                       onSubmitEditing={handleLogin}
                     />
