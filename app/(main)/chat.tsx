@@ -7,7 +7,6 @@ import {
     FlatList,
     KeyboardAvoidingView,
     Modal,
-    Platform,
     ScrollView,
     StyleSheet,
     Text,
@@ -499,7 +498,7 @@ export default function ChatScreen() {
 
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior="padding"
       >
         <View style={[styles.flex, { paddingTop: headerHeight }]}>
           {showSuggestions ? (

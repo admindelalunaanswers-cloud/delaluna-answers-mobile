@@ -23,9 +23,9 @@ import { ThemedView } from '@/src/components/themed-view';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { ThemeContext } from '@/src/context/theme-context';
 import { useUser } from '@/src/context/user-context';
-import { signOut, updateUserDoc } from '@/src/services/user.service';
-import { Events } from '@/src/services/analytics.service';
 import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
+import { Events } from '@/src/services/analytics.service';
+import { signOut, updateUserDoc } from '@/src/services/user.service';
 import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
 import LoadingScreen from '../(util)/loading-screen';
 
@@ -105,7 +105,7 @@ export default function VerifyEmail() {
 
   const handleSignOut = async () => {
     try { await signOut(); } catch { /* ignore */ }
-    router.replace('/(startup)/welcome');
+    router.replace('/(auth)/login');
   };
 
   const handleSaveEmail = async () => {
@@ -237,7 +237,7 @@ export default function VerifyEmail() {
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior="padding"
       >
         <ImageBackground
           source={theme.backgroundImage}

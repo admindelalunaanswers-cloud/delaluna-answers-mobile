@@ -150,11 +150,9 @@ export default function Login() {
         style={{ flex: 1 }}
         resizeMode="cover"
       >
-        {/* (property) behavior?: "height" | "padding" | "position" | undefined
- */}
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? "padding"  : "padding"}
+          behavior="padding"
         >
           <ScrollView
             contentContainerStyle={styles.scrollContent}

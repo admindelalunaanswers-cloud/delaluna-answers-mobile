@@ -161,7 +161,7 @@ export default function UpdatePasswordScreen() {
 
   const content = (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior="padding"
       keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
       style={styles.flex}
     >

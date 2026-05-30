@@ -243,7 +243,7 @@ export default function FeedbackScreen() {
         textColor={COLORS.light}
       />
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         style={s.flex}
         keyboardVerticalOffset={insets.top + scale(NAV_BAR_HEIGHT)}
       >

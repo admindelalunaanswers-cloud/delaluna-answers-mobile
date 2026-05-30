@@ -497,7 +497,7 @@ export default function ChatFlow({
     <>
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : kbVisible ? 'height' : undefined}
+      behavior="padding"
       keyboardVerticalOffset={insets.top + keyboardOffset}
     >
       {/* ── Chat history ── */}
