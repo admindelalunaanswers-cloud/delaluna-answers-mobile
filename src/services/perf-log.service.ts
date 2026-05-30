@@ -66,7 +66,11 @@ interface UserOpts {
 
 function safeWrite(fn: () => Promise<void>, label: string): void {
   fn().catch((err) => {
-    if (__DEV__) console.warn(`[perf-log] ${label} failed:`, err);
+    // "already-exists" is Firestore offline persistence replaying a prior
+    // Fast Refresh session's write — the event was already committed.
+    if (__DEV__ && err?.code !== 'already-exists') {
+      console.warn(`[perf-log] ${label} failed:`, err);
+    }
   });
 }
 
