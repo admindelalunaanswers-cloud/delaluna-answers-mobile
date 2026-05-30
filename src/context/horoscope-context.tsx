@@ -270,8 +270,17 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
             // (subscribeBreakdown was skipped in load() because chart was null
             // at fetch time — Android timing: calculateNatalChart finishes after
             // load()'s Promise.all already completed with chart=null.)
+            // Re-fetch breakdown state here — sign-up's fire-and-forget chain
+            // may have already written the doc between load()'s Promise.all and
+            // this callback, making the captured breakdownFetch stale. Using the
+            // stale snapshot would cause a second requestBreakdown call → two
+            // Extension runs → two "chart ready" notifications.
             if (!unsubBreakdownRef.current) {
-              subscribeBreakdown(uid, newChart, signal, breakdownFetch, pronouns);
+              fetchBreakdown(uid).then(freshBreakdownFetch => {
+                if (!signal.cancelled) {
+                  subscribeBreakdown(uid, newChart, signal, freshBreakdownFetch, pronouns);
+                }
+              }).catch(console.error);
             }
             // Generate yesterday + tomorrow now that the chart exists.
             // Without this, new users only ever get today's horoscope until
