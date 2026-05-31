@@ -908,18 +908,23 @@ export default function SingleConnectionCreateScreen() {
 
   if (loading) {
     return (
-      <ThemedView style={{ flex: 1 }}>
-        <HeaderNav title="Compatibility" />
-        <View style={[styles.pendingWrapper, { marginTop: headerHeight }]}>
+      <View style={styles.loadingContainer}>
+        <LottieView
+          source={require("@/src/assets/animations/galaxy.json")}
+          autoPlay
+          loop
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View style={styles.pendingWrapper}>
           <LottieView
-            source={require("@/src/assets/animations/galaxy.json")}
+            source={require("@/src/assets/animations/splash-loop.json")}
             autoPlay
             loop
             style={styles.pendingAnimation}
           />
           <Text style={styles.pendingText}>{loadingMessage}</Text>
         </View>
-      </ThemedView>
+      </View>
     );
   }
 
@@ -1093,16 +1098,19 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
     overflow: "hidden",
   },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: "#050010",
+  },
   pendingWrapper: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: verticalScale(10),
-    paddingVertical: verticalScale(24),
+    gap: verticalScale(12),
   },
   pendingAnimation: {
-    width: moderateScale(220),
-    height: moderateScale(220),
+    width: moderateScale(450),
+    height: moderateScale(450),
   },
   pendingText: {
     color: "rgba(255,255,255,0.75)",

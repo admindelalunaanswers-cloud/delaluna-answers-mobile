@@ -416,6 +416,11 @@ const PREMIUM_ENTITLEMENT_ID = 'Delaluna Answers Pro';
 // almost certainly looking at the chat screen and don't need a notification.
 const CHAT_FOREGROUND_GRACE_MS = 30_000;
 
+// For longer-running generations (connection reports, synastry, transits) the
+// AI can take 60-180s. Use a 3-minute window so a user watching the loading
+// screen isn't notified, but one who backgrounded the app is.
+const GENERATION_FOREGROUND_GRACE_MS = 3 * 60 * 1000;
+
 /**
  * Returns the user's current local hour (0-23) given a UTC offset in minutes.
  * Returns null if the offset is missing or invalid.
@@ -600,6 +605,13 @@ export const dailyHoroscopeNotifications = onSchedule('every 1 hours', async () 
     const localDay = localDayOfWeek(now, offset);
     if (localHour === null || localDay === null) continue;
 
+    // Skip periodic notifications for accounts created in the last 24 hours.
+    // New users receive targeted notifications (notifyBreakdownReady, etc.)
+    // from Firestore triggers — the scheduled job would double-notify them
+    // if they happen to register during a notification window.
+    const createdAt = data.createdAt as Timestamp | undefined;
+    if (createdAt && (now.getTime() - createdAt.toMillis()) < 24 * 60 * 60 * 1000) continue;
+
     // Truly silent data-only push at midnight — wakes the app to pre-generate
     // today's horoscope before morning. No sound, no banner.
     if (localHour === ROLLOVER_PUSH_LOCAL_HOUR) {
@@ -646,12 +658,19 @@ export const dailyHoroscopeNotifications = onSchedule('every 1 hours', async () 
     }
 
     if (localDay === SUNDAY && localHour === cxHour) {
-      // Premium-gated and only relevant if the user actually has connections.
+      // Premium-gated and only relevant if the user has at least one established
+      // connection (created more than 24 hours ago). Connections without a
+      // createTime field are legacy/pre-date the field — treat them as established.
+      const cutoff24h = Timestamp.fromDate(new Date(now.getTime() - 24 * 60 * 60 * 1000));
       const [premium, cxSnap] = await Promise.all([
         isUserPremium(uid),
-        userDoc.ref.collection('connections').limit(1).get(),
+        userDoc.ref.collection('connections').limit(10).get(),
       ]);
-      if (premium && !cxSnap.empty) {
+      const hasEstablishedConnection = cxSnap.docs.some(d => {
+        const ct = d.data().createTime as Timestamp | undefined;
+        return !ct || ct.toMillis() <= cutoff24h.toMillis();
+      });
+      if (premium && hasEstablishedConnection) {
         messages.push({
           to: token,
           sound: 'default',
@@ -968,8 +987,8 @@ export const notifyChatReply = onDocumentUpdated(
 
 /**
  * Push when the synastry reading extension writes back its `response` field.
- * Synastry is birthchart-based and never regenerates on the weekly schedule —
- * this fires once per (re)generation only.
+ * Only fires if the app is backgrounded — if the user is watching the loading
+ * screen the in-app listener handles the update without a push.
  */
 export const notifySynastryReady = onDocumentUpdated(
   'users/{userId}/connections/{connectionId}/synastryReading/{docId}',
@@ -982,8 +1001,15 @@ export const notifySynastryReady = onDocumentUpdated(
     if (before?.response === after.response) return;
 
     const userSnap = await db.collection('users').doc(userId).get();
-    const token = userSnap.data()?.expoPushToken as string | undefined;
+    const userData = userSnap.data();
+    const token = userData?.expoPushToken as string | undefined;
     if (!token) return;
+
+    const lastActiveAt = userData?.lastActiveAt as Timestamp | undefined;
+    if (lastActiveAt && Date.now() - lastActiveAt.toMillis() < GENERATION_FOREGROUND_GRACE_MS) {
+      console.info(`[notifySynastryReady] Skip — user ${userId} foregrounded`);
+      return;
+    }
 
     await sendExpoPush(userId, token, {
       title: 'Synastry Reading Ready',
@@ -993,13 +1019,50 @@ export const notifySynastryReady = onDocumentUpdated(
   }
 );
 
+// ─── notifyTransitsReady ──────────────────────────────────────────────────────
+
+/**
+ * Push when the transits extension writes back its `response` field — covers
+ * manual regenerations. Skipped if the user is still in the foreground
+ * (watching the loading state). Sunday scheduled reminders are handled
+ * separately by dailyHoroscopeNotifications.
+ */
+export const notifyTransitsReady = onDocumentUpdated(
+  'users/{userId}/transits/{dateId}',
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    const { userId } = event.params;
+
+    if (!after?.response) return;
+    if (before?.response === after.response) return;
+
+    const userSnap = await db.collection('users').doc(userId).get();
+    const userData = userSnap.data();
+    const token = userData?.expoPushToken as string | undefined;
+    if (!token) return;
+
+    const lastActiveAt = userData?.lastActiveAt as Timestamp | undefined;
+    if (lastActiveAt && Date.now() - lastActiveAt.toMillis() < GENERATION_FOREGROUND_GRACE_MS) {
+      console.info(`[notifyTransitsReady] Skip — user ${userId} foregrounded`);
+      return;
+    }
+
+    await sendExpoPush(userId, token, {
+      title: '✨ Transit Reading Ready',
+      body: 'Your weekly transit reading is ready. Tap to see what the stars have in store.',
+      data: { screen: '/(main)/transits' },
+    }, 'notifyTransitsReady');
+  }
+);
+
 // ─── parseConnectionCompatibility ────────────────────────────────────────────
 
 /**
- * Parses the AI compatibility response into the parent connection doc and
- * enqueues a randomly-timed afternoon push (12-5 PM user local) so the user
- * gets notified some time later in the day rather than the moment generation
- * completes — feels less like a system notification, more like a check-in.
+ * Parses the AI compatibility response into the parent connection doc. If the
+ * user is backgrounded, enqueues a randomly-timed afternoon push (12-5 PM
+ * local) so it feels like a check-in rather than an instant system ping.
+ * Skipped entirely when the user is still in the foreground.
  */
 export const parseConnectionCompatibility = onDocumentUpdated(
   'users/{userId}/connections/{connectionId}/report/{reportId}',
@@ -1035,11 +1098,19 @@ export const parseConnectionCompatibility = onDocumentUpdated(
 
     if (!parseOk) return;
 
-    // Compute a random afternoon (12-5 PM) hour in the user's local timezone
-    // and enqueue a delayed push. The hourly drain delivers it on the next
-    // tick at-or-after the chosen time.
     const userSnap = await db.collection('users').doc(userId).get();
     const userData = userSnap.data();
+
+    // Skip push entirely if the user is still looking at the app — the
+    // in-app real-time listener will surface the result without a notification.
+    const lastActiveAt = userData?.lastActiveAt as Timestamp | undefined;
+    if (lastActiveAt && Date.now() - lastActiveAt.toMillis() < GENERATION_FOREGROUND_GRACE_MS) {
+      console.info(`[parseConnectionCompatibility] Skip push — user ${userId} foregrounded`);
+      return;
+    }
+
+    // Enqueue a randomly-timed afternoon push (12-5 PM user local). The hourly
+    // drain delivers it on the next tick at-or-after the chosen time.
     const offset = userData?.timezoneOffsetMinutes;
     if (typeof offset !== 'number' || !Number.isFinite(offset)) {
       // No timezone — send immediately so they at least find out.
