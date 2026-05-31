@@ -10,7 +10,7 @@ seed/
 .expo/
 dist/
 web-build/
-expo-env.d.ts                   
+expo-env.d.ts
 
 # Native
 .kotlin/
@@ -63,19 +63,24 @@ coverage/
 /android
 app.apk
 /scripts
+
+# credentials
 /credentials.json
+credentials/
 
 # local Claude Code config
 .claude/
 SLASH_COMMANDS.md
-.gitignore
 CLAUDE.md
 THREAT_MODEL.md
-CLAUDE.md
 
+# session memory / handoff files
+.remember/
+
+# docs generated locally
 docs/firebase-monitoring-dev.md
 docs/firebase-monitoring-overview.md
 docs/TESTING_GUIDE.md
-.gitignore
-.gitignore
+
+# EAS build artefacts
 src/assets/android-asset/assets/adi-registration.properties
