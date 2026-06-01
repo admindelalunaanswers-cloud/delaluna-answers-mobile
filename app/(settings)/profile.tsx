@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Linking,
   Modal,
   ScrollView,
   StyleSheet,
@@ -23,17 +22,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getProfileImageSource } from '@/app/(settings)/select-avatar';
 import { auth } from '@/firebaseConfig';
 import HeaderNav from '@/src/components/shared/header-nav';
+import PolicyModal from '@/src/components/sign-up/policy-modals';
 import { ThemedView } from '@/src/components/themed-view';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { useUser } from '@/src/context/user-context';
+import { privacyPolicy, termsAndConditions } from '@/src/assets/legal/legal-texts';
 import { registerForPushNotifications, unregisterPushToken } from '@/src/services/notifications.service';
 import { signOut } from '@/src/services/user.service';
 import { C } from '@/src/constants/theme';
 import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
-
-const PRIVACY_POLICY_URL = 'https://admindelalunaanswers-cloud.github.io/delaluna-legal/';
-const TERMS_OF_USE_URL   = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -92,6 +90,8 @@ export default function ProfileScreen() {
   const [showReauthModal, setShowReauthModal] = useState(false);
   const [reauthPassword, setReauthPassword] = useState('');
   const [reauthLoading, setReauthLoading] = useState(false);
+  const [policyModalVisible, setPolicyModalVisible] = useState(false);
+  const [policyModalContent, setPolicyModalContent] = useState<'Privacy Policy' | 'Terms & Conditions'>('Privacy Policy');
 
   const isPremium = isPro;
   const profileImageSource = getProfileImageSource(ud?.profileImageId) ?? getProfileImageSource('profile8')!;
@@ -424,7 +424,7 @@ export default function ProfileScreen() {
 
           <View style={ss.rowDivider} />
 
-          <TouchableOpacity style={ss.settingsRow} onPress={() => Linking.openURL(TERMS_OF_USE_URL)} activeOpacity={0.75}>
+          <TouchableOpacity style={ss.settingsRow} onPress={() => { setPolicyModalContent('Terms & Conditions'); setPolicyModalVisible(true); }} activeOpacity={0.75}>
             <Ionicons name="document-text-outline" size={scale(18)} color="#ffffff" style={{ marginRight: scale(4) }} />
             <Text style={ss.rowText}>Terms of Use</Text>
             <Image source={require('@/src/assets/actions/arrow-right-icon.png')} style={ss.rowArrow} />
@@ -432,7 +432,7 @@ export default function ProfileScreen() {
 
           <View style={ss.rowDivider} />
 
-          <TouchableOpacity style={ss.settingsRow} onPress={() => Linking.openURL(PRIVACY_POLICY_URL)} activeOpacity={0.75}>
+          <TouchableOpacity style={ss.settingsRow} onPress={() => { setPolicyModalContent('Privacy Policy'); setPolicyModalVisible(true); }} activeOpacity={0.75}>
             <Ionicons name="shield-checkmark-outline" size={scale(18)} color="#ffffff" style={{ marginRight: scale(4) }} />
             <Text style={ss.rowText}>Privacy Policy</Text>
             <Image source={require('@/src/assets/actions/arrow-right-icon.png')} style={ss.rowArrow} />
@@ -483,6 +483,13 @@ export default function ProfileScreen() {
 
         <View style={{ height: verticalScale(32) }} />
       </ScrollView>
+
+      <PolicyModal
+        visible={policyModalVisible}
+        onClose={() => setPolicyModalVisible(false)}
+        title={policyModalContent}
+        textContent={policyModalContent === 'Terms & Conditions' ? termsAndConditions : privacyPolicy}
+      />
 
       <Modal
         visible={showReauthModal}

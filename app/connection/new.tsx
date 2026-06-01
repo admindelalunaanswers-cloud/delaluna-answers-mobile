@@ -7,6 +7,7 @@ import {
   Easing,
   FlatList,
   Image,
+  ImageBackground,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -908,13 +909,7 @@ export default function SingleConnectionCreateScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <LottieView
-          source={require("@/src/assets/animations/galaxy.json")}
-          autoPlay
-          loop
-          style={StyleSheet.absoluteFillObject}
-        />
+      <ImageBackground source={theme.backgroundImage} style={styles.loadingContainer}>
         <View style={styles.pendingWrapper}>
           <LottieView
             source={require("@/src/assets/animations/splash-loop.json")}
@@ -924,7 +919,7 @@ export default function SingleConnectionCreateScreen() {
           />
           <Text style={styles.pendingText}>{loadingMessage}</Text>
         </View>
-      </View>
+      </ImageBackground>
     );
   }
 
@@ -1100,7 +1095,6 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: "#050010",
   },
   pendingWrapper: {
     flex: 1,
