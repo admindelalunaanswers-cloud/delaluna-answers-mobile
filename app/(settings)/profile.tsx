@@ -489,6 +489,10 @@ export default function ProfileScreen() {
         onClose={() => setPolicyModalVisible(false)}
         title={policyModalContent}
         textContent={policyModalContent === 'Terms & Conditions' ? termsAndConditions : privacyPolicy}
+        onLinkPress={(url) => {
+          if (url === '#privacy-policy') setPolicyModalContent('Privacy Policy');
+          else if (url === '#terms-of-service') setPolicyModalContent('Terms & Conditions');
+        }}
       />
 
       <Modal

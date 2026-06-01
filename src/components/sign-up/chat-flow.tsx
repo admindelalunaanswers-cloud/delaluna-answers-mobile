@@ -915,6 +915,10 @@ export default function ChatFlow({
       onClose={() => setIsPolicyModalVisible(false)}
       title={policyModalContent}
       textContent={policyModalContent === 'Terms & Conditions' ? termsAndConditions : privacyPolicy}
+      onLinkPress={(url) => {
+        if (url === '#privacy-policy') setPolicyModalContent('Privacy Policy');
+        else if (url === '#terms-of-service') setPolicyModalContent('Terms & Conditions');
+      }}
     />
   </>
   );
