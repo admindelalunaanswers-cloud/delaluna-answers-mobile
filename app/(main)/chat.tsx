@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
     ActivityIndicator,
+    Alert,
     Animated,
     FlatList,
     KeyboardAvoidingView,
@@ -38,6 +39,7 @@ import { buildConnectionContextSummary } from '@/src/services/connection-context
 import { buildNatalChartSummary } from '@/src/services/natal-chart-breakdown.service';
 import { ChatStore } from '@/src/stores/chat-store';
 import { renderRichText } from '@/src/utils/rich-text';
+import { checkForHarm, HARM_ALERTS } from '@/src/utils/harm-filter';
 
 const SUGGESTIONS = [
   HOME_STRINGS.newLove.questionFunnel,
@@ -304,6 +306,14 @@ export default function ChatScreen() {
   const handleSend = useCallback(async (text?: string) => {
     const msg = (text ?? inputText).trim();
     if (!msg || !authUser || isSending) return;
+
+    const harmType = checkForHarm(msg);
+    if (harmType) {
+      const { title, message: alertMsg } = HARM_ALERTS[harmType];
+      Alert.alert(title, alertMsg, [{ text: "OK" }]);
+      setInputText('');
+      return;
+    }
 
     if (chatLocked) {
       handleLimitReached(msg);
