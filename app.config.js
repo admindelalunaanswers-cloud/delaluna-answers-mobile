@@ -5,6 +5,8 @@ const { withAndroidManifest } = require("@expo/config-plugins");
 const withPhoneOnly = (config) =>
   withAndroidManifest(config, (mod) => {
     const manifest = mod.modResults.manifest;
+
+    // Restrict to phone screen sizes; tablets (≥600dp) are excluded via largestWidthLimitDp
     manifest["supports-screens"] = [
       {
         $: {
@@ -12,11 +14,28 @@ const withPhoneOnly = (config) =>
           "android:normalScreens": "true",
           "android:largeScreens": "false",
           "android:xlargeScreens": "false",
-          "android:requiresSmallestWidthDp": "0",
-          "android:compatibleWidthLimitDp": "600",
+          "android:requiresSmallestWidthDp": "320",
+          "android:largestWidthLimitDp": "600",
         },
       },
     ];
+
+    // Exclude non-phone form factors from Google Play distribution
+    const excludedFormFactors = [
+      "android.hardware.telephony",      // marks as phone-targeted
+      "android.hardware.type.watch",
+      "android.hardware.type.television",
+      "android.hardware.type.automotive",
+    ];
+    const existing = manifest["uses-feature"] ?? [];
+    const existingNames = new Set(existing.map((f) => f.$?.["android:name"]));
+    for (const name of excludedFormFactors) {
+      if (!existingNames.has(name)) {
+        existing.push({ $: { "android:name": name, "android:required": "false" } });
+      }
+    }
+    manifest["uses-feature"] = existing;
+
     return mod;
   });
 
