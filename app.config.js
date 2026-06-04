@@ -56,6 +56,7 @@ module.exports = {
       appleTeamId: "RG6859Q9LQ",
       newArchEnabled: true,
       googleServicesFile: "./GoogleService-Info.plist",
+      deploymentTarget: "15.1",
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         UIBackgroundModes: ["remote-notification"],
