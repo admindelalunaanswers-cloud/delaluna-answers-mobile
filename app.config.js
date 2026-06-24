@@ -20,19 +20,11 @@ const withPhoneOnly = (config) =>
       },
     ];
 
-    // Exclude non-phone form factors from Google Play distribution
-    const excludedFormFactors = [
-      "android.hardware.telephony",      // marks as phone-targeted
-      "android.hardware.type.watch",
-      "android.hardware.type.television",
-      "android.hardware.type.automotive",
-    ];
+    // Declare telephony as not required so Google Play targets phones without blocking
+    // non-phone form factors via hardware.type.* (Play rejects required="false" on those)
     const existing = manifest["uses-feature"] ?? [];
-    const existingNames = new Set(existing.map((f) => f.$?.["android:name"]));
-    for (const name of excludedFormFactors) {
-      if (!existingNames.has(name)) {
-        existing.push({ $: { "android:name": name, "android:required": "false" } });
-      }
+    if (!existing.some((f) => f.$?.["android:name"] === "android.hardware.telephony")) {
+      existing.push({ $: { "android:name": "android.hardware.telephony", "android:required": "false" } });
     }
     manifest["uses-feature"] = existing;
 
