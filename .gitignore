@@ -84,3 +84,6 @@ docs/TESTING_GUIDE.md
 
 # EAS build artefacts
 src/assets/android-asset/assets/adi-registration.properties
+env.dev.local
+env.prod.local
+env.test.local
