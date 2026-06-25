@@ -35,7 +35,7 @@ module.exports = {
   expo: {
     name: "Delaluna Answers",
     slug: "delaluna-answers-mobile",
-    version: "1.0.0",
+    version: "1.0.5",
     orientation: "portrait",
     icon: "./src/assets/dlla-branded/delaluna_app_icon.png",
     scheme: "delalunaanswersmobile",
