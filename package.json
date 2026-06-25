@@ -1,7 +1,7 @@
 {
   "name": "delaluna-answers-mobile",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "1.0.5",
   "scripts": {
     "start": "expo start -c",
     "emulators": "firebase emulators:start --only auth,functions,firestore,storage,eventarc,extensions --import=./seed --export-on-exit=./seed",
@@ -14,9 +14,9 @@
     "build:dev-sim": "eas build --profile development-simulator --platform all",
     "build:dev-device": "eas build --profile development-device --platform all",
     "build:preview": "eas build --profile preview-device --platform all",
+    "build:prod": "eas build --profile production --platform all",
     "update:preview": "eas update --channel preview-device --environment preview --message ",
-    "build:preview-ios": "eas build --profile preview-device --platform ios",
-    "build:preview-android": "eas build --profile preview-device --platform android",
+    "update:prod": "eas update --channel production --environment production --message ",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
