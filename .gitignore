@@ -87,3 +87,4 @@ src/assets/android-asset/assets/adi-registration.properties
 env.dev.local
 env.prod.local
 env.test.local
+.claude/settings.json
