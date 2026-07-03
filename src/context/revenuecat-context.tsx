@@ -8,38 +8,48 @@
  * - Listens for real-time CustomerInfo updates (renewal, expiry, etc.)
  */
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { CustomerInfo } from 'react-native-purchases';
-import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import type { CustomerInfo } from "react-native-purchases";
+import RevenueCatUI, { PAYWALL_RESULT } from "react-native-purchases-ui";
 
+import { Events } from "@/src/services/analytics.service";
+import { recordError } from "@/src/services/crashlytics.service";
 import {
+  CHAT_PACK_OFFERING_ID,
+  CHAT_PACK_QUANTITIES,
   configureRevenueCat,
-  loginUser,
-  logoutUser,
+  ENTITLEMENT_ID,
   getCustomerInfo,
   getOfferings,
   hasEntitlement,
-  restorePurchases as restorePurchasesService,
+  loginUser,
+  logoutUser,
   onCustomerInfoUpdate,
-  ENTITLEMENT_ID,
-  CHAT_PACK_OFFERING_ID,
-  CHAT_PACK_QUANTITIES,
+  resolvePaywallOffering,
+  restorePurchases as restorePurchasesService,
   REVENUECAT_ENABLED,
-} from '@/src/services/revenuecat.service';
-import { useUser } from './user-context';
-import { Events } from '@/src/services/analytics.service';
-import { recordError } from '@/src/services/crashlytics.service';
+} from "@/src/services/revenuecat.service";
+import { useUser } from "./user-context";
 
 let AsyncStorage: any = null;
 try {
-  AsyncStorage = require('@react-native-async-storage/async-storage').default;
+  AsyncStorage = require("@react-native-async-storage/async-storage").default;
 } catch {
   // Native module unavailable — devPlan will not persist.
 }
 
-const DEV_PLAN_KEY_PREFIX = 'revenuecat.devPlan.v1';
+const DEV_PLAN_KEY_PREFIX = "revenuecat.devPlan.v1";
 const devPlanStorageKey = (uid: string | null | undefined) =>
-  `${DEV_PLAN_KEY_PREFIX}.${uid ?? 'anonymous'}`;
+  `${DEV_PLAN_KEY_PREFIX}.${uid ?? "anonymous"}`;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -47,7 +57,7 @@ const devPlanStorageKey = (uid: string | null | undefined) =>
  * `auto` = no admin override; access is computed from real subscription state.
  * `free` / `premium` = explicit admin overrides.
  */
-export type DevPlan = 'auto' | 'free' | 'premium';
+export type DevPlan = "auto" | "free" | "premium";
 
 interface RevenueCatContextValue {
   /** Whether the user has the "Delaluna Answers Pro" entitlement */
@@ -70,7 +80,9 @@ interface RevenueCatContextValue {
    * - `'dismissed'`   — paywall shown but user closed without buying
    * - `'unavailable'` — RC disabled or offering not found; show fallback sheet
    */
-  presentChatPackPaywall: () => Promise<{ purchased: true; quantity: number } | 'dismissed' | 'unavailable'>;
+  presentChatPackPaywall: () => Promise<
+    { purchased: true; quantity: number } | "dismissed" | "unavailable"
+  >;
   /** Present the RevenueCat Customer Center for subscription management */
   presentCustomerCenter: () => Promise<void>;
   /**
@@ -96,10 +108,11 @@ const RevenueCatContext = createContext<RevenueCatContextValue>({
   restorePurchases: async () => false,
   presentPaywall: async () => false,
   presentPaywallIfNeeded: async () => false,
-  presentChatPackPaywall: async () => 'unavailable' as const satisfies 'unavailable',
+  presentChatPackPaywall: async () =>
+    "unavailable" as const satisfies "unavailable",
   presentCustomerCenter: async () => {},
   isDevMode: !REVENUECAT_ENABLED,
-  devPlan: 'auto',
+  devPlan: "auto",
   setDevPlan: () => {},
   toggleDevPro: () => {},
 });
@@ -118,11 +131,11 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
   // Placeholder plan — lets the client test free / premium flows via the
   // mock paywall, regardless of real RevenueCat state. Persisted per-account
   // so admin overrides survive reload and don't leak between users on the same device.
-  const [devPlan, setDevPlanState] = useState<DevPlan>('auto');
+  const [devPlan, setDevPlanState] = useState<DevPlan>("auto");
 
   const isPro = useMemo(() => {
     // Admin override: explicit plan selection (from admin screen) beats real state.
-    if (devPlan !== 'auto') return devPlan === 'premium';
+    if (devPlan !== "auto") return devPlan === "premium";
     // Use real RevenueCat entitlement on all platforms.
     if (!REVENUECAT_ENABLED || customerInfo === null) return false;
     return hasEntitlement(customerInfo);
@@ -134,34 +147,45 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
     if (!AsyncStorage) return;
     (async () => {
       try {
-        const raw = await AsyncStorage.getItem(devPlanStorageKey(authUser?.uid));
+        const raw = await AsyncStorage.getItem(
+          devPlanStorageKey(authUser?.uid),
+        );
         if (cancelled) return;
-        if (raw === 'auto' || raw === 'free' || raw === 'premium') {
+        if (raw === "auto" || raw === "free" || raw === "premium") {
           setDevPlanState(raw);
         } else {
-          setDevPlanState('auto');
+          setDevPlanState("auto");
         }
       } catch {
         // ignore — fall back to in-memory state
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [authUser?.uid]);
 
-  const setDevPlan = useCallback((plan: DevPlan) => {
-    setDevPlanState(plan);
-    if (AsyncStorage) {
-      AsyncStorage.setItem(devPlanStorageKey(authUser?.uid), plan).catch(() => {});
-    }
-  }, [authUser?.uid]);
+  const setDevPlan = useCallback(
+    (plan: DevPlan) => {
+      setDevPlanState(plan);
+      if (AsyncStorage) {
+        AsyncStorage.setItem(devPlanStorageKey(authUser?.uid), plan).catch(
+          () => {},
+        );
+      }
+    },
+    [authUser?.uid],
+  );
 
   const toggleDevPro = useCallback(() => {
     setDevPlanState((prev) => {
-      const cycle: DevPlan[] = ['auto', 'free', 'premium'];
+      const cycle: DevPlan[] = ["auto", "free", "premium"];
       const idx = cycle.indexOf(prev);
       const next = cycle[(idx === -1 ? 0 : idx + 1) % cycle.length];
       if (AsyncStorage) {
-        AsyncStorage.setItem(devPlanStorageKey(authUser?.uid), next).catch(() => {});
+        AsyncStorage.setItem(devPlanStorageKey(authUser?.uid), next).catch(
+          () => {},
+        );
       }
       return next;
     });
@@ -204,15 +228,17 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
           if (!cancelled) setCustomerInfo(info);
         }
       } catch (err) {
-        console.error('[RevenueCat] syncUser error:', err);
-        recordError(err, 'rc_sync_user');
+        console.error("[RevenueCat] syncUser error:", err);
+        recordError(err, "rc_sync_user");
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
 
     syncUser();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [authUser?.uid]);
 
   // ── Listen for real-time updates ────────────────────────────────────────────
@@ -232,8 +258,8 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       const info = await getCustomerInfo();
       setCustomerInfo(info);
     } catch (err) {
-      console.error('[RevenueCat] refresh error:', err);
-      recordError(err, 'rc_refresh');
+      console.error("[RevenueCat] refresh error:", err);
+      recordError(err, "rc_refresh");
     }
   }, []);
 
@@ -246,8 +272,8 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       Events.restorePurchases({ success: ok });
       return ok;
     } catch (err) {
-      console.error('[RevenueCat] restorePurchases error:', err);
-      recordError(err, 'rc_restore');
+      console.error("[RevenueCat] restorePurchases error:", err);
+      recordError(err, "rc_restore");
       Events.restorePurchases({ success: false });
       return false;
     }
@@ -259,17 +285,24 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
   const resolvePurchasedProductId = useCallback(async (): Promise<string> => {
     try {
       const info = await getCustomerInfo();
-      return info.entitlements.active[ENTITLEMENT_ID]?.productIdentifier ?? 'unknown';
+      return (
+        info.entitlements.active[ENTITLEMENT_ID]?.productIdentifier ?? "unknown"
+      );
     } catch {
-      return 'unknown';
+      return "unknown";
     }
   }, []);
 
   const handlePaywallResult = useCallback(
-    async (result: PAYWALL_RESULT, source: 'manual' | 'gated'): Promise<boolean> => {
+    async (
+      result: PAYWALL_RESULT,
+      source: "manual" | "gated",
+    ): Promise<boolean> => {
       await refresh();
       if (result === PAYWALL_RESULT.PURCHASED) {
-        Events.purchaseCompleted({ product_id: await resolvePurchasedProductId() });
+        Events.purchaseCompleted({
+          product_id: await resolvePurchasedProductId(),
+        });
         return true;
       }
       if (result === PAYWALL_RESULT.RESTORED) {
@@ -284,74 +317,112 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
     [refresh, resolvePurchasedProductId],
   );
 
+  const resolveOffering = useCallback(async () => {
+    const info = customerInfo ?? (await getCustomerInfo());
+    const { offeringId, entitlementId } = resolvePaywallOffering(info);
+    const offerings = await getOfferings();
+    const offering =
+      offeringId === "default"
+        ? offerings.current
+        : (offerings.all[offeringId] ?? null);
+    return { offering, entitlementId };
+  }, [customerInfo]);
+
   const presentPaywall = useCallback(async (): Promise<boolean> => {
     if (!REVENUECAT_ENABLED) {
-      console.log('[RevenueCat] disabled — skipping presentPaywall');
+      console.log("[RevenueCat] disabled — skipping presentPaywall");
       return false;
     }
     try {
-      Events.paywallViewed('manual');
-      const result: PAYWALL_RESULT = await RevenueCatUI.presentPaywall();
-      return await handlePaywallResult(result, 'manual');
+      const { offering } = await resolveOffering();
+      Events.paywallViewed("manual");
+      const result: PAYWALL_RESULT = await RevenueCatUI.presentPaywall(
+        offering ? { offering } : undefined,
+      );
+      return await handlePaywallResult(result, "manual");
     } catch (err) {
-      console.error('[RevenueCat] presentPaywall error:', err);
-      recordError(err, 'rc_present_paywall');
-      Events.purchaseFailed({ product_id: 'unknown', reason: String((err as any)?.message ?? err) });
+      console.error("[RevenueCat] presentPaywall error:", err);
+      recordError(err, "rc_present_paywall");
+      Events.purchaseFailed({
+        product_id: "unknown",
+        reason: String((err as any)?.message ?? err),
+      });
       return false;
     }
-  }, [handlePaywallResult]);
+  }, [handlePaywallResult, resolveOffering]);
 
   const presentPaywallIfNeeded = useCallback(async (): Promise<boolean> => {
     if (!REVENUECAT_ENABLED) {
-      console.log('[RevenueCat] disabled — skipping presentPaywallIfNeeded');
+      console.log("[RevenueCat] disabled — skipping presentPaywallIfNeeded");
       return false;
     }
     try {
-      Events.paywallViewed('gated');
+      if (customerInfo && hasEntitlement(customerInfo)) return false;
+      const { offering, entitlementId } = await resolveOffering();
+      Events.paywallViewed("gated");
       const result: PAYWALL_RESULT = await RevenueCatUI.presentPaywallIfNeeded({
-        requiredEntitlementIdentifier: ENTITLEMENT_ID,
+        requiredEntitlementIdentifier: entitlementId,
+        ...(offering ? { offering } : {}),
       });
-      return await handlePaywallResult(result, 'gated');
+      return await handlePaywallResult(result, "gated");
     } catch (err) {
-      console.error('[RevenueCat] presentPaywallIfNeeded error:', err);
-      recordError(err, 'rc_present_paywall_if_needed');
-      Events.purchaseFailed({ product_id: 'unknown', reason: String((err as any)?.message ?? err) });
+      console.error("[RevenueCat] presentPaywallIfNeeded error:", err);
+      recordError(err, "rc_present_paywall_if_needed");
+      Events.purchaseFailed({
+        product_id: "unknown",
+        reason: String((err as any)?.message ?? err),
+      });
       return false;
     }
-  }, [handlePaywallResult]);
+  }, [handlePaywallResult, resolveOffering, customerInfo]);
 
-  const presentChatPackPaywall = useCallback(async (): Promise<{ purchased: true; quantity: number } | 'dismissed' | 'unavailable'> => {
-    if (!REVENUECAT_ENABLED) return 'unavailable';
+  const presentChatPackPaywall = useCallback(async (): Promise<
+    { purchased: true; quantity: number } | "dismissed" | "unavailable"
+  > => {
+    if (!REVENUECAT_ENABLED) return "unavailable";
     try {
       const offerings = await getOfferings();
       const offering = offerings.all[CHAT_PACK_OFFERING_ID] ?? null;
       if (!offering) {
-        console.warn('[RevenueCat] in-app-purchases offering not found');
-        return 'unavailable';
+        console.warn("[RevenueCat] in-app-purchases offering not found");
+        return "unavailable";
       }
-      Events.paywallViewed('manual');
-      const result: PAYWALL_RESULT = await RevenueCatUI.presentPaywall({ offering });
-      if (result !== PAYWALL_RESULT.PURCHASED && result !== PAYWALL_RESULT.RESTORED) return 'dismissed';
+      Events.paywallViewed("manual");
+      const result: PAYWALL_RESULT = await RevenueCatUI.presentPaywall({
+        offering,
+      });
+      if (
+        result !== PAYWALL_RESULT.PURCHASED &&
+        result !== PAYWALL_RESULT.RESTORED
+      )
+        return "dismissed";
 
       // Resolve quantity from the most recent non-subscription transaction
       const info = await getCustomerInfo();
       setCustomerInfo(info);
       const recent = info.nonSubscriptionTransactions
         .slice()
-        .sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime())[0];
-      const quantity = (recent && CHAT_PACK_QUANTITIES[recent.productIdentifier]) ?? 1;
-      Events.purchaseCompleted({ product_id: recent?.productIdentifier ?? 'unknown' });
+        .sort(
+          (a, b) =>
+            new Date(b.purchaseDate).getTime() -
+            new Date(a.purchaseDate).getTime(),
+        )[0];
+      const quantity =
+        (recent && CHAT_PACK_QUANTITIES[recent.productIdentifier]) ?? 1;
+      Events.purchaseCompleted({
+        product_id: recent?.productIdentifier ?? "unknown",
+      });
       return { purchased: true, quantity };
     } catch (err) {
-      console.error('[RevenueCat] presentChatPackPaywall error:', err);
-      recordError(err, 'rc_chat_pack_paywall');
-      return 'unavailable';
+      console.error("[RevenueCat] presentChatPackPaywall error:", err);
+      recordError(err, "rc_chat_pack_paywall");
+      return "unavailable";
     }
   }, []);
 
   const presentCustomerCenter = useCallback(async () => {
     if (!REVENUECAT_ENABLED) {
-      console.log('[RevenueCat] disabled — skipping presentCustomerCenter');
+      console.log("[RevenueCat] disabled — skipping presentCustomerCenter");
       return;
     }
     try {
@@ -359,8 +430,8 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       // Refresh after user manages their subscription
       await refresh();
     } catch (err) {
-      console.error('[RevenueCat] presentCustomerCenter error:', err);
-      recordError(err, 'rc_customer_center');
+      console.error("[RevenueCat] presentCustomerCenter error:", err);
+      recordError(err, "rc_customer_center");
     }
   }, [refresh]);
 
