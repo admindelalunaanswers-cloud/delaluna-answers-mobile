@@ -4,49 +4,55 @@
  * entitlement checking, purchases, and subscription management.
  */
 
-import Constants from 'expo-constants';
-import { Platform } from 'react-native';
+import Constants from "expo-constants";
+import { Platform } from "react-native";
 import Purchases, {
   LOG_LEVEL,
   type CustomerInfo,
   type PurchasesOfferings,
   type PurchasesPackage,
   type PurchasesStoreProduct,
-} from 'react-native-purchases';
+} from "react-native-purchases";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 /** RevenueCat public SDK key — test key for dev, platform-specific production key from EAS env */
 const API_KEY = __DEV__
-  ? (Constants.expoConfig?.extra?.REVENUECAT_TST_API_KEY as string) ?? ''
-  : Platform.select({
+  ? ((Constants.expoConfig?.extra?.REVENUECAT_TST_API_KEY as string) ?? "")
+  : (Platform.select({
       ios: Constants.expoConfig?.extra?.REVENUECAT_AAS_API_KEY as string,
       android: Constants.expoConfig?.extra?.REVENUECAT_GPS_API_KEY as string,
-    }) ?? '';
+    }) ?? "");
 
 export const REVENUECAT_ENABLED = true;
 
 /** The entitlement identifier configured in RevenueCat dashboard */
-export const ENTITLEMENT_ID = 'Delaluna Answers Pro';
+export const ENTITLEMENT_ID = "Delaluna Answers Pro";
+
+/** Offering identifier for the free-trial paywall (shown to first-time users) */
+export const FREE_TRIAL_OFFERING_ID = "free-trial-offer";
+
+/** Entitlement identifier for the free-trial offering */
+export const FREE_TRIAL_ENTITLEMENT_ID = "Pro-Trial";
 
 /** Offering identifier for the chat-pack IAP paywall */
-export const CHAT_PACK_OFFERING_ID = 'in-app-purchases';
+export const CHAT_PACK_OFFERING_ID = "in-app-purchases";
 
 /** Product identifiers configured in RevenueCat dashboard */
 export const PRODUCT_IDS = {
-  weekly: 'delaluna.sub.weekly',
-  monthly: 'delaluna.sub.monthly',
-  chatPack1:  'delaluna.iap.chat_pack_1',
-  chatPack3:  'delaluna.iap.chat_pack_3',
-  chatPack5:  'delaluna.iap.chat_pack_5',
-  chatPack10: 'delaluna.iap.chat_pack_10',
+  weekly: "delaluna.sub.weekly",
+  monthly: "delaluna.sub.monthly",
+  chatPack1: "delaluna.iap.chat_pack_1",
+  chatPack3: "delaluna.iap.chat_pack_3",
+  chatPack5: "delaluna.iap.chat_pack_5",
+  chatPack10: "delaluna.iap.chat_pack_10",
 } as const;
 
 /** Maps each chat-pack product ID to the number of questions it grants */
 export const CHAT_PACK_QUANTITIES: Record<string, number> = {
-  [PRODUCT_IDS.chatPack1]:  1,
-  [PRODUCT_IDS.chatPack3]:  3,
-  [PRODUCT_IDS.chatPack5]:  5,
+  [PRODUCT_IDS.chatPack1]: 1,
+  [PRODUCT_IDS.chatPack3]: 3,
+  [PRODUCT_IDS.chatPack5]: 5,
   [PRODUCT_IDS.chatPack10]: 10,
 };
 
@@ -68,13 +74,13 @@ export function configureRevenueCat(): boolean {
 
   if (!REVENUECAT_ENABLED) {
     _configured = true;
-    console.log('[RevenueCat] disabled — skipping SDK configuration');
+    console.log("[RevenueCat] disabled — skipping SDK configuration");
     return false;
   }
 
   if (!API_KEY) {
     _configured = true; // prevent repeated warn-and-bail on every re-render
-    console.warn('[RevenueCat] no API key found — skipping configuration');
+    console.warn("[RevenueCat] no API key found — skipping configuration");
     return false;
   }
 
@@ -84,7 +90,7 @@ export function configureRevenueCat(): boolean {
 
   Purchases.configure({ apiKey: API_KEY });
   _configured = true;
-  console.log('[RevenueCat] SDK configured');
+  console.log("[RevenueCat] SDK configured");
   return true;
 }
 
@@ -98,7 +104,7 @@ export async function loginUser(
   firebaseUid: string,
 ): Promise<{ customerInfo: CustomerInfo; created: boolean }> {
   const { customerInfo, created } = await Purchases.logIn(firebaseUid);
-  console.log('[RevenueCat] logIn:', firebaseUid, 'created:', created);
+  console.log("[RevenueCat] logIn:", firebaseUid, "created:", created);
   return { customerInfo, created };
 }
 
@@ -108,11 +114,11 @@ export async function loginUser(
 export async function logoutUser(): Promise<CustomerInfo> {
   const isAnonymous = await Purchases.isAnonymous();
   if (isAnonymous) {
-    console.log('[RevenueCat] logOut skipped — already anonymous');
+    console.log("[RevenueCat] logOut skipped — already anonymous");
     return Purchases.getCustomerInfo();
   }
   const customerInfo = await Purchases.logOut();
-  console.log('[RevenueCat] logOut — reset to anonymous');
+  console.log("[RevenueCat] logOut — reset to anonymous");
   return customerInfo;
 }
 
@@ -144,6 +150,52 @@ export async function checkProAccess(): Promise<boolean> {
   return hasEntitlement(info);
 }
 
+/**
+ * Returns true if the user has ever held the given entitlement (active or expired).
+ * Use this to distinguish brand-new subscribers from returning/lapsed ones.
+ */
+export function hasEverHeldEntitlement(
+  customerInfo: CustomerInfo,
+  entitlementId: string = ENTITLEMENT_ID,
+): boolean {
+  return entitlementId in customerInfo.entitlements.all;
+}
+
+/**
+ * Convenience: fetch customer info and return both current access status and
+ * whether the user has ever subscribed (even if now expired or cancelled).
+ */
+export async function getSubscriptionHistory(): Promise<{
+  isActive: boolean;
+  hasEverSubscribed: boolean;
+}> {
+  const info = await getCustomerInfo();
+  return {
+    isActive: hasEntitlement(info),
+    hasEverSubscribed: hasEverHeldEntitlement(info),
+  };
+}
+
+/**
+ * Returns the offering ID and required entitlement ID to use when presenting
+ * the subscription paywall, based on whether the user has ever subscribed.
+ *
+ * - First-time users  → free-trial-offer / Pro-Trial
+ * - Returning users   → default / Delaluna Answers Pro
+ */
+export function resolvePaywallOffering(customerInfo: CustomerInfo): {
+  offeringId: string;
+  entitlementId: string;
+} {
+  if (hasEverHeldEntitlement(customerInfo)) {
+    return { offeringId: "default", entitlementId: ENTITLEMENT_ID };
+  }
+  return {
+    offeringId: FREE_TRIAL_OFFERING_ID,
+    entitlementId: FREE_TRIAL_ENTITLEMENT_ID,
+  };
+}
+
 // ─── Offerings & products ────────────────────────────────────────────────────
 
 /**
@@ -171,7 +223,7 @@ export async function purchaseProduct(
   product: PurchasesStoreProduct,
 ): Promise<CustomerInfo> {
   const { customerInfo } = await Purchases.purchaseStoreProduct(product);
-  console.log('[RevenueCat] purchaseProduct complete:', product.identifier);
+  console.log("[RevenueCat] purchaseProduct complete:", product.identifier);
   return customerInfo;
 }
 
@@ -182,7 +234,7 @@ export async function purchaseProduct(
  */
 export async function restorePurchases(): Promise<CustomerInfo> {
   const customerInfo = await Purchases.restorePurchases();
-  console.log('[RevenueCat] restorePurchases complete');
+  console.log("[RevenueCat] restorePurchases complete");
   return customerInfo;
 }
 
