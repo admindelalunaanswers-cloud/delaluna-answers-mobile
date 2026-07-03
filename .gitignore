@@ -171,3 +171,4 @@ skills-lock.json
 .agents/skills/firebase-remote-config-basics/references/ios_setup.md
 .agents/skills/firebase-security-rules-auditor/SKILL.md
 .agents/skills/xcode-project-setup/SKILL.md
+.claude/settings.json
