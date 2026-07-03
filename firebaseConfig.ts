@@ -30,6 +30,8 @@
 // }
 
 import Constants from "expo-constants";
+import * as Device from "expo-device";
+import { Platform } from "react-native";
 // import {
 //   getAI,
 //   getGenerativeModel,
@@ -49,6 +51,7 @@ const { getReactNativePersistence } = require("firebase/auth");
 
 // Firestore
 import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
+import { FIRESTORE_DATABASE_ID } from "@/src/constants/env";
 
 // Functions
 import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
@@ -91,8 +94,10 @@ try {
 }
 export { auth };
 
-// Firestore
-export const db = getFirestore(app);
+// Firestore — routed per environment (development → dllad, preview → dllat,
+// production → (default)). See src/constants/env.ts for the mapping.
+console.log(`[firebaseConfig] Using Firestore database: ${FIRESTORE_DATABASE_ID}`);
+export const db = getFirestore(app, FIRESTORE_DATABASE_ID);
 
 // Storage
 export const storage = getStorage(app);
@@ -125,10 +130,16 @@ export const functions = getFunctions(app, "us-central1");
 // });
 
 // Emulator Support (DEV only)
-// Using LAN IP for real device testing
+//
+// Android and iOS reach the dev machine differently on this team's setup, so
+// each platform gets its own override: EMULATOR_HOST_ANDROID / EMULATOR_HOST_IOS
+// in .env. Both default to "localhost"; set EMULATOR_HOST_IOS to the dev
+// machine's LAN IP for physical iOS device testing.
 export const USE_EMULATOR = __DEV__ && extra?.USE_EMULATOR === true;
 if (USE_EMULATOR) {
-  const host: string = extra?.EMULATOR_HOST ?? "localhost";
+  const host: string = Platform.OS === "android"
+    ? (extra?.EMULATOR_HOST_ANDROID || "localhost")
+    : (extra?.EMULATOR_HOST_IOS || "localhost");
   connectAuthEmulator(auth, `http://${host}:9099`);
   connectFirestoreEmulator(db, host, 8080);
   connectFunctionsEmulator(functions, host, 5001);

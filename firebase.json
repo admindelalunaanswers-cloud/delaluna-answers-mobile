@@ -46,7 +46,10 @@
       "host": "0.0.0.0"
     },
     "singleProjectMode": true,
-    "extensions": {}
+    "extensions": {},
+    "dataconnect": {
+      "dataDir": "dataconnect/.dataconnect/pgliteData"
+    }
   },
   "extensions": {
     "delete-user-data": "firebase/delete-user-data@0.1.28",
@@ -66,5 +69,8 @@
   },
   "storage": {
     "rules": "storage.rules"
+  },
+  "dataconnect": {
+    "source": "dataconnect"
   }
 }
