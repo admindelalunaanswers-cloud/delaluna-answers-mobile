@@ -1,12 +1,12 @@
 // src/services/tarotCardDraw.service.ts
 
-import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "@/firebaseConfig";
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { TAROT_CARDS } from "../constants/tarotCards.registry";
 import { DailyCardPack } from "../models/daily-cards.model";
-import { DrawnTarotCard } from "../types/tarot-cards.type";
 import { DailyCardPackSchema } from "../schemas/dailyCardPack.schema";
 import { DrawnTarotCardSchema } from "../schemas/drawnTarotCard.schema";
-
+import { DrawnTarotCard } from "../types/tarot-cards.type";
 
 function createSeededRng(seed: string) {
   let h = 2166136261 >>> 0;
@@ -17,7 +17,7 @@ function createSeededRng(seed: string) {
 
   return function () {
     // Mulberry32
-    h += 0x6D2B79F5;
+    h += 0x6d2b79f5;
     let t = h;
     t = Math.imul(t ^ (t >>> 15), t | 1);
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
@@ -37,12 +37,16 @@ function shuffleDeck<T>(deck: T[], seed: string): T[] {
   return shuffled;
 }
 
-function drawDailySpread(userId: string, date: string, count: number): DrawnTarotCard[] {
+function drawDailySpread(
+  userId: string,
+  date: string,
+  count: number,
+): DrawnTarotCard[] {
   const seed = `${userId}_${date}`;
   const shuffledDeck = shuffleDeck(TAROT_CARDS, seed);
   const rand = createSeededRng(seed + "_rev");
 
-  return shuffledDeck.slice(0, count).map(card => {
+  return shuffledDeck.slice(0, count).map((card) => {
     const reversed = rand() < (card.reversalProbability ?? 0.35);
 
     return DrawnTarotCardSchema.parse({
@@ -51,32 +55,40 @@ function drawDailySpread(userId: string, date: string, count: number): DrawnTaro
       imagePath: card.imagePath,
       reversed,
       keywords: reversed ? card.keywordsReversed : card.keywordsUpright,
-      meaning: card.arcana !== 'Oracle'
-        ? (reversed ? (card.meaningReversedOracle ?? card.meaningReversed) : (card.meaningUprightOracle ?? card.meaningUpright))
-        : (reversed ? card.meaningReversed : card.meaningUpright),
+      meaning:
+        card.arcana !== "Oracle"
+          ? reversed
+            ? (card.meaningReversedOracle ?? card.meaningReversed)
+            : (card.meaningUprightOracle ?? card.meaningUpright)
+          : reversed
+            ? card.meaningReversed
+            : card.meaningUpright,
     });
   });
 }
 
 function buildTarotJSON(cards: DrawnTarotCard[]): string {
   return JSON.stringify(
-    cards.map(c => ({
+    cards.map((c) => ({
       name: c.name,
       reversed: c.reversed,
       keywords: c.keywords,
-      meaning: c.meaning
+      meaning: c.meaning,
     })),
     null,
-    2
+    2,
   );
 }
 
-function buildDailyCardPack(date: string, cards: DrawnTarotCard[]): DailyCardPack {
-  const keywordList = cards.flatMap(c => c.keywords);
+function buildDailyCardPack(
+  date: string,
+  cards: DrawnTarotCard[],
+): DailyCardPack {
+  const keywordList = cards.flatMap((c) => c.keywords);
   const keywordString = keywordList.join(", ");
-  const meaningString = cards.map(c => c.meaning).join(" ");
+  const meaningString = cards.map((c) => c.meaning).join(" ");
 
-  const reversedCount = cards.filter(c => c.reversed).length;
+  const reversedCount = cards.filter((c) => c.reversed).length;
   const uprightCount = cards.length - reversedCount;
 
   return DailyCardPackSchema.parse({
@@ -88,7 +100,7 @@ function buildDailyCardPack(date: string, cards: DrawnTarotCard[]): DailyCardPac
     tarotJSON: buildTarotJSON(cards),
     reversedCount,
     uprightCount,
-    createdAt: null,  // placeholder — overridden with serverTimestamp() on write
+    createdAt: null, // placeholder — overridden with serverTimestamp() on write
     firstView: false,
   });
 }
@@ -96,10 +108,8 @@ function buildDailyCardPack(date: string, cards: DrawnTarotCard[]): DailyCardPac
 async function getOrCreateCardsForDate(
   userId: string,
   date: string,
-  count: number
+  count: number,
 ) {
-  const db = getFirestore();
-
   // Use the local date as the document ID
   const cardsRef = doc(db, "users", userId, "cards", date);
   const cardsSnap = await getDoc(cardsRef);
@@ -122,12 +132,15 @@ function localDateId(offsetDays: number = 0): string {
   const d = new Date();
   d.setDate(d.getDate() + offsetDays);
   const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
-export async function getTarotCardDraw(userId: string, cardDrawCount: number = 1) {
+export async function getTarotCardDraw(
+  userId: string,
+  cardDrawCount: number = 1,
+) {
   const yesterday = localDateId(-1);
   const today = localDateId(0);
   const tomorrow = localDateId(1);
