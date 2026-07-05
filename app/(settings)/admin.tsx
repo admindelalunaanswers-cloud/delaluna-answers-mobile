@@ -46,6 +46,7 @@ import {
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 
 const NAV_BAR_HEIGHT = 44;
+const SHOW_ENTITLEMENT_OVERRIDES = false;
 
 const PLAN_OPTIONS: {
   value: DevPlan;
@@ -363,6 +364,7 @@ export default function AdminScreen() {
         </View>
 
         {/* ── Override Entitlements ── */}
+        {SHOW_ENTITLEMENT_OVERRIDES && (
         <View style={[ss.detailsCard, { marginTop: scale(12) }]}>
           <Text style={ss.sectionLabel}>OVERRIDE ENTITLEMENTS</Text>
 
@@ -421,8 +423,9 @@ export default function AdminScreen() {
               </>
             )}
         </View>
+        )}
 
-        {selectedUser && (
+        {SHOW_ENTITLEMENT_OVERRIDES && selectedUser && (
           <View style={[ss.detailsCard, { marginTop: scale(12) }]}>
             <Text style={ss.sectionLabel}>SELECTED USER</Text>
             <View style={ss.detailRow}>
