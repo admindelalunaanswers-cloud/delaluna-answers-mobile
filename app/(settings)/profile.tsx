@@ -13,6 +13,7 @@ import {
 } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import { router } from "expo-router";
@@ -112,6 +113,7 @@ export default function ProfileScreen() {
   const [policyModalContent, setPolicyModalContent] = useState<
     "Privacy Policy" | "Terms & Conditions"
   >("Privacy Policy");
+  const [uidCopied, setUidCopied] = useState(false);
 
   const isPremium = isPro;
   const profileImageSource =
@@ -350,12 +352,21 @@ export default function ProfileScreen() {
             </Text>
           </View>
           <View style={ss.separator} />
-          <View style={ss.detailRow}>
+          <TouchableOpacity
+            style={ss.detailRow}
+            disabled={!authUser?.uid}
+            onPress={async () => {
+              if (!authUser?.uid) return;
+              await Clipboard.setStringAsync(authUser.uid);
+              setUidCopied(true);
+              setTimeout(() => setUidCopied(false), 1500);
+            }}
+          >
             <Text style={ss.detailLabel}>User ID</Text>
             <Text style={ss.detailValue} numberOfLines={1}>
-              {authUser?.uid.slice(0, 8) ?? "—"}
+              {uidCopied ? "Copied" : (authUser?.uid ?? "—")}
             </Text>
-          </View>
+          </TouchableOpacity>
           {false && (
             <>
               <View style={ss.separator} />
