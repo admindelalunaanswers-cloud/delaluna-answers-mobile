@@ -30,7 +30,7 @@ export const REVENUECAT_ENABLED = true;
 export const ENTITLEMENT_ID = "Delaluna Answers Pro";
 
 /** Offering identifier for the free-trial paywall (shown to first-time users) */
-export const FREE_TRIAL_OFFERING_ID = "free-trial-offer";
+export const FREE_TRIAL_OFFERING_ID = "sale";
 
 /** Entitlement identifier for the free-trial offering */
 export const FREE_TRIAL_ENTITLEMENT_ID = "Pro-Trial";
@@ -180,8 +180,8 @@ export async function getSubscriptionHistory(): Promise<{
  * Returns the offering ID and required entitlement ID to use when presenting
  * the subscription paywall, based on whether the user has ever subscribed.
  *
- * - First-time users  → free-trial-offer / Pro-Trial
- * - Returning users   → default / Delaluna Answers Pro
+ * - First-time users  → sale (free-trial-paywall) / Pro-Trial
+ * - Returning users   → default (Branded Paywall) / Delaluna Answers Pro
  */
 export function resolvePaywallOffering(customerInfo: CustomerInfo): {
   offeringId: string;
