@@ -1,7 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { doc, onSnapshot } from "firebase/firestore";
-import LottieView from "lottie-react-native";
 import React, { useEffect, useState } from "react";
 import {
   Dimensions,
@@ -19,17 +18,20 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import LoadingScreen from "@/app/(util)/loading-screen";
 import { db } from "@/firebaseConfig";
 import HeaderNav from "@/src/components/shared/header-nav";
+import SkeletonLines from "@/src/components/shared/skeleton-lines";
 import { ThemedText } from "@/src/components/themed-text";
 import { COMPATIBILITY_DEFINITIONS } from "@/src/constants/definitions";
-import { useUser } from "@/src/context/user-context";
 import { useRevenueCat } from "@/src/context/revenuecat-context";
+import { useUser } from "@/src/context/user-context";
 import { calculateNatalChart } from "@/src/services/astroEngine";
 import { subscribeToSynastryReading } from "@/src/services/synastry-reading.service";
+import { ChatStore } from "@/src/stores/chat-store";
 import { NavigationStore } from "@/src/stores/navigation-store";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
+import { renderRichText } from "@/src/utils/rich-text";
+import { ThemedView } from "@/src/components/themed-view";
 
 const NAV_BAR_HEIGHT = 44;
 const BAR_MAX_WIDTH = Dimensions.get("window").width - scale(18) * 2;
@@ -93,6 +95,7 @@ interface ConnectionDoc {
   firstPerson?: PersonInfo;
   secondPerson?: PersonInfo;
   compatibility?: CompatibilityReport;
+  synastryUnlocked?: boolean;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -177,18 +180,33 @@ function ScoreBar({
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ConnectionViewScreen() {
-  const { id: connectionId } = useLocalSearchParams<{ id: string }>();
+  const {
+    id: connectionId,
+    firstFirst,
+    firstLast,
+    secondFirst,
+    secondLast,
+  } = useLocalSearchParams<{
+    id: string;
+    firstFirst?: string;
+    firstLast?: string;
+    secondFirst?: string;
+    secondLast?: string;
+  }>();
   const { authUser } = useUser();
-  const { isPro } = useRevenueCat();
+  const { isPro, loading: rcLoading, presentPaywall } = useRevenueCat();
+  const hasPremiumAccess = rcLoading || isPro;
   const insets = useSafeAreaInsets();
   const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
 
   const [connection, setConnection] = useState<ConnectionDoc | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedKeyword, setExpandedKeyword] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState(LOADING_SAYINGS[0]);
   const [hasSynastryReading, setHasSynastryReading] = useState(false);
+
+  const synastryUnlocked = connection?.synastryUnlocked === true;
 
   // Rotate loading messages while waiting for report
   useEffect(() => {
@@ -223,6 +241,7 @@ export default function ConnectionViewScreen() {
           firstPerson: data.firstPerson,
           secondPerson: data.secondPerson,
           compatibility: data.compatibility,
+          synastryUnlocked: data.synastryUnlocked === true,
         });
         setLoading(false);
       },
@@ -304,13 +323,7 @@ export default function ConnectionViewScreen() {
     return params;
   };
 
-  const handleCompareBirthChart = async () => {
-    // Gate behind premium / consumable purchase (skip if already viewed)
-    if (!isPro && !hasSynastryReading) {
-      router.push('/(settings)/paywall');
-      return;
-    }
-
+  const runSynastryCompare = async () => {
     const fp = connection?.firstPerson;
     const sp = connection?.secondPerson;
 
@@ -332,11 +345,25 @@ export default function ConnectionViewScreen() {
       });
 
       router.push(`/connection/${connectionId}/synastry`);
-
     } catch (e) {
-      console.error("Error calculating synastry:", e);
       setComputingSynastry(false);
     }
+  };
+
+  const handleCompareBirthChart = async () => {
+    if (!hasPremiumAccess && !hasSynastryReading && !synastryUnlocked) {
+      presentPaywall();
+      return;
+    }
+    await runSynastryCompare();
+  };
+
+  const handleTalkToDelaluna = () => {
+    if (!connectionId) return;
+    const sp = connection?.secondPerson;
+    const name = sp?.firstName?.trim() || "this connection";
+    ChatStore.setPendingConnection({ id: String(connectionId), name });
+    router.push("/(main)/chat");
   };
 
   const handleCompareBirthCharts = async () => {
@@ -359,27 +386,38 @@ export default function ConnectionViewScreen() {
   };
 
   const report = connection?.compatibility;
-  const firstName = connection?.firstPerson?.firstName + " " + connection?.firstPerson?.lastName || "Person 1";
-  const secondName = connection?.secondPerson?.firstName + " " + connection?.secondPerson?.lastName || "Person 2";
+
+  const capitalize = (s?: string) => {
+    const trimmed = s?.trim();
+    if (!trimmed) return "";
+    return trimmed
+      .split(/\s+/)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(" ");
+  };
+
+  const buildName = (first?: string, last?: string, fallback = "Person") => {
+    const joined = [capitalize(first), capitalize(last)].filter(Boolean).join(" ");
+    return joined || fallback;
+  };
+
+  const firstName = buildName(firstFirst, firstLast, "Person 1");
+  const secondName = buildName(secondFirst, secondLast, "Person 2");
 
   // ─── Loading / Error states ─────────────────────────────────────────────────
 
-  if (loading) {
-    return <LoadingScreen message={loadingMessage} />;
-  }
-
   if (error) {
     return (
-      <View style={styles.wrapper}>
+      <ThemedView style={styles.wrapper}>
         <HeaderNav
           title="Compatibility"
           leftIconName="arrow-back"
           onLeftPress={() => router.replace("/(main)/connections")}
         />
-        <View style={[styles.centered, { marginTop: headerHeight }]}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      </View>
+        <ThemedView style={[styles.centered, { marginTop: headerHeight }]}>
+          <ThemedText style={styles.errorText}>{error}</ThemedText>
+        </ThemedView>
+      </ThemedView>
     );
   }
 
@@ -409,28 +447,22 @@ export default function ConnectionViewScreen() {
             </Text>
           )}
 
-          
-
-          
-
-          {/* Score bars or pending state */}
-          {!report ? (
-            <View style={styles.pendingCard}>
-              {connection?.status?.state === "error" ? (
-                <Text style={styles.errorText}>Something went wrong generating the report.</Text>
-              ) : (
-                <>
-                  <LottieView
-                    source={require("@/src/assets/animations/splash-loop.json")}
-                    autoPlay
-                    loop
-                    style={styles.pendingAnimation}
-                  />
-                  <Text style={styles.pendingText}>{statusLabel}</Text>
-                </>
-              )}
-            </View>
-          ) : (
+          {/* Score bars — only render once the report exists */}
+          {connection?.status?.state === "error" && !report ? (
+            <Text style={styles.errorText}>Something went wrong generating the report.</Text>
+          ) : !report ? (
+            <>
+              <View style={styles.loadingCard}>
+                <Text style={styles.loadingCardLabel}>WEEKLY ADVICE</Text>
+                <SkeletonLines lines={4} />
+              </View>
+              <View style={styles.loadingCard}>
+                <Text style={styles.loadingCardLabel}>WEEKLY FORECAST</Text>
+                <SkeletonLines lines={6} lineHeight={moderateScale(8)} />
+              </View>
+              <Text style={styles.pendingText}>{statusLabel}</Text>
+            </>
+          ) : report ? (
             <>
               {/* Compare / View Birth Charts */}
               <TouchableOpacity
@@ -440,12 +472,26 @@ export default function ConnectionViewScreen() {
                 disabled={computingSynastry}
               >
                 <Text style={styles.compareBirthChartsBtnText}>
-                  {hasSynastryReading ? "View Birth Charts" : "Compare Birth Charts"}
+                  { "View Synastry Analysis"}
                 </Text>
               </TouchableOpacity>
 
+              <TouchableOpacity
+                style={styles.talkToDelalunaBtn}
+                onPress={handleTalkToDelaluna}
+                activeOpacity={0.85}
+              >
+                <Ionicons
+                  name="chatbubble-ellipses-outline"
+                  size={moderateScale(14)}
+                  color="#FFFFFF"
+                  style={{ marginRight: scale(6) }}
+                />
+                <Text style={styles.talkToDelalunaBtnText}>Talk to Delaluna About It</Text>
+              </TouchableOpacity>
+
               <Text style={styles.sectionLabel}>Weekly Advice</Text>
-              <Text style={styles.reportSummary}>{report.advice}</Text>
+              <Text style={styles.reportSummary}>{renderRichText(report.advice)}</Text>
 
               <Text style={styles.sectionLabel}>Weekly Forecast</Text>
               <ThemedText style={styles.reportSummary}>
@@ -495,9 +541,10 @@ export default function ConnectionViewScreen() {
                   );
                 })}
             </>
-          )}
+          ) : null}
         </ScrollView>
       </View>
+
     </View>
   );
 }
@@ -522,6 +569,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(18),
     paddingTop: verticalScale(20),
     paddingBottom: verticalScale(48),
+  },
+  centerContent: {
+    alignItems: 'center',
+    width: '80%',
+    gap: verticalScale(12),
   },
   namesText: {
     color: "#B8A3FF",
@@ -572,9 +624,54 @@ const styles = StyleSheet.create({
     gap: verticalScale(10),
     paddingVertical: verticalScale(24),
   },
+  loadingCard: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: scale(12),
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    paddingVertical: verticalScale(16),
+    paddingHorizontal: scale(16),
+    marginBottom: verticalScale(14),
+  },
+  loadingCardLabel: {
+    color: "#ffffff",
+    fontSize: moderateScale(12),
+    fontWeight: "700",
+    letterSpacing: 1.5,
+    marginBottom: verticalScale(10),
+  },
+  namesSkeleton: {
+    alignItems: "center",
+    marginBottom: verticalScale(4),
+  },
+  pendingFullScreen: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pendingFullScreenAnimation: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   pendingAnimation: {
-    width: moderateScale(220),
-    height: moderateScale(220),
+     width: moderateScale(550),
+    height: moderateScale(550),
+  },
+  animation: {
+     width: "100%",
+    height: "100%",
+  },
+  animationStack: {
+    width: moderateScale(550),
+    height: moderateScale(550),
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pendingAnimationOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
   },
   pendingText: {
     color: "rgba(255,255,255,0.75)",
@@ -638,10 +735,25 @@ const styles = StyleSheet.create({
     borderRadius: scale(10),
     paddingVertical: verticalScale(10),
     alignItems: "center",
-    marginBottom: verticalScale(20),
+    marginBottom: verticalScale(10),
   },
   compareBirthChartsBtnText: {
     color: "#B8A3FF",
+    fontSize: moderateScale(13),
+    fontWeight: "600",
+    letterSpacing: 0.5,
+  },
+  talkToDelalunaBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#B8A3FF",
+    borderRadius: scale(10),
+    paddingVertical: verticalScale(10),
+    marginBottom: verticalScale(20),
+  },
+  talkToDelalunaBtnText: {
+    color: "#FFFFFF",
     fontSize: moderateScale(13),
     fontWeight: "600",
     letterSpacing: 0.5,

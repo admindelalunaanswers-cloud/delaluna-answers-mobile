@@ -7,8 +7,8 @@ import {
   Text,
   StyleSheet,
   ImageBackground,
-  StatusBar,
 } from "react-native";
+import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { doc, setDoc } from "firebase/firestore";
@@ -31,7 +31,7 @@ export default function ChangeThemeScreen() {
     }
   }, []);
 
-  /** 🎨 Handle select + apply */
+  /** Handle select + apply */
   const handleSelect = (key: string) => setThemeKey(key);
 
   const handleApply = async () => {
@@ -100,9 +100,8 @@ export default function ChangeThemeScreen() {
     <View style={[styles.container, { backgroundColor: "transparent" }]}>
       {/* Dynamic StatusBar based on theme */}
       <StatusBar
-        barStyle={theme.isDark ? "light-content" : "dark-content"}
+        style={theme.isDark ? "light" : "dark"}
         translucent
-        backgroundColor="transparent"
       />
 
 

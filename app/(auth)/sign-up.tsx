@@ -1,38 +1,39 @@
-import React, { useContext, useEffect, useState } from 'react';
-import {
-  View,
-  TouchableOpacity,
-  Text,
-  StyleSheet,
-  ImageBackground,
-  Platform,
-  Modal,
-  useWindowDimensions,
-  TouchableWithoutFeedback,
-  Keyboard,
-  Alert,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
+import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { updateProfile } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import React, { useEffect, useState } from 'react';
+import {
+  Alert,
+  ImageBackground,
+  Keyboard,
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  useWindowDimensions
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ThemeContext } from '@/src/context/theme-context';
-import { signUp, createUserDoc } from '@/src/services/user.service';
-import { FinalSignupPayload } from '@/src/types/signup.types';
-import { calculateNatalChart, calculateTransits, BirthData } from '@/src/services/astroEngine';
-import { requestBreakdown } from '@/src/services/natal-chart-breakdown.service';
-import { requestHoroscope, getTodayDateId } from '@/src/services/horoscope.service';
-import { requestTransitReading, getThisWeekDateId } from '@/src/services/transit-reading.service';
-import type { NatalChartDetailsDoc } from '@/src/types/user.type';
 import { db } from '@/firebaseConfig';
-import { verticalScale, scale, moderateScale } from '@/src/utils/responsive';
 import ChatFlow, { StepConfig } from '@/src/components/sign-up/chat-flow';
-import LoadingScreen from '../(util)/loading-screen';
-import { Ionicons } from '@expo/vector-icons';
 import { ThemedView } from '@/src/components/themed-view';
+import { themes } from '@/src/context/theme-context';
+import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
+import { Events } from '@/src/services/analytics.service';
+import { BirthData, calculateNatalChart, calculateTransits } from '@/src/services/astroEngine';
+import { getTodayDateId, requestHoroscope } from '@/src/services/horoscope.service';
+import { requestBreakdown } from '@/src/services/natal-chart-breakdown.service';
+import { getThisWeekDateId, requestTransitReading } from '@/src/services/transit-reading.service';
+import { createUserDoc, signUp } from '@/src/services/user.service';
+import { FinalSignupPayload } from '@/src/types/signup.types';
+import type { NatalChartDetailsDoc } from '@/src/types/user.type';
+import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
+import { Ionicons } from '@expo/vector-icons';
+import LoadingScreen from '../(util)/loading-screen';
 
 // ─── Fallback coordinates (Greenwich) ─────────────────────────────────────────
 
@@ -65,7 +66,7 @@ function parseAuthError(err: any): string {
 
 export default function SignUpChatScreen() {
   const router = useRouter();
-  const { theme } = useContext(ThemeContext);
+  const theme = themes.default;
   const [step, setStep] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Setting up your account...');
@@ -73,9 +74,16 @@ export default function SignUpChatScreen() {
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
 
+  const { markReady } = useScreenPerfLog('/(auth)/sign-up');
+
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const modalCardWidth = width > 640 ? '55%' : width > 480 ? '70%' : '86%';
+
+  // Mark screen ready on mount — form renders immediately, no async data needed
+  useEffect(() => {
+    markReady();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Timeout safety net
   useEffect(() => {
@@ -140,6 +148,8 @@ export default function SignUpChatScreen() {
         return;
       }
 
+      Events.signUp('email');
+
       // Step 2 — Update display name
       setLoadingMessage('Setting up your profile...');
       await updateProfile(userCred.user, { displayName });
@@ -177,6 +187,7 @@ export default function SignUpChatScreen() {
         timezone: payload.birthTimezone,
       };
       const natalChart = await calculateNatalChart(bd);
+      Events.birthChartGenerated({ has_time: !payload.isBirthTimeUnknown });
       const chartPlanets = natalChart.planets.map(({ name, symbol, longitude, sign, signSymbol, degree, minutes, seconds, speed, isRetrograde, house }) =>
         ({ name, symbol, longitude, sign, signSymbol, degree, minutes, seconds, speed, isRetrograde, house })
       );
@@ -254,7 +265,7 @@ export default function SignUpChatScreen() {
     <ImageBackground source={theme.backgroundImage} style={styles.background} resizeMode="cover">
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <ThemedView style={{ flex: 1 }}>
-          <StatusBar style="light" translucent backgroundColor="transparent" />
+          <StatusBar style="light" translucent />
 
           <BlurView intensity={10} tint="dark" style={[styles.overlay, Platform.OS === 'android' && { paddingTop: insets.top + verticalScale(12) }]}>
             <ThemedView
@@ -343,7 +354,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(16),
     marginBottom: verticalScale(8),
   },
-  goBackText: { color: '#6FFFE9', fontSize: moderateScale(20), fontWeight: '500', textAlign: 'center', },
+  goBackText: { 
+    color: '#6FFFE9', fontSize: moderateScale(20), fontWeight: '500', textAlign: 'center', },
   cancelText: { color: '#6FFFE9', fontSize: moderateScale(18), fontWeight: '500' },
   chatFlowWrapper: { flex: 1, width: '100%' },
   modalOverlay: {

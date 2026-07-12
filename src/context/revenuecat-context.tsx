@@ -8,26 +8,56 @@
  * - Listens for real-time CustomerInfo updates (renewal, expiry, etc.)
  */
 
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import type { CustomerInfo } from 'react-native-purchases';
-import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import type { CustomerInfo } from "react-native-purchases";
+import RevenueCatUI, { PAYWALL_RESULT } from "react-native-purchases-ui";
 
+import { Events } from "@/src/services/analytics.service";
+import { recordError } from "@/src/services/crashlytics.service";
 import {
+  CHAT_PACK_OFFERING_ID,
+  CHAT_PACK_QUANTITIES,
   configureRevenueCat,
+  ENTITLEMENT_ID,
+  getCustomerInfo,
+  getOfferings,
+  hasEntitlement,
   loginUser,
   logoutUser,
-  getCustomerInfo,
-  hasEntitlement,
-  restorePurchases as restorePurchasesService,
   onCustomerInfoUpdate,
-  ENTITLEMENT_ID,
+  resolvePaywallOffering,
+  restorePurchases as restorePurchasesService,
   REVENUECAT_ENABLED,
-} from '@/src/services/revenuecat.service';
-import { useUser } from './user-context';
+} from "@/src/services/revenuecat.service";
+import { useUser } from "./user-context";
+
+let AsyncStorage: any = null;
+try {
+  AsyncStorage = require("@react-native-async-storage/async-storage").default;
+} catch {
+  // Native module unavailable — devPlan will not persist.
+}
+
+const DEV_PLAN_KEY_PREFIX = "revenuecat.devPlan.v1";
+const devPlanStorageKey = (uid: string | null | undefined) =>
+  `${DEV_PLAN_KEY_PREFIX}.${uid ?? "anonymous"}`;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type DevPlan = 'free' | 'freeTrial' | 'premium';
+/**
+ * `auto` = no admin override; access is computed from real subscription state.
+ * `free` / `premium` = explicit admin overrides.
+ */
+export type DevPlan = "auto" | "free" | "premium";
 
 interface RevenueCatContextValue {
   /** Whether the user has the "Delaluna Answers Pro" entitlement */
@@ -44,6 +74,15 @@ interface RevenueCatContextValue {
   presentPaywall: () => Promise<boolean>;
   /** Present the paywall only if the user does NOT have the pro entitlement */
   presentPaywallIfNeeded: () => Promise<boolean>;
+  /**
+   * Present the RC paywall for the chat-pack IAP offering.
+   * - `{ purchased: true; quantity: number }` — purchase completed; quantity of questions granted
+   * - `'dismissed'`   — paywall shown but user closed without buying
+   * - `'unavailable'` — RC disabled or offering not found; show fallback sheet
+   */
+  presentChatPackPaywall: () => Promise<
+    { purchased: true; quantity: number } | "dismissed" | "unavailable"
+  >;
   /** Present the RevenueCat Customer Center for subscription management */
   presentCustomerCenter: () => Promise<void>;
   /**
@@ -53,7 +92,7 @@ interface RevenueCatContextValue {
   isDevMode: boolean;
   /** Current dev plan when RevenueCat is disabled. */
   devPlan: DevPlan;
-  /** Set the dev plan (free / freeTrial / premium). No-op when SDK is enabled. */
+  /** Set the dev plan (free / premium). No-op when SDK is enabled. */
   setDevPlan: (plan: DevPlan) => void;
   /** Flip the local pro flag when RevenueCat is disabled. No-op otherwise. */
   toggleDevPro: () => void;
@@ -69,9 +108,11 @@ const RevenueCatContext = createContext<RevenueCatContextValue>({
   restorePurchases: async () => false,
   presentPaywall: async () => false,
   presentPaywallIfNeeded: async () => false,
+  presentChatPackPaywall: async () =>
+    "unavailable" as const satisfies "unavailable",
   presentCustomerCenter: async () => {},
   isDevMode: !REVENUECAT_ENABLED,
-  devPlan: 'free',
+  devPlan: "auto",
   setDevPlan: () => {},
   toggleDevPro: () => {},
 });
@@ -83,35 +124,86 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [loading, setLoading] = useState(REVENUECAT_ENABLED);
   const configuredRef = useRef(false);
+  /** True only when configureRevenueCat() actually initialised the SDK. */
+  const sdkReadyRef = useRef(false);
+  const loggedInUidRef = useRef<string | null>(null);
 
-  // Placeholder plan — lets the client test free / free-trial / premium
-  // flows via the mock paywall, regardless of real RevenueCat state.
-  const [devPlan, setDevPlanState] = useState<DevPlan>('free');
+  // Placeholder plan — lets the client test free / premium flows via the
+  // mock paywall, regardless of real RevenueCat state. Persisted per-account
+  // so admin overrides survive reload and don't leak between users on the same device.
+  const [devPlan, setDevPlanState] = useState<DevPlan>("auto");
 
-  // Placeholder always drives isPro so the mock paywall works in every build.
-  const isPro = devPlan === 'premium';
+  const isPro = useMemo(() => {
+    // Admin override: explicit plan selection (from admin screen) beats real state.
+    if (devPlan !== "auto") return devPlan === "premium";
+    // Use real RevenueCat entitlement on all platforms.
+    if (!REVENUECAT_ENABLED || customerInfo === null) return false;
+    return hasEntitlement(customerInfo);
+  }, [customerInfo, devPlan]);
 
-  const setDevPlan = useCallback((plan: DevPlan) => {
-    setDevPlanState(plan);
-  }, []);
+  // Hydrate devPlan from AsyncStorage when the auth user changes.
+  useEffect(() => {
+    let cancelled = false;
+    if (!AsyncStorage) return;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(
+          devPlanStorageKey(authUser?.uid),
+        );
+        if (cancelled) return;
+        if (raw === "auto" || raw === "free" || raw === "premium") {
+          setDevPlanState(raw);
+        } else {
+          setDevPlanState("auto");
+        }
+      } catch {
+        // ignore — fall back to in-memory state
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser?.uid]);
+
+  const setDevPlan = useCallback(
+    (plan: DevPlan) => {
+      setDevPlanState(plan);
+      if (AsyncStorage) {
+        AsyncStorage.setItem(devPlanStorageKey(authUser?.uid), plan).catch(
+          () => {},
+        );
+      }
+    },
+    [authUser?.uid],
+  );
 
   const toggleDevPro = useCallback(() => {
     setDevPlanState((prev) => {
-      const cycle: DevPlan[] = ['free', 'freeTrial', 'premium'];
-      return cycle[(cycle.indexOf(prev) + 1) % cycle.length];
+      const cycle: DevPlan[] = ["auto", "free", "premium"];
+      const idx = cycle.indexOf(prev);
+      const next = cycle[(idx === -1 ? 0 : idx + 1) % cycle.length];
+      if (AsyncStorage) {
+        AsyncStorage.setItem(devPlanStorageKey(authUser?.uid), next).catch(
+          () => {},
+        );
+      }
+      return next;
     });
-  }, []);
+  }, [authUser?.uid]);
 
   // ── Configure SDK once ──────────────────────────────────────────────────────
   useEffect(() => {
     if (configuredRef.current) return;
     configuredRef.current = true;
-    configureRevenueCat();
+    sdkReadyRef.current = configureRevenueCat();
+    // If the SDK could not be initialised (missing key in this build),
+    // clear the loading flag so the app doesn't hang on a spinner.
+    if (!sdkReadyRef.current) setLoading(false);
   }, []);
 
   // ── Link to Firebase user & fetch initial customer info ─────────────────────
   useEffect(() => {
-    if (!REVENUECAT_ENABLED) return;
+    if (!REVENUECAT_ENABLED || !sdkReadyRef.current) return;
 
     let cancelled = false;
 
@@ -119,30 +211,39 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       try {
         if (authUser?.uid) {
           const { customerInfo: info } = await loginUser(authUser.uid);
+          loggedInUidRef.current = authUser.uid;
           if (!cancelled) setCustomerInfo(info);
-        } else {
-          // User signed out — reset to anonymous
+        } else if (loggedInUidRef.current) {
+          // User signed out — reset to anonymous (only if we previously logged in)
+          loggedInUidRef.current = null;
           try {
             await logoutUser();
           } catch {
             // Already anonymous — ignore
           }
           if (!cancelled) setCustomerInfo(null);
+        } else {
+          // No prior login — SDK is anonymous; fetch real customer info
+          const info = await getCustomerInfo();
+          if (!cancelled) setCustomerInfo(info);
         }
       } catch (err) {
-        console.error('[RevenueCat] syncUser error:', err);
+        console.error("[RevenueCat] syncUser error:", err);
+        recordError(err, "rc_sync_user");
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
 
     syncUser();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [authUser?.uid]);
 
   // ── Listen for real-time updates ────────────────────────────────────────────
   useEffect(() => {
-    if (!REVENUECAT_ENABLED) return;
+    if (!REVENUECAT_ENABLED || !sdkReadyRef.current) return;
     const unsubscribe = onCustomerInfoUpdate((info) => {
       setCustomerInfo(info);
     });
@@ -157,7 +258,8 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       const info = await getCustomerInfo();
       setCustomerInfo(info);
     } catch (err) {
-      console.error('[RevenueCat] refresh error:', err);
+      console.error("[RevenueCat] refresh error:", err);
+      recordError(err, "rc_refresh");
     }
   }, []);
 
@@ -166,49 +268,161 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
     try {
       const info = await restorePurchasesService();
       setCustomerInfo(info);
-      return hasEntitlement(info);
+      const ok = hasEntitlement(info);
+      Events.restorePurchases({ success: ok });
+      return ok;
     } catch (err) {
-      console.error('[RevenueCat] restorePurchases error:', err);
+      console.error("[RevenueCat] restorePurchases error:", err);
+      recordError(err, "rc_restore");
+      Events.restorePurchases({ success: false });
       return false;
     }
   }, []);
 
+  // Pull the product identifier out of the user's currently active Pro
+  // entitlement. Falls back to 'unknown' if the entitlement isn't there yet
+  // (e.g. CustomerInfo cache lag right after purchase).
+  const resolvePurchasedProductId = useCallback(async (): Promise<string> => {
+    try {
+      const info = await getCustomerInfo();
+      return (
+        info.entitlements.active[ENTITLEMENT_ID]?.productIdentifier ?? "unknown"
+      );
+    } catch {
+      return "unknown";
+    }
+  }, []);
+
+  const handlePaywallResult = useCallback(
+    async (
+      result: PAYWALL_RESULT,
+      source: "manual" | "gated",
+    ): Promise<boolean> => {
+      await refresh();
+      if (result === PAYWALL_RESULT.PURCHASED) {
+        Events.purchaseCompleted({
+          product_id: await resolvePurchasedProductId(),
+        });
+        return true;
+      }
+      if (result === PAYWALL_RESULT.RESTORED) {
+        Events.restorePurchases({ success: true });
+        return true;
+      }
+      if (result !== PAYWALL_RESULT.NOT_PRESENTED) {
+        Events.paywallDismissed(source);
+      }
+      return false;
+    },
+    [refresh, resolvePurchasedProductId],
+  );
+
+  const resolveOffering = useCallback(async () => {
+    const info = customerInfo ?? (await getCustomerInfo());
+    const { offeringId, entitlementId } = resolvePaywallOffering(info);
+    const offerings = await getOfferings();
+    const offering =
+      offeringId === "default"
+        ? offerings.current
+        : (offerings.all[offeringId] ?? null);
+    return { offering, entitlementId };
+  }, [customerInfo]);
+
   const presentPaywall = useCallback(async (): Promise<boolean> => {
     if (!REVENUECAT_ENABLED) {
-      console.log('[RevenueCat] disabled — skipping presentPaywall');
+      console.log("[RevenueCat] disabled — skipping presentPaywall");
       return false;
     }
     try {
-      const result: PAYWALL_RESULT = await RevenueCatUI.presentPaywall();
-      // Refresh customer info after paywall interaction
-      await refresh();
-      return result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
+      const { offering } = await resolveOffering();
+      Events.paywallViewed("manual");
+      const result: PAYWALL_RESULT = await RevenueCatUI.presentPaywall(
+        offering ? { offering } : undefined,
+      );
+      return await handlePaywallResult(result, "manual");
     } catch (err) {
-      console.error('[RevenueCat] presentPaywall error:', err);
+      console.error("[RevenueCat] presentPaywall error:", err);
+      recordError(err, "rc_present_paywall");
+      Events.purchaseFailed({
+        product_id: "unknown",
+        reason: String((err as any)?.message ?? err),
+      });
       return false;
     }
-  }, [refresh]);
+  }, [handlePaywallResult, resolveOffering]);
 
   const presentPaywallIfNeeded = useCallback(async (): Promise<boolean> => {
     if (!REVENUECAT_ENABLED) {
-      console.log('[RevenueCat] disabled — skipping presentPaywallIfNeeded');
+      console.log("[RevenueCat] disabled — skipping presentPaywallIfNeeded");
       return false;
     }
     try {
+      if (customerInfo && hasEntitlement(customerInfo)) return false;
+      const { offering, entitlementId } = await resolveOffering();
+      Events.paywallViewed("gated");
       const result: PAYWALL_RESULT = await RevenueCatUI.presentPaywallIfNeeded({
-        requiredEntitlementIdentifier: ENTITLEMENT_ID,
+        requiredEntitlementIdentifier: entitlementId,
+        ...(offering ? { offering } : {}),
       });
-      await refresh();
-      return result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
+      return await handlePaywallResult(result, "gated");
     } catch (err) {
-      console.error('[RevenueCat] presentPaywallIfNeeded error:', err);
+      console.error("[RevenueCat] presentPaywallIfNeeded error:", err);
+      recordError(err, "rc_present_paywall_if_needed");
+      Events.purchaseFailed({
+        product_id: "unknown",
+        reason: String((err as any)?.message ?? err),
+      });
       return false;
     }
-  }, [refresh]);
+  }, [handlePaywallResult, resolveOffering, customerInfo]);
+
+  const presentChatPackPaywall = useCallback(async (): Promise<
+    { purchased: true; quantity: number } | "dismissed" | "unavailable"
+  > => {
+    if (!REVENUECAT_ENABLED) return "unavailable";
+    try {
+      const offerings = await getOfferings();
+      const offering = offerings.all[CHAT_PACK_OFFERING_ID] ?? null;
+      if (!offering) {
+        console.warn("[RevenueCat] in-app-purchases offering not found");
+        return "unavailable";
+      }
+      Events.paywallViewed("manual");
+      const result: PAYWALL_RESULT = await RevenueCatUI.presentPaywall({
+        offering,
+      });
+      if (
+        result !== PAYWALL_RESULT.PURCHASED &&
+        result !== PAYWALL_RESULT.RESTORED
+      )
+        return "dismissed";
+
+      // Resolve quantity from the most recent non-subscription transaction
+      const info = await getCustomerInfo();
+      setCustomerInfo(info);
+      const recent = info.nonSubscriptionTransactions
+        .slice()
+        .sort(
+          (a, b) =>
+            new Date(b.purchaseDate).getTime() -
+            new Date(a.purchaseDate).getTime(),
+        )[0];
+      const quantity =
+        (recent && CHAT_PACK_QUANTITIES[recent.productIdentifier]) ?? 1;
+      Events.purchaseCompleted({
+        product_id: recent?.productIdentifier ?? "unknown",
+      });
+      return { purchased: true, quantity };
+    } catch (err) {
+      console.error("[RevenueCat] presentChatPackPaywall error:", err);
+      recordError(err, "rc_chat_pack_paywall");
+      return "unavailable";
+    }
+  }, []);
 
   const presentCustomerCenter = useCallback(async () => {
     if (!REVENUECAT_ENABLED) {
-      console.log('[RevenueCat] disabled — skipping presentCustomerCenter');
+      console.log("[RevenueCat] disabled — skipping presentCustomerCenter");
       return;
     }
     try {
@@ -216,7 +430,8 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       // Refresh after user manages their subscription
       await refresh();
     } catch (err) {
-      console.error('[RevenueCat] presentCustomerCenter error:', err);
+      console.error("[RevenueCat] presentCustomerCenter error:", err);
+      recordError(err, "rc_customer_center");
     }
   }, [refresh]);
 
@@ -230,6 +445,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
         restorePurchases,
         presentPaywall,
         presentPaywallIfNeeded,
+        presentChatPackPaywall,
         presentCustomerCenter,
         isDevMode: !REVENUECAT_ENABLED,
         devPlan,

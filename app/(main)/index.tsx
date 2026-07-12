@@ -14,6 +14,7 @@ import HeaderNav from '@/src/components/shared/header-nav';
 import HomeSignsDisplay from '@/src/components/shared/signs-display.component';
 import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
 import AdBannerFull from '@/src/components/shared/ad-banner-full.component';
+import AdBannerShop from '@/src/components/shared/ad-banner-shop.component';
 import AdBanner from '@/src/components/shared/ad-banner.component';
 import SectionTitle from '@/src/components/shared/section-title.component';
 import { ThemedView } from '@/src/components/themed-view';
@@ -29,6 +30,8 @@ import { useUser } from '@/src/context/user-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { useResponsive } from '@/src/hooks/use-responsive';
 import { verticalScale } from '@/src/utils/responsive';
+import { getContentPadding } from '@/src/utils/layout';
+import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -40,7 +43,9 @@ export default function HomeScreen() {
     transitMoon,
     breakdown,
   } = useHoroscope();
-  const { isPro } = useRevenueCat();
+  const { isPro, loading: rcLoading } = useRevenueCat();
+  const { markReady } = useScreenPerfLog('/(main)/index');
+  const hasPremiumAccess = rcLoading || isPro;
 
 
   const todayDateId = getTodayDateId();
@@ -108,13 +113,6 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (transitMoon) {
-      console.log('[moon-phase]', {
-        date: todayDateId,
-        phase: transitMoon.phase,
-        sunMoonAngle: transitMoon.sunMoonAngle,
-        illumination: transitMoon.illumination,
-        sign: transitMoon.sign,
-      });
       setMoonByDate(prev => ({
         ...prev,
         [todayDateId]: { phaseName: transitMoon.phase, illumination: transitMoon.illumination, moonSign: transitMoon.sign },
@@ -125,12 +123,18 @@ export default function HomeScreen() {
   // Prefetch all card front images across all days so day-switching is instant
   useEffect(() => {
     const allCards = Object.values(cardDraw).flatMap(pack => pack.cards ?? []);
-    allCards.forEach(card => {
+    const uniqueIds = Array.from(new Set(allCards.map(card => card.id)));
+    uniqueIds.forEach(id => {
       Image.prefetch(
-        `https://firebasestorage.googleapis.com/v0/b/delaluna-answers.firebasestorage.app/o/tarot-card-front%2F${card.id}.png?alt=media`
-      );
+        `https://firebasestorage.googleapis.com/v0/b/delaluna-answers.firebasestorage.app/o/tarot-card-front%2F${id}.png?alt=media`
+      ).catch(() => {});
     });
   }, [cardDraw]);
+
+  // Mark screen ready once initial data is available
+  useEffect(() => {
+    if (!rcLoading) markReady();
+  }, [rcLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeCards = cardDraw[selectedDate] ?? null;
   const activeHoroscope = horoscopeByDate[selectedDate] ?? null;
@@ -146,7 +150,7 @@ export default function HomeScreen() {
   };
 
   const insets = useSafeAreaInsets();
-  const { scale } = useResponsive();
+  const { scale, width: screenWidth } = useResponsive();
   const headerHeight = insets.top + scale(NAV_BAR_HEIGHT);
 
   // ─── Derived values ─────────────────────────────────────────────────────────
@@ -156,15 +160,20 @@ export default function HomeScreen() {
   const risingSign = chartDetails?.ascendant.sign ?? '—';
 
   const activeMoonData = moonByDate[selectedDate];
-  const noRetrogradesLabel = "No planets currently in retrograde";
-  const retrogrades = (activeHoroscope?.planetsRetrograde ?? []).filter(p => p.toLowerCase() !== 'none' || noRetrogradesLabel);
+  const noRetrogradesLabel = "No planets in retrograde";
+  const filteredRetrogrades = (activeHoroscope?.planetsRetrograde ?? []).filter(p => p.toLowerCase() !== 'none');
+  const retrogrades = filteredRetrogrades.length > 0 ? filteredRetrogrades : [noRetrogradesLabel];
 
   const scrollRef = useRef<ScrollView>(null);
   const dateSwitcherDates = Object.keys(cardDraw).sort();
 
-  const [showFullBanner] = useState(() => Math.random() < 0.5);
-  const isPremium = isPro;
+  const [adVariant] = useState<'upgrade-full' | 'upgrade-compact' | 'shop'>(() => {
+    const variants = ['upgrade-full', 'upgrade-compact', 'shop'] as const;
+    return variants[Math.floor(Math.random() * variants.length)];
+  });
+  const isPremium = hasPremiumAccess;
   const isPaygated = selectedDate !== todayDateId && !isPremium;
+  const isGenerating = !activeHoroscope;
 
   const handleUnlock = () => {
     router.push('/(settings)/paywall');
@@ -207,23 +216,23 @@ export default function HomeScreen() {
         <ScrollView
           ref={scrollRef}
           style={styles.scroll}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: verticalScale(2) }]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: verticalScale(2), paddingHorizontal: getContentPadding(screenWidth) }]}
           showsVerticalScrollIndicator={false}
         >
           <SectionTitle sectionName="quote" title="Quote" />
-          <HomeTextBox sectionName="quote" content={activeHoroscope?.quote} />
+          <HomeTextBox sectionName="quote" content={activeHoroscope?.quote} generating={isGenerating} />
 
           <SectionTitle sectionName="advice" title="Advice" />
-          <HomeTextBox sectionName="advice" content={activeHoroscope?.advice} />
+          <HomeTextBox sectionName="advice" content={activeHoroscope?.advice} generating={isGenerating} />
 
           <SectionTitle sectionName="dos" title="Do's" />
-          <HomeTextBox sectionName="dos" content={activeHoroscope?.do ?? []} />
+          <HomeTextBox sectionName="dos" content={activeHoroscope?.do ?? []} generating={isGenerating} />
 
           <SectionTitle sectionName="donts" title="Don'ts" />
-          <HomeTextBox sectionName="donts" content={activeHoroscope?.dont ?? []} />
+          <HomeTextBox sectionName="donts" content={activeHoroscope?.dont ?? []} generating={isGenerating} />
 
           <SectionTitle sectionName="affirmation" title="Affirmation" />
-          <HomeTextBox sectionName="affirmation" content={activeHoroscope?.affirmation} />
+          <HomeTextBox sectionName="affirmation" content={activeHoroscope?.affirmation} generating={isGenerating} />
 
           <SectionTitle sectionName="tarot" title="Today's Cards" />
           <HomeTextBox
@@ -232,6 +241,7 @@ export default function HomeScreen() {
             cards={activeCards?.cards}
             firstView={activeCards?.firstView}
             onReveal={handleCardReveal}
+            generating={isGenerating}
           />
 
           <SectionTitle sectionName="message" title="Message in a Bottle" />
@@ -243,14 +253,15 @@ export default function HomeScreen() {
             content={activeHoroscope?.moon}
             contentTwo={activeHoroscope?.moonPhaseDetails}
             moonData={activeMoonData}
+            generating={isGenerating}
           />
 
           <SectionTitle sectionName="retrograde" title="Planets in Retrograde" />
-          <HomeTextBox sectionName="retrograde" content={retrogrades} />
+          <HomeTextBox sectionName="retrograde" content={isGenerating ? [] : retrogrades} generating={isGenerating} />
 
           <SectionTitle sectionName="newLove" title="New Love" />
           <Text style={styles.sectionDefinition}>{HOME_STRINGS.newLove.definition}</Text>
-          <HomeTextBox sectionName="newLove" content={activeHoroscope?.newLove ?? []} />
+          <HomeTextBox sectionName="newLove" content={activeHoroscope?.newLove ?? []} generating={isGenerating} />
           <TouchableOpacity
             style={styles.questionButton}
             onPress={() => { ChatStore.setInitialMessage(HOME_STRINGS.newLove.questionFunnel); router.push('/(main)/chat'); }}
@@ -261,7 +272,7 @@ export default function HomeScreen() {
 
           <SectionTitle sectionName="returns" title="Returns" />
           <Text style={styles.sectionDefinition}>{HOME_STRINGS.returns.definition}</Text>
-          <HomeTextBox sectionName="returns" content={activeHoroscope?.returns ?? []} />
+          <HomeTextBox sectionName="returns" content={activeHoroscope?.returns ?? []} generating={isGenerating} />
           <TouchableOpacity
             style={styles.questionButton}
             onPress={() => { ChatStore.setInitialMessage(HOME_STRINGS.returns.questionFunnel1); router.push('/(main)/chat'); }}
@@ -278,21 +289,26 @@ export default function HomeScreen() {
           </TouchableOpacity>
 
           <SectionTitle sectionName="luckyNumbers" title="Lucky Numbers" />
-          <HomeTextBox sectionName="luckyNumbers" content={activeHoroscope?.luckyNumbers ?? []} />
+          <HomeTextBox sectionName="luckyNumbers" content={activeHoroscope?.luckyNumbers ?? []} generating={isGenerating} />
 
           <SectionTitle sectionName="warning" title="Warning" />
-          <HomeTextBox sectionName="warning" content={activeHoroscope?.warning} />
+          <HomeTextBox sectionName="warning" content={activeHoroscope?.warning} generating={isGenerating} />
         </ScrollView>
-        {!isPremium && (
-          showFullBanner ? (
-            <AdBannerFull
-              icon="sparkles"
-              title="Unlock Your Full Birth Chart"
-              subtitle="Premium readings, ad-free."
-              ctaLabel="Upgrade"
-              onPress={handleUnlock}
-            />
-          ) : (
+        {!hasPremiumAccess && (() => {
+          // Free users get a 3-way rotation; premium + trial see nothing.
+          if (adVariant === 'shop') return <AdBannerShop />;
+          if (adVariant === 'upgrade-full') {
+            return (
+              <AdBannerFull
+                icon="sparkles"
+                title="Unlock Your Full Birth Chart"
+                subtitle="Premium readings, ad-free."
+                ctaLabel="Upgrade"
+                onPress={handleUnlock}
+              />
+            );
+          }
+          return (
             <AdBanner
               icon="sparkles"
               title="Unlock Your Full Birth Chart"
@@ -300,8 +316,8 @@ export default function HomeScreen() {
               ctaLabel="Upgrade"
               onPress={handleUnlock}
             />
-          )
-        )}
+          );
+        })()}
         </PaygateOverlay>
       </View>
     </ThemedView>
@@ -321,7 +337,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 16,
+    // paddingHorizontal is applied dynamically via getContentPadding(screenWidth)
+    // so content stays in a phone-width column even on iPad — see render above.
     paddingTop: 12,
   },
   generatingRow: {

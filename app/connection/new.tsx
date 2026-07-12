@@ -7,13 +7,16 @@ import {
   Easing,
   FlatList,
   Image,
+  ImageBackground,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
   Switch,
+  Text,
   TextInput,
   TouchableOpacity,
+  View,
 } from "react-native";
 
 import { router } from "expo-router";
@@ -21,6 +24,7 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { httpsCallable } from "firebase/functions";
+import LottieView from "lottie-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { functions } from "@/firebaseConfig";
@@ -43,7 +47,9 @@ import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { ThemedText } from "@/src/components/themed-text";
 import { C } from "@/src/constants/theme";
 import { buildCompatibilityPrompt } from "@/src/prompts/compatibility-prompt";
-import LoadingScreen from "../(util)/loading-screen";
+import { Events } from "@/src/services/analytics.service";
+import { measure } from "@/src/services/performance.service";
+import { recordError } from "@/src/services/crashlytics.service";
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -819,7 +825,6 @@ export default function SingleConnectionCreateScreen() {
           isPlaceOfBirthUnknown: userDoc?.isPlaceOfBirthUnknown ?? false,
         };
         userNatalChart = chartDetails ?? null;
-        console.log("Saving connection with data:", { enrichedFirst, userNatalChart });
       } else {
         const firstBirthParams = extractBirthParams(firstPerson);
         userNatalChart = await calculateNatalChart({
@@ -834,7 +839,6 @@ export default function SingleConnectionCreateScreen() {
           "Rising Sign": userNatalChart?.ascendant.sign,
           userName: `${firstPerson["First Name"]} ${firstPerson["Last Name"]}`,
         };
-         console.log("Saving New First Person connection with data:", { enrichedFirst, userNatalChart });
       }
 
       const secondBirthParams = extractBirthParams(secondPerson);
@@ -849,7 +853,6 @@ export default function SingleConnectionCreateScreen() {
         "Moon Sign": secondChart.planets.find((p: any) => p.name === "Moon")?.sign ?? "",
         "Rising Sign": secondChart.ascendant.sign,
       };
-      console.log("Saving New Second Person connection with data:", { enrichedSecond, secondChart });
 
       const userPronouns = isMe ? (userDoc?.pronouns ?? "") : firstPerson.Pronouns;
       const partnerPronouns = secondPerson.Pronouns;
@@ -862,19 +865,35 @@ export default function SingleConnectionCreateScreen() {
       );
 
       const createConnectionFn = httpsCallable(functions, 'createConnection');
-      const result = await createConnectionFn({
-        userId: authUser!.uid,
-        isMe,
-        relationshipType: relationshipType!,
-        firstPerson: enrichedFirst,
-        secondPerson: enrichedSecond,
-        prompt,
-      }) as { data: { connectionId: string } };
+      const result = await measure(
+        'connection_create',
+        () => createConnectionFn({
+          userId: authUser!.uid,
+          isMe,
+          relationshipType: relationshipType!,
+          firstPerson: enrichedFirst,
+          secondPerson: enrichedSecond,
+          prompt,
+        }) as Promise<{ data: { connectionId: string } }>,
+        { attributes: { is_me: String(isMe) } },
+      );
 
-      router.replace({ pathname: "/connection/[id]", params: { id: result.data.connectionId } });
+      Events.connectionCreated();
+
+      router.replace({
+        pathname: "/connection/[id]",
+        params: {
+          id: result.data.connectionId,
+          firstFirst: enrichedFirst["First Name"] ?? "",
+          firstLast: enrichedFirst["Last Name"] ?? "",
+          secondFirst: enrichedSecond["First Name"] ?? "",
+          secondLast: enrichedSecond["Last Name"] ?? "",
+        },
+      });
       return;
     } catch (err) {
       console.error("Error saving connection:", err);
+      recordError(err, 'connection_create');
       dismissAllSuggestions();
       Keyboard.dismiss();
       Alert.alert("Error", "Something went wrong creating this connection.");
@@ -889,7 +908,19 @@ export default function SingleConnectionCreateScreen() {
     undefined;
 
   if (loading) {
-    return <LoadingScreen progress={0} message={loadingMessage} />;
+    return (
+      <ImageBackground source={theme.backgroundImage} style={styles.loadingContainer}>
+        <View style={styles.pendingWrapper}>
+          <LottieView
+            source={require("@/src/assets/animations/splash-loop.json")}
+            autoPlay
+            loop
+            style={styles.pendingAnimation}
+          />
+          <Text style={styles.pendingText}>{loadingMessage}</Text>
+        </View>
+      </ImageBackground>
+    );
   }
 
   return (
@@ -1061,6 +1092,25 @@ const styles = StyleSheet.create({
     width: "100%",
     backgroundColor: "transparent",
     overflow: "hidden",
+  },
+  loadingContainer: {
+    flex: 1,
+  },
+  pendingWrapper: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: verticalScale(12),
+  },
+  pendingAnimation: {
+    width: moderateScale(450),
+    height: moderateScale(450),
+  },
+  pendingText: {
+    color: "rgba(255,255,255,0.75)",
+    fontSize: moderateScale(14),
+    textAlign: "center",
+    paddingHorizontal: scale(24),
   },
   section: {
     width: "100%",

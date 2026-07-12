@@ -30,6 +30,8 @@
 // }
 
 import Constants from "expo-constants";
+import * as Device from "expo-device";
+import { Platform } from "react-native";
 // import {
 //   getAI,
 //   getGenerativeModel,
@@ -41,7 +43,7 @@ import { FirebaseOptions, getApp, getApps, initializeApp } from "firebase/app";
 
 // Auth
 import { Auth, connectAuthEmulator, getAuth, initializeAuth } from "firebase/auth";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { SecureAuthStorage } from "@/src/services/secure-auth-storage";
 // getReactNativePersistence is exported by the Metro/RN bundle of firebase/auth
 // but absent from the browser TypeScript definitions — require() bypasses that.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -49,12 +51,13 @@ const { getReactNativePersistence } = require("firebase/auth");
 
 // Firestore
 import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
+import { FIRESTORE_DATABASE_ID } from "@/src/constants/env";
 
 // Functions
 import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
 
 // Storage
-import { getStorage, ref } from "firebase/storage";
+import { connectStorageEmulator, getStorage, ref } from "firebase/storage";
 
 // Load Expo config
 const extra = (Constants.expoConfig as any)?.extra ?? (Constants.manifest as any)?.extra;
@@ -75,11 +78,13 @@ const firebaseConfig: FirebaseOptions = {
 // Initialize Firebase
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// Auth — use AsyncStorage persistence so users stay logged in across app restarts.
+// Auth — persist tokens in SecureStore (Keychain on iOS, EncryptedSharedPreferences
+// on Android) instead of plaintext AsyncStorage. Existing users on prior builds
+// will be signed out once on first launch of this build.
 // Falls back to getAuth on hot reload when auth is already initialized.
 let auth: Auth;
 try {
-  auth = initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) });
+  auth = initializeAuth(app, { persistence: getReactNativePersistence(SecureAuthStorage) });
 } catch (e: any) {
   if (e.code === 'auth/already-initialized') {
     auth = getAuth(app);
@@ -89,8 +94,10 @@ try {
 }
 export { auth };
 
-// Firestore
-export const db = getFirestore(app);
+// Firestore — routed per environment (development → dllad, preview → dllat,
+// production → (default)). See src/constants/env.ts for the mapping.
+console.log(`[firebaseConfig] Using Firestore database: ${FIRESTORE_DATABASE_ID}`);
+export const db = getFirestore(app, FIRESTORE_DATABASE_ID);
 
 // Storage
 export const storage = getStorage(app);
@@ -123,14 +130,20 @@ export const functions = getFunctions(app, "us-central1");
 // });
 
 // Emulator Support (DEV only)
-// Using LAN IP for real device testing
-// __DEV__ && extra?.USE_EMULATOR ===
-export const USE_EMULATOR = false;
+//
+// Android and iOS reach the dev machine differently on this team's setup, so
+// each platform gets its own override: EMULATOR_HOST_ANDROID / EMULATOR_HOST_IOS
+// in .env. Both default to "localhost"; set EMULATOR_HOST_IOS to the dev
+// machine's LAN IP for physical iOS device testing.
+export const USE_EMULATOR = __DEV__ && extra?.USE_EMULATOR === true;
 if (USE_EMULATOR) {
-  const host: string = extra?.EMULATOR_HOST ?? "localhost";
+  const host: string = Platform.OS === "android"
+    ? (extra?.EMULATOR_HOST_ANDROID || "localhost")
+    : (extra?.EMULATOR_HOST_IOS || "localhost");
   connectAuthEmulator(auth, `http://${host}:9099`);
   connectFirestoreEmulator(db, host, 8080);
   connectFunctionsEmulator(functions, host, 5001);
+  connectStorageEmulator(storage, host, 9199);
   console.log("USING EMULATOR: ", host);
 }
 

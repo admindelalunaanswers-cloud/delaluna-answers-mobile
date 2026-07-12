@@ -1,26 +1,26 @@
 import { doc, setDoc, serverTimestamp, getDoc, collection, getDocs } from 'firebase/firestore';
 import {
   createUserWithEmailAndPassword,
-  fetchSignInMethodsForEmail,
   signInWithEmailAndPassword,
   onAuthStateChanged as fbOnAuthStateChanged,
   signOut as fbSignOut,
 } from 'firebase/auth';
-import { auth, db } from '@/firebaseConfig';
+import { httpsCallable } from 'firebase/functions';
+import { auth, db, functions } from '@/firebaseConfig';
 import { FinalSignupPayload } from '@/src/types/signup.types';
 import type { HoroscopeResult } from '@/src/types/horoscope.types';
 import type { UserDoc } from '@/src/types/user.type';
 
 /**
- * Returns true if the email is already registered in Firebase Auth.
- * Fails silently (returns false) on network errors so the UI never breaks.
+ * Revoke all refresh tokens for the current user. Best-effort — failures are
+ * swallowed because the caller is on a credential-change path and we still
+ * want to complete the local action (signOut, password change, deletion).
  */
-export async function checkEmailExists(email: string): Promise<boolean> {
+export async function revokeMyRefreshTokens(): Promise<void> {
   try {
-    const methods = await fetchSignInMethodsForEmail(auth, email);
-    return methods.length > 0;
-  } catch {
-    return false;
+    await httpsCallable(functions, 'revokeMyRefreshTokens')({});
+  } catch (err) {
+    console.warn('[user.service] revokeMyRefreshTokens failed:', err);
   }
 }
 
@@ -100,9 +100,11 @@ export async function createNewUserDoc(userId: string): Promise<void> {
     const docSnap = await getDoc(userDocRef);
 
     if (!docSnap.exists()) {
+      const email = auth.currentUser?.email?.toLowerCase() ?? '';
       await setDoc(userDocRef, {
         createdAt: serverTimestamp(),
         lastUpdatedAt: serverTimestamp(),
+        ...(email ? { email } : {}),
       });
     }
   } catch (error) {
@@ -214,44 +216,3 @@ export async function updateUserDoc(userId: string, userData: Partial<UserDoc>):
   }
 }
 
-/**
- * Update only birth-related fields and trigger backend recomputation pipeline.
- * Intended for use from Edit Profile when astro-dependent fields change.
- */
-export async function updateUserBirthData(
-  userId: string,
-  payload: {
-    birthday: string;
-    birthtime: string | null;
-    birthTimezone: number;
-    birthLat: number;
-    birthLon: number;
-    placeOfBirth: string | null;
-    isBirthTimeUnknown: boolean;
-    isPlaceOfBirthUnknown: boolean;
-  }
-): Promise<void> {
-  try {
-    const userDocRef = getUserDocRef(userId);
-
-    const sanitizedData = sanitizeFirestoreData({
-      birthday: payload.birthday,
-      birthtime: payload.birthtime ?? '12:00',
-      birthTimezone: payload.birthTimezone ?? 0,
-      birthLat: payload.birthLat,
-      birthLon: payload.birthLon,
-      placeOfBirth: payload.placeOfBirth ?? null,
-      isBirthTimeUnknown: payload.isBirthTimeUnknown ?? false,
-      isPlaceOfBirthUnknown: payload.isPlaceOfBirthUnknown ?? false,
-      signupStatus: 'processing',
-    });
-
-    await setDoc(userDocRef, {
-      ...sanitizedData,
-      lastUpdatedAt: serverTimestamp(),
-    }, { merge: true });
-  } catch (error) {
-    console.error('❌ Error updating user birth data:', error);
-    throw new Error('Error updating user birth data');
-  }
-}

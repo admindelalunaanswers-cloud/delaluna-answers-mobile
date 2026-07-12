@@ -5,12 +5,13 @@ import {
   Image,
   ImageSourcePropType,
   Platform,
-  StatusBar,
 } from "react-native";
+import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemeContext } from "@/src/context/theme-context";
 import { useResponsive } from "@/src/hooks/use-responsive";
+import { MAX_CONTENT_WIDTH } from "@/src/utils/layout";
 import { ThemedText } from "../themed-text";
 import { ThemedView } from "../themed-view";
 
@@ -67,6 +68,10 @@ export default function HeaderNav({
       width: scale(30),
       height: scale(30),
     },
+    avatarIcon: {
+      width: scale(40),
+      height: scale(40),
+    },
     placeholder: {
       width: scale(24),
       height: scale(24),
@@ -82,9 +87,8 @@ export default function HeaderNav({
   return (
     <>
       <StatusBar
-        barStyle={theme.isDark ? "light-content" : "dark-content"}
+        style={theme.isDark ? "light" : "dark"}
         translucent
-        backgroundColor="transparent"
       />
 
       <ThemedView
@@ -125,7 +129,7 @@ export default function HeaderNav({
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             {rightAvatarSource ? (
-              <Image source={rightAvatarSource} style={[styles.avatar, dynamic.icon]} />
+              <Image source={rightAvatarSource} style={[styles.avatar, dynamic.avatarIcon]} />
             ) : rightIconName ? (
               <Ionicons name={rightIconName} size={moderateScale(30)} color={tc} />
             ) : rightIconSource ? (
@@ -157,6 +161,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    // Prevent the nav content from spreading to iPad edges — keep it phone-width centered
+    width: "100%",
+    maxWidth: MAX_CONTENT_WIDTH,
+    alignSelf: "center",
   },
   sideContainer: {
     alignItems: "center",

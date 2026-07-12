@@ -1,38 +1,43 @@
-import React, { useEffect, useState, memo } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { httpsCallable } from "firebase/functions";
+import React, { memo, useEffect, useState } from "react";
 import {
+  Alert,
   Image,
+  ScrollView,
   StyleSheet,
-  View,
-  ActivityIndicator,
   Text,
   TouchableOpacity,
-  Alert,
-  ScrollView,
+  useWindowDimensions,
+  View
 } from "react-native";
+import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
 import Animated, {
-  useSharedValue,
+  Easing,
   useAnimatedStyle,
+  useSharedValue,
   withDelay,
   withTiming,
-  Easing,
 } from "react-native-reanimated";
-import { Ionicons } from "@expo/vector-icons";
-import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
-import { httpsCallable } from "firebase/functions";
-import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
-import { initialWindowSafeAreaInsets, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { db, functions } from "../../firebaseConfig";
-import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
-import { useUser } from "@/src/context/user-context";
-import { useRevenueCat } from "@/src/context/revenuecat-context";
-import HeaderNav from "@/src/components/shared/header-nav";
 import DelalunaContainer from "@/src/components/shared/delaluna-container.component";
-import { ThemedView } from "@/src/components/themed-view";
-import { ConnectionsCache, connectionDisplayName } from "@/src/services/connections-cache.service";
+import HeaderNav from "@/src/components/shared/header-nav";
+import PaygateOverlay from "@/src/components/shared/paygate-overlay.component";
 import { ThemedText } from "@/src/components/themed-text";
+import { ThemedView } from "@/src/components/themed-view";
 import { CONNECTIONS_DEFINITION } from "@/src/constants/definitions";
+import { useRevenueCat } from "@/src/context/revenuecat-context";
+import { useUser } from "@/src/context/user-context";
+import { useAdmin } from "@/src/context/admin-context";
+import { ConnectionsCache } from "@/src/services/connections-cache.service";
+import { Events } from "@/src/services/analytics.service";
+import { recordError } from "@/src/services/crashlytics.service";
+import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
+import { getContentPadding } from "@/src/utils/layout";
+import { db, functions } from "../../firebaseConfig";
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -69,12 +74,16 @@ const AnimatedConnectionItem = memo(
     );
 
     return (
-      <Animated.View style={animStyle}>
-        <ReanimatedSwipeable renderRightActions={renderRightActions} overshootRight={false}>
+      <Animated.View style={[animStyle, styles.itemWrapper]}>
+        <ReanimatedSwipeable
+          renderRightActions={renderRightActions}
+          overshootRight={false}
+          containerStyle={styles.swipeable}
+        >
           <ThemedView style={[styles.connectionItem, isLocked && styles.connectionItemLocked]}>
             <TouchableOpacity
-              onPress={() => (isLocked ? onLockedPress() : onOpen(connection.id))}
-              style={styles.connectionItem}
+              onPress={() => (isLocked ? onLockedPress(connection.id) : onOpen(connection.id))}
+              style={styles.connectionItemInner}
               activeOpacity={0.75}
             >
               <Text
@@ -103,22 +112,25 @@ const AnimatedConnectionItem = memo(
   }
 );
 
-const FREE_CONNECTION_LIMIT = 3;
-const PREMIUM_CONNECTION_LIMIT = 10;
-
 export default function ConnectionsScreen() {
   const { authUser } = useUser();
   const { isPro } = useRevenueCat();
+  const {
+    premiumConnectionLimit: PREMIUM_CONNECTION_LIMIT,
+  } = useAdmin();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
 
   const [connections, setConnections] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+
   const fade = useSharedValue(0);
   const fadeStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
 
   const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
 
-  const accessLimit = isPro ? PREMIUM_CONNECTION_LIMIT : FREE_CONNECTION_LIMIT;
+  // Connection allowance: Premium subscribers get PREMIUM_CONNECTION_LIMIT; free users get 0.
+  const accessLimit = isPro ? PREMIUM_CONNECTION_LIMIT : 0;
   const canAddNew = connections.length < accessLimit;
 
   const presentUpgradePaywall = () => {
@@ -126,7 +138,17 @@ export default function ConnectionsScreen() {
   };
 
   const handleOpenConnection = (connectionId: string) => {
-    router.push({ pathname: "/connection/[id]", params: { id: connectionId } });
+    const conn = connections.find(c => c.connectionId === connectionId);
+    router.push({
+      pathname: "/connection/[id]",
+      params: {
+        id: connectionId,
+        firstFirst: conn?.firstPerson?.firstName ?? "",
+        firstLast: conn?.firstPerson?.lastName ?? "",
+        secondFirst: conn?.secondPerson?.firstName ?? "",
+        secondLast: conn?.secondPerson?.lastName ?? "",
+      },
+    });
   };
 
   const goToNewConnectionScreen = () => {
@@ -134,14 +156,15 @@ export default function ConnectionsScreen() {
       if (isPro) {
         Alert.alert(
           'Connection limit reached',
-          `You can save up to ${PREMIUM_CONNECTION_LIMIT} connections. Remove one to add a new one.`,
+          `You can save up to ${accessLimit} connections. Remove one to add a new one.`,
+          [{ text: 'OK', style: 'cancel' }],
         );
       } else {
         Alert.alert(
-          'Connection limit reached',
-          `Free accounts can save up to ${FREE_CONNECTION_LIMIT} connections. Remove one to free up a slot, or upgrade to Premium for up to ${PREMIUM_CONNECTION_LIMIT}.`,
+          'Connections are a Premium feature',
+          `Upgrade to Premium to save up to ${PREMIUM_CONNECTION_LIMIT} connections.`,
           [
-            { text: 'OK', style: 'cancel' },
+            { text: 'Cancel', style: 'cancel' },
             { text: 'Upgrade', onPress: presentUpgradePaywall },
           ],
         );
@@ -151,12 +174,16 @@ export default function ConnectionsScreen() {
     router.push("/connection/new");
   };
 
-  const handleLockedPress = () => {
+  const handleLockedPress = (connectionId?: string) => {
+    const message = 'Connections are a Premium feature. Upgrade to read this connection, or delete it to clean up your list.';
     Alert.alert(
       'Connection locked',
-      `Free accounts can access ${FREE_CONNECTION_LIMIT} connections. Remove a connection to unlock another, or upgrade to Premium.`,
+      message,
       [
-        { text: 'OK', style: 'cancel' },
+        { text: 'Cancel', style: 'cancel' },
+        ...(connectionId
+          ? [{ text: 'Delete', style: 'destructive' as const, onPress: () => handleDeleteConnection(connectionId) }]
+          : []),
         { text: 'Upgrade', onPress: presentUpgradePaywall },
       ],
     );
@@ -208,49 +235,57 @@ export default function ConnectionsScreen() {
         {
           text: "Yes, Remove",
           style: "destructive",
-          onPress: async () => {
-            try {
-              const deleteFn = httpsCallable(functions, "deleteConnection");
-              await deleteFn({ userId: authUser?.uid, connectionId });
-              setConnections((prev) => prev.filter((c) => c.id !== connectionId));
-              if (authUser?.uid) ConnectionsCache.remove(authUser.uid, connectionId);
-            } catch (err) {
-              console.error("Error deleting connection:", err);
-              Alert.alert("Error", "Failed to delete connection.");
-            }
+          onPress: () => {
+            const uid = authUser?.uid;
+            if (!uid) return;
+            const previous = connections;
+            setConnections((prev) => prev.filter((c) => c.id !== connectionId));
+            ConnectionsCache.remove(uid, connectionId);
+            const deleteFn = httpsCallable(functions, "deleteConnection");
+            deleteFn({ userId: uid, connectionId })
+              .then(() => Events.connectionDeleted())
+              .catch((err) => {
+                console.error("Error deleting connection:", err);
+                recordError(err, 'connection_delete');
+                setConnections(previous);
+                ConnectionsCache.save(uid, previous);
+                Alert.alert("Error", "Failed to delete connection.");
+              });
           },
         },
       ]
     );
   };
 
-  if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#fff" />
-      </View>
-    );
-  }
+  
 
   const hasConnections = connections.length > 0;
+  const isPaygated = accessLimit === 0;
 
   return (
     <Animated.View style={[styles.container, fadeStyle]}>
       <ThemedView style={styles.container}>
         <HeaderNav
           title="Connections"
-          rightIconName={hasConnections ? "add" : undefined}
-          onRightPress={hasConnections ? goToNewConnectionScreen : undefined}
+          rightIconName={hasConnections && !isPaygated ? "add" : undefined}
+          onRightPress={hasConnections && !isPaygated ? goToNewConnectionScreen : undefined}
         />
          <ThemedText type="definition" style={{ marginTop: headerHeight, paddingHorizontal: scale(10), paddingVertical: scale(25), textAlign: "center" }}>
             {CONNECTIONS_DEFINITION}
           </ThemedText>
+        <PaygateOverlay
+          locked={isPaygated}
+          style={styles.paygateContainer}
+          unlockTitle="Unlock Connections"
+          unlockMessage="Upgrade to Premium to save and read compatibility connections."
+          onUnlock={presentUpgradePaywall}
+        >
         {hasConnections ? (
           <ScrollView
             style={{ flex: 1 }}
             contentContainerStyle={[
               styles.listContainer,
-              { paddingBottom: insets.bottom + verticalScale(60) },
+              { paddingBottom: insets.bottom + verticalScale(60), paddingHorizontal: getContentPadding(screenWidth) },
             ]}
             showsVerticalScrollIndicator={false}
           >
@@ -259,7 +294,7 @@ export default function ConnectionsScreen() {
                 key={c.id}
                 index={index}
                 connection={c}
-                isLocked={!isPro && index < connections.length - FREE_CONNECTION_LIMIT}
+                isLocked={index < connections.length - accessLimit}
                 onOpen={handleOpenConnection}
                 onDelete={handleDeleteConnection}
                 onLockedPress={handleLockedPress}
@@ -278,7 +313,9 @@ export default function ConnectionsScreen() {
               </TouchableOpacity>
             ))}
             <Text style={styles.slotCounter}>
-              {connections.length} of {accessLimit} connections
+              {accessLimit === 0
+                ? `${connections.length} connection${connections.length === 1 ? '' : 's'} locked — upgrade to unlock`
+                : `${connections.length} of ${accessLimit} connections`}
             </Text>
           </ScrollView>
         ) : (
@@ -297,6 +334,8 @@ export default function ConnectionsScreen() {
             </DelalunaContainer>
           </ThemedView>
         )}
+        </PaygateOverlay>
+
       </ThemedView>
     </Animated.View>
   );
@@ -304,10 +343,30 @@ export default function ConnectionsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, width: "100%" },
+  paygateContainer: { flex: 1 },
   centered: { flex: 1, justifyContent: "space-around", alignItems: "center", padding: scale(15) },
-  listContainer: { flexGrow: 1, paddingHorizontal: scale(15),  },
-  connectionItem: { padding: scale(16), flexDirection: "row",
-    justifyContent: "center", },
+  listContainer: { flexGrow: 1 }, // paddingHorizontal applied dynamically via getContentPadding(screenWidth)
+  itemWrapper: {
+    marginVertical: verticalScale(6),
+    borderRadius: moderateScale(14),
+    overflow: "hidden",
+  },
+  swipeable: {
+    borderRadius: moderateScale(14),
+    overflow: "hidden",
+  },
+  connectionItem: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  connectionItemInner: {
+    padding: scale(16),
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    flex: 1,
+  },
   connectionItemLocked: { opacity: 0.55 },
   connectionName: { color: "#fff", fontSize: moderateScale(16) },
   connectionNameLocked: { color: "rgba(255,255,255,0.55)" },
@@ -319,8 +378,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     width: scale(90),
     height: "100%",
-    borderTopRightRadius: moderateScale(10),
-    borderBottomRightRadius: moderateScale(10),
   },
   deleteText: {
     color: "#fff",

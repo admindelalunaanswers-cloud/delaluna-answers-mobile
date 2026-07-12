@@ -3,6 +3,7 @@ import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 
 import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
+import { renderRichText } from "@/src/utils/rich-text";
 
 import DelalunaContainer from "../shared/delaluna-container.component";
 import MoonPhaseImageFrame from "../home/moon-image-view.component";
@@ -35,7 +36,7 @@ export default function MoonView({
 
         {horoscopeMoon && (
           <DelalunaContainer>
-            <Text style={styles.text}>{horoscopeMoon}</Text>
+            <Text style={styles.text}>{renderRichText(horoscopeMoon)}</Text>
           </DelalunaContainer>
         )}
       </View>

@@ -93,10 +93,9 @@ Delaluna Answers is a personalized astrology companion for iOS and Android that 
 Sign-up -> `(auth)/verify-email.tsx` (OTP) -> `sendVerificationCode` Cloud Function -> user enters 6-digit code -> `verifyCode` marks `emailVerified` in Auth + Firestore -> redirect to `(main)`.
 
 ### Notable Architectural Choices
-1. **No automated tests** -- manual QA only
-2. **New Architecture on** -- constrains package choices to those that support Fabric/TurboModules
-3. **Two parallel theme systems** -- the named `ThemeContext` (for general screens) and the Dark Cosmic `C/S/R` tokens (for testing/chart screens)
-4. **AI results arrive asynchronously via Firestore** -- the UI subscribes to `status.state` transitions and handles a stuck-extension retry path in `chat.service.ts`
+1. **New Architecture on** -- constrains package choices to those that support Fabric/TurboModules
+2. **Two parallel theme systems** -- the named `ThemeContext` (for general screens) and the Dark Cosmic `C/S/R` tokens (for chart/settings screens)
+3. **AI results arrive asynchronously via Firestore** -- the UI subscribes to `status.state` transitions and handles a stuck-extension retry path in `chat.service.ts`
 
 ## Getting Started
 
@@ -117,25 +116,57 @@ npm install
 ### Development
 
 ```bash
-# Start Expo dev server + Firebase emulators (with persistent seed data)
+# Start Expo dev server + Firebase emulators together (recommended)
 npm run dev
 
 # Or start them separately
-npx expo start
-npm run emulators
+npx expo start          # just Metro
+npm run emulators       # just Firebase emulators
+npx expo start -c       # clear Metro cache (fixes weird bundler errors)
+npx expo start --tunnel # when phone and laptop are on different Wi-Fi
 ```
 
-> **Note:** This app uses native modules (`react-native-swisseph`, `react-native-purchases`, etc.) that require a custom dev client. Plain Expo Go will not work. Run `npx expo run:ios` or `npx expo run:android` for a local dev build, or use an EAS development build.
+> **Note:** This app uses native modules (`react-native-swisseph`, `react-native-purchases`, etc.) that require a custom dev client — plain Expo Go will not work. Install a dev build on your device with `npm run build:dev-device`, then open the Delaluna dev client app and connect to Metro.
+
+**Find your laptop IP for manual connection:**
+```bash
+ipconfig getifaddr en0
+# Then enter exp://<ip>:8081 in the dev client
+```
+
+### When to rebuild vs. reload
+
+| Change | Action |
+|---|---|
+| Edit anything in `app/` or `src/` | Nothing — hot reload |
+| Added/changed a native package | `npm run build:dev-device` |
+| Edited `app.config.js` / `eas.json` / native | `npm run build:dev-device` |
+| JS fix to already-shipped preview build | `npm run update:preview "msg"` |
+| New preview for testers | `npm run build:preview` |
+| Store release | `npm run build:prod` |
 
 ### Build
 
 ```bash
-# Preview build (real device)
-npm run build:preview
-
-# OTA update (JS-only changes)
-npm run update:preview "description of changes"
+npm run build:dev-device   # dev client, iOS + Android (physical device)
+npm run build:dev-sim      # dev client, iOS simulator
+npm run build:preview      # preview build, both platforms
+npm run build:prod         # production build for App Store / Google Play
 ```
+
+### OTA Updates
+
+OTA updates deliver JS/asset-only changes without a full rebuild. The installed build's `runtimeVersion` must match.
+
+```bash
+npm run update:preview "fix login button"
+npm run update:prod "fix login button"
+
+# Check update status
+eas update:list --branch preview-device
+```
+
+If an update won't apply: verify the channel matches, `runtimeVersion` matches, then kill the app twice and wait ~30 seconds.
 
 ### Firebase Emulator Seed Data
 
@@ -145,10 +176,48 @@ Emulator state (accounts, Firestore docs) is automatically saved on shutdown and
 npm run seed:export
 ```
 
+### Cloud Functions
+
+```bash
+firebase deploy --only functions
+firebase deploy --only functions:sendVerificationCode  # deploy one function
+firebase functions:log
+firebase functions:secrets:set EMAIL_USER
+```
+
 ### Lint
 
 ```bash
 npx expo lint
+```
+
+### Testing
+
+```bash
+npm test                  # run all tests
+npm run test:watch        # re-run on file changes
+npm run test:coverage     # run with coverage report (80% threshold on all metrics)
+npm run test:debug        # debug with Node inspector (then open chrome://inspect)
+```
+
+Tests live in `__tests__` directories alongside source files. See [docs/TESTING.md](docs/TESTING.md) for the full testing guide.
+
+### Debugging
+
+```bash
+# Open dev menu: shake phone, three-finger tap (iOS), or:
+adb shell input keyevent 82
+
+# Native logs
+npx react-native log-ios
+npx react-native log-android
+adb logcat *:S ReactNative:V ReactNativeJS:V
+
+# Nuclear cache clear
+rm -rf node_modules .expo ios/Pods ios/build android/build && npm install
+
+# Firebase emulator port conflict
+lsof -ti:4000,5001,8080,9099,9199 | xargs kill -9
 ```
 
 ## Project Structure
@@ -156,29 +225,61 @@ npx expo lint
 ```
 app/                    # Expo Router screens (file-based routing)
   (main)/               # Tab navigator: home, connections, transits, chat
-  (auth)/               # Login, sign-up, email verification
-  (settings)/           # Profile, edit profile, paywall, theme picker
+  (auth)/               # Login, sign-up, forgot password, email verification (OTP)
+  (settings)/           # Profile, edit profile, paywall, theme picker, purchased reports
   (home)/               # Birth chart viewer
-  (testing)/            # Natal chart results
-  connection/           # Synastry screens
+  (startup)/            # Splash and welcome screens
+  (util)/               # Feedback, support, loading screens
+  connection/           # Connection detail, edit, and synastry screens
 
 src/
-  assets/               # Images, icons, theme backgrounds
-  components/           # Reusable UI components
-  constants/            # Design tokens, string constants
-  context/              # React contexts (User, RevenueCat, Horoscope, Theme)
+  assets/               # Images, icons, Lottie animations, theme backgrounds
+  components/           # Reusable UI components (natal chart wheel, chat, tarot, etc.)
+  constants/            # Design tokens (C/S/R), string constants
+  context/              # React contexts (User, RevenueCat, Horoscope, Theme, Admin)
   hooks/                # Custom hooks (responsive, theme, pull-to-refresh)
-  services/             # Business logic (astro engine, Firebase, RevenueCat, chat)
+  models/               # Data model helpers
+  prompts/              # AI prompt templates
+  schemas/              # Zod validation schemas
+  services/             # Business logic (astro engine, Firebase, RevenueCat, chat, etc.)
   stores/               # In-memory stores for cross-screen data passing
   types/                # TypeScript type definitions
+  utils/                # Pure utility functions (location, synastry, responsive, dates)
 
-functions/              # Firebase Cloud Functions
-extensions/             # Firebase Extension configs
+functions/              # Firebase Cloud Functions (OTP, chat cleanup, push notifications)
+extensions/             # Firebase Extension configs (AI generation, RevenueCat sync)
+plugins/                # Custom Expo config plugins
+docs/                   # Additional developer docs (CHEATSHEET.md, TESTING.md)
 ```
 
 ## Environment Variables
 
-Firebase credentials are injected via EAS environment secret vaults -- they are **not** stored in the repository. See `app.config.js` for the full list of expected variables.
+Firebase credentials are injected via EAS environment secret vaults — they are **not** stored in the repository.
+
+| Variable | Used in |
+|---|---|
+| `FIREBASE_API_KEY` | Firebase JS SDK init |
+| `FIREBASE_AUTH_DOMAIN` | Firebase JS SDK init |
+| `FIREBASE_PROJECT_ID` | Firebase JS SDK init |
+| `FIREBASE_STORAGE_BUCKET` | Firebase JS SDK init |
+| `FIREBASE_MESSAGING_SENDER_ID` | Firebase JS SDK init |
+| `FIREBASE_APP_ID` | Firebase JS SDK init |
+| `REVENUECAT_AAS_API_KEY` | RevenueCat iOS (production) |
+| `REVENUECAT_GPS_API_KEY` | RevenueCat Android (production) |
+| `REVENUECAT_TST_API_KEY` | RevenueCat (dev/test) |
+| `REVENUECAT_KEY_V1` / `REVENUECAT_KEY_V2` | Server-side RevenueCat (Cloud Functions only) |
+| `APP_ENV` | Runtime environment flag (`development` / `preview` / `production`) |
+
+Pull env vars for local development:
+```bash
+eas env:pull --environment development   # writes .env.local
+```
+
+To add or update a secret:
+```bash
+eas env:create --environment preview --name MY_KEY --value "..."
+eas env:list --environment preview
+```
 
 ## License
 

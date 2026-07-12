@@ -1,10 +1,9 @@
 import React from "react";
 
-import { View, Text, Image, StyleSheet, TouchableOpacity } from "react-native";
+import { Image, StyleSheet, TouchableOpacity } from "react-native";
 
-import { verticalScale, scale, moderateScale } from "@/src/utils/responsive";
-import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
+import { router } from "expo-router";
 import { ThemedText } from "../themed-text";
 import { ThemedView } from "../themed-view";
 

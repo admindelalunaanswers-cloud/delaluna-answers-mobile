@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 
 import { db } from '@/firebaseConfig';
 import type { NatalChartBreakdownResult } from '@/src/types/natal-chart-breakdown.types';
@@ -32,12 +32,19 @@ function parseResult(data: Record<string, any>): NatalChartBreakdownResult | nul
   const raw = data?.response ?? data?.result ?? data?.output;
   if (!raw) return null;
   try {
-    const cleaned = typeof raw === 'string'
+    const stripped = typeof raw === 'string'
       ? raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
       : raw;
-    return typeof cleaned === 'string'
-      ? JSON.parse(cleaned)
-      : (cleaned as NatalChartBreakdownResult);
+    // Hermes (React Native) is stricter than V8 — trailing commas before } or ]
+    // are invalid JSON but the AI occasionally emits them. Strip them before parsing.
+    const parsed: NatalChartBreakdownResult = typeof stripped !== 'string'
+      ? stripped
+      : JSON.parse(stripped.replace(/,(\s*[}\]])/g, '$1'));
+    // Reject empty or structurally incomplete responses (e.g. {} written by
+    // the Extension on error). An empty object is truthy and would otherwise
+    // be accepted, causing the birth chart view to render blank content.
+    if (!parsed || !Array.isArray(parsed.houses) || parsed.houses.length === 0) return null;
+    return parsed;
   } catch {
     return null;
   }
@@ -68,14 +75,20 @@ export async function requestBreakdown(
   chart: NatalChartDetailsDoc,
   pronouns = 'they/them',
 ): Promise<void> {
+  const docRef = doc(db, 'users', uid, 'natalChart', BREAKDOWN_DOC);
+
+  // Delete before writing so the Extension's onDocumentCreated trigger always fires.
+  // Using setDoc on an existing document only fires onDocumentWritten — if the
+  // Extension uses onCreate (the most common AI-generation pattern), it would
+  // silently skip the re-request and leave the breakdown permanently stuck.
+  // deleteDoc on a non-existent document is a safe no-op, so this works for
+  // both new users (first generation) and existing users (profile updates).
+  await deleteDoc(docRef);
+
   const natalChart  = buildNatalChartSummary(chart);
   const prompt      = buildNatalChartPrompt(natalChart, pronouns);
-  const requestedAt = serverTimestamp();
 
-  await setDoc(
-    doc(db, 'users', uid, 'natalChart', BREAKDOWN_DOC),
-    { prompt, natalChart, requestedAt },
-  );
+  await setDoc(docRef, { prompt, natalChart, requestedAt: serverTimestamp() });
 }
 
 /**

@@ -28,8 +28,10 @@ import { ThemeContext } from '@/src/context/theme-context';
 import { ThemedText } from '@/src/components/themed-text';
 import { auth, db } from '@/firebaseConfig';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
+import { MAX_CONTENT_WIDTH } from '@/src/utils/layout';
 import { updateUserDoc } from '@/src/services/user.service';
 import { useUser } from '@/src/context/user-context';
+import { Events } from '@/src/services/analytics.service';
 
 import LoadingScreen from '../(util)/loading-screen';
 
@@ -101,7 +103,13 @@ export default function Login() {
       setLoading(true);
       setSkipAutoRedirect(true);
 
-      const cred = await signInWithEmailAndPassword(auth, email.trim(), password.trim());
+      // Trim email only — passwords are sent verbatim. Trimming the password
+      // would silently strip legitimate characters and lock out users whose
+      // passwords contain whitespace (or whose password manager appended a
+      // newline on paste).
+      const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+
+      Events.login('email');
 
       // Record login timestamp on every login
       updateUserDoc(cred.user.uid, {
@@ -135,18 +143,16 @@ export default function Login() {
 
   return (
     <>
-      <StatusBar style="light" translucent backgroundColor="transparent" />
+      <StatusBar style="light" translucent />
 
       <ImageBackground
         source={require('@/src/assets/start-up/welcome-background.jpg')}
         style={{ flex: 1 }}
         resizeMode="cover"
       >
-        {/* (property) behavior?: "height" | "padding" | "position" | undefined
- */}
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? "padding"  : "padding"}
+          behavior="padding"
         >
           <ScrollView
             contentContainerStyle={styles.scrollContent}
@@ -196,6 +202,8 @@ export default function Login() {
                       value={password}
                       onChangeText={setPassword}
                       secureTextEntry={!showPassword}
+                      autoComplete="current-password"
+                      textContentType="password"
                       returnKeyType="done"
                       onSubmitEditing={handleLogin}
                     />
@@ -248,6 +256,8 @@ export default function Login() {
 const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
+    // Center the card on wide screens (iPad) rather than stretching edge to edge
+    alignItems: 'center',
   },
   logoContainer: {
     flex: 1,
@@ -262,6 +272,7 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '100%',
+    maxWidth: MAX_CONTENT_WIDTH,
     backgroundColor: 'rgba(255,255,255,0.1)',
     borderTopLeftRadius: moderateScale(25),
     borderTopRightRadius: moderateScale(25),

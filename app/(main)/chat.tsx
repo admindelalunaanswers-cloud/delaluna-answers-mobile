@@ -1,37 +1,45 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
-import {
-  Animated,
-  FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  ActivityIndicator,
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import {
+    ActivityIndicator,
+    Alert,
+    Animated,
+    FlatList,
+    KeyboardAvoidingView,
+    Modal,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import ConnectionPickerSheet, { type PickerConnection } from '@/src/components/connection-picker-sheet';
+import ConsumablePlaceholder from '@/src/components/shared/consumable-placeholder.component';
 import HeaderNav from '@/src/components/shared/header-nav';
 import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
 import { ThemedView } from '@/src/components/themed-view';
+import { HOME_STRINGS } from '@/src/constants/strings';
 import { C, R, S } from '@/src/constants/theme';
+import { useAdmin } from '@/src/context/admin-context';
+import { useHoroscope } from '@/src/context/horoscope-context';
+import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { useUser } from '@/src/context/user-context';
 import { useResponsive } from '@/src/hooks/use-responsive';
+import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
+import { getContentPadding, MAX_CONTENT_WIDTH } from '@/src/utils/layout';
+import type { ChatConnectionContext, ChatMessageDoc, SavedChatSession } from '@/src/services/chat.service';
 import { deleteChatSession, resumeChatSession, retryChatMessage, saveChatAndClear, sendChatMessage, subscribeToChatHistory, subscribeToChatSessions } from '@/src/services/chat.service';
-import type { ChatMessageDoc, SavedChatSession } from '@/src/services/chat.service';
+import { Events } from '@/src/services/analytics.service';
+import { recordError } from '@/src/services/crashlytics.service';
+import { buildConnectionContextSummary } from '@/src/services/connection-context.service';
 import { buildNatalChartSummary } from '@/src/services/natal-chart-breakdown.service';
 import { ChatStore } from '@/src/stores/chat-store';
-import { HOME_STRINGS } from '@/src/constants/strings';
-import { useHoroscope } from '@/src/context/horoscope-context';
-
-const DAILY_CHAT_LIMIT = 1;
+import { renderRichText } from '@/src/utils/rich-text';
+import { checkForHarm, HARM_ALERTS } from '@/src/utils/harm-filter';
 
 const SUGGESTIONS = [
   HOME_STRINGS.newLove.questionFunnel,
@@ -44,6 +52,17 @@ const SUGGESTIONS = [
   'What does my rising sign reveal about me?',
 ];
 
+const CONNECTION_SUGGESTIONS = [
+  'Should I reach out today?',
+  'Why do we keep having the same fight?',
+  "What's the long-term outlook for us?",
+  'How do I bring up what\'s bothering me?',
+  'Are we actually compatible?',
+  'What is each of us bringing to this dynamic?',
+  'How do I get through to them when they shut down?',
+  'Should I give this another shot?',
+];
+
 const VISIBLE_SUGGESTIONS = 5;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -52,10 +71,6 @@ function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-/** Strip markdown bold titles like **Reality Check:** and leftover asterisks */
-function stripBoldTitles(text: string): string {
-  return text.replace(/\*\*[^*]+:\*\*\s*/g, '').replace(/\*/g, '').replace(/^ +/gm, '').trim();
-}
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -93,6 +108,9 @@ function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: C
 
   return (
     <View style={styles.messageGroup}>
+      {msg.connectionName ? (
+        <Text style={styles.aboutTag}>about {msg.connectionName}</Text>
+      ) : null}
       <View style={styles.userBubbleRow}>
         <View style={styles.userBubble}>
           <Text style={styles.userBubbleText}>{msg.userMessage}</Text>
@@ -108,7 +126,7 @@ function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: C
               Something went wrong. Try again.
             </Text>
           ) : (
-            <Text style={styles.aiBubbleText}>{stripBoldTitles(msg.response ?? '')}</Text>
+            <Text style={styles.aiBubbleText}>{renderRichText(msg.response ?? '')}</Text>
           )}
         </View>
         {showRetry && (
@@ -126,8 +144,12 @@ function MessageBubble({ msg, onRetry }: { msg: ChatMessageDoc; onRetry: (msg: C
 export default function ChatScreen() {
   const { authUser } = useUser();
   const { chartDetails } = useHoroscope();
+  const { dailyChatLimit, premiumDailyChatLimit } = useAdmin();
+  const { isPro, loading: rcLoading, presentChatPackPaywall, refresh: refreshRevenueCat } = useRevenueCat();
+  const { markReady, logOp, logError: logPerfError } = useScreenPerfLog('/(main)/chat');
+  const hasPremiumAccess = rcLoading || isPro;
   const insets = useSafeAreaInsets();
-  const { scale } = useResponsive();
+  const { scale, width: screenWidth } = useResponsive();
   const headerHeight = insets.top + scale(44);
 
   const [messages, setMessages] = useState<ChatMessageDoc[]>([]);
@@ -137,8 +159,14 @@ export default function ChatScreen() {
   const [showHistory, setShowHistory] = useState(false);
   const [savedSessions, setSavedSessions] = useState<SavedChatSession[]>([]);
   const [viewingSession, setViewingSession] = useState<SavedChatSession | null>(null);
+  const [selectedConnection, setSelectedConnection] = useState<ChatConnectionContext | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
-  const questionLimit = DAILY_CHAT_LIMIT;
+  const [extraQuestionsPurchased, setExtraQuestionsPurchased] = useState(0);
+  const [showQuestionConsumable, setShowQuestionConsumable] = useState(false);
+
+  const baseDailyChatLimit = hasPremiumAccess ? premiumDailyChatLimit : dailyChatLimit;
+  const questionLimit = baseDailyChatLimit + extraQuestionsPurchased;
 
   // Count ALL questions sent today (active chat + saved sessions)
   const todayStart = new Date();
@@ -150,9 +178,17 @@ export default function ChatScreen() {
   const questionsRemaining = Math.max(0, questionLimit - questionsUsed);
   const chatLocked = questionsUsed >= questionLimit;
 
-  const handleUpgrade = useCallback(() => {
-    router.push('/(settings)/paywall');
-  }, []);
+  // When the limit is hit: show the RC paywall first.
+  const handleLimitReached = useCallback(async (prefillText?: string) => {
+    if (prefillText) setInputText(prefillText);
+    const result = await presentChatPackPaywall();
+    if (result === 'unavailable') {
+      setShowQuestionConsumable(true);
+    } else if (typeof result === 'object' && result.purchased) {
+      setExtraQuestionsPurchased((n) => n + result.quantity);
+    }
+    // 'dismissed' → user closed the RC paywall, do nothing
+  }, [presentChatPackPaywall]);
 
   const flatListRef = useRef<FlatList>(null);
   const chatStarted = useRef(false);
@@ -187,35 +223,44 @@ export default function ChatScreen() {
     fromNotification.current = ChatStore.popFromNotification();
   }, []);
 
-  // ─── Auto-save on leaving chat screen (navigate away) ─────────────────────
-  // Disabled: was clearing chat when tabbing away/back, breaking notification flow.
+  // ─── Pending connection from connection detail screen ─────────────────────
 
-  // useFocusEffect(
-  //   useCallback(() => {
-  //     return () => {
-  //       if (!authUser || fromNotification.current) {
-  //         fromNotification.current = false;
-  //         return;
-  //       }
-  //       const msgs = messagesRef.current;
-  //       if (msgs.length > 0) {
-  //         saveChatAndClear(authUser.uid, msgs).catch(console.error);
-  //       }
-  //     };
-  //   }, [authUser]),
-  // );
+  useEffect(() => {
+    const pending = ChatStore.popPendingConnection();
+    if (!pending || !authUser) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const ctx = await buildConnectionContextSummary(authUser.uid, pending.id);
+        if (!cancelled && ctx) setSelectedConnection(ctx);
+      } catch (e) {
+        console.error('connection context load error', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [authUser?.uid]);
 
-  // ─── Auto-save when app goes to background ────────────────────────────────
-  // Disabled: was clearing chat when app backgrounded, breaking notification flow.
+  // ─── Rehydrate chip from latest message's connection metadata ─────────────
 
-  // useEffect(() => {
-  //   const sub = AppState.addEventListener('change', (state) => {
-  //     if (state === 'background' && authUser && messagesRef.current.length > 0) {
-  //       saveChatAndClear(authUser.uid, messagesRef.current).catch(console.error);
-  //     }
-  //   });
-  //   return () => sub.remove();
-  // }, [authUser]);
+  const lastConnectionId = messages.length > 0
+    ? messages[messages.length - 1].connectionId
+    : undefined;
+
+  useEffect(() => {
+    if (!authUser || !lastConnectionId) return;
+    if (selectedConnection?.id === lastConnectionId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const ctx = await buildConnectionContextSummary(authUser.uid, lastConnectionId);
+        if (!cancelled && ctx) setSelectedConnection(ctx);
+      } catch {
+        // connection may have been deleted — leave chip cleared
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [authUser?.uid, lastConnectionId]);
+
 
   // ─── Auto-send initial message from ChatStore ──────────────────────────────
 
@@ -224,8 +269,7 @@ export default function ChatScreen() {
     const initial = ChatStore.popInitialMessage();
     if (initial) {
       if (chatLocked) {
-        setInputText(initial);
-        handleUpgrade();
+        handleLimitReached(initial);
       } else {
         handleSend(initial);
       }
@@ -250,6 +294,11 @@ export default function ChatScreen() {
     }
   }, [messages.length]);
 
+  // Mark screen ready once the initial data is available
+  useEffect(() => {
+    if (!rcLoading) markReady();
+  }, [rcLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ─── Send ──────────────────────────────────────────────────────────────────
 
   const chartSummary = chartDetails ? buildNatalChartSummary(chartDetails) : undefined;
@@ -258,34 +307,72 @@ export default function ChatScreen() {
     const msg = (text ?? inputText).trim();
     if (!msg || !authUser || isSending) return;
 
+    const harmType = checkForHarm(msg);
+    if (harmType) {
+      const { title, message: alertMsg } = HARM_ALERTS[harmType];
+      Alert.alert(title, alertMsg, [{ text: "OK" }]);
+      setInputText('');
+      return;
+    }
+
     if (chatLocked) {
-      setInputText(msg);
-      handleUpgrade();
+      handleLimitReached(msg);
       return;
     }
 
     chatStarted.current = true;
     setInputText('');
     setIsSending(true);
+    const t = Date.now();
     try {
-      await sendChatMessage(authUser.uid, msg, chartSummary);
+      await sendChatMessage(authUser.uid, msg, chartSummary, selectedConnection ?? undefined);
+      logOp('chat_send', Date.now() - t);
+      Events.chatMessageSent({ length: msg.length });
     } catch (e) {
+      logPerfError(e instanceof Error ? e.message : String(e));
       console.error('chat send error', e);
+      recordError(e, 'chat_send');
     } finally {
       setIsSending(false);
     }
-  }, [inputText, authUser, isSending, chatLocked, chartSummary, handleUpgrade]);
+  }, [inputText, authUser, isSending, chatLocked, chartSummary, selectedConnection, handleLimitReached]);
 
   // ─── Retry ─────────────────────────────────────────────────────────────────
 
   const handleRetry = useCallback(async (msg: ChatMessageDoc) => {
     if (!authUser) return;
     try {
-      await retryChatMessage(authUser.uid, msg.id, msg.userMessage, chartSummary);
+      // Prefer the chip's current connection; fall back to whatever was on the message.
+      let retryCtx: ChatConnectionContext | undefined =
+        selectedConnection?.id === msg.connectionId ? selectedConnection ?? undefined : undefined;
+      if (!retryCtx && msg.connectionId) {
+        const fresh = await buildConnectionContextSummary(authUser.uid, msg.connectionId);
+        if (fresh) retryCtx = fresh;
+      }
+      await retryChatMessage(authUser.uid, msg.id, msg.userMessage, chartSummary, retryCtx);
+      Events.chatRetry();
     } catch (e) {
       console.error('chat retry error', e);
+      recordError(e, 'chat_retry');
     }
-  }, [authUser, chartSummary]);
+  }, [authUser, chartSummary, selectedConnection]);
+
+  // ─── Connection picker handlers ───────────────────────────────────────────
+
+  const handleSelectConnection = useCallback(async (picked: PickerConnection) => {
+    if (!authUser) return;
+    setPickerOpen(false);
+    try {
+      const ctx = await buildConnectionContextSummary(authUser.uid, picked.id);
+      if (ctx) setSelectedConnection(ctx);
+    } catch (e) {
+      console.error('connection context load error', e);
+    }
+  }, [authUser]);
+
+  const handleClearConnection = useCallback(() => {
+    setSelectedConnection(null);
+  }, []);
 
   // ─── New chat ──────────────────────────────────────────────────────────────
 
@@ -312,8 +399,7 @@ export default function ChatScreen() {
   // ─── Derived ───────────────────────────────────────────────────────────────
 
   const showSuggestions = historyLoaded && messages.length === 0;
-  const hasPending = messages.some(m => m.isPending);
-  const sendDisabled = isSending || hasPending || !inputText.trim();
+  const sendDisabled = isSending || !inputText.trim();
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -332,7 +418,7 @@ export default function ChatScreen() {
         style={{ flex: 1 }}
         unlockTitle="Unlock Chat"
         unlockMessage="Subscribe to get personalized cosmic guidance through Delaluna chat."
-        onUnlock={handleUpgrade}
+        onUnlock={() => handleLimitReached()}
       >
 
       {/* ── History modal ── */}
@@ -371,7 +457,7 @@ export default function ChatScreen() {
                     </View>
                     {m.response ? (
                       <View style={[styles.aiBubble, { alignSelf: 'flex-start' }]}>
-                        <Text style={styles.aiBubbleText}>{stripBoldTitles(m.response)}</Text>
+                        <Text style={styles.aiBubbleText}>{renderRichText(m.response)}</Text>
                       </View>
                     ) : null}
                   </View>
@@ -422,22 +508,28 @@ export default function ChatScreen() {
 
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior="padding"
       >
         <View style={[styles.flex, { paddingTop: headerHeight }]}>
           {showSuggestions ? (
             <View style={styles.suggestionsContainer}>
-              <Text style={styles.suggestionsLabel}>What's on your mind?</Text>
-              {Array.from({ length: VISIBLE_SUGGESTIONS }, (_, i) =>
-                SUGGESTIONS[(suggestionOffset + i) % SUGGESTIONS.length]
-              ).map((q) => (
+              <Text style={styles.suggestionsLabel}>
+                {selectedConnection
+                  ? `What do you want to know about ${selectedConnection.name}?`
+                  : "What's on your mind?"}
+              </Text>
+              {(() => {
+                const pool = selectedConnection ? CONNECTION_SUGGESTIONS : SUGGESTIONS;
+                return Array.from({ length: VISIBLE_SUGGESTIONS }, (_, i) =>
+                  pool[(suggestionOffset + i) % pool.length]
+                );
+              })().map((q) => (
                 <TouchableOpacity
                   key={q}
                   style={styles.suggestionChip}
                   onPress={() => {
                     if (chatLocked) {
-                      setInputText(q);
-                      handleUpgrade();
+                      handleLimitReached(q);
                     } else {
                       handleSend(q);
                     }
@@ -457,13 +549,43 @@ export default function ChatScreen() {
               renderItem={({ item }) => <MessageBubble msg={item} onRetry={handleRetry} />}
               contentContainerStyle={[
                 styles.messageList,
-                { paddingBottom: insets.bottom + S.md },
+                {
+                  paddingBottom: insets.bottom + S.md,
+                  paddingHorizontal: getContentPadding(screenWidth),
+                  maxWidth: MAX_CONTENT_WIDTH,
+                  alignSelf: 'center',
+                  width: '100%',
+                },
               ]}
               showsVerticalScrollIndicator={false}
               onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
             />
           )}
 
+          <View style={styles.contextRow}>
+            {selectedConnection ? (
+              <TouchableOpacity
+                style={styles.contextChipActive}
+                onPress={handleClearConnection}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="person-circle-outline" size={14} color={C.purpleLight} />
+                <Text style={styles.contextChipText}>Talking about {selectedConnection.name}</Text>
+                <Ionicons name="close" size={14} color={C.purpleLight} />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.contextChipAdd}
+                onPress={() => setPickerOpen(true)}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="add" size={14} color={C.muted} />
+                <Text style={styles.contextChipAddText}>About a connection</Text>
+              </TouchableOpacity>
+            )}
+          </View>
           <View style={[styles.inputBar, { paddingBottom: S.sm }]}>
             <TextInput
               style={styles.textInput}
@@ -486,18 +608,38 @@ export default function ChatScreen() {
               {isSending ? (
                 <ActivityIndicator size="small" color={C.white} />
               ) : (
-                <Text style={styles.sendButtonText}>{'\u2192'}</Text>
+                <Ionicons name="send" size={18} color={C.white} />
               )}
             </TouchableOpacity>
           </View>
           <View style={[styles.counterBar]}>
             <Text style={styles.counterText}>
-              {questionsRemaining} of {questionLimit} questions remaining today
+              {baseDailyChatLimit === 0
+                ? questionLimit === 0
+                  ? 'Buy additional questions to continue chatting'
+                  : `${questionsRemaining} of ${questionLimit} purchased question${questionLimit === 1 ? '' : 's'} remaining`
+                : `${questionsRemaining} of ${questionLimit} questions remaining today`}
             </Text>
           </View>
         </View>
       </KeyboardAvoidingView>
       </PaygateOverlay>
+
+      <ConsumablePlaceholder
+        visible={showQuestionConsumable}
+        onClose={() => setShowQuestionConsumable(false)}
+        onPurchased={(quantity) => {
+          setExtraQuestionsPurchased((n) => n + quantity);
+        }}
+        onRefresh={refreshRevenueCat}
+      />
+
+      <ConnectionPickerSheet
+        visible={pickerOpen}
+        uid={authUser?.uid}
+        onClose={() => setPickerOpen(false)}
+        onSelect={handleSelectConnection}
+      />
     </ThemedView>
   );
 }
@@ -523,11 +665,11 @@ const styles = StyleSheet.create({
   },
   suggestionChip: {
     borderWidth: 1,
-    borderColor: 'rgba(188,168,244,0.35)',
+    borderColor: C.inactiveTabs + '59',
     borderRadius: R.pill,
     paddingVertical: 10,
     paddingHorizontal: S.md,
-    backgroundColor: 'rgba(188,168,244,0.07)',
+    backgroundColor: C.inactiveTabs + '12',
     width: '100%',
   },
   suggestionText: {
@@ -564,7 +706,7 @@ const styles = StyleSheet.create({
 
   aiBubbleRow: { alignItems: 'flex-start' },
   aiBubble: {
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: C.white + '12',
     borderRadius: R.lg,
     borderBottomLeftRadius: R.sm,
     paddingHorizontal: S.md,
@@ -610,14 +752,59 @@ const styles = StyleSheet.create({
     paddingTop: S.sm,
     gap: S.sm,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderTopColor: C.white + '14',
+    backgroundColor: C.cosmos + '33',
+  },
+  contextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: S.sm + 2,
+    paddingTop: S.sm,
+    paddingBottom: 2,
+    backgroundColor: C.cosmos + '33',
+  },
+  contextChipActive: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: S.sm + 2,
+    borderRadius: R.pill,
+    backgroundColor: C.purpleLight + '2E',
+    borderWidth: 1,
+    borderColor: C.purpleLight + '73',
+  },
+  contextChipText: {
+    color: C.purpleLight,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  contextChipAdd: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: S.sm + 2,
+    borderRadius: R.pill,
+    borderWidth: 1,
+    borderColor: C.white + '2E',
+  },
+  contextChipAddText: {
+    color: C.muted,
+    fontSize: 12,
+  },
+  aboutTag: {
+    alignSelf: 'flex-end',
+    color: C.purpleLight,
+    fontSize: 11,
+    fontStyle: 'italic',
+    marginBottom: 2,
   },
   textInput: {
     flex: 1,
     minHeight: 40,
     maxHeight: 120,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: C.white + '14',
     borderRadius: R.xl,
     paddingHorizontal: S.md,
     paddingVertical: S.sm,
@@ -637,12 +824,6 @@ const styles = StyleSheet.create({
   sendButtonDisabled: {
     backgroundColor: C.purpleDim,
   },
-  sendButtonText: {
-    color: C.white,
-    fontSize: 18,
-    fontWeight: '600',
-    lineHeight: 22,
-  },
 
   paygateContainer: {
     paddingHorizontal: S.md,
@@ -659,7 +840,7 @@ const styles = StyleSheet.create({
   counterBar: {
     alignItems: 'center',
     paddingVertical: S.xs,
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    backgroundColor: C.cosmos + '33',
   },
   counterText: {
     color: C.muted,
@@ -668,7 +849,7 @@ const styles = StyleSheet.create({
 
   historyModal: {
     flex: 1,
-    backgroundColor: '#0d0d1a',
+    backgroundColor: C.nebula,
   },
   historyHeader: {
     flexDirection: 'row',
@@ -677,7 +858,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: S.md,
     paddingVertical: S.md,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
+    borderBottomColor: C.white + '14',
   },
   historyTitle: {
     color: C.white,
@@ -710,7 +891,7 @@ const styles = StyleSheet.create({
   sessionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: C.white + '0D',
     borderRadius: R.md,
     paddingHorizontal: S.md,
     paddingVertical: S.sm + 2,
@@ -736,7 +917,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: S.sm,
     paddingVertical: 6,
     borderRadius: R.pill,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: C.white + '1F',
   },
   resumeButtonText: {
     color: C.white,

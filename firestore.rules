@@ -2,8 +2,172 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ─── Helpers ────────────────────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Verified-email check. Gates feature writes so an attacker who creates an
+    // account at someone-else@example.com cannot use the app until they prove
+    // ownership of that mailbox via the OTP flow.
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isVerifiedOwner(uid) {
+      return isOwner(uid) && isVerified();
+    }
+
+    // Admin privilege is granted via the `admin: true` custom auth claim,
+    // set server-side by the `syncAdminClaim` Cloud Function based on a
+    // secret-backed email allowlist. The mobile client mirrors this to
+    // `users/{uid}.isAdmin` for UI hints — that field is NOT consulted
+    // here; the token claim is the only source of truth for privilege.
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    // Fields the client may NEVER change on its own user doc — they are
+    // server-only (createdAt is set once at signup; isPremiumMember is
+    // written by the RevenueCat extension; isAdmin is set during signup
+    // based on email match and immutable from the client thereafter;
+    // isEmailVerified is flipped by the verifyCode cloud function).
+    function noProtectedFieldsChanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['createdAt', 'isPremiumMember', 'isAdmin', 'isEmailVerified']);
+    }
+
+    // ─── Admin override ─────────────────────────────────────────────────────
+    // Anything matching this rule short-circuits all other rules.
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if isAdmin();
+    }
+
+    // ─── Users ──────────────────────────────────────────────────────────────
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+
+      // First-time create: only the owner; createdAt must be a server timestamp.
+      // Clients can never self-create with isPremiumMember/isAdmin set — both
+      // are written server-side (RevenueCat extension and syncAdminClaim).
+      allow create: if isOwner(uid)
+        && request.resource.data.createdAt == request.time
+        && (!('isPremiumMember' in request.resource.data) || request.resource.data.isPremiumMember == false)
+        && (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false);
+
+      // Updates: owner can edit profile fields but cannot change protected
+      // fields, AND must be email-verified. The extra checks let admins
+      // (handled above) bypass.
+      allow update: if isVerifiedOwner(uid) && noProtectedFieldsChanged();
+
+      allow delete: if isOwner(uid);
+
+      // Owner-owned subcollections — birth chart, horoscopes, transits,
+      // chat (active + saved), connections, tarot draws, etc.
+      match /natalChart/{docId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      match /birthChart/{docId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      match /horoscope/{dateId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      match /transits/{dateId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      match /updayedChat/{messageId} {
+        // The active rolling chat (Firestore Extension reads/writes this; the
+        // extension uses admin SDK so it bypasses these rules).
+        allow read, write: if isVerifiedOwner(uid);
+      }
+
+      match /savedChats/{sessionId} {
+        allow read, write: if isVerifiedOwner(uid);
+      }
+
+      match /cards/{dateId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      match /connections/{connectionId} {
+        allow read, create, update, delete: if isVerifiedOwner(uid);
+
+        // Synastry reading + any other connection-scoped subdocs.
+        match /{document=**} {
+          allow read, write: if isVerifiedOwner(uid);
+        }
+      }
+
+      // RevenueCat extension writes purchase receipts here via the admin SDK.
+      // The client is read-only.
+      match /purchases/{purchaseId} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+    }
+
+    // ─── RevenueCat extension destination ──────────────────────────────────
+    match /subscriptions/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+
+      match /{document=**} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+    }
+
+    // ─── Email-verification OTPs (server-only) ─────────────────────────────
+    // sendVerificationCode / verifyCode cloud functions read/write this with
+    // the admin SDK; clients must not see other users' codes.
+    match /emailVerification/{uid} {
+      allow read, write: if false;
+    }
+
+    // ─── App config (min-version gate, etc.) ───────────────────────────────
+    // Public-readable so the unauthenticated splash screen can fetch the
+    // minimum supported version. Writes are admin-only (handled by the
+    // admin override at the top of this file).
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ─── Perf logs ──────────────────────────────────────────────────────────
+    // performanceLogs/{screenSlug}        ← screen metadata (lastEventAt)
+    // performanceLogs/{screenSlug}/events ← raw client events (write-only for client)
+    // performanceLogs/{screenSlug}/daily  ← CF aggregations (admin-read only)
+    match /performanceLogs/{screenSlug} {
+      // Any signed-in user may merge lastEventAt onto the parent doc.
+      allow write: if isSignedIn();
+      allow read:  if isAdmin();
+
+      match /events/{eventId} {
+        // Client may only create their own events — no updates or deletes.
+        // userId may be null when auth context hasn't resolved at log time;
+        // the non-null check prevents spoofing another user's UID.
+        allow create: if isSignedIn()
+          && (request.resource.data.userId == request.auth.uid
+              || request.resource.data.userId == null);
+        allow read:   if isAdmin();
+        allow update, delete: if false;
+      }
+
+      match /daily/{date} {
+        // Written exclusively by CF admin SDK (bypasses rules).
+        allow read:  if isAdmin();
+        allow write: if false;
+      }
     }
   }
 }

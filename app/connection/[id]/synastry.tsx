@@ -1,17 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
   View,
   useWindowDimensions,
 } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import HeaderNav from "@/src/components/shared/header-nav";
+import SkeletonLines from "@/src/components/shared/skeleton-lines";
 import SynastryWheel from "@/src/components/synastry/synastry-wheel.draw";
 import { calculateSynastry, type Aspect } from "@/src/services/astroEngine";
 import {
@@ -25,6 +26,7 @@ import { selectTopAspects } from "@/src/utils/synastry";
 import type { SynastryReadingResult } from "@/src/types/synastry-reading.types";
 import { C } from "@/src/constants/theme";
 import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
+import { renderRichText } from "@/src/utils/rich-text";
 import { ThemedView } from "@/src/components/themed-view";
 
 const NAV_BAR_HEIGHT = 44;
@@ -48,24 +50,31 @@ function AspectRow({ a }: { a: Aspect }) {
   const orbMin = Math.floor((a.orb % 1) * 60);
   return (
     <View style={styles.aspectRow}>
-      <View style={styles.aspectPlanets}>
-        <Text style={[styles.aspectPSym, { color: C.planet[a.planet1] ?? C.muted }]}>
+      <View style={styles.aspectSide}>
+        <Text style={[styles.aspectPSym, { color: C.purpleLight }]}>
           {a.symbol1}
         </Text>
+        <Text style={[styles.aspectPlanetName, { color: C.purpleLight }]} numberOfLines={1}>
+          {a.planet1}
+        </Text>
+      </View>
+
+      <View style={styles.aspectMid}>
         <Text style={[styles.aspectSym, { color }]}>{a.aspectSymbol}</Text>
-        <Text style={[styles.aspectPSym, { color: C.planet[a.planet2] ?? C.muted }]}>
+        <Text style={[styles.aspectType, { color }]}>{a.type}</Text>
+        <Text style={styles.aspectOrb}>
+          {orbDeg}°{pad(orbMin)}'
+        </Text>
+      </View>
+
+      <View style={[styles.aspectSide, styles.aspectSideRight]}>
+        <Text style={[styles.aspectPSym, { color: C.gold }]}>
           {a.symbol2}
         </Text>
-      </View>
-      <View style={styles.aspectMid}>
-        <Text style={[styles.aspectType, { color }]}>{a.type}</Text>
-        <Text style={styles.aspectNames}>
-          {a.planet1} · {a.planet2}
+        <Text style={[styles.aspectPlanetName, { color: C.gold }]} numberOfLines={1}>
+          {a.planet2}
         </Text>
       </View>
-      <Text style={styles.aspectOrb}>
-        {orbDeg}°{pad(orbMin)}'
-      </Text>
     </View>
   );
 }
@@ -108,12 +117,11 @@ function ReadingSection({
     <View style={styles.readingCard}>
       <Text style={styles.readingLabel}>{label}</Text>
       {body ? (
-        <Text style={styles.readingBody}>{body}</Text>
+        <Animated.View entering={FadeIn.duration(450)}>
+          <Text style={styles.readingBody}>{renderRichText(body)}</Text>
+        </Animated.View>
       ) : loading ? (
-        <View style={styles.readingLoading}>
-          <ActivityIndicator size="small" color="rgba(255,255,255,0.6)" />
-          <Text style={styles.readingLoadingText}>Generating…</Text>
-        </View>
+        <SkeletonLines lines={4} />
       ) : (
         <Text style={styles.readingPlaceholder}>Reading unavailable.</Text>
       )}
@@ -220,29 +228,31 @@ export default function SynastryAnalysisScreen() {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
-          <NamesRow nameA={nameA} nameB={nameB} />
+          <Animated.View entering={FadeIn.duration(350)}>
+            <NamesRow nameA={nameA} nameB={nameB} />
 
-          <View style={styles.wheelWrap}>
-            <SynastryWheel
-              chartA={chartA}
-              chartB={chartB}
-              highlightedAspects={topAspects}
-              size={wheelSize}
-            />
-          </View>
-
-          <View style={styles.legendRow}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: C.purpleLight }]} />
-              <Text style={styles.legendText}>{nameA}</Text>
+            <View style={styles.wheelWrap}>
+              <SynastryWheel
+                chartA={chartA}
+                chartB={chartB}
+                highlightedAspects={topAspects}
+                size={wheelSize}
+              />
             </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: C.gold }]} />
-              <Text style={styles.legendText}>{nameB}</Text>
-            </View>
-          </View>
 
-          <View style={styles.aspectsSection}>
+            <View style={styles.legendRow}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: C.purpleLight }]} />
+                <Text style={styles.legendText}>{nameA}</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: C.gold }]} />
+                <Text style={styles.legendText}>{nameB}</Text>
+              </View>
+            </View>
+          </Animated.View>
+
+          <Animated.View entering={FadeIn.duration(400).delay(150)} style={styles.aspectsSection}>
             <Text style={styles.aspectsTitle}>KEY ASPECT</Text>
             <View style={styles.aspectsList}>
               {topAspects.length === 0 ? (
@@ -251,7 +261,7 @@ export default function SynastryAnalysisScreen() {
                 topAspects.map((a, i) => <AspectRow key={`${a.planet1}-${a.planet2}-${i}`} a={a} />)
               )}
             </View>
-          </View>
+          </Animated.View>
 
           
 
@@ -380,31 +390,39 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "rgba(255,255,255,0.08)",
   },
-  aspectPlanets: {
-    flexDirection: "row",
-    alignItems: "center",
-    width: scale(68),
-    gap: scale(2),
+  aspectSide: {
+    flex: 1,
+    alignItems: "flex-start",
+    gap: verticalScale(2),
+  },
+  aspectSideRight: {
+    alignItems: "flex-end",
   },
   aspectPSym: {
-    fontSize: moderateScale(18),
-    width: scale(22),
+    fontSize: moderateScale(20),
     textAlign: "center",
   },
+  aspectPlanetName: {
+    fontSize: moderateScale(11),
+    fontWeight: "600",
+    letterSpacing: 0.3,
+  },
   aspectSym: {
-    fontSize: moderateScale(15),
-    width: scale(20),
+    fontSize: moderateScale(18),
     textAlign: "center",
     fontWeight: "700",
   },
   aspectMid: {
     flex: 1,
+    alignItems: "center",
     paddingHorizontal: scale(8),
+    gap: verticalScale(1),
   },
   aspectType: {
-    fontSize: moderateScale(12),
+    fontSize: moderateScale(11),
     fontWeight: "700",
     letterSpacing: 0.5,
+    textTransform: "uppercase",
   },
   aspectNames: {
     color: C.dimText,
@@ -413,9 +431,8 @@ const styles = StyleSheet.create({
   },
   aspectOrb: {
     color: C.moonSilver,
-    fontSize: moderateScale(11),
-    minWidth: scale(40),
-    textAlign: "right",
+    fontSize: moderateScale(10),
+    textAlign: "center",
   },
 
   // Reading cards

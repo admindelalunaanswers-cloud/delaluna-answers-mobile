@@ -1,11 +1,11 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 
-import { View, Text, StyleSheet, ViewStyle } from "react-native";
+import { Animated, View, Text, StyleSheet, ViewStyle } from "react-native";
 
-import { Ionicons } from "@expo/vector-icons";
 
 import { DrawnTarotCard } from "@/src/types/tarot-cards.type";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
+import { renderRichText } from "@/src/utils/rich-text";
 
 import DelalunaContainer from "../shared/delaluna-container.component";
 import MessageInABottleComponent from "./message-in-a-bottle.component";
@@ -28,22 +28,70 @@ export type SectionName =
   | "warning"
   | "luckyNumbers";
 
-// Icon mapping for each section
-const SECTION_ICONS: Record<SectionName, { name: keyof typeof Ionicons.glyphMap; color?: string }> = {
-  quote: { name: "chatbubble-outline", color: "#5BC0BE" },
-  advice: { name: "bulb-outline", color: "#F4A261" },
-  dos: { name: "checkmark-circle-outline", color: "#2A9D8F" },
-  donts: { name: "close-circle-outline", color: "#E76F51" },
-  affirmation: { name: "sparkles-outline", color: "#E63946" },
-  tarot: { name: "sparkles-outline", color: "#9D4EDD" },
-  message: { name: "send-outline", color: "#06FFA5" },
-  moon: { name: "moon-outline", color: "#F1FAEE" },
-  retrograde: { name: "planet-outline", color: "#8E44AD" },
-  newLove: { name: "heart-outline", color: "#FF69B4" },
-  returns: { name: "repeat-outline", color: "#FCA311" },
-  warning: { name: "warning-outline", color: "#FF9F40" },
-  luckyNumbers: { name: "dice-outline", color: "#FFD60A" },
-};
+
+// ─── Skeleton shimmer ─────────────────────────────────────────────────────────
+
+function SkeletonLine({ width = '100%', height = 14 }: { width?: number | string; height?: number }) {
+  const opacity = useRef(new Animated.Value(0.25)).current;
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.55, duration: 850, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.25, duration: 850, useNativeDriver: true }),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [opacity]);
+
+  // Wrap in a plain View so width (string | number) doesn't conflict with
+  // Animated.View's narrower DimensionValue requirement.
+  return (
+    <View style={{ width: width as any, height }}>
+      <Animated.View
+        style={{
+          flex: 1,
+          borderRadius: 6,
+          backgroundColor: 'rgba(111, 255, 233, 0.18)',
+          opacity,
+        }}
+      />
+    </View>
+  );
+}
+
+function SkeletonTextBlock() {
+  return (
+    <View style={{ width: '100%', gap: 10, paddingVertical: 4 }}>
+      <SkeletonLine width="92%" height={13} />
+      <SkeletonLine width="100%" height={13} />
+      <SkeletonLine width="76%" height={13} />
+    </View>
+  );
+}
+
+function SkeletonListBlock() {
+  return (
+    <View style={{ width: '100%', gap: 10, paddingVertical: 4 }}>
+      <SkeletonLine width="80%" height={13} />
+      <SkeletonLine width="88%" height={13} />
+      <SkeletonLine width="72%" height={13} />
+    </View>
+  );
+}
+
+function SkeletonHorizontalBlock() {
+  return (
+    <View style={{ flexDirection: 'row', gap: 12, paddingVertical: 4, justifyContent: 'center', width: '100%' }}>
+      <SkeletonLine width={72} height={28} />
+      <SkeletonLine width={72} height={28} />
+      <SkeletonLine width={72} height={28} />
+    </View>
+  );
+}
+
+// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface HomeTextBoxProps {
   sectionName: SectionName;
@@ -55,6 +103,8 @@ interface HomeTextBoxProps {
   firstView?: boolean;
   onReveal?: () => void;
   moonData?: { phaseName?: string; illumination?: number; moonSign?: string } | null;
+  /** Show skeleton shimmer while horoscope is being generated */
+  generating?: boolean;
 }
 
 export default function HomeTextBox({
@@ -66,20 +116,22 @@ export default function HomeTextBox({
   firstView,
   onReveal,
   moonData,
+  generating = false,
 }: HomeTextBoxProps) {
 
   const isBottleSection = sectionName === "message";
   const isTarotSection = sectionName === "tarot";
   const isListStyleSection = Array.isArray(content);
-  const isHoriListSection = sectionName === "newLove" || sectionName === "luckyNumbers" || sectionName === "returns" || sectionName == "retrograde";
+  const isHoriListSection = sectionName === "newLove" || sectionName === "luckyNumbers" || sectionName === "returns" || sectionName === "retrograde";
   const isMoonSection = sectionName === "moon";
 
-  // Get icon config for this section
-  const iconConfig = SECTION_ICONS[sectionName];
+  // True when we have no real content yet and are actively waiting for it
+  const isEmpty = isListStyleSection ? (content as string[]).length === 0 : !content;
+  const showSkeleton = generating && isEmpty;
 
   const renderTextContent = () => {
     if (!content || Array.isArray(content)) return null;
-    return <Text style={styles.text}>{content}</Text>;
+    return <Text style={styles.text}>{renderRichText(content)}</Text>;
   };
 
   const renderListContent = () => {
@@ -105,34 +157,46 @@ export default function HomeTextBox({
 
           {/* TAROT MEANING BOX */}
           <DelalunaContainer style={styles.box}>
-            {isListStyleSection ? renderListContent() : renderTextContent()}
+            {showSkeleton ? <SkeletonTextBlock /> : isListStyleSection ? renderListContent() : renderTextContent()}
           </DelalunaContainer>
         </>
       ) : isBottleSection ? (
         <MessageInABottleComponent placeholder="Message to the universe" />
       ) : isHoriListSection ? (
-        <View style={styles.newLoveRow}>
-          {Array.isArray(content) ? content.map((item, index) => (
-            <React.Fragment key={index}>
-              <Text style={styles.newLoveText}>{item}</Text>
-              {index < content.length - 1 && <Text style={styles.separator}>•</Text>}
-            </React.Fragment>
-          )) : <Text style={styles.newLoveText}>{content}</Text>}
-        </View>
+        showSkeleton ? (
+          <DelalunaContainer>
+            <SkeletonHorizontalBlock />
+          </DelalunaContainer>
+        ) : (
+          <View style={styles.newLoveRow}>
+            {Array.isArray(content) ? content.map((item, index) => (
+              <React.Fragment key={index}>
+                <Text style={styles.newLoveText}>{item}</Text>
+                {index < content.length - 1 && <Text style={styles.separator}>•</Text>}
+              </React.Fragment>
+            )) : <Text style={styles.newLoveText}>{content}</Text>}
+          </View>
+        )
       ) : isListStyleSection ? (
         <DelalunaContainer>
-          {renderListContent()}
+          {showSkeleton ? <SkeletonListBlock /> : renderListContent()}
         </DelalunaContainer>
       ) : isMoonSection ? (
-        <MoonView
-          phaseName={moonData?.phaseName}
-          illumination={moonData?.illumination}
-          sign={moonData?.moonSign}
-          horoscopeMoon={contentTwo || `The ${moonData?.moonSign} Moon is currently in its ${moonData?.phaseName} phase with an illumination of ${moonData?.illumination}%.`}
-        />
+        showSkeleton ? (
+          <DelalunaContainer>
+            <SkeletonTextBlock />
+          </DelalunaContainer>
+        ) : (
+          <MoonView
+            phaseName={moonData?.phaseName}
+            illumination={moonData?.illumination}
+            sign={moonData?.moonSign}
+            horoscopeMoon={contentTwo || `The ${moonData?.moonSign} Moon is currently in its ${moonData?.phaseName} phase with an illumination of ${moonData?.illumination}%.`}
+          />
+        )
       ) : (
         <DelalunaContainer>
-          {renderTextContent()}
+          {showSkeleton ? <SkeletonTextBlock /> : renderTextContent()}
         </DelalunaContainer>
       )}
     </View>

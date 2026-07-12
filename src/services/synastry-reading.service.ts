@@ -28,6 +28,7 @@ function summarizeChart(chart: NatalChart) {
 
 function summarizeAspects(scored: ScoredAspect[], nameA: string, nameB: string) {
   return scored.map(a => ({
+    key:    `${a.planet1}-${a.planet2}`,
     pair:   `${nameA}'s ${a.planet1} meeting ${nameB}'s ${a.planet2}`,
     aspect: a.type.toLowerCase(),
     orb:    Math.round(a.orb * 100) / 100,
@@ -35,24 +36,43 @@ function summarizeAspects(scored: ScoredAspect[], nameA: string, nameB: string) 
   }));
 }
 
+type AspectSummary = ReturnType<typeof summarizeAspects>;
+
 /**
- * Build the JSON-serialized data block embedded in the prompt.
- * Includes both charts' key placements plus the top scored cross-chart aspects.
+ * Build a readable bullet list of the curated top aspects so the model
+ * sees them surfaced separately from the dense JSON chart blob. Each line:
+ *   - [nature] {nameA}'s {planet1} meeting {nameB}'s {planet2} ({aspect}, orb X°) [key: Planet1-Planet2]
+ */
+function formatTopAspects(aspects: AspectSummary): string {
+  if (aspects.length === 0) return '(none — no significant cross-chart aspects)';
+  return aspects
+    .map(a => `- [${a.nature}] ${a.pair} (${a.aspect}, orb ${a.orb}°) [key: ${a.key}]`)
+    .join('\n');
+}
+
+/**
+ * Build the JSON-serialized data block + readable aspect list for the prompt.
+ * The JSON carries both charts' placements; the formatted aspect list is the
+ * curated topAspects surfaced separately so the model can anchor each section
+ * to specific interactions without parsing them out of the JSON blob.
  */
 function buildSynastryData(
   chartA: NatalChart,
   chartB: NatalChart,
   nameA: string,
   nameB: string,
-): string {
+): { synastryData: string; topAspects: string } {
   const rawAspects = calculateSynastry(chartA.planets, chartB.planets);
   const scored     = selectTopAspects(rawAspects);
+  const aspects    = summarizeAspects(scored, nameA, nameB);
 
-  return JSON.stringify({
+  const synastryData = JSON.stringify({
     [nameA]: summarizeChart(chartA),
     [nameB]: summarizeChart(chartB),
-    topAspects: summarizeAspects(scored, nameA, nameB),
+    topAspects: aspects,
   });
+
+  return { synastryData, topAspects: formatTopAspects(aspects) };
 }
 
 function parseResult(data: Record<string, any>): SynastryReadingResult | null {
@@ -68,7 +88,23 @@ function parseResult(data: Record<string, any>): SynastryReadingResult | null {
       typeof parsed?.conflictStyle === 'string' &&
       typeof parsed?.longevity === 'string'
     ) {
-      return parsed as SynastryReadingResult;
+      const aspectDescriptions =
+        parsed.aspectDescriptions &&
+        typeof parsed.aspectDescriptions === 'object' &&
+        !Array.isArray(parsed.aspectDescriptions)
+          ? Object.fromEntries(
+              Object.entries(parsed.aspectDescriptions).filter(
+                ([, v]) => typeof v === 'string',
+              ),
+            ) as Record<string, string>
+          : undefined;
+
+      return {
+        loveLanguage: parsed.loveLanguage,
+        conflictStyle: parsed.conflictStyle,
+        longevity: parsed.longevity,
+        ...(aspectDescriptions ? { aspectDescriptions } : {}),
+      };
     }
     return null;
   } catch {
@@ -111,13 +147,13 @@ export async function requestSynastryReading(
   nameA: string,
   nameB: string,
 ): Promise<void> {
-  const synastryData = buildSynastryData(chartA, chartB, nameA, nameB);
-  const prompt       = buildSynastryPrompt(nameA, nameB, synastryData);
-  const requestedAt  = serverTimestamp();
+  const { synastryData, topAspects } = buildSynastryData(chartA, chartB, nameA, nameB);
+  const prompt      = buildSynastryPrompt(nameA, nameB, synastryData, topAspects);
+  const requestedAt = serverTimestamp();
 
   await setDoc(
     doc(db, 'users', uid, 'connections', connectionId, 'synastryReading', READING_DOC),
-    { prompt, synastryData, nameA, nameB, requestedAt },
+    { prompt, synastryData, topAspects, nameA, nameB, requestedAt },
     { merge: true },
   );
 }

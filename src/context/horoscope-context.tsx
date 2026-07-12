@@ -13,6 +13,12 @@ import { doc, getDoc } from 'firebase/firestore';
 
 import { db } from '@/firebaseConfig';
 import { calculateTransits, type MoonData, type TransitData } from '@/src/services/astroEngine';
+import { recordError } from '@/src/services/crashlytics.service';
+
+const reportError = (label: string) => (e: unknown) => {
+  console.error(label, e);
+  recordError(e, label);
+};
 import {
   fetchHoroscope,
   getTodayDateId,
@@ -225,7 +231,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     setLoading(false);
 
     // Pre-generate tomorrow's horoscope so it's ready when the day rolls over.
-    if (chart) rolloverHoroscope(uid, chart, pronouns).catch(console.error);
+    if (chart) rolloverHoroscope(uid, chart, pronouns).catch(reportError('horoscope_rollover'));
 
     const { result, pending } = horoscopeRes;
 
@@ -264,9 +270,22 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
             // (subscribeBreakdown was skipped in load() because chart was null
             // at fetch time — Android timing: calculateNatalChart finishes after
             // load()'s Promise.all already completed with chart=null.)
+            // Re-fetch breakdown state here — sign-up's fire-and-forget chain
+            // may have already written the doc between load()'s Promise.all and
+            // this callback, making the captured breakdownFetch stale. Using the
+            // stale snapshot would cause a second requestBreakdown call → two
+            // Extension runs → two "chart ready" notifications.
             if (!unsubBreakdownRef.current) {
-              subscribeBreakdown(uid, newChart, signal, breakdownFetch, pronouns);
+              fetchBreakdown(uid).then(freshBreakdownFetch => {
+                if (!signal.cancelled) {
+                  subscribeBreakdown(uid, newChart, signal, freshBreakdownFetch, pronouns);
+                }
+              }).catch(console.error);
             }
+            // Generate yesterday + tomorrow now that the chart exists.
+            // Without this, new users only ever get today's horoscope until
+            // the next day's rollover.
+            requestSurroundingHoroscopes(uid, dateId, newChart, pronouns).catch(console.error);
           }
         }).catch(console.error);
       });
@@ -337,7 +356,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     }
 
     const signal = { cancelled: false };
-    load(authUser.uid, signal).catch(console.error);
+    load(authUser.uid, signal).catch(reportError('horoscope_load'));
 
     return () => {
       signal.cancelled = true;
@@ -385,12 +404,24 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
 
   const refresh = async () => {
     if (!authUser) return;
+
+    // Cancel all live listeners before re-fetching so stale callbacks don't
+    // overwrite the incoming fresh data.
     unsubHoroscopeRef.current?.(); unsubHoroscopeRef.current = null;
     unsubBreakdownRef.current?.(); unsubBreakdownRef.current = null;
     unsubTransitRef.current?.();   unsubTransitRef.current = null;
+
+    // Clear data and reset all generating flags to a known clean state.
+    // Without this, a previous `breakdownGenerating = true` from an earlier
+    // load could persist if the new load short-circuits (e.g. result already
+    // in cache), leaving the UI stuck on a spinner indefinitely.
     setHoroscope(null);
+    setHoroscopeGenerating(false);
     setBreakdown(null);
+    setBreakdownGenerating(false);
     setTransitReading(null);
+    setTransitReadingGenerating(false);
+
     const signal = { cancelled: false };
     await load(authUser.uid, signal);
   };

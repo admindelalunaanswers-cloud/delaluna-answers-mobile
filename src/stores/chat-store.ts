@@ -4,6 +4,7 @@
 
 let pendingMessage: string | null = null;
 let _fromNotification = false;
+let pendingConnection: { id: string; name: string } | null = null;
 
 export const ChatStore = {
   setInitialMessage: (msg: string) => { pendingMessage = msg; },
@@ -17,5 +18,11 @@ export const ChatStore = {
     const v = _fromNotification;
     _fromNotification = false;
     return v;
+  },
+  setPendingConnection: (conn: { id: string; name: string }) => { pendingConnection = conn; },
+  popPendingConnection: (): { id: string; name: string } | null => {
+    const c = pendingConnection;
+    pendingConnection = null;
+    return c;
   },
 };

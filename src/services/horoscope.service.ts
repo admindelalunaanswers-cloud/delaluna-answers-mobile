@@ -5,6 +5,7 @@ import type { HoroscopeResult } from '@/src/types/horoscope.types';
 import type { NatalChartDetailsDoc } from '@/src/types/user.type';
 import { calculateTransits } from '@/src/services/astroEngine';
 import { getTarotCardDraw } from '@/src/services/tarot-card.service';
+import { measure } from '@/src/services/performance.service';
 import { HOROSCOPE_PROMPT_TEMPLATE } from '@/src/prompts/horoscope-prompt';
 
 const RETROGRADE_PLANETS = new Set([
@@ -107,10 +108,11 @@ function parseResult(data: Record<string, any>): HoroscopeResult | null {
   const raw = data?.response ?? data?.result ?? data?.output;
   if (!raw) return null;
   try {
-    const cleaned = typeof raw === 'string'
-      ? raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
-      : null;
-    return cleaned !== null ? JSON.parse(cleaned) : (raw as HoroscopeResult);
+    if (typeof raw !== 'string') return raw as HoroscopeResult;
+    const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+    // Hermes is stricter than V8 — trailing commas before } or ] are invalid.
+    const sanitized = stripped.replace(/,(\s*[}\]])/g, '$1');
+    return JSON.parse(sanitized);
   } catch {
     return null;
   }
@@ -154,7 +156,7 @@ async function writeHoroscopeDoc(
 ): Promise<void> {
   const date = formatDateLabel(dateId);
   const todaysMoonStr = formatMoonSummary(moon);
-  const retrogradeStr = retrogrades.length > 0 ? retrogrades.join(', ') : 'none';
+  const retrogradeStr = retrogrades.length > 0 ? retrogrades.join(', ') : 'No planets in retrograde';
 
   const prompt = renderPrompt({
     tarotKeywords,
@@ -165,7 +167,15 @@ async function writeHoroscopeDoc(
     pronouns,
   });
 
-  await setDoc(doc(db, 'users', uid, 'horoscope', dateId), {
+  const docRef = doc(db, 'users', uid, 'horoscope', dateId);
+
+  // Delete before writing so the Extension's onDocumentCreated trigger always
+  // fires. Overwriting an existing document only triggers onDocumentWritten;
+  // if the Extension uses onCreate, the re-request would be silently ignored.
+  // deleteDoc on a non-existent document is a safe no-op.
+  await deleteDoc(docRef);
+
+  await setDoc(docRef, {
     prompt,
     tarotKeywords,
     natalChart,
@@ -276,56 +286,58 @@ export async function rolloverHoroscope(
   chart: NatalChartDetailsDoc,
   pronouns = 'they/them',
 ): Promise<void> {
-  const dateId     = getTodayDateId();
-  const twoDaysAgo = offsetDateId(dateId, -2);
-  const tomorrowId = offsetDateId(dateId, +1);
-  const natalChart = buildNatalChartSummary(chart);
+  return measure('horoscope_rollover', async () => {
+    const dateId     = getTodayDateId();
+    const twoDaysAgo = offsetDateId(dateId, -2);
+    const tomorrowId = offsetDateId(dateId, +1);
+    const natalChart = buildNatalChartSummary(chart);
 
-  // Remove the oldest doc — failure is harmless
-  deleteDoc(doc(db, 'users', uid, 'horoscope', twoDaysAgo)).catch(() => {});
+    // Remove the oldest doc — failure is harmless
+    deleteDoc(doc(db, 'users', uid, 'horoscope', twoDaysAgo)).catch(() => {});
 
-  // Check today and tomorrow in parallel
-  const [todaySnap, tomorrowSnap] = await Promise.all([
-    getDoc(doc(db, 'users', uid, 'horoscope', dateId)),
-    getDoc(doc(db, 'users', uid, 'horoscope', tomorrowId)),
-  ]);
+    // Check today and tomorrow in parallel
+    const [todaySnap, tomorrowSnap] = await Promise.all([
+      getDoc(doc(db, 'users', uid, 'horoscope', dateId)),
+      getDoc(doc(db, 'users', uid, 'horoscope', tomorrowId)),
+    ]);
 
-  const todayMissing    = !todaySnap.exists();
-  const tomorrowMissing = !tomorrowSnap.exists();
+    const todayMissing    = !todaySnap.exists();
+    const tomorrowMissing = !tomorrowSnap.exists();
 
-  if (!todayMissing && !tomorrowMissing) return;
+    if (!todayMissing && !tomorrowMissing) return;
 
-  // Tarot draw is seeded by date — same cards every call for the same day
-  const tarotDraw = await getTarotCardDraw(uid, 3).catch(() => null);
+    // Tarot draw is seeded by date — same cards every call for the same day
+    const tarotDraw = await getTarotCardDraw(uid, 3).catch(() => null);
 
-  // Generate today if missing — awaited so the user sees it immediately
-  if (todayMissing) {
-    try {
-      const t = await calculateTransits(new Date());
-      const retrogrades = t.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name);
-      await writeHoroscopeDoc(
-        uid, dateId, natalChart,
-        t.moon, retrogrades,
-        tarotDraw?.today.keywordString ?? '',
-        pronouns,
-      );
-    } catch (e) {
-      console.error('rolloverHoroscope: failed to generate today', e);
+    // Generate today if missing — awaited so the user sees it immediately
+    if (todayMissing) {
+      try {
+        const t = await calculateTransits(new Date());
+        const retrogrades = t.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name);
+        await writeHoroscopeDoc(
+          uid, dateId, natalChart,
+          t.moon, retrogrades,
+          tarotDraw?.today.keywordString ?? '',
+          pronouns,
+        );
+      } catch (e) {
+        console.error('rolloverHoroscope: failed to generate today', e);
+      }
     }
-  }
 
-  // Generate tomorrow if missing — fire and forget
-  if (tomorrowMissing) {
-    calculateTransits(dateIdToDate(tomorrowId))
-      .then(t => writeHoroscopeDoc(
-        uid, tomorrowId, natalChart,
-        t.moon,
-        t.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name),
-        tarotDraw?.tomorrow.keywordString ?? '',
-        pronouns,
-      ))
-      .catch(console.error);
-  }
+    // Generate tomorrow if missing — fire and forget
+    if (tomorrowMissing) {
+      calculateTransits(dateIdToDate(tomorrowId))
+        .then(t => writeHoroscopeDoc(
+          uid, tomorrowId, natalChart,
+          t.moon,
+          t.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name),
+          tarotDraw?.tomorrow.keywordString ?? '',
+          pronouns,
+        ))
+        .catch(console.error);
+    }
+  });
 }
 
 /**

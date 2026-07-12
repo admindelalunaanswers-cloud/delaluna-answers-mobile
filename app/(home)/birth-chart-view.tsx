@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import type { ScrollView as ScrollViewType } from 'react-native';
 
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,8 +14,11 @@ import NatalWheelTab from '@/src/components/natalChart/natal-chart-wheel.tab';
 import NatalTable from '@/src/components/natalChart/natal-chart-table.tab';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
+import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
 import PremiumUnlock from '@/src/components/shared/premium-unlock.component';
+import SkeletonLines from '@/src/components/shared/skeleton-lines';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
+import { renderRichText } from '@/src/utils/rich-text';
 import type { NatalChart } from '@/src/services/astroEngine';
 import type { NatalChartBreakdownResult } from '@/src/types/natal-chart-breakdown.types';
 
@@ -39,8 +43,30 @@ export default function BirthChartScreen() {
   const [chartTab, setChartTab]         = useState<ChartTab>('Natal Wheel');
   const [breakdownTab, setBreakdownTab] = useState<BreakdownTab>('Insights');
 
-  const { isPro } = useRevenueCat();
-  const isPremium = isPro;
+  // Scroll-position persistence: one ref for the ScrollView, one map for saved offsets
+  const scrollRef      = useRef<ScrollViewType>(null);
+  const scrollOffsets  = useRef<Partial<Record<BreakdownTab, number>>>({});
+
+  function switchBreakdownTab(tab: BreakdownTab) {
+    // Save current position before leaving
+    scrollOffsets.current[breakdownTab] = scrollOffsets.current[breakdownTab] ?? 0;
+    // Switch tab
+    setBreakdownTab(tab);
+    // Restore saved position for the target tab (default 0)
+    const savedY = scrollOffsets.current[tab] ?? 0;
+    // requestAnimationFrame lets the new content render before we scroll
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: savedY, animated: false });
+    });
+  }
+
+  const { isPro, loading: rcLoading } = useRevenueCat();
+  const { markReady } = useScreenPerfLog('/(home)/birth-chart-view');
+  const isPremium = rcLoading || isPro;
+
+  useEffect(() => {
+    if (!rcLoading) markReady();
+  }, [rcLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const insets       = useSafeAreaInsets();
   const headerHeight = insets.top + scale(NAV_BAR_HEIGHT);
@@ -67,7 +93,7 @@ export default function BirthChartScreen() {
       <ThemedView key={label} style={styles.insightCard}>
         <ThemedText style={styles.insightLabel}>{label}</ThemedText>
         {title ? <ThemedText style={styles.insightTitle}>{title}</ThemedText> : null}
-        <ThemedText style={styles.insightBody}>{content}</ThemedText>
+        <ThemedText style={styles.insightBody}>{renderRichText(content)}</ThemedText>
       </ThemedView>
     );
   }
@@ -117,7 +143,7 @@ export default function BirthChartScreen() {
             {h.planets.map(p => `${p.name} in ${p.sign} ${p.degree}`).join('  ·  ')}
           </ThemedText>
         )}
-        {!h.locked && <ThemedText style={styles.cardBody}>{h.interpretation}</ThemedText>}
+        {!h.locked && <ThemedText style={styles.cardBody}>{renderRichText(h.interpretation)}</ThemedText>}
       </ThemedView>
     ));
   }
@@ -132,7 +158,7 @@ export default function BirthChartScreen() {
           </ThemedText>
           <ThemedText style={styles.cardMeta}>House {p.house}</ThemedText>
         </ThemedView>
-        <ThemedText style={styles.cardBody}>{p.interpretation}</ThemedText>
+        <ThemedText style={styles.cardBody}>{renderRichText(p.interpretation)}</ThemedText>
       </ThemedView>
     ));
   }
@@ -147,14 +173,26 @@ export default function BirthChartScreen() {
           </ThemedText>
           <ThemedText style={styles.cardMeta}>orb {a.orb}</ThemedText>
         </ThemedView>
-        <ThemedText style={styles.cardBody}>{a.interpretation}</ThemedText>
+        <ThemedText style={styles.cardBody}>{renderRichText(a.interpretation)}</ThemedText>
       </ThemedView>
     ));
   }
 
   function renderBreakdownContent() {
     if (isBreakdownLoading) {
-      return <ActivityIndicator color="#BCA8F4" style={{ marginTop: verticalScale(24) }} />;
+      return (
+        <>
+          {Array.from({ length: 5 }, (_, i) => (
+            <View key={i} style={styles.card}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(8) }}>
+                <SkeletonLines lines={1} widths={[scale(120)]} lineHeight={moderateScale(12)} color="rgba(255,255,255,0.15)" />
+                <SkeletonLines lines={1} widths={[scale(48)]} lineHeight={moderateScale(10)} color="rgba(255,255,255,0.09)" />
+              </View>
+              <SkeletonLines lines={3} widths={['100%', '88%', '66%']} lineHeight={moderateScale(11)} spacing={verticalScale(6)} color="rgba(255,255,255,0.1)" />
+            </View>
+          ))}
+        </>
+      );
     }
     if (!activeBreakdown) {
       return <ThemedText style={styles.errorText}>Breakdown not ready yet.</ThemedText>;
@@ -236,7 +274,7 @@ export default function BirthChartScreen() {
                   <Pressable
                     key={tab}
                     style={[styles.breakdownTab, isActive && styles.breakdownTabActive]}
-                    onPress={() => setBreakdownTab(tab)}
+                    onPress={() => switchBreakdownTab(tab)}
                   >
                     <ThemedView style={styles.breakdownTabInner}>
                       <ThemedText style={[styles.breakdownTabText, isActive && styles.breakdownTabTextActive]}>
@@ -253,12 +291,17 @@ export default function BirthChartScreen() {
           </ThemedView>
 
           <ScrollView
+            ref={scrollRef}
             style={styles.breakdownScroll}
             contentContainerStyle={[
               styles.breakdownContent,
               { paddingBottom: insets.bottom + verticalScale(16) },
             ]}
             showsVerticalScrollIndicator={false}
+            onScroll={e => {
+              scrollOffsets.current[breakdownTab] = e.nativeEvent.contentOffset.y;
+            }}
+            scrollEventThrottle={16}
           >
             {renderBreakdownContent()}
           </ScrollView>

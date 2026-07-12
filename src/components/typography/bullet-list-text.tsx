@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
+import { renderRichText } from "@/src/utils/rich-text";
 
 interface BulletListProps {
   items: string[];
@@ -12,7 +13,7 @@ export function BulletList({ items, bullet = "•" }: BulletListProps) {
     <View style={styles.list}>
       {items.map((item, index) => (
         <View key={index} style={styles.row}>
-          <Text style={styles.text}>{item}</Text>
+          <Text style={styles.text}>{renderRichText(item)}</Text>
         </View>
       ))}
     </View>

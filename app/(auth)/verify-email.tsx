@@ -1,6 +1,5 @@
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   ImageBackground,
   KeyboardAvoidingView,
   Platform,
@@ -23,6 +22,8 @@ import { ThemedView } from '@/src/components/themed-view';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { ThemeContext } from '@/src/context/theme-context';
 import { useUser } from '@/src/context/user-context';
+import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
+import { Events } from '@/src/services/analytics.service';
 import { signOut } from '@/src/services/user.service';
 import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
 import LoadingScreen from '../(util)/loading-screen';
@@ -45,29 +46,37 @@ export default function VerifyEmail() {
   const [verified, setVerified] = useState(false);
   const [codeSent, setCodeSent] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
+
 
   // Don't gate on transitReadingGenerating — transit reading populates the
   // transits screen separately and can lag well behind today's horoscope.
   const horoscopeReady =
     !!horoscope || (!dataLoading && !horoscopeGenerating);
 
+  const { markReady } = useScreenPerfLog('/(auth)/verify-email');
+
   const inputRefs = useRef<(TextInput | null)[]>([]);
+
+  // Mark screen ready on mount — OTP form renders immediately
+  useEffect(() => {
+    markReady();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-send code on mount
   useEffect(() => {
     handleSendCode();
   }, []);
 
-  // Cooldown countdown
+  // Cooldown countdown — setTimeout so each tick schedules exactly one next tick
   useEffect(() => {
     if (resendCooldown <= 0) return;
-    const t = setInterval(() => setResendCooldown(c => Math.max(0, c - 1)), 1000);
-    return () => clearInterval(t);
+    const t = setTimeout(() => setResendCooldown(c => Math.max(0, c - 1)), 1000);
+    return () => clearTimeout(t);
   }, [resendCooldown]);
 
   const handleSendCode = async () => {
-    console.log("Auth: ", auth.currentUser);
     if (sending || resendCooldown > 0) return;
     if (!auth.currentUser) {
       setSendError('Not signed in. Please sign up or log in first.');
@@ -76,9 +85,7 @@ export default function VerifyEmail() {
     setSending(true);
     setSendError(null);
     try {
-      console.log("Auth: ", auth);
       await auth.currentUser.getIdToken(true); // ensure a fresh token is attached
-      console.log("Auth.currentUser: ", auth.currentUser);
 
       await sendVerificationCode({});
       setCodeSent(true);
@@ -93,11 +100,29 @@ export default function VerifyEmail() {
 
   const handleSignOut = async () => {
     try { await signOut(); } catch { /* ignore */ }
-    router.replace('/(startup)/welcome');
+    router.replace('/(auth)/login');
   };
 
   const handleDigitChange = (text: string, index: number) => {
-    const char = text.replace(/\D/g, '').slice(-1);
+    if (verifyError) setVerifyError(null);
+    // Strip anything that isn't a letter or digit, uppercase, take the last
+    // character. Lets users paste the whole code (handled below via length>1).
+    const cleaned = text.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+
+    // Paste of full code: distribute across boxes starting at this index.
+    if (cleaned.length > 1) {
+      const next = [...digits];
+      for (let i = 0; i < CODE_LENGTH - index && i < cleaned.length; i++) {
+        next[index + i] = cleaned[i];
+      }
+      setDigits(next);
+      const lastFilled = Math.min(index + cleaned.length, CODE_LENGTH) - 1;
+      inputRefs.current[Math.min(lastFilled + 1, CODE_LENGTH - 1)]?.focus();
+      if (next.every(d => d !== '')) handleVerify(next.join(''));
+      return;
+    }
+
+    const char = cleaned.slice(-1);
     const next = [...digits];
     next[index] = char;
     setDigits(next);
@@ -105,7 +130,6 @@ export default function VerifyEmail() {
     if (char && index < CODE_LENGTH - 1) {
       inputRefs.current[index + 1]?.focus();
     }
-    // Auto-verify when all digits filled
     if (char && next.every(d => d !== '')) {
       handleVerify(next.join(''));
     }
@@ -123,16 +147,18 @@ export default function VerifyEmail() {
     const enteredCode = code ?? digits.join('');
 
     if (!enteredCode || enteredCode.length !== CODE_LENGTH) {
-      Alert.alert('Invalid code', 'Please enter the full 6-digit code.');
+      setVerifyError('Please enter all 6 characters of the code.');
       return;
     }
 
+    setVerifyError(null);
     setVerifying(true);
     try {
       await verifyCodeFn({ code: enteredCode });
+      Events.emailVerified();
     } catch (e: any) {
       const msg = e?.message ?? 'Something went wrong.';
-      Alert.alert('Verification failed', msg);
+      setVerifyError(msg);
       setDigits(Array(CODE_LENGTH).fill(''));
       inputRefs.current[0]?.focus();
       setVerifying(false);
@@ -174,15 +200,14 @@ export default function VerifyEmail() {
   }
 
   const email = authUser?.email ?? '';
-  const maskedEmail = email.replace(/(.{2}).+(@.+)/, '$1…$2');
 
   return (
     <>
-      <StatusBar style="light" translucent backgroundColor="transparent" />
+      <StatusBar style="light" translucent />
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior="padding"
       >
         <ImageBackground
           source={theme.backgroundImage}
@@ -212,18 +237,20 @@ export default function VerifyEmail() {
                   <ThemedView style={styles.errorBox}>
                     <ThemedText style={styles.errorText}>Could not send code</ThemedText>
                     <ThemedText style={styles.errorDetail}>{sendError}</ThemedText>
-                    <TouchableOpacity onPress={handleSendCode} style={styles.retryButton}>
-                      <ThemedText style={styles.retryText}>Try again</ThemedText>
-                    </TouchableOpacity>
                   </ThemedView>
                 ) : (
-                  <ThemedText style={styles.subtitle}>
-                    {codeSent
-                      ? `We sent a 6-digit code to ${maskedEmail}`
-                      : sending
-                      ? 'Sending code…'
-                      : 'Preparing your code…'}
-                  </ThemedText>
+                  <ThemedView style={styles.emailRow}>
+                    <ThemedText style={styles.subtitle}>
+                      {codeSent
+                        ? 'Code sent to'
+                        : sending
+                        ? 'Sending code…'
+                        : 'Preparing your code…'}
+                    </ThemedText>
+                    {codeSent && (
+                      <ThemedText style={styles.emailDisplay}>{email}</ThemedText>
+                    )}
+                  </ThemedView>
                 )}
 
                 {/* Code input boxes */}
@@ -236,7 +263,11 @@ export default function VerifyEmail() {
                       value={d}
                       onChangeText={text => handleDigitChange(text, i)}
                       onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, i)}
-                      keyboardType="number-pad"
+                      keyboardType={Platform.OS === 'ios' ? 'ascii-capable' : 'default'}
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                      autoComplete="off"
+                      spellCheck={false}
                       maxLength={6}
                       selectTextOnFocus
                       caretHidden
@@ -244,6 +275,11 @@ export default function VerifyEmail() {
                     />
                   ))}
                 </View>
+
+                {/* Inline verification error */}
+                {verifyError && (
+                  <ThemedText style={styles.verifyError}>{verifyError}</ThemedText>
+                )}
 
                 {/* Verify button */}
                 <TouchableOpacity
@@ -337,18 +373,6 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(12),
     textAlign: 'center',
   },
-  retryButton: {
-    marginTop: verticalScale(4),
-    paddingVertical: verticalScale(6),
-    paddingHorizontal: scale(20),
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: moderateScale(20),
-  },
-  retryText: {
-    color: 'white',
-    fontSize: moderateScale(13),
-    fontWeight: '600',
-  },
   title: {
     fontSize: moderateScale(26),
     fontWeight: '700',
@@ -408,5 +432,21 @@ const styles = StyleSheet.create({
   signOutText: {
     color: 'rgba(255,255,255,0.35)',
     fontSize: moderateScale(13),
+  },
+  verifyError: {
+    color: '#ff8080',
+    fontSize: moderateScale(13),
+    textAlign: 'center',
+  },
+  emailRow: {
+    alignItems: 'center',
+    gap: scale(4),
+    marginBottom: verticalScale(8),
+  },
+  emailDisplay: {
+    color: 'white',
+    fontSize: moderateScale(14),
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });

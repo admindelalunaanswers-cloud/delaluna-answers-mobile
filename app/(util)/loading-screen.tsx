@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useRef, useState } from 'react';
-import { Animated, ImageBackground, StatusBar, StyleSheet, View } from 'react-native';
+import { Animated, ImageBackground, StyleSheet, View } from 'react-native';
 import LottieView from 'lottie-react-native';
 
 import { ThemeContext } from '@/src/context/theme-context';
@@ -57,7 +57,6 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ progress, message }) => {
 
   return (
     <ImageBackground source={theme.backgroundImage} style={styles.background}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <View style={styles.centerContent}>
         <LottieView
           source={require('@/src/assets/animations/splash-loop.json')}

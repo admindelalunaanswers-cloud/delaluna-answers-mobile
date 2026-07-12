@@ -2,15 +2,17 @@
 import { verticalScale, moderateScale, scale } from '@/src/utils/responsive';
 import Markdown from 'react-native-markdown-display';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
+  Linking,
   Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
   Platform,
   ScrollView,
+  StyleSheet,
+  Text,
+  TextStyle,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 
@@ -19,6 +21,7 @@ interface PolicyModalProps {
   onClose: () => void;
   textContent?: string;
   title: string;
+  onLinkPress?: (url: string) => void;
 }
 
 
@@ -27,29 +30,44 @@ export default function PolicyModal({
   onClose,
   textContent,
   title,
+  onLinkPress,
 }: PolicyModalProps) {
-  const [content, setContent] = useState<string>('');
+  const rules = {
+    link: (node: any, children: any, _parent: any, styles: any) => (
+      <Text
+        key={node.key}
+        style={styles.link}
+        onPress={() => {
+          const url: string = node.attributes.href ?? '';
+          if (url.startsWith('#') && onLinkPress) {
+            onLinkPress(url);
+          } else {
+            Linking.openURL(url);
+          }
+        }}
+      >
+        {children}
+      </Text>
+    ),
+  };
 
   return (
     <Modal visible={visible} animationType="slide">
       <View style={styles.modalContainer}>
         <View style={styles.header}>
-  <Text style={styles.title}>{title}</Text>
-  <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-    <Text style={styles.closeText}>Close</Text>
-  </TouchableOpacity>
-</View>
-
+          <Text style={styles.title}>{title}</Text>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <Text style={styles.closeText}>Close</Text>
+          </TouchableOpacity>
+        </View>
 
         {visible && textContent && (
           <ScrollView contentContainerStyle={styles.textContainer}>
-            <Markdown style={markdownStyles}>
-  {textContent}
-</Markdown>
-
+            <Markdown style={markdownStyles} rules={rules}>
+              {textContent}
+            </Markdown>
           </ScrollView>
         )}
-
       </View>
     </Modal>
   );
@@ -81,28 +99,20 @@ const styles = StyleSheet.create({
     padding: scale(8),
   },
   closeText: {
-    color: '#0000EE', // match link color
+    color: '#0000EE',
     fontSize: moderateScale(16),
     fontWeight: '500',
   },
   textContainer: {
     padding: scale(16),
   },
-  textContent: {
-    fontSize: moderateScale(14),
-    color: '#333',
-    lineHeight: moderateScale(20),
-  },
 });
-
-import { TextStyle } from 'react-native';
 
 const markdownStyles: { [key: string]: TextStyle } = {
   body: { color: '#333', fontSize: moderateScale(15), lineHeight: moderateScale(22) },
-  heading1: { fontSize: moderateScale(22), fontWeight: 'bold', marginBottom: verticalScale(10), alignSelf: 'center', },
-  heading2: { fontSize: moderateScale(20), fontWeight: 'bold', marginTop: verticalScale(16), alignSelf: 'center',  },
-  heading3: { fontSize: moderateScale(18), fontWeight: '600', marginTop: verticalScale(12), alignSelf: 'center',  },
+  heading1: { fontSize: moderateScale(22), fontWeight: 'bold', marginBottom: verticalScale(10), alignSelf: 'center' },
+  heading2: { fontSize: moderateScale(20), fontWeight: 'bold', marginTop: verticalScale(16), alignSelf: 'center' },
+  heading3: { fontSize: moderateScale(18), fontWeight: '600', marginTop: verticalScale(12), alignSelf: 'center' },
   strong: { fontWeight: 'bold' },
   link: { color: '#1C2541', textDecorationLine: 'underline' },
 };
-
