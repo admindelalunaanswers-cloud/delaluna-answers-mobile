@@ -1,8 +1,10 @@
 // src/components/home/moon-image-view.tsx
 
-import { getMoonPhaseImage } from "@/src/constants/moonPhaseImages";
 import React from "react";
-import { StyleSheet, View, Image } from "react-native";
+import { Image, StyleSheet, View } from "react-native";
+
+import { getMoonPhaseImage } from "@/src/constants/moonPhaseImages";
+import { scale } from "@/src/utils/responsive";
 
 
 interface MoonPhaseProps {
@@ -12,13 +14,12 @@ interface MoonPhaseProps {
 
 export default function MoonPhaseImageFrame({
   phaseName,
-  illumination,
 }: MoonPhaseProps) {
-  const source = getMoonPhaseImage(phaseName, illumination);
+  const moonSource = getMoonPhaseImage(phaseName);
 
   return (
     <View style={styles.frame}>
-      <Image style={styles.image} source={source} />
+      <Image source={moonSource} style={{ width: scale(90), height: scale(90) }} />
     </View>
   );
 }
@@ -28,14 +29,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    gap: 12,
+    gap: scale(12),
     width: "100%",
-  },
-  image: {
-    width: 90,
-    height: 90,
-    resizeMode: "contain",
-    justifyContent: "center",
-    alignItems: "center",
   },
 });

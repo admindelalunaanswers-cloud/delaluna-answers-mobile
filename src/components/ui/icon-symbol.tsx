@@ -12,6 +12,7 @@ const ICON_MAPPING = {
   'globe': 'globe-outline',
   'bubble.left': 'chatbubble-outline',
   'binoculars': 'binoculars-outline',
+  'shield': 'shield-outline',
 } satisfies Record<string, ComponentProps<typeof Ionicons>['name']>;
 
 export type IconSymbolName = keyof typeof ICON_MAPPING;

@@ -1,694 +1,379 @@
-/**
- * InputScreen.tsx
- * Birth data entry. Two columns for lat/lon. Timezone picker.
- * Transit date picker. Dark cosmic aesthetic.
- */
+import React, { useEffect, useRef, useState } from 'react';
 
-import { C, R, S } from '@/src/constants/theme';
-import { BirthData, calculateNatalChart, calculateTransits } from '@/src/services/astroEngine';
-import { TestingStore } from '@/src/stores/testing-store';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+
 import { router } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  ImageBackground,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+import { doc, getFirestore, updateDoc } from 'firebase/firestore';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-type NominatimResult = {
-  place_id: number;
-  display_name: string;
-  lat: string;
-  lon: string;
-  type: string;
-  address: {
-    city?: string; town?: string; village?: string; municipality?: string;
-    state?: string; country?: string;
-  };
-};
+import { getProfileImageSource } from '@/app/(settings)/select-avatar';
+import DateSwitcher from '@/src/components/home/date-switcher.component';
+import HomeTextBox from '@/src/components/home/home-text-box.component';
+import HeaderNav from '@/src/components/shared/header-nav';
+import HomeSignsDisplay from '@/src/components/shared/signs-display.component';
+import PaygateOverlay from '@/src/components/shared/paygate-overlay.component';
+import AdBannerFull from '@/src/components/shared/ad-banner-full.component';
+import AdBannerShop from '@/src/components/shared/ad-banner-shop.component';
+import AdBanner from '@/src/components/shared/ad-banner.component';
+import SectionTitle from '@/src/components/shared/section-title.component';
+import { ThemedView } from '@/src/components/themed-view';
+import { HOME_STRINGS } from '@/src/constants/strings';
+import type { DailyCardPack } from '@/src/schemas/dailyCardPack.schema';
+import { calculateTransits } from '@/src/services/astroEngine';
+import { getTodayDateId, subscribeToHoroscope } from '@/src/services/horoscope.service';
+import { getTarotCardDraw } from '@/src/services/tarot-card.service';
+import { ChatStore } from '@/src/stores/chat-store';
+import type { HoroscopeResult } from '@/src/types/horoscope.types';
+import { useHoroscope } from '@/src/context/horoscope-context';
+import { useUser } from '@/src/context/user-context';
+import { useRevenueCat } from '@/src/context/revenuecat-context';
+import { useResponsive } from '@/src/hooks/use-responsive';
+import { verticalScale } from '@/src/utils/responsive';
+import { getContentPadding } from '@/src/utils/layout';
+import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
 
-// Keep only results that have a city/town/village name in their structured address.
-// Filters out counties, states, countries, and other non-city results regardless of Nominatim type.
-function hasCity(r: NominatimResult): boolean {
-  const a = r.address;
-  return !!(a.city ?? a.town ?? a.village ?? a.municipality);
-}
+const NAV_BAR_HEIGHT = 44;
 
-function formatPlace(r: NominatimResult): string {
-  const a = r.address;
-  const place = a.city ?? a.town ?? a.village ?? a.municipality;
-  return [place, a.state, a.country].filter(Boolean).join(', ') || r.display_name;
-}
-
-
-
-// ─── Tiny reusable bits ───────────────────────────────────────────────────────
-
-function FieldLabel({ t }: { t: string }) {
-  return <Text style={st.fieldLabel}>{t}</Text>;
-}
-
-function TextBox({
-  value, onChange, placeholder, numeric,
-}: {
-  value: string;
-  onChange: (s: string) => void;
-  placeholder: string;
-  numeric?: boolean;
-}) {
-  return (
-    <TextInput
-      style={st.textBox}
-      value={value}
-      onChangeText={onChange}
-      placeholder={placeholder}
-      placeholderTextColor={C.dimText}
-      keyboardType={numeric ? 'numbers-and-punctuation' : 'default'}
-      selectionColor={C.gold}
-      autoCorrect={false}
-    />
-  );
-}
-
-function Card({ children }: { children: React.ReactNode }) {
-  return <View style={st.card}>{children}</View>;
-}
-
-// ─── Timezone auto-detect helpers ─────────────────────────────────────────────
-
-/**
- * Given an IANA timezone name and a Date, return the UTC offset in hours
- * (e.g. -5 for CDT, +5.5 for IST) at that exact moment — DST included.
- * Rounds to nearest 15 min to cover offsets like Nepal +5:45, Chatham +12:45.
- */
-function getUtcOffsetHours(ianaTimezone: string, date: Date): number {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: ianaTimezone,
-    year: 'numeric', month: 'numeric', day: 'numeric',
-    hour: 'numeric', minute: 'numeric',
-    hour12: false,
-  }).formatToParts(date);
-  const get = (type: string) => {
-    const p = parts.find(x => x.type === type);
-    return p ? parseInt(p.value) : 0;
-  };
-  let h = get('hour');
-  if (h === 24) h = 0;  // midnight edge-case
-  const localMs = Date.UTC(get('year'), get('month') - 1, get('day'), h, get('minute'));
-  return Math.round((localMs - date.getTime()) / 900000) * 0.25;
-}
+export default function HomeScreen() {
+  const { authUser, userDoc } = useUser();
+  const {
+    chartDetails,
+    horoscope,
+    transitMoon,
+    breakdown,
+  } = useHoroscope();
+  const { isPro, loading: rcLoading } = useRevenueCat();
+  const { markReady } = useScreenPerfLog('/(main)/index');
+  const hasPremiumAccess = rcLoading || isPro;
 
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+  const todayDateId = getTodayDateId();
+  const [selectedDate, setSelectedDate] = useState(todayDateId);
+  const [cardDraw, setCardDraw] = useState<Record<string, DailyCardPack>>({});
+  const [horoscopeByDate, setHoroscopeByDate] = useState<Record<string, HoroscopeResult>>({});
+  const [moonByDate, setMoonByDate] = useState<Record<string, { phaseName: string; illumination: number; moonSign: string }>>({});
 
-export default function InputScreen() {
-  // Form state
-  const [name,        setName]        = useState('');
-  const [birthDate,   setBirthDate]   = useState(new Date(1990, 0, 15, 12, 0));
-  const [lat,         setLat]         = useState('');
-  const [lon,         setLon]         = useState('');
-  const [city,        setCity]        = useState('');
-  const [tzValue,     setTzValue]     = useState(0);        // UTC offset in hours
-  const [tzDisplay,   setTzDisplay]   = useState('');       // e.g. "America/Chicago  ·  UTC−5"
-  const [transitDate,   setTransitDate]   = useState(new Date());
-  const [transitPicked, setTransitPicked] = useState(false);  // true once user explicitly picks a date
-
-  // Picker visibility
-  const [showBirthDate, setShowBirthDate] = useState(false);
-  const [showBirthTime, setShowBirthTime] = useState(false);
-  const [showTransit,   setShowTransit]   = useState(false);
-
-  const [loading,           setLoading]           = useState(false);
-  const [synastryLoading,   setSynastryLoading]   = useState(false);
-  const [locationResults,   setLocationResults]   = useState<NominatimResult[]>([]);
-  const [locationSearching, setLocationSearching] = useState(false);
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-
-  // ── Date picker handlers ──────────────────────────────────────────────────
-
-  const onPickBirthDate = (_: DateTimePickerEvent, d?: Date) => {
-    setShowBirthDate(false);
-    if (!d) return;
-    setBirthDate(prev => {
-      const next = new Date(d);
-      next.setHours(prev.getHours(), prev.getMinutes());
-      return next;
-    });
-  };
-
-  const onPickBirthTime = (_: DateTimePickerEvent, d?: Date) => {
-    setShowBirthTime(false);
-    if (!d) return;
-    setBirthDate(prev => {
-      const next = new Date(prev);
-      next.setHours(d.getHours(), d.getMinutes());
-      return next;
-    });
-  };
-
-  const onPickTransit = (_: DateTimePickerEvent, d?: Date) => {
-    setShowTransit(false);
-    if (d) { setTransitDate(d); setTransitPicked(true); }
-  };
-
-  // ── Calculate ─────────────────────────────────────────────────────────────
-
-  const handleCalculate = useCallback(async () => {
-    if (!name.trim()) {
-      Alert.alert('Name required', 'Enter a name for this chart.');
-      return;
-    }
-    const latNum = parseFloat(lat.replace(',', '.'));
-    const lonNum = parseFloat(lon.replace(',', '.'));
-    if (isNaN(latNum) || isNaN(lonNum)) {
-      Alert.alert('Location required', 'Search and select a birth location above.');
-      return;
-    }
-    if (latNum < -90 || latNum > 90 || lonNum < -180 || lonNum > 180) {
-      Alert.alert('Invalid coords', 'Lat: −90 to 90  •  Lon: −180 to 180');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const bd: BirthData = {
-        year:     birthDate.getFullYear(),
-        month:    birthDate.getMonth() + 1,
-        day:      birthDate.getDate(),
-        hour:     birthDate.getHours(),
-        minute:   birthDate.getMinutes(),
-        lat:      latNum,
-        lon:      lonNum,
-        timezone: tzValue,
-      };
-
-      // Use current time unless user explicitly picked a date
-      const effectiveTransitDate = transitPicked ? transitDate : new Date();
-
-      const [natalChart, transits] = await Promise.all([
-        calculateNatalChart(bd),
-        calculateTransits(effectiveTransitDate, latNum, lonNum),
-      ]);
-
-      const { date: transitDateObj, ...transitsData } = transits;
-      TestingStore.setResults({ natalChart, transits: transitsData, transitDate: transitDateObj.toISOString(), name: name.trim(), birthData: bd });
-      router.push('/(testing)/ResultsScreen');
-    } catch (e: any) {
-      Alert.alert('Calculation Error', e?.message ?? 'Unknown error. Check inputs and try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, [name, birthDate, lat, lon, tzValue, transitDate, transitPicked]);
-
-  // ── Go straight to synastry (Person A) ───────────────────────────────────
-
-  const handleSynastry = useCallback(async () => {
-    if (!name.trim()) { Alert.alert('Name required', 'Enter a name for this chart.'); return; }
-    const latNum = parseFloat(lat.replace(',', '.'));
-    const lonNum = parseFloat(lon.replace(',', '.'));
-    if (isNaN(latNum) || isNaN(lonNum)) { Alert.alert('Location required', 'Search and select a birth location above.'); return; }
-
-    setSynastryLoading(true);
-    try {
-      const bd: BirthData = {
-        year: birthDate.getFullYear(), month: birthDate.getMonth() + 1,
-        day: birthDate.getDate(), hour: birthDate.getHours(),
-        minute: birthDate.getMinutes(), lat: latNum, lon: lonNum, timezone: tzValue,
-      };
-      const natalChart = await calculateNatalChart(bd);
-      TestingStore.setSynastry({ chartA: natalChart, nameA: name.trim() });
-      router.push('/connection/SynastryScreen');
-    } catch (e: any) {
-      Alert.alert('Calculation Error', e?.message ?? 'Unknown error.');
-    } finally {
-      setSynastryLoading(false);
-    }
-  }, [name, birthDate, lat, lon, tzValue]);
-
-  // ── Location search ───────────────────────────────────────────────────────
-
-  const searchLocation = useCallback(async (query: string) => {
-    setLocationSearching(true);
-    try {
-      const resp = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=10&addressdetails=1`,
-        { headers: { 'Accept-Language': 'en', 'User-Agent': 'AstroNatal/1.0' } }
-      );
-      if (!resp.ok) throw new Error();
-      const all = await resp.json() as NominatimResult[];
-      const seen = new Set<string>();
-      setLocationResults(
-        all.filter(r => {
-          if (!hasCity(r)) return false;
-          const label = formatPlace(r);
-          if (seen.has(label)) return false;
-          seen.add(label);
-          return true;
-        })
-      );
-    } catch {
-      setLocationResults([]);
-    } finally {
-      setLocationSearching(false);
-    }
-  }, []);
-
-  const onCityChange = useCallback((text: string) => {
-    setCity(text);
-    setLat('');
-    setLon('');
-    setTzValue(0);
-    setTzDisplay('');
-    setLocationResults([]);
-    if (searchTimer.current) clearTimeout(searchTimer.current);
-    if (text.trim().length >= 2) {
-      searchTimer.current = setTimeout(() => searchLocation(text), 600);
-    }
-  }, [searchLocation]);
-
-  // ── Timezone detection ────────────────────────────────────────────────────
-  // Called automatically when a location is selected.
-
-  const detectTimezone = useCallback(async (latNum: number, lonNum: number): Promise<void> => {
-    try {
-      // Open-Meteo returns the IANA timezone name for any coordinate.
-      // Free, no API key, extremely reliable. The `timezone` field at root
-      // level is always present when timezone=auto is passed.
-      const resp = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${latNum}&longitude=${lonNum}&timezone=auto&current=temperature_2m`
-      );
-      if (!resp.ok) return;
-      const data = await resp.json() as { timezone?: string; utc_offset_seconds?: number };
-      const tzName = data.timezone;
-      if (!tzName) return;
-
-      // Use noon UTC on the birth date so historical DST rules apply correctly.
-      const refDate = new Date(Date.UTC(
-        birthDate.getFullYear(),
-        birthDate.getMonth(),
-        birthDate.getDate(),
-        12, 0, 0
-      ));
-
-      let offset: number;
-      try {
-        offset = getUtcOffsetHours(tzName, refDate);
-      } catch {
-        // Intl fallback: use Open-Meteo's current UTC offset (may be off by
-        // 1 hr at DST transitions vs. the historical birth-date offset).
-        offset = Math.round(((data.utc_offset_seconds ?? 0) / 3600) * 4) / 4;
-      }
-
-      setTzValue(offset);
-      const sign = offset >= 0 ? '+' : '−';
-      const absH = Math.floor(Math.abs(offset));
-      const absM = Math.round((Math.abs(offset) % 1) * 60);
-      const offsetStr = absM ? `UTC${sign}${absH}:${String(absM).padStart(2, '0')}` : `UTC${sign}${absH}`;
-      setTzDisplay(`${tzName}  ·  ${offsetStr}`);
-    } catch {
-      // silent fail — tzValue stays at 0 (UTC)
-    }
-  }, [birthDate]);
-
-  const selectLocation = useCallback((r: NominatimResult) => {
-    setCity(formatPlace(r));
-    setLat(r.lat);
-    setLon(r.lon);
-    setLocationResults([]);
-  }, []);
-
-  // Re-detect timezone whenever birth date or coordinates change.
-  // This ensures DST is correct regardless of which the user sets first.
   useEffect(() => {
-    if (!lat || !lon) return;
-    const latNum = parseFloat(lat);
-    const lonNum = parseFloat(lon);
-    if (isNaN(latNum) || isNaN(lonNum)) return;
-    detectTimezone(latNum, lonNum);
-  }, [birthDate, lat, lon, detectTimezone]);
+    if (!authUser) return;
 
-  // ── Format helpers ─────────────────────────────────────────────────────────
+    getTarotCardDraw(authUser.uid, 3)
+      .then(draw => {
+        const packs = draw as unknown as { yesterday: DailyCardPack; today: DailyCardPack; tomorrow: DailyCardPack };
+        setCardDraw({
+          [packs.yesterday.date]: packs.yesterday,
+          [packs.today.date]:     packs.today,
+          [packs.tomorrow.date]:  packs.tomorrow,
+        });
+      })
+      .catch(console.error);
 
-  const fDate = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-  const fTime = (d: Date) => d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    const offset = (days: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() + days);
+      return {
+        dateId: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+        date: d,
+      };
+    };
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+    const { dateId: yesterdayId, date: yesterdayDate } = offset(-1);
+    const { dateId: tomorrowId,  date: tomorrowDate  } = offset(+1);
+
+    Promise.all([
+      calculateTransits(yesterdayDate, 0, 0),
+      calculateTransits(tomorrowDate,  0, 0),
+    ]).then(([yestTransits, tmrwTransits]) => {
+      setMoonByDate(prev => ({
+        ...prev,
+        [yesterdayId]: { phaseName: yestTransits.moon.phase, illumination: yestTransits.moon.illumination, moonSign: yestTransits.moon.sign },
+        [tomorrowId]:  { phaseName: tmrwTransits.moon.phase, illumination: tmrwTransits.moon.illumination, moonSign: tmrwTransits.moon.sign },
+      }));
+    }).catch(console.error);
+
+    // Subscribe to yesterday/tomorrow horoscope docs so they populate when the
+    // extension finishes generating them — can lag 10-30s on real devices.
+    const unsubYesterday = subscribeToHoroscope(authUser.uid, yesterdayId, (result) => {
+      setHoroscopeByDate(prev => ({ ...prev, [yesterdayId]: result }));
+    });
+    const unsubTomorrow = subscribeToHoroscope(authUser.uid, tomorrowId, (result) => {
+      setHoroscopeByDate(prev => ({ ...prev, [tomorrowId]: result }));
+    });
+
+    return () => {
+      unsubYesterday();
+      unsubTomorrow();
+    };
+  }, [authUser?.uid]);
+
+  // Keep today's horoscope and moon in the by-date maps
+  useEffect(() => {
+    if (horoscope) setHoroscopeByDate(prev => ({ ...prev, [todayDateId]: horoscope }));
+  }, [horoscope]);
+
+  useEffect(() => {
+    if (transitMoon) {
+      setMoonByDate(prev => ({
+        ...prev,
+        [todayDateId]: { phaseName: transitMoon.phase, illumination: transitMoon.illumination, moonSign: transitMoon.sign },
+      }));
+    }
+  }, [transitMoon]);
+
+  // Prefetch all card front images across all days so day-switching is instant
+  useEffect(() => {
+    const allCards = Object.values(cardDraw).flatMap(pack => pack.cards ?? []);
+    const uniqueIds = Array.from(new Set(allCards.map(card => card.id)));
+    uniqueIds.forEach(id => {
+      Image.prefetch(
+        `https://firebasestorage.googleapis.com/v0/b/delaluna-answers.firebasestorage.app/o/tarot-card-front%2F${id}.png?alt=media`
+      ).catch(() => {});
+    });
+  }, [cardDraw]);
+
+  // Mark screen ready once initial data is available
+  useEffect(() => {
+    if (!rcLoading) markReady();
+  }, [rcLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const activeCards = cardDraw[selectedDate] ?? null;
+  const activeHoroscope = horoscopeByDate[selectedDate] ?? null;
+
+  const handleCardReveal = async () => {
+    if (!authUser || !activeCards) return;
+    const db = getFirestore();
+    await updateDoc(doc(db, 'users', authUser.uid, 'cards', selectedDate), { firstView: true });
+    setCardDraw(prev => ({
+      ...prev,
+      [selectedDate]: { ...prev[selectedDate], firstView: true },
+    }));
+  };
+
+  const insets = useSafeAreaInsets();
+  const { scale, width: screenWidth } = useResponsive();
+  const headerHeight = insets.top + scale(NAV_BAR_HEIGHT);
+
+  // ─── Derived values ─────────────────────────────────────────────────────────
+
+  const sunSign    = chartDetails?.planets.find(p => p.name === 'Sun')?.sign  ?? '—';
+  const moonSign   = chartDetails?.planets.find(p => p.name === 'Moon')?.sign ?? '—';
+  const risingSign = chartDetails?.ascendant.sign ?? '—';
+
+  const activeMoonData = moonByDate[selectedDate];
+  const noRetrogradesLabel = "No planets in retrograde";
+  const filteredRetrogrades = (activeHoroscope?.planetsRetrograde ?? []).filter(p => p.toLowerCase() !== 'none');
+  const retrogrades = filteredRetrogrades.length > 0 ? filteredRetrogrades : [noRetrogradesLabel];
+
+  const scrollRef = useRef<ScrollView>(null);
+  const dateSwitcherDates = Object.keys(cardDraw).sort();
+
+  const [adVariant] = useState<'upgrade-full' | 'upgrade-compact' | 'shop'>(() => {
+    const variants = ['upgrade-full', 'upgrade-compact', 'shop'] as const;
+    return variants[Math.floor(Math.random() * variants.length)];
+  });
+  const isPremium = hasPremiumAccess;
+  const isPaygated = selectedDate !== todayDateId && !isPremium;
+  const isGenerating = !activeHoroscope;
+
+  const handleUnlock = () => {
+    router.push('/(settings)/paywall');
+  };
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    
-    <SafeAreaView style={st.safe} edges={['top']}>
-      <ImageBackground source={require('@/src/assets/themes-png/default-theme.png')} style={{ flex: 1 }}>
-      <StatusBar barStyle="light-content" backgroundColor={C.cosmos} />
+    <ThemedView style={styles.container}>
+      <HeaderNav
+        title={userDoc?.fullName ?? ([userDoc?.firstName, userDoc?.lastName].filter(Boolean).join(' ') || 'Home')}
+        rightAvatarSource={getProfileImageSource((userDoc as any)?.profileImageId) ?? getProfileImageSource('profile8')!}
+        onRightPress={() => router.push('/profile')}
+      />
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={[styles.content, { paddingTop: headerHeight }]}>
+        <HomeSignsDisplay
+          sun={sunSign}
+          moon={moonSign}
+          rising={risingSign}
+          showViewChart={true}
+          birthChartReady={!!chartDetails && !!breakdown}
+        />
+        <DateSwitcher
+          value={selectedDate}
+          dates={dateSwitcherDates.length > 0 ? dateSwitcherDates : [todayDateId]}
+          onChange={(date) => {
+            setSelectedDate(date);
+            scrollRef.current?.scrollTo({ y: 0, animated: false });
+          }}
+        />
+
+        <PaygateOverlay
+          locked={isPaygated}
+          style={{ flex: 1 }}
+          unlockTitle="Unlock Past & Future Readings"
+          unlockMessage="Upgrade to Premium to view yesterday's and tomorrow's horoscope."
+          onUnlock={handleUnlock}
+        >
         <ScrollView
-          contentContainerStyle={st.scroll}
-          keyboardShouldPersistTaps="handled"
+          ref={scrollRef}
+          style={styles.scroll}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: verticalScale(2), paddingHorizontal: getContentPadding(screenWidth) }]}
           showsVerticalScrollIndicator={false}
         >
+          <SectionTitle sectionName="quote" title="Quote" />
+          <HomeTextBox sectionName="quote" content={activeHoroscope?.quote} generating={isGenerating} />
 
-          {/* Header ──────────────────────────────────────────────────────── */}
-          <View style={st.header}>
-            <Text style={st.starDeco}>· ✦ · ✦ · ✦ ·</Text>
-            <Text style={st.appTitle}>Natal Chart</Text>
-            <Text style={st.appSub}>SWISS EPHEMERIS  ·  PRECISION CHARTS</Text>
-          </View>
+          <SectionTitle sectionName="advice" title="Advice" />
+          <HomeTextBox sectionName="advice" content={activeHoroscope?.advice} generating={isGenerating} />
 
-          {/* Name ────────────────────────────────────────────────────────── */}
-          <Card>
-            <FieldLabel t="NAME" />
-            <TextBox value={name} onChange={setName} placeholder="Chart subject name…" />
-          </Card>
+          <SectionTitle sectionName="dos" title="Do's" />
+          <HomeTextBox sectionName="dos" content={activeHoroscope?.do ?? []} generating={isGenerating} />
 
-          {/* Birth date & time ───────────────────────────────────────────── */}
-          <Card>
-            <FieldLabel t="BIRTH DATE & TIME" />
-            <View style={st.row}>
-              <TouchableOpacity style={[st.pillBtn, { flex: 3 }]} onPress={() => setShowBirthDate(true)}>
-                <Text style={st.pillIcon}>📅</Text>
-                <Text style={st.pillText}>{fDate(birthDate)}</Text>
-              </TouchableOpacity>
-              <View style={{ width: S.sm }} />
-              <TouchableOpacity style={[st.pillBtn, { flex: 2 }]} onPress={() => setShowBirthTime(true)}>
-                <Text style={st.pillIcon}>🕐</Text>
-                <Text style={st.pillText}>{fTime(birthDate)}</Text>
-              </TouchableOpacity>
-            </View>
-            {showBirthDate && (
-              <DateTimePicker
-                value={birthDate} mode="date"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                themeVariant="dark" maximumDate={new Date()}
-                onChange={onPickBirthDate}
-              />
-            )}
-            {showBirthTime && (
-              <DateTimePicker
-                value={birthDate} mode="time"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                themeVariant="dark"
-                onChange={onPickBirthTime}
-              />
-            )}
-          </Card>
+          <SectionTitle sectionName="donts" title="Don'ts" />
+          <HomeTextBox sectionName="donts" content={activeHoroscope?.dont ?? []} generating={isGenerating} />
 
-          {/* Location ────────────────────────────────────────────────────── */}
-          <Card>
-            <FieldLabel t="BIRTH LOCATION" />
-            <View style={st.locationSearchRow}>
-              <TextInput
-                style={[st.textBox, st.locationInput]}
-                value={city}
-                onChangeText={onCityChange}
-                placeholder="Search city or place…"
-                placeholderTextColor={C.dimText}
-                selectionColor={C.gold}
-                autoCorrect={false}
-              />
-              {locationSearching && (
-                <ActivityIndicator style={st.locationSpinner} size="small" color={C.nebulaTeal} />
-              )}
-            </View>
-            {locationResults.length > 0 && (
-              <ScrollView style={st.locationDrop} nestedScrollEnabled keyboardShouldPersistTaps="handled">
-                {locationResults.map(r => (
-                  <TouchableOpacity key={r.place_id} style={st.locationRow} onPress={() => selectLocation(r)}>
-                    <Text style={st.locationRowText} numberOfLines={1}>{formatPlace(r)}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
-            {lat !== '' && lon !== '' && (
-              <Text style={st.locationCoords}>
-                📍  {parseFloat(lat).toFixed(4)}°  {parseFloat(lon).toFixed(4)}°
-              </Text>
-            )}
-            {tzDisplay !== '' && (
-              <Text style={st.locationTz}>{tzDisplay}</Text>
-            )}
-          </Card>
+          <SectionTitle sectionName="affirmation" title="Affirmation" />
+          <HomeTextBox sectionName="affirmation" content={activeHoroscope?.affirmation} generating={isGenerating} />
 
+          <SectionTitle sectionName="tarot" title="Today's Cards" />
+          <HomeTextBox
+            sectionName="tarot"
+            content={activeHoroscope?.tarot}
+            cards={activeCards?.cards}
+            firstView={activeCards?.firstView}
+            onReveal={handleCardReveal}
+            generating={isGenerating}
+          />
 
-          {/* Transit date ────────────────────────────────────────────────── */}
-          <Card>
-            <FieldLabel t="TRANSIT DATE  (TODAY'S SKY)" />
-            <TouchableOpacity style={st.pillBtn} onPress={() => setShowTransit(true)}>
-              <Text style={st.pillIcon}>🔭</Text>
-              <Text style={st.pillText}>{fDate(transitDate)}</Text>
-            </TouchableOpacity>
-            {showTransit && (
-              <DateTimePicker
-                value={transitDate} mode="date"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                themeVariant="dark"
-                onChange={onPickTransit}
-              />
-            )}
-          </Card>
+          <SectionTitle sectionName="message" title="Message in a Bottle" />
+          <HomeTextBox sectionName="message" />
 
-          {/* Calculate button ─────────────────────────────────────────────── */}
+          <SectionTitle sectionName="moon" title="Moon Phase" />
+          <HomeTextBox
+            sectionName="moon"
+            content={activeHoroscope?.moon}
+            contentTwo={activeHoroscope?.moonPhaseDetails}
+            moonData={activeMoonData}
+            generating={isGenerating}
+          />
+
+          <SectionTitle sectionName="retrograde" title="Planets in Retrograde" />
+          <HomeTextBox sectionName="retrograde" content={isGenerating ? [] : retrogrades} generating={isGenerating} />
+
+          <SectionTitle sectionName="newLove" title="New Love" />
+          <Text style={styles.sectionDefinition}>{HOME_STRINGS.newLove.definition}</Text>
+          <HomeTextBox sectionName="newLove" content={activeHoroscope?.newLove ?? []} generating={isGenerating} />
           <TouchableOpacity
-            style={[st.calcBtn, (loading || synastryLoading) && st.calcBtnDisabled]}
-            onPress={handleCalculate}
-            disabled={loading || synastryLoading}
-            activeOpacity={0.75}
+            style={styles.questionButton}
+            onPress={() => { ChatStore.setInitialMessage(HOME_STRINGS.newLove.questionFunnel); router.push('/(main)/chat'); }}
+            activeOpacity={0.7}
           >
-            {loading
-              ? <ActivityIndicator color={C.void} />
-              : <Text style={st.calcBtnText}>✦  CALCULATE CHART  ✦</Text>
-            }
+            <Text style={styles.questionButtonText}>{HOME_STRINGS.newLove.questionFunnel}</Text>
           </TouchableOpacity>
 
+          <SectionTitle sectionName="returns" title="Returns" />
+          <Text style={styles.sectionDefinition}>{HOME_STRINGS.returns.definition}</Text>
+          <HomeTextBox sectionName="returns" content={activeHoroscope?.returns ?? []} generating={isGenerating} />
           <TouchableOpacity
-            style={[st.synastryBtn, (loading || synastryLoading) && st.calcBtnDisabled]}
-            onPress={handleSynastry}
-            disabled={loading || synastryLoading}
-            activeOpacity={0.75}
+            style={styles.questionButton}
+            onPress={() => { ChatStore.setInitialMessage(HOME_STRINGS.returns.questionFunnel1); router.push('/(main)/chat'); }}
+            activeOpacity={0.7}
           >
-            {synastryLoading
-              ? <ActivityIndicator color={C.goldBright} />
-              : <Text style={st.synastryBtnText}>♡  SYNASTRY</Text>
-            }
+            <Text style={styles.questionButtonText}>{HOME_STRINGS.returns.questionFunnel1}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.questionButton, { marginTop: 8 }]}
+            onPress={() => { ChatStore.setInitialMessage(HOME_STRINGS.returns.questionFunnel2); router.push('/(main)/chat'); }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.questionButtonText}>{HOME_STRINGS.returns.questionFunnel2}</Text>
           </TouchableOpacity>
 
-          <Text style={st.footer}>
-            Powered by react-native-swisseph · Moshier Ephemeris
-          </Text>
+          <SectionTitle sectionName="luckyNumbers" title="Lucky Numbers" />
+          <HomeTextBox sectionName="luckyNumbers" content={activeHoroscope?.luckyNumbers ?? []} generating={isGenerating} />
 
+          <SectionTitle sectionName="warning" title="Warning" />
+          <HomeTextBox sectionName="warning" content={activeHoroscope?.warning} generating={isGenerating} />
         </ScrollView>
-      </KeyboardAvoidingView>
-      </ImageBackground>
-    </SafeAreaView>
-    
+        {!hasPremiumAccess && (() => {
+          // Free users get a 3-way rotation; premium + trial see nothing.
+          if (adVariant === 'shop') return <AdBannerShop />;
+          if (adVariant === 'upgrade-full') {
+            return (
+              <AdBannerFull
+                icon="sparkles"
+                title="Unlock Your Full Birth Chart"
+                subtitle="Premium readings, ad-free."
+                ctaLabel="Upgrade"
+                onPress={handleUnlock}
+              />
+            );
+          }
+          return (
+            <AdBanner
+              icon="sparkles"
+              title="Unlock Your Full Birth Chart"
+              subtitle="Premium readings, ad-free."
+              ctaLabel="Upgrade"
+              onPress={handleUnlock}
+            />
+          );
+        })()}
+        </PaygateOverlay>
+      </View>
+    </ThemedView>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
-const st = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: C.cosmos },
-  scroll: { paddingHorizontal: S.md, paddingBottom: S.xxl },
-
-  header: { alignItems: 'center', paddingTop: S.xl, paddingBottom: S.lg },
-  starDeco: { color: C.goldDim, fontSize: 11, letterSpacing: 8, marginBottom: S.sm },
-  appTitle: {
-    fontSize: 34, fontWeight: '800', letterSpacing: 8,
-    color: C.goldBright, fontFamily: 'serif',
-  },
-  appSub: {
-    fontSize: 10, letterSpacing: 3, color: C.nebulaTeal,
-    marginTop: 6, textTransform: 'uppercase',
-  },
-
-  card: {
-    backgroundColor: C.nebula,
-    borderRadius: R.lg,
-    borderWidth: 1,
-    borderColor: C.starfield,
-    padding: S.md,
-    marginBottom: S.md,
-  },
-  fieldLabel: {
-    color: C.gold,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 2.5,
-    marginBottom: S.sm,
-  },
-  textBox: {
-    backgroundColor: C.deepSpace,
-    borderRadius: R.md,
-    borderWidth: 1,
-    borderColor: C.starfield,
-    color: C.white,
-    fontSize: 15,
-    paddingHorizontal: S.md,
-    paddingVertical: S.sm + 2,
-    marginBottom: S.sm,
-  },
-  row: { flexDirection: 'row' },
-  hint: { color: C.dimText, fontSize: 11, fontStyle: 'italic', marginTop: 2 },
-
-  locationSearchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: S.sm,
-  },
-  locationInput: {
+const styles = StyleSheet.create({
+  container: {
     flex: 1,
-    marginBottom: 0,
+    justifyContent: 'flex-start',
   },
-  locationSpinner: {
-    marginLeft: S.sm,
+  content: {
+    flex: 1,
+    width: '100%',
   },
-  locationDrop: {
-    maxHeight: 200,
-    backgroundColor: C.deepSpace,
-    borderRadius: R.md,
-    borderWidth: 1,
-    borderColor: C.starfield,
-    marginBottom: S.sm,
+  scroll: {
+    flex: 1,
   },
-  locationRow: {
-    paddingHorizontal: S.md,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: C.starfield,
+  scrollContent: {
+    // paddingHorizontal is applied dynamically via getContentPadding(screenWidth)
+    // so content stays in a phone-width column even on iPad — see render above.
+    paddingTop: 12,
   },
-  locationRowText: {
-    color: C.white,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  locationCoords: {
-    color: C.nebulaTeal,
-    fontSize: 11,
-    letterSpacing: 0.5,
-    textAlign: 'center',
-    marginTop: 2,
-  },
-  locationTz: {
-    color: C.muted,
-    fontSize: 10,
-    letterSpacing: 0.5,
-    textAlign: 'center',
-    marginTop: 4,
-  },
-
-  pillBtn: {
-    backgroundColor: C.deepSpace,
-    borderRadius: R.md,
-    borderWidth: 1,
-    borderColor: C.starfield,
+  generatingRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: S.md,
-    paddingVertical: S.sm + 2,
-    marginBottom: S.sm,
-  },
-  pillIcon: { fontSize: 15, marginRight: S.sm },
-  pillText: { color: C.white, fontSize: 14 },
-
-  tzButton: {
-    backgroundColor: C.deepSpace,
-    borderRadius: R.md,
-    borderWidth: 1,
-    borderColor: C.starfield,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: S.md,
-    paddingVertical: S.sm + 2,
-  },
-  tzButtonText: { color: C.white, fontSize: 14 },
-  tzChevron: { color: C.gold, fontSize: 11 },
-  tzDrop: {
-    maxHeight: 200,
-    backgroundColor: C.deepSpace,
-    borderRadius: R.md,
-    borderWidth: 1,
-    borderColor: C.starfield,
-    marginTop: S.sm,
-  },
-  tzRow: {
-    paddingHorizontal: S.md,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: C.starfield,
-  },
-  tzRowActive: { backgroundColor: C.purpleDim },
-  tzRowText: { color: C.muted, fontSize: 13 },
-  tzRowTextActive: { color: C.goldBright, fontWeight: '700' },
-
-  tzDetectBtn: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: C.deepSpace,
-    borderRadius: R.md,
-    borderWidth: 1,
-    borderColor: C.nebulaTeal,
-    height: 38,
-    marginBottom: S.sm,
+    gap: 8,
+    paddingVertical: 12,
+    marginBottom: 8,
   },
-  tzDetectText: {
-    color: C.nebulaTeal,
+  generatingText: {
+    color: '#BCA8F4',
+    fontSize: 14,
+  },
+  sectionDefinition: {
+    color: 'rgba(255,255,255,0.4)',
     fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 1,
-  },
-  tzDetectHint: {
-    color: C.muted,
-    fontSize: 10,
-    letterSpacing: 0.5,
-    marginBottom: S.sm,
+    lineHeight: 18,
+    marginTop: -8,
+    marginBottom: 8,
     textAlign: 'center',
   },
-
-  calcBtn: {
-    backgroundColor: C.gold,
-    borderRadius: R.pill,
-    paddingVertical: S.md + 4,
-    alignItems: 'center',
-    marginTop: S.sm,
-    shadowColor: C.gold,
-    shadowOpacity: 0.45,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
+  questionButton: {
+    borderWidth: 1,
+    borderColor: 'rgba(188,168,244,0.35)',
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginBottom: 24,
+    backgroundColor: 'rgba(188,168,244,0.07)',
   },
-  calcBtnDisabled: { opacity: 0.55 },
-  calcBtnText: {
-    color: C.void,
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 3,
-  },
-
-  synastryBtn: {
-    backgroundColor: 'transparent', borderRadius: R.pill, paddingVertical: S.md + 4,
-    alignItems: 'center', marginTop: S.sm, borderWidth: 1, borderColor: C.goldBright,
-  },
-  synastryBtnText: { color: C.goldBright, fontSize: 15, fontWeight: '600', letterSpacing: 3 },
-
-  footer: {
-    color: C.dimText,
-    fontSize: 10,
+  questionButtonText: {
+    color: '#BCA8F4',
+    fontSize: 13,
+    lineHeight: 18,
     textAlign: 'center',
-    marginTop: S.lg,
-    letterSpacing: 1,
   },
 });

@@ -154,3 +154,5 @@ export const COMPATIBILITY_STRINGS = {
     }
   }
 };
+
+export const CONNECTION_SCREEN_INFO = "Metrics are based on birth chart placements, aspects and planetary transits. Statistics are updated weekly.";

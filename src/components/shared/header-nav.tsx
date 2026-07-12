@@ -1,20 +1,21 @@
 import React, { useContext } from "react";
 import {
-  View,
-  Text,
   TouchableOpacity,
   StyleSheet,
   Image,
   ImageSourcePropType,
   Platform,
-  StatusBar,
 } from "react-native";
+import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemeContext } from "@/src/context/theme-context";
 import { useResponsive } from "@/src/hooks/use-responsive";
+import { MAX_CONTENT_WIDTH } from "@/src/utils/layout";
+import { ThemedText } from "../themed-text";
+import { ThemedView } from "../themed-view";
 
-const NAV_BAR_HEIGHT = 44; // logical nav bar height (below status bar)
+const NAV_BAR_HEIGHT = 44;
 
 type HeaderNavProps = {
   title?: string;
@@ -24,6 +25,7 @@ type HeaderNavProps = {
   rightIconName?: React.ComponentProps<typeof Ionicons>["name"];
   leftIconSource?: ImageSourcePropType;
   rightIconSource?: ImageSourcePropType;
+  rightAvatarSource?: ImageSourcePropType;
   onLeftPress?: () => void;
   onRightPress?: () => void;
   backgroundColor?: string;
@@ -38,6 +40,7 @@ export default function HeaderNav({
   rightIconName,
   leftIconSource,
   rightIconSource,
+  rightAvatarSource,
   onLeftPress,
   onRightPress,
   backgroundColor,
@@ -55,7 +58,7 @@ export default function HeaderNav({
 
   const dynamic = {
     navBar: {
-      paddingHorizontal: scale(10),
+      paddingHorizontal: scale(5),
     },
     sideContainer: {
       width: scale(80),
@@ -64,6 +67,10 @@ export default function HeaderNav({
     icon: {
       width: scale(30),
       height: scale(30),
+    },
+    avatarIcon: {
+      width: scale(40),
+      height: scale(40),
     },
     placeholder: {
       width: scale(24),
@@ -80,18 +87,17 @@ export default function HeaderNav({
   return (
     <>
       <StatusBar
-        barStyle={theme.isDark ? "light-content" : "dark-content"}
+        style={theme.isDark ? "light" : "dark"}
         translucent
-        backgroundColor="transparent"
       />
 
-      <View
+      <ThemedView
         style={[
           styles.headerContainer,
           { height: headerHeight, paddingTop: insets.top },
         ]}
       >
-        <View style={[styles.navBar, dynamic.navBar, { height: navHeight }]}>
+        <ThemedView style={[styles.navBar, dynamic.navBar, { height: navHeight }]}>
           {/* LEFT */}
           <TouchableOpacity
             onPress={onLeftPress}
@@ -103,42 +109,43 @@ export default function HeaderNav({
             ) : leftIconSource ? (
               <Image source={leftIconSource} style={[styles.icon, dynamic.icon, { tintColor: tc }]} />
             ) : leftLabel ? (
-              <Text style={[styles.sideText, dynamic.sideText, { color: tc }]}>{leftLabel}</Text>
+              <ThemedText style={[styles.sideText, dynamic.sideText, { color: tc }]}>{leftLabel}</ThemedText>
             ) : (
-              <View style={dynamic.placeholder} />
+              <ThemedView style={dynamic.placeholder} />
             )}
           </TouchableOpacity>
 
           {/* TITLE */}
-          <View style={styles.centerContainer} pointerEvents="none">
-            <Text style={[styles.title, dynamic.title, { color: tc }]} numberOfLines={1}>
+          <ThemedView style={styles.centerContainer} pointerEvents="none">
+            <ThemedText style={[styles.title, dynamic.title, { color: tc }]} numberOfLines={1}>
               {title}
-            </Text>
-          </View>
+            </ThemedText>
+          </ThemedView>
 
           {/* RIGHT */}
           <TouchableOpacity
             onPress={onRightPress}
-            style={[styles.sideContainer, dynamic.sideContainer]}
+            style={[styles.sideContainer, styles.rightContainer, dynamic.sideContainer]}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            {rightIconName ? (
+            {rightAvatarSource ? (
+              <Image source={rightAvatarSource} style={[styles.avatar, dynamic.avatarIcon]} />
+            ) : rightIconName ? (
               <Ionicons name={rightIconName} size={moderateScale(30)} color={tc} />
             ) : rightIconSource ? (
               <Image source={rightIconSource} style={[styles.icon, dynamic.icon, { tintColor: tc }]} />
             ) : rightLabel ? (
-              <Text style={[styles.sideText, dynamic.sideText, { color: tc }]}>{rightLabel}</Text>
+              <ThemedText style={[styles.sideText, dynamic.sideText, { color: tc }]}>{rightLabel}</ThemedText>
             ) : (
-              <View style={dynamic.placeholder} />
+              <ThemedView style={dynamic.placeholder} />
             )}
           </TouchableOpacity>
-        </View>
-      </View>
+        </ThemedView>
+      </ThemedView>
     </>
   );
 }
 
-// Only static / layout values here — no scale() calls
 const styles = StyleSheet.create({
   headerContainer: {
     width: "100%",
@@ -154,9 +161,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    // Prevent the nav content from spreading to iPad edges — keep it phone-width centered
+    width: "100%",
+    maxWidth: MAX_CONTENT_WIDTH,
+    alignSelf: "center",
   },
   sideContainer: {
     alignItems: "center",
+    justifyContent: "center",
+  },
+  rightContainer: {
+    alignItems: "flex-end",
     justifyContent: "center",
   },
   centerContainer: {
@@ -175,6 +190,10 @@ const styles = StyleSheet.create({
   },
   icon: {
     resizeMode: "contain",
+  },
+  avatar: {
+    borderRadius: 999,
+    overflow: "hidden",
   },
   sideText: {
     fontWeight: "500",
