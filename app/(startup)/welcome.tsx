@@ -1,58 +1,54 @@
+import React, { useRef } from 'react';
+import { ImageBackground, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { router } from 'expo-router';
 import LottieView from 'lottie-react-native';
-import React from 'react';
-import { ImageBackground, StyleSheet, useWindowDimensions, View } from 'react-native';
-
-import PrimaryButton from '@/src/assets/buttons/primary-button-component';
-import SecondaryButton from '@/src/assets/buttons/secondary-button-component';
-import ButtonText from '@/src/components/typography/button-text';
-import { scale, verticalScale } from '@/src/utils/responsive';
 import { StatusBar } from 'expo-status-bar';
 
+import ButtonText from '@/src/components/typography/button-text';
+import PrimaryButton from '@/src/assets/buttons/primary-button-component';
+import SecondaryButton from '@/src/assets/buttons/secondary-button-component';
+import { scale, verticalScale } from '@/src/utils/responsive';
 
 export default function Welcome() {
   const { width } = useWindowDimensions();
   const logoW = Math.min(width * 0.72, scale(360));
-  const logoH = logoW * 0.95; // adjust to your logo aspect
+  const galaxyRef = useRef<LottieView>(null);
+
+  const handleGetStarted = () => {
+    galaxyRef.current?.pause();
+    setTimeout(() => router.replace('/sign-up'), 120);
+  };
 
   return (
-    <View style={styles.container}>
-      <StatusBar>
+    <ImageBackground
+      source={require('@/src/assets/start-up/welcome-background.jpg')}
+      style={styles.container}
+      resizeMode="cover"
+    >
+      <StatusBar style="light" />
 
-      </StatusBar>
-      {/* background image */}
-      <ImageBackground
-        source={require('@/src/assets/start-up/welcome-background.jpg')}
-        style={styles.background}
-        resizeMode="cover"
-      />
-
-      {/* TOP: animation fills, logo centered on top */}
+      {/* TOP: galaxy animation fills, logo centered on top */}
       <View pointerEvents="none" style={styles.topContainer}>
         <LottieView
+          ref={galaxyRef}
           source={require('@/src/assets/animations/galaxy.json')}
           autoPlay
           loop
-          style={styles.topAnimation}  // absolute fill inside top container
-        /> 
-        {/* centered logo (over the animation) */}
-        <View pointerEvents="none" style={styles.logoWrap}>
-          
-         <LottieView
-          source={require('@/src/assets/animations/logo.json')}
-          autoPlay
-          loop={false}
-          style={{ width: '100%', aspectRatio: 0.95 / 2}}
+          style={styles.topAnimation}
         />
+        <View pointerEvents="none" style={styles.logoWrap}>
+          <LottieView
+            source={require('@/src/assets/animations/logo.json')}
+            autoPlay
+            loop={false}
+            style={{ width: '100%', height: '100%' }}
+          />
         </View>
       </View>
 
       {/* BOTTOM: buttons */}
       <View style={styles.bottomContainer}>
-        <PrimaryButton
-          title="Get Started"
-          onPress={() => router.replace('/sign-up')}
-        />
+        <PrimaryButton title="Get Started" onPress={handleGetStarted} />
 
         <View style={styles.divider} />
 
@@ -64,21 +60,19 @@ export default function Welcome() {
           />
         </ButtonText>
       </View>
-    </View>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-
-  container: { flex: 1 },
-  background: { ...StyleSheet.absoluteFillObject },
-
-  topContainer: {
-    flex: 3.5,                 // keep logo centered here
-    position: 'relative',
-    paddingBottom: verticalScale(75),   // ↓ was larger; reduces gap
+  container: {
+    flex: 1,
   },
-
+  topContainer: {
+    flex: 3.5,
+    position: 'relative',
+    paddingBottom: verticalScale(75),
+  },
   bottomContainer: {
     flex: 2,
     alignItems: 'center',
@@ -87,17 +81,12 @@ const styles = StyleSheet.create({
     paddingBottom: verticalScale(30),
     gap: verticalScale(15),
     paddingHorizontal: scale(24),
-
-    // pull the whole block upward
-    marginTop: -verticalScale(90),   // ↑ increase magnitude to move closer
+    marginTop: -verticalScale(90),
   },
-  // animation fills top container
   topAnimation: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 1,
   },
-
-  // center the logo in the middle of the top container
   logoWrap: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
@@ -108,6 +97,6 @@ const styles = StyleSheet.create({
     width: '80%',
     height: StyleSheet.hairlineWidth,
     backgroundColor: '#D4D6DD',
-    marginVertical: verticalScale(15), // was 20
+    marginVertical: verticalScale(15),
   },
 });

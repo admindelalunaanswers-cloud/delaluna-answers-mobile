@@ -1,0 +1,65 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ─── Helpers ────────────────────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isVerifiedOwner(uid) {
+      return isOwner(uid) && isVerified();
+    }
+
+    // Admin privilege is granted via the `admin: true` custom auth claim,
+    // set by the `syncAdminClaim` Cloud Function. See firestore.rules.
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    function isImageUnder(maxBytes) {
+      return request.resource.size < maxBytes
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // ─── Tarot card art (public read, admin-only write) ────────────────────
+    // The home screen prefetches these via public download URLs, so they must
+    // be readable without auth.
+    match /tarot-card-front/{file=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /tarot-card-back/{file=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ─── Per-user uploads (avatars, custom artwork, etc.) ──────────────────
+    // Reserved for future profile uploads — verified owner only, 5 MB image cap.
+    match /users/{uid}/{file=**} {
+      allow read:  if isOwner(uid) || isAdmin();
+      allow write: if isVerifiedOwner(uid) && isImageUnder(5 * 1024 * 1024);
+    }
+
+    // ─── Public app assets (deploy-time only) ──────────────────────────────
+    match /public/{file=**} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+
+    // ─── Default deny ──────────────────────────────────────────────────────
+    match /{allPaths=**} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

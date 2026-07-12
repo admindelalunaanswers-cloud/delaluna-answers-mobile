@@ -1,3 +1,5 @@
+import { measure } from '@/src/services/performance.service';
+
 /**
  * astroEngine.ts
  * ─────────────────────────────────────────────────────────────────────────────
@@ -50,6 +52,7 @@ const PLANET_SYMBOLS: Record<string, string> = {
   Neptune:  '♆',
   Pluto:    'P',
   'N. Node':'☊',
+  'S. Node':'☋',
   Chiron:   '⚷',
 };
 
@@ -68,21 +71,13 @@ const ZODIAC = [
   { name: 'Pisces',      sym: '♓' },
 ];
 
-// Each phase is centered on a primary event (0°/90°/180°/270°) spanning 45°.
-// New Moon:         0° – 22.5°    Waxing Crescent: 22.5° – 67.5°
-// First Quarter:  67.5° – 112.5°  Waxing Gibbous: 112.5° – 157.5°
-// Full Moon:     157.5° – 202.5°  Waning Gibbous: 202.5° – 247.5°
-// Last Quarter:  247.5° – 292.5°  Waning Crescent: 292.5° – 360°
-const MOON_PHASES = [
-  { name: 'New Moon',        emoji: '🌑', max: 22.5  },
-  { name: 'Waxing Crescent', emoji: '🌒', max: 67.5  },
-  { name: 'First Quarter',   emoji: '🌓', max: 112.5 },
-  { name: 'Waxing Gibbous',  emoji: '🌔', max: 157.5 },
-  { name: 'Full Moon',       emoji: '🌕', max: 202.5 },
-  { name: 'Waning Gibbous',  emoji: '🌖', max: 247.5 },
-  { name: 'Last Quarter',    emoji: '🌗', max: 292.5 },
-  { name: 'Waning Crescent', emoji: '🌘', max: 360   },
-];
+// Cardinal phases (New, First Quarter, Full, Last Quarter) span ~1 day each,
+// centered on their exact event (0°/90°/180°/270°). The moon moves ~12.19°/day
+// relative to the sun (360° / 29.5306 day synodic month), so each cardinal
+// phase covers ±~6.1° around its event. The waxing/waning crescent and gibbous
+// phases fill the gaps.
+const SYNODIC_DAY_DEG = 360 / 29.5306;
+const CARDINAL_HALF   = SYNODIC_DAY_DEG / 2;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -125,7 +120,6 @@ export interface MoonData {
   degree: number;
   minutes: number;
   phase: string;
-  phaseEmoji: string;
   illumination: number;  // 0–100 %
   sunMoonAngle: number;  // 0–360 degrees
   isRetrograde: boolean;
@@ -269,8 +263,14 @@ function getHouse(lon: number, cusps: number[]): number {
 
 function moonPhase(angle: number) {
   const n = normLon(angle);
-  const p = MOON_PHASES.find(p => n < p.max) ?? MOON_PHASES[7];
-  return { phase: p.name, phaseEmoji: p.emoji };
+  if (n < CARDINAL_HALF || n >= 360 - CARDINAL_HALF) return { phase: 'New Moon' };
+  if (n < 90 - CARDINAL_HALF)                        return { phase: 'Waxing Crescent' };
+  if (n < 90 + CARDINAL_HALF)                        return { phase: 'First Quarter' };
+  if (n < 180 - CARDINAL_HALF)                       return { phase: 'Waxing Gibbous' };
+  if (n < 180 + CARDINAL_HALF)                       return { phase: 'Full Moon' };
+  if (n < 270 - CARDINAL_HALF)                       return { phase: 'Waning Gibbous' };
+  if (n < 270 + CARDINAL_HALF)                       return { phase: 'Last Quarter' };
+  return { phase: 'Waning Crescent' };
 }
 
 function illumination(angle: number): number {
@@ -355,11 +355,30 @@ async function calcHouses(jd: number, lat: number, lon: number): Promise<HouseDa
 }
 
 /**
+ * Derive South Node from North Node (always exactly 180° opposite).
+ */
+function deriveSouthNode(nNode: PlanetPosition, cusps: number[]): PlanetPosition {
+  const lon  = normLon(nNode.longitude + 180);
+  const sign = lonToSign(lon);
+  const house = cusps.length > 1 ? getHouse(lon, cusps) : 1;
+  return {
+    name:        'S. Node',
+    symbol:      PLANET_SYMBOLS['S. Node'],
+    color:       '#ffffff',
+    longitude:   lon,
+    ...sign,
+    speed:       nNode.speed,
+    isRetrograde: nNode.isRetrograde,
+    house,
+  };
+}
+
+/**
  * Build MoonData from planet positions (requires Sun and Moon already calculated).
  */
 function buildMoonData(moon: PlanetPosition, sunLon: number): MoonData {
   const angle = normLon(moon.longitude - sunLon);
-  const { phase, phaseEmoji } = moonPhase(angle);
+  const { phase } = moonPhase(angle);
   return {
     longitude:    moon.longitude,
     sign:         moon.sign,
@@ -367,7 +386,6 @@ function buildMoonData(moon: PlanetPosition, sunLon: number): MoonData {
     degree:       moon.degree,
     minutes:      moon.minutes,
     phase,
-    phaseEmoji,
     illumination: illumination(angle),
     sunMoonAngle: Math.round(angle * 100) / 100,
     isRetrograde: moon.isRetrograde,
@@ -380,28 +398,33 @@ function buildMoonData(moon: PlanetPosition, sunLon: number): MoonData {
  * Calculate a full natal chart.
  */
 export async function calculateNatalChart(birth: BirthData): Promise<NatalChart> {
-  const jd     = birthToJD(birth);
-  const houses = await calcHouses(jd, birth.lat, birth.lon);
+  return measure('natal_chart_calc', async () => {
+    const jd     = birthToJD(birth);
+    const houses = await calcHouses(jd, birth.lat, birth.lon);
 
-  // Calculate all planets in parallel
-  const planets = await Promise.all(
-    Object.keys(PLANET_IDS).map(name => calcPlanet(jd, name, houses.cusps))
-  );
+    // Calculate all planets in parallel
+    const planets = await Promise.all(
+      Object.keys(PLANET_IDS).map(name => calcPlanet(jd, name, houses.cusps))
+    );
 
-  const sunPlanet  = planets.find(p => p.name === 'Sun')!;
-  const moonPlanet = planets.find(p => p.name === 'Moon')!;
-  const moon       = buildMoonData(moonPlanet, sunPlanet.longitude);
+    const sunPlanet  = planets.find(p => p.name === 'Sun')!;
+    const moonPlanet = planets.find(p => p.name === 'Moon')!;
+    const nNode      = planets.find(p => p.name === 'N. Node')!;
+    const moon       = buildMoonData(moonPlanet, sunPlanet.longitude);
 
-  const asc = lonToSign(houses.ascendant);
-  const mc  = lonToSign(houses.mc);
+    planets.push(deriveSouthNode(nNode, houses.cusps));
 
-  return {
-    planets,
-    houses,
-    moon,
-    ascendant:  { sign: asc.sign, signSymbol: asc.signSymbol, degree: asc.degree, minutes: asc.minutes },
-    midheaven:  { sign: mc.sign,  signSymbol: mc.signSymbol,  degree: mc.degree,  minutes: mc.minutes  },
-  };
+    const asc = lonToSign(houses.ascendant);
+    const mc  = lonToSign(houses.mc);
+
+    return {
+      planets,
+      houses,
+      moon,
+      ascendant:  { sign: asc.sign, signSymbol: asc.signSymbol, degree: asc.degree, minutes: asc.minutes },
+      midheaven:  { sign: mc.sign,  signSymbol: mc.signSymbol,  degree: mc.degree,  minutes: mc.minutes  },
+    };
+  });
 }
 
 /**
@@ -413,16 +436,21 @@ export async function calculateTransits(
   lat: number = 0,
   lon: number = 0
 ): Promise<TransitData> {
-  const jd = dateToJD(date);
-  const houses = await calcHouses(jd, lat, lon);
+  return measure('transits_calc', async () => {
+    const jd = dateToJD(date);
+    const houses = await calcHouses(jd, lat, lon);
 
-  const planets = await Promise.all(
-    Object.keys(PLANET_IDS).map(name => calcPlanet(jd, name, houses.cusps))
-  );
+    const planets = await Promise.all(
+      Object.keys(PLANET_IDS).map(name => calcPlanet(jd, name, houses.cusps))
+    );
 
-  const sunPlanet  = planets.find(p => p.name === 'Sun')!;
-  const moonPlanet = planets.find(p => p.name === 'Moon')!;
-  const moon       = buildMoonData(moonPlanet, sunPlanet.longitude);
+    const sunPlanet  = planets.find(p => p.name === 'Sun')!;
+    const moonPlanet = planets.find(p => p.name === 'Moon')!;
+    const nNode      = planets.find(p => p.name === 'N. Node')!;
+    const moon       = buildMoonData(moonPlanet, sunPlanet.longitude);
 
-  return { planets, moon, date };
+    planets.push(deriveSouthNode(nNode, houses.cusps));
+
+    return { planets, moon, date };
+  });
 }

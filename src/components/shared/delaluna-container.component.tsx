@@ -46,8 +46,7 @@ export default function DelalunaContainer({
 const styles = StyleSheet.create({
   // 🪐 Default (your Figma style)
   defaultContainer: {
-    display: "flex",
-    flexDirection: "row",
+    flexDirection: "column",
     justifyContent: "center",
     alignItems: "center",
     alignSelf: "stretch",
@@ -57,7 +56,7 @@ const styles = StyleSheet.create({
     borderRadius: scale(12),
     borderWidth: 1.5,
     borderColor: "rgba(142, 68, 173, 0.6)",
-    //backgroundColor: "rgba(255, 255, 255, 0.05)",
+    overflow: "visible",
   },
 
   // 💫 Highlight / Premium Glow
@@ -76,8 +75,7 @@ const styles = StyleSheet.create({
 
   // 🪶 Subtle version
   subtleContainer: {
-    display: "flex",
-    flexDirection: "row",
+    flexDirection: "column",
     justifyContent: "center",
     alignItems: "center",
     alignSelf: "stretch",
@@ -85,6 +83,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(16),
     gap: scale(8),
     borderRadius: scale(12),
-    
+    overflow: "visible",
   },
 });

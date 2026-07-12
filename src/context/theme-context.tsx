@@ -1,5 +1,10 @@
 import React, { createContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import type { ColorValue, ImageSourcePropType } from 'react-native';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../../firebaseConfig';
+import { Events } from '@/src/services/analytics.service';
+
 // Safe AsyncStorage wrapper — silently no-ops if native module isn't in the build yet
 let AsyncStorage: { getItem(k: string): Promise<string | null>; setItem(k: string, v: string): Promise<void> };
 try {
@@ -9,13 +14,13 @@ try {
 }
 
 // ===== Images =====
-const defaultImg  = require('@/src/assets/themes-png/default-theme.png');
-const blueTheme   = require('@/src/assets/themes-png/blue-theme.png');
-const greenTheme  = require('@/src/assets/themes-png/green-theme.png');
-const orangeTheme = require('@/src/assets/themes-png/orange-theme.png');
-const redTheme    = require('@/src/assets/themes-png/red-theme.png');
-const yellowTheme = require('@/src/assets/themes-png/yellow-theme.png');
-const pinkTheme   = require('@/src/assets/themes-png/pink-theme.png');
+const defaultImg  = require('@/src/assets/themes-jpg/default-theme.jpg');
+const blueTheme   = require('@/src/assets/themes-jpg/blue-theme.jpg');
+const greenTheme  = require('@/src/assets/themes-jpg/green-theme.jpg');
+const orangeTheme = require('@/src/assets/themes-jpg/orange-theme.jpg');
+const redTheme    = require('@/src/assets/themes-jpg/red-theme.jpg');
+const yellowTheme = require('@/src/assets/themes-jpg/yellow-theme.jpg');
+const pinkTheme   = require('@/src/assets/themes-jpg/pink-theme.jpg');
 
 // ===== Types =====
 export interface ThemeColors {
@@ -176,11 +181,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setThemeKey = useCallback(async (key: string) => {
     if (!allThemes[key]) return;
     _setThemeKey(key);
+    Events.themeChanged(key);
     try { await AsyncStorage.setItem(GLOBAL_KEY, key); } catch {}
   }, []);
 
   useEffect(() => {
     let cancelled = false;
+
+    // 1. Load from AsyncStorage immediately so the app renders fast
     (async () => {
       let key = 'default';
       try {
@@ -192,7 +200,24 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         setHydrated(true);
       }
     })();
-    return () => { cancelled = true; };
+
+    // 2. When Firebase Auth resolves, check Firestore and sync if different
+    const unsubAuth = onAuthStateChanged(auth, async (user) => {
+      if (!user || cancelled) return;
+      try {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        const firestoreKey = snap.data()?.themeKey as string | undefined;
+        if (firestoreKey && allThemes[firestoreKey] && !cancelled) {
+          _setThemeKey(firestoreKey);
+          try { await AsyncStorage.setItem(GLOBAL_KEY, firestoreKey); } catch {}
+        }
+      } catch {}
+    });
+
+    return () => {
+      cancelled = true;
+      unsubAuth();
+    };
   }, []);
 
   if (!hydrated) return null;
