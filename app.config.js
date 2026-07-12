@@ -23,8 +23,17 @@ const withPhoneOnly = (config) =>
     // Declare telephony as not required so Google Play targets phones without blocking
     // non-phone form factors via hardware.type.* (Play rejects required="false" on those)
     const existing = manifest["uses-feature"] ?? [];
-    if (!existing.some((f) => f.$?.["android:name"] === "android.hardware.telephony")) {
-      existing.push({ $: { "android:name": "android.hardware.telephony", "android:required": "false" } });
+    if (
+      !existing.some(
+        (f) => f.$?.["android:name"] === "android.hardware.telephony",
+      )
+    ) {
+      existing.push({
+        $: {
+          "android:name": "android.hardware.telephony",
+          "android:required": "false",
+        },
+      });
     }
     manifest["uses-feature"] = existing;
 
@@ -35,7 +44,7 @@ module.exports = {
   expo: {
     name: "Delaluna Answers",
     slug: "delaluna-answers-mobile",
-    version: "1.0.5",
+    version: "1.1.0",
     orientation: "portrait",
     icon: "./src/assets/dlla-branded/delaluna_app_icon.png",
     scheme: "delalunaanswersmobile",
@@ -117,24 +126,24 @@ module.exports = {
       eas: {
         projectId: "a267fc5e-e587-4e94-b9ab-1cddd6decb94",
       },
-      FIREBASE_API_KEY:            process.env.FIREBASE_API_KEY,
-      FIREBASE_AUTH_DOMAIN:        process.env.FIREBASE_AUTH_DOMAIN,
-      FIREBASE_PROJECT_ID:         process.env.FIREBASE_PROJECT_ID,
-      FIREBASE_STORAGE_BUCKET:     process.env.FIREBASE_STORAGE_BUCKET,
+      FIREBASE_API_KEY: process.env.FIREBASE_API_KEY,
+      FIREBASE_AUTH_DOMAIN: process.env.FIREBASE_AUTH_DOMAIN,
+      FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
+      FIREBASE_STORAGE_BUCKET: process.env.FIREBASE_STORAGE_BUCKET,
       FIREBASE_MESSAGING_SENDER_ID: process.env.FIREBASE_MESSAGING_SENDER_ID,
-      FIREBASE_APP_ID:             process.env.FIREBASE_APP_ID,
-      APP_ENV:                     process.env.APP_ENV,
-      USE_EMULATOR:                process.env.USE_EMULATOR === "true",
-      EMULATOR_HOST_ANDROID:       process.env.EMULATOR_HOST_ANDROID,
-      EMULATOR_HOST_IOS:           process.env.EMULATOR_HOST_IOS,
-      REVENUECAT_AAS_API_KEY:      process.env.REVENUECAT_AAS_API_KEY,
-      REVENUECAT_GPS_API_KEY:      process.env.REVENUECAT_GPS_API_KEY,
-      REVENUECAT_TST_API_KEY:      process.env.REVENUECAT_TST_API_KEY,
+      FIREBASE_APP_ID: process.env.FIREBASE_APP_ID,
+      APP_ENV: process.env.APP_ENV,
+      USE_EMULATOR: process.env.USE_EMULATOR === "true",
+      EMULATOR_HOST_ANDROID: process.env.EMULATOR_HOST_ANDROID,
+      EMULATOR_HOST_IOS: process.env.EMULATOR_HOST_IOS,
+      REVENUECAT_AAS_API_KEY: process.env.REVENUECAT_AAS_API_KEY,
+      REVENUECAT_GPS_API_KEY: process.env.REVENUECAT_GPS_API_KEY,
+      REVENUECAT_TST_API_KEY: process.env.REVENUECAT_TST_API_KEY,
       // Server-side secret keys — use only in Cloud Functions / trusted server code, never in client SDK calls
-      REVENUECAT_KEY_V1:           process.env.REVENUECAT_KEY_V1,
-      REVENUECAT_KEY_V2:           process.env.REVENUECAT_KEY_V2,
+      REVENUECAT_KEY_V1: process.env.REVENUECAT_KEY_V1,
+      REVENUECAT_KEY_V2: process.env.REVENUECAT_KEY_V2,
     },
-    runtimeVersion: "1.0.0",
+    runtimeVersion: "1.1.0",
     updates: {
       url: "https://u.expo.dev/a267fc5e-e587-4e94-b9ab-1cddd6decb94",
     },
