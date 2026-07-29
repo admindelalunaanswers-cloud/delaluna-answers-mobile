@@ -65,7 +65,12 @@ coverage/
 /ios
 /android
 app.apk
-/scripts
+
+# local-only scripts, except the EAS build hooks referenced from package.json
+# (note: /scripts/* not /scripts — git won't descend into an excluded directory,
+# so the negation below only works if the directory itself stays untracked-eligible)
+/scripts/*
+!/scripts/exclude-dev-client.js
 
 # credentials
 /credentials.json
