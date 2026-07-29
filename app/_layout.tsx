@@ -21,6 +21,7 @@ import { RevenueCatProvider } from '@/src/context/revenuecat-context';
 import { AdminProvider } from '@/src/context/admin-context';
 import { useColorScheme } from '@/src/hooks/use-color-scheme';
 import { useMinVersion } from '@/src/hooks/use-min-version';
+import { usePortraitLock } from '@/src/hooks/use-portrait-lock';
 import { useTheme } from '@/src/hooks/use-theme';
 import { UpdateRequiredScreen } from '@/src/components/update-required-screen';
 import { logScreenView, screenLabelForPath, setUserId } from '@/src/services/analytics.service';
@@ -253,6 +254,8 @@ function VersionGate({ children }: { children: ReactNode }) {
 installGlobalErrorHandler();
 
 export default function RootLayout() {
+  usePortraitLock();
+
   useEffect(() => {
     let cleanup = () => {};
     import('@/src/services/notifications.service')
