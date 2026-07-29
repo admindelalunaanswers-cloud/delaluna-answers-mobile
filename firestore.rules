@@ -55,10 +55,14 @@ service cloud.firestore {
       // First-time create: only the owner; createdAt must be a server timestamp.
       // Clients can never self-create with isPremiumMember/isAdmin set — both
       // are written server-side (RevenueCat extension and syncAdminClaim).
+      // `isEmailVerified` is listed here as well as in noProtectedFieldsChanged:
+      // it is read server-side, so a client that seeded it true at create time
+      // would be asserting an email ownership it never proved.
       allow create: if isOwner(uid)
         && request.resource.data.createdAt == request.time
         && (!('isPremiumMember' in request.resource.data) || request.resource.data.isPremiumMember == false)
-        && (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false);
+        && (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false)
+        && (!('isEmailVerified' in request.resource.data) || request.resource.data.isEmailVerified == false);
 
       // Updates: owner can edit profile fields but cannot change protected
       // fields, AND must be email-verified. The extra checks let admins
@@ -88,7 +92,17 @@ service cloud.firestore {
       match /updayedChat/{messageId} {
         // The active rolling chat (Firestore Extension reads/writes this; the
         // extension uses admin SDK so it bypasses these rules).
-        allow read, write: if isVerifiedOwner(uid);
+        //
+        // A non-empty `prompt` is what makes the Gemini extension run a
+        // generation, so clients must not be able to write one — the daily
+        // question allowance and chat-pack balance are enforced in the
+        // `sendChatMessage` Cloud Function, and a direct Firestore write would
+        // sidestep both. Prompt-less creates stay allowed so restoring a saved
+        // session (resumeChatSession) can write back completed turns.
+        allow read, delete: if isVerifiedOwner(uid);
+        allow create: if isVerifiedOwner(uid)
+          && request.resource.data.get('prompt', '') == '';
+        allow update: if false;
       }
 
       match /savedChats/{sessionId} {
@@ -111,6 +125,15 @@ service cloud.firestore {
       // RevenueCat extension writes purchase receipts here via the admin SDK.
       // The client is read-only.
       match /purchases/{purchaseId} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+
+      // Chat question ledger — written only by the sendChatMessage Cloud
+      // Function. Deliberately NOT derived from the chat documents themselves:
+      // the client can delete its own chat history, which would otherwise
+      // reset the daily allowance on demand.
+      match /chatUsage/{docId} {
         allow read: if isOwner(uid);
         allow write: if false;
       }
@@ -148,8 +171,12 @@ service cloud.firestore {
     // performanceLogs/{screenSlug}/events ← raw client events (write-only for client)
     // performanceLogs/{screenSlug}/daily  ← CF aggregations (admin-read only)
     match /performanceLogs/{screenSlug} {
-      // Any signed-in user may merge lastEventAt onto the parent doc.
-      allow write: if isSignedIn();
+      // Any signed-in user may merge screen metadata onto the parent doc — and
+      // nothing else. An unrestricted write here let any user delete another
+      // screen's doc or graft arbitrary fields onto the admin analytics view.
+      allow create, update: if isSignedIn()
+        && request.resource.data.keys().hasOnly(['screen', 'screenPath', 'lastEventAt']);
+      allow delete: if false;
       allow read:  if isAdmin();
 
       match /events/{eventId} {
