@@ -15,6 +15,11 @@
  * Reserved:
  *   - `crash()` is intentionally exposed as `forceCrash()` so the call
  *     site is grep-able and obviously test-only.
+ *
+ * This module deliberately keeps raw `if (__DEV__) console.warn` instead of
+ * `src/utils/logger`: the logger imports *this* file to forward errors, so
+ * using it here would be a cycle. These warns only report a failure of
+ * Crashlytics itself, which by definition can't be reported to Crashlytics.
  */
 
 import {
