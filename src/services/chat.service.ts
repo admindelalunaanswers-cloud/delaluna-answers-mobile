@@ -1,6 +1,7 @@
+import { httpsCallable } from 'firebase/functions';
 import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore';
 
-import { db } from '@/firebaseConfig';
+import { db, functions } from '@/firebaseConfig';
 
 // ─── Persona / system context ─────────────────────────────────────────────────
 // Prepended to every chat prompt so the persona is enforced client-side
@@ -105,18 +106,11 @@ export async function clearChatHistory(uid: string): Promise<void> {
   await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'users', uid, 'updayedChat', d.id))));
 }
 
-/**
- * Sends a chat message by writing a document to users/{uid}/updayedChat.
- * The Firebase Extension reads the `prompt` field and writes back `response`.
- * When a natal chart summary is provided it is prepended to the prompt so the
- * AI can give personalised, chart-aware answers.
- */
-export async function sendChatMessage(
-  uid: string,
+function buildPrompt(
   userMessage: string,
   natalChartSummary?: string,
   connection?: ChatConnectionContext,
-): Promise<void> {
+): string {
   let prompt = SYSTEM_CONTEXT;
   if (natalChartSummary) {
     prompt += `\n\nThe user's natal chart for personalized answers:\n${natalChartSummary}`;
@@ -125,22 +119,62 @@ export async function sendChatMessage(
     prompt += `\n\nContext on the person they're asking about — ${connection.name}:\n${connection.contextSummary}`;
   }
   prompt += `\n\nUser: ${userMessage}`;
-
-  const payload: Record<string, any> = {
-    userMessage,
-    prompt,
-    createTime: Timestamp.now(),
-  };
-  if (connection) {
-    payload.connectionId = connection.id;
-    payload.connectionName = connection.name;
-  }
-
-  await addDoc(collection(db, 'users', uid, 'updayedChat'), payload);
+  return prompt;
 }
 
 /**
- * Deletes a stuck/errored message doc and re-submits it to re-trigger the extension.
+ * Raised when the server rejects a send because the user is out of questions.
+ * The chat screen catches this to open the chat-pack paywall.
+ */
+export class ChatQuotaExceededError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ChatQuotaExceededError';
+  }
+}
+
+const sendChatMessageFn = httpsCallable<
+  Record<string, unknown>,
+  { messageId: string }
+>(functions, 'sendChatMessage');
+
+async function submit(payload: Record<string, unknown>): Promise<void> {
+  try {
+    await sendChatMessageFn(payload);
+  } catch (err: any) {
+    if (err?.code === 'functions/resource-exhausted') {
+      throw new ChatQuotaExceededError(err?.message ?? 'Out of questions.');
+    }
+    throw err;
+  }
+}
+
+/**
+ * Sends a chat message through the `sendChatMessage` Cloud Function, which
+ * enforces the daily question allowance and chat-pack balance before writing
+ * to users/{uid}/updayedChat. Firestore rules reject client-written prompts,
+ * so this is the only way to trigger a generation — the in-app counter is a
+ * display of the server's limit, not the limit itself.
+ */
+export async function sendChatMessage(
+  uid: string,
+  userMessage: string,
+  natalChartSummary?: string,
+  connection?: ChatConnectionContext,
+): Promise<void> {
+  await submit({
+    userMessage,
+    prompt: buildPrompt(userMessage, natalChartSummary, connection),
+    ...(connection
+      ? { connectionId: connection.id, connectionName: connection.name }
+      : {}),
+  });
+}
+
+/**
+ * Re-submits a stuck/errored message. The server verifies the message really
+ * did fail before deleting it and re-running the generation without charging
+ * another question.
  */
 export async function retryChatMessage(
   uid: string,
@@ -149,8 +183,14 @@ export async function retryChatMessage(
   natalChartSummary?: string,
   connection?: ChatConnectionContext,
 ): Promise<void> {
-  await deleteDoc(doc(db, 'users', uid, 'updayedChat', docId));
-  await sendChatMessage(uid, userMessage, natalChartSummary, connection);
+  await submit({
+    userMessage,
+    prompt: buildPrompt(userMessage, natalChartSummary, connection),
+    retryOf: docId,
+    ...(connection
+      ? { connectionId: connection.id, connectionName: connection.name }
+      : {}),
+  });
 }
 
 /**

@@ -32,7 +32,7 @@ import { useResponsive } from '@/src/hooks/use-responsive';
 import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
 import { getContentPadding, MAX_CONTENT_WIDTH } from '@/src/utils/layout';
 import type { ChatConnectionContext, ChatMessageDoc, SavedChatSession } from '@/src/services/chat.service';
-import { deleteChatSession, resumeChatSession, retryChatMessage, saveChatAndClear, sendChatMessage, subscribeToChatHistory, subscribeToChatSessions } from '@/src/services/chat.service';
+import { ChatQuotaExceededError, deleteChatSession, resumeChatSession, retryChatMessage, saveChatAndClear, sendChatMessage, subscribeToChatHistory, subscribeToChatSessions } from '@/src/services/chat.service';
 import { Events } from '@/src/services/analytics.service';
 import { recordError } from '@/src/services/crashlytics.service';
 import { buildConnectionContextSummary } from '@/src/services/connection-context.service';
@@ -40,6 +40,7 @@ import { buildNatalChartSummary } from '@/src/services/natal-chart-breakdown.ser
 import { ChatStore } from '@/src/stores/chat-store';
 import { renderRichText } from '@/src/utils/rich-text';
 import { checkForHarm, HARM_ALERTS } from '@/src/utils/harm-filter';
+import { logger } from '@/src/utils/logger';
 
 const SUGGESTIONS = [
   HOME_STRINGS.newLove.questionFunnel,
@@ -234,7 +235,7 @@ export default function ChatScreen() {
         const ctx = await buildConnectionContextSummary(authUser.uid, pending.id);
         if (!cancelled && ctx) setSelectedConnection(ctx);
       } catch (e) {
-        console.error('connection context load error', e);
+        logger.error('[chat] connection context load failed', e, 'chat_connection_context');
       }
     })();
     return () => { cancelled = true; };
@@ -329,8 +330,14 @@ export default function ChatScreen() {
       logOp('chat_send', Date.now() - t);
       Events.chatMessageSent({ length: msg.length });
     } catch (e) {
+      // The server is the authority on the question allowance — the counter
+      // above is only a display. If it says we're out, fall back to the paywall.
+      if (e instanceof ChatQuotaExceededError) {
+        handleLimitReached(msg);
+        return;
+      }
       logPerfError(e instanceof Error ? e.message : String(e));
-      console.error('chat send error', e);
+      logger.error('[chat] send failed', e, 'chat_send');
       recordError(e, 'chat_send');
     } finally {
       setIsSending(false);
@@ -352,7 +359,7 @@ export default function ChatScreen() {
       await retryChatMessage(authUser.uid, msg.id, msg.userMessage, chartSummary, retryCtx);
       Events.chatRetry();
     } catch (e) {
-      console.error('chat retry error', e);
+      logger.error('[chat] retry failed', e, 'chat_retry');
       recordError(e, 'chat_retry');
     }
   }, [authUser, chartSummary, selectedConnection]);
@@ -366,7 +373,7 @@ export default function ChatScreen() {
       const ctx = await buildConnectionContextSummary(authUser.uid, picked.id);
       if (ctx) setSelectedConnection(ctx);
     } catch (e) {
-      console.error('connection context load error', e);
+      logger.error('[chat] connection context load failed', e, 'chat_connection_context');
     }
   }, [authUser]);
 
@@ -392,7 +399,7 @@ export default function ChatScreen() {
       setViewingSession(null);
       setShowHistory(false);
     } catch (e) {
-      console.error('chat resume error', e);
+      logger.error('[chat] resume failed', e, 'chat_resume');
     }
   }, [authUser]);
 
