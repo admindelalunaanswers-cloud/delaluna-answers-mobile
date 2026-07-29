@@ -106,6 +106,19 @@ jest.mock('react-native-purchases-ui', () => ({
   },
 }));
 
+// src/utils/logger.ts forwards errors to Crashlytics, so anything that logs an
+// error pulls this native module in. Stub it so tests don't need a native host.
+jest.mock('@react-native-firebase/crashlytics', () => ({
+  getCrashlytics: jest.fn(() => ({})),
+  crash: jest.fn(),
+  log: jest.fn(),
+  recordError: jest.fn(),
+  setAttribute: jest.fn(),
+  setAttributes: jest.fn(),
+  setCrashlyticsCollectionEnabled: jest.fn(() => Promise.resolve()),
+  setUserId: jest.fn(),
+}));
+
 jest.mock('expo-device', () => ({
   isDevice: true,
 }));
