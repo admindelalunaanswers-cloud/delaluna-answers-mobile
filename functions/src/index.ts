@@ -192,8 +192,83 @@ const CreateConnectionSchema = z.object({
   firstPerson: PersonSchema,
   secondPerson: PersonSchema,
   prompt: z.string().max(32000).optional(),
-  birthDetailsChangeCount: z.number().int().nonnegative().optional(),
 });
+
+const SendChatMessageSchema = z.object({
+  userMessage: z.string().min(1).max(4000),
+  prompt: z.string().min(1).max(32000),
+  connectionId: z
+    .string()
+    .min(1)
+    .max(200)
+    .regex(/^[A-Za-z0-9_\-]+$/)
+    .optional(),
+  connectionName: z.string().max(200).optional(),
+  /**
+   * Id of a failed message being retried. When it points at a genuinely failed
+   * generation the retry is not billed again — see sendChatMessage. Restricted
+   * to plain id characters so it can't be used to walk out of the collection.
+   */
+  retryOf: z
+    .string()
+    .min(1)
+    .max(200)
+    .regex(/^[A-Za-z0-9_\-]+$/, "Invalid message id.")
+    .optional(),
+});
+
+// How many times a connection's birth details may be edited. Mirrors
+// MAX_BIRTH_DETAIL_CHANGES in app/connection/[id]/edit.tsx; enforced in
+// createConnection against a server-derived counter.
+const MAX_BIRTH_DETAIL_CHANGES = 3;
+
+// The person fields that count as "birth details" for that cap.
+const BIRTH_DETAIL_FIELDS = [
+  "birthday",
+  "timeOfBirth",
+  "placeOfBirth",
+  "birthLat",
+  "birthLon",
+  "birthTimezone",
+  "isBirthTimeUnknown",
+  "isPlaceOfBirthUnknown",
+] as const;
+
+/** True when any birth-detail field differs between the stored and incoming person. */
+function birthDetailsDiffer(
+  stored: unknown,
+  incoming: Record<string, unknown>,
+): boolean {
+  if (!stored || typeof stored !== "object") return false; // nothing to compare against
+  const prev = stored as Record<string, unknown>;
+  return BIRTH_DETAIL_FIELDS.some((f) => (prev[f] ?? null) !== (incoming[f] ?? null));
+}
+
+// ─── Chat quota ──────────────────────────────────────────────────────────────
+
+// Daily question allowance, by entitlement. These mirror
+// DEFAULT_DAILY_CHAT_LIMIT / DEFAULT_PREMIUM_DAILY_CHAT_LIMIT in
+// src/context/admin-context.tsx, which drives the client-side UI counter.
+//
+// The admin screen's limit sliders persist to AsyncStorage — device-local, so
+// they cannot reach the server. Admins are exempted from the quota entirely
+// (see sendChatMessage) so that testing workflow still works without letting a
+// client-side setting relax a server-side limit.
+const FREE_DAILY_CHAT_LIMIT = 2;
+const PREMIUM_DAILY_CHAT_LIMIT = 2;
+
+// A chat document with no response older than this is treated as a failed
+// generation for the purposes of an unbilled retry.
+const GENERATION_STUCK_MS = 3 * 60 * 1000;
+
+// Consumable chat packs. Must match PRODUCT_IDS / CHAT_PACK_QUANTITIES in
+// src/services/revenuecat.service.ts.
+const CHAT_PACK_QUANTITIES: Record<string, number> = {
+  "delaluna.iap.chat_pack_1": 1,
+  "delaluna.iap.chat_pack_3": 3,
+  "delaluna.iap.chat_pack_5": 5,
+  "delaluna.iap.chat_pack_10": 10,
+};
 
 // ─── sendVerificationCode ─────────────────────────────────────────────────────
 
@@ -206,11 +281,26 @@ export const sendVerificationCode = onCall(
     }
 
     const uid = request.auth.uid;
-    const email = request.auth.token.email;
-    console.log("Auth: ", request.auth);
+
+    // Read the address off the Auth record, not request.auth.token.email — the
+    // ID token is cached for up to an hour, so right after an email change the
+    // token still carries the old address and we'd mail the code there.
+    // verifyCode compares against this same source, so the two stay in step.
+    const authUser = await admin.auth().getUser(uid);
+    const email = authUser.email;
 
     if (!email) {
       throw new HttpsError("invalid-argument", "No email on account.");
+    }
+
+    // Keep the display mirror honest: an email change resets emailVerified on
+    // the Auth record, but `users/{uid}.isEmailVerified` is server-only and
+    // would otherwise still read true from a previous verification.
+    if (!authUser.emailVerified) {
+      await db
+        .collection("users")
+        .doc(uid)
+        .set({ isEmailVerified: false }, { merge: true });
     }
 
     // Rate-limit: check if a code was sent in the last 60 seconds
@@ -290,6 +380,29 @@ export const verifyCode = onCall({ invoker: "public" }, async (request) => {
   const expiresAt: Timestamp = data.expiresAt;
   const attempts: number = data.attempts ?? 0;
 
+  // Bind the code to the mailbox it was actually delivered to. Without this a
+  // user could request a code at an address they own, change the account email
+  // (edit-profile calls updateEmail, which drops emailVerified back to false),
+  // then redeem the old code to get emailVerified=true on an address they have
+  // never proven ownership of — which syncAdminClaim would then treat as proof
+  // for the ADMIN_EMAILS allowlist.
+  //
+  // Read the address off the Auth record rather than request.auth.token.email:
+  // the ID token is cached for up to an hour, so a token minted before the
+  // email change would still carry the old address.
+  const authUser = await admin.auth().getUser(uid);
+  const issuedTo = String(data.email ?? "").toLowerCase();
+  const currentEmail = (authUser.email ?? "").toLowerCase();
+
+  if (!issuedTo || !currentEmail || issuedTo !== currentEmail) {
+    // The code is dead — it belongs to an address no longer on this account.
+    await otpRef.delete();
+    throw new HttpsError(
+      "failed-precondition",
+      "Your email address changed after this code was sent. Please request a new one.",
+    );
+  }
+
   if (attempts >= 5) {
     await otpRef.delete();
     throw new HttpsError(
@@ -352,8 +465,14 @@ export const syncAdminClaim = onCall(
     }
 
     const uid = request.auth.uid;
-    const email = (request.auth.token.email ?? "").toLowerCase();
-    const emailVerified = request.auth.token.email_verified === true;
+
+    // Source the identity from the Auth record, not request.auth.token. The ID
+    // token is cached for up to an hour, so a token issued before an email
+    // change (or before emailVerified was reset by one) can misrepresent both
+    // fields — and this is the function that hands out the admin claim.
+    const userRecord = await admin.auth().getUser(uid);
+    const email = (userRecord.email ?? "").toLowerCase();
+    const emailVerified = userRecord.emailVerified === true;
 
     const allowed = adminEmails
       .value()
@@ -363,7 +482,6 @@ export const syncAdminClaim = onCall(
 
     const shouldBeAdmin = emailVerified && !!email && allowed.includes(email);
 
-    const userRecord = await admin.auth().getUser(uid);
     const existingClaims = (userRecord.customClaims ?? {}) as Record<
       string,
       unknown
@@ -389,9 +507,9 @@ export const syncAdminClaim = onCall(
       .doc(uid)
       .set({ isAdmin: shouldBeAdmin }, { merge: true });
 
-    console.log(
-      `[syncAdminClaim] uid=${uid} email=${email} -> admin=${shouldBeAdmin}`,
-    );
+    // uid is enough to identify the account here; the email address is PII and
+    // this line runs on every sign-in that flips the claim.
+    console.log(`[syncAdminClaim] uid=${uid} -> admin=${shouldBeAdmin}`);
 
     return { admin: shouldBeAdmin, changed: true };
   },
@@ -934,7 +1052,6 @@ export const createConnection = onCall(async (request) => {
     firstPerson,
     secondPerson,
     prompt: clientPrompt,
-    birthDetailsChangeCount,
   } = parseInput(CreateConnectionSchema, request.data);
 
   // Only allow users to create connections under their own user doc
@@ -1004,6 +1121,28 @@ export const createConnection = onCall(async (request) => {
 
   const existingSnap = await connectionRef.get();
   const isNew = !existingSnap.exists;
+  const existing = existingSnap.data();
+
+  // Birth-detail edits are capped (MAX_BIRTH_DETAIL_CHANGES in
+  // app/connection/[id]/edit.tsx). The counter is derived here rather than
+  // accepted from the client — otherwise a caller could simply resubmit
+  // birthDetailsChangeCount: 0 on every edit and never hit the cap.
+  const priorChangeCount = Number(existing?.birthDetailsChangeCount ?? 0);
+  const birthDetailsChanged =
+    !isNew &&
+    (birthDetailsDiffer(existing?.firstPerson, mappedFirst) ||
+      birthDetailsDiffer(existing?.secondPerson, mappedSecond));
+
+  if (birthDetailsChanged && priorChangeCount >= MAX_BIRTH_DETAIL_CHANGES) {
+    throw new HttpsError(
+      "resource-exhausted",
+      `Connection birth details can only be updated ${MAX_BIRTH_DETAIL_CHANGES} times.`,
+    );
+  }
+
+  const nextChangeCount = birthDetailsChanged
+    ? priorChangeCount + 1
+    : priorChangeCount;
 
   await connectionRef.set(
     {
@@ -1013,10 +1152,7 @@ export const createConnection = onCall(async (request) => {
       firstPerson: mappedFirst,
       secondPerson: mappedSecond,
       status: { state: "pending" },
-      birthDetailsChangeCount:
-        typeof birthDetailsChangeCount === "number"
-          ? birthDetailsChangeCount
-          : (existingSnap.data()?.birthDetailsChangeCount ?? 0),
+      birthDetailsChangeCount: nextChangeCount,
       // Stamp createTime only on first creation; preserve it on edits
       ...(isNew ? { createTime: FieldValue.serverTimestamp() } : {}),
       // Clear any previous compatibility so the UI shows pending until the new report parses
@@ -1037,6 +1173,181 @@ export const createConnection = onCall(async (request) => {
   );
 
   return { connectionId };
+});
+
+// ─── sendChatMessage ─────────────────────────────────────────────────────────
+
+/**
+ * Counts the chat-pack questions a user has ever bought, from the RevenueCat
+ * extension's purchaser-info mirror (`subscriber.non_subscriptions` — the v1
+ * subscriber record of consumable purchases, one entry per purchase).
+ *
+ * Returns 0 if the mirror is missing or shaped unexpectedly, which fails
+ * closed: the user falls back to their daily allowance only.
+ */
+async function purchasedChatCredits(uid: string): Promise<number> {
+  try {
+    const snap = await db
+      .doc(`subscriptions/purchaser-info/customers/${uid}`)
+      .get();
+    const data = snap.data();
+    const nonSubs =
+      data?.subscriber?.non_subscriptions ?? data?.non_subscriptions;
+    if (!nonSubs || typeof nonSubs !== "object") return 0;
+
+    let total = 0;
+    for (const [productId, purchases] of Object.entries(nonSubs)) {
+      const perPurchase = CHAT_PACK_QUANTITIES[productId];
+      if (!perPurchase) continue; // not a chat pack
+      total += perPurchase * (Array.isArray(purchases) ? purchases.length : 1);
+    }
+    return total;
+  } catch (err) {
+    console.error(`[sendChatMessage] credit lookup failed for ${uid}:`, err);
+    return 0;
+  }
+}
+
+/**
+ * The only path that may submit a chat prompt for AI generation.
+ *
+ * Previously the client wrote straight into `users/{uid}/updayedChat` and the
+ * Gemini extension picked it up, so the paywall and the daily question limit
+ * were enforced in React state only — any user could drive unlimited paid
+ * generation by writing to Firestore with their own credentials. Firestore
+ * rules now reject client-written prompts; the quota is enforced here.
+ *
+ * Usage is tracked in `users/{uid}/chatUsage/{YYYY-MM-DD}` rather than by
+ * counting chat documents, because the client can delete its own chat history
+ * (clearChatHistory / deleteChatSession) and would otherwise reset its quota
+ * at will. That collection is server-write-only.
+ */
+export const sendChatMessage = onCall({ invoker: "public" }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in.");
+  }
+  if (request.auth.token.email_verified !== true) {
+    throw new HttpsError(
+      "permission-denied",
+      "Please verify your email address first.",
+    );
+  }
+
+  const uid = request.auth.uid;
+  const input = parseInput(SendChatMessageSchema, request.data);
+
+  const userRef = db.collection("users").doc(uid);
+  const usageRef = userRef.collection("chatUsage");
+  const chatRef = userRef.collection("updayedChat");
+
+  // Admins are exempt — they already hold a full read/write claim, so metering
+  // them adds nothing, and it keeps the admin screen's limit sliders usable.
+  const isAdmin = request.auth.token.admin === true;
+
+  // Re-running a generation that actually failed is free. The retried document
+  // must be in the extension's ERROR state (or have been stuck without a
+  // response past the generation timeout) and is consumed here, so this can't
+  // be looped to farm unbilled generations off an in-flight message.
+  let freeRetry = false;
+  if (input.retryOf) {
+    const prevRef = chatRef.doc(input.retryOf);
+    const prev = await prevRef.get();
+    if (prev.exists) {
+      const prevData = prev.data()!;
+      const state = String(prevData.status?.state ?? "").toUpperCase();
+      const createdMs =
+        (prevData.createTime as Timestamp | undefined)?.toMillis() ?? 0;
+      const stuck =
+        !prevData.response &&
+        createdMs > 0 &&
+        Date.now() - createdMs > GENERATION_STUCK_MS;
+
+      if (state === "ERROR" || stuck) {
+        await prevRef.delete();
+        freeRetry = true;
+      }
+    }
+  }
+
+  if (!isAdmin && !freeRetry) {
+    const [premium, purchased, userSnap] = await Promise.all([
+      isUserPremium(uid),
+      purchasedChatCredits(uid),
+      userRef.get(),
+    ]);
+
+    // Bill against the user's local day so the quota resets at their midnight,
+    // matching what the in-app counter shows.
+    const offset = userSnap.data()?.timezoneOffsetMinutes;
+    const nowLocal =
+      typeof offset === "number" && Number.isFinite(offset)
+        ? new Date(Date.now() + offset * 60 * 1000)
+        : new Date();
+    const dayId = formatDateId(nowLocal);
+
+    const dailyLimit = premium
+      ? PREMIUM_DAILY_CHAT_LIMIT
+      : FREE_DAILY_CHAT_LIMIT;
+
+    // Read-modify-write in a transaction so parallel sends can't both pass the
+    // check and overspend the allowance.
+    await db.runTransaction(async (tx) => {
+      const dayRef = usageRef.doc(dayId);
+      const creditsRef = usageRef.doc("_credits");
+      const [daySnap, creditsSnap] = await Promise.all([
+        tx.get(dayRef),
+        tx.get(creditsRef),
+      ]);
+
+      const usedToday = Number(daySnap.data()?.count ?? 0);
+      const creditsSpent = Number(creditsSnap.data()?.consumed ?? 0);
+      const creditsLeft = Math.max(0, purchased - creditsSpent);
+
+      if (usedToday < dailyLimit) {
+        tx.set(
+          dayRef,
+          { count: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() },
+          { merge: true },
+        );
+        return;
+      }
+
+      if (creditsLeft > 0) {
+        // Daily allowance is spent — draw down a purchased chat-pack question.
+        tx.set(
+          creditsRef,
+          {
+            consumed: FieldValue.increment(1),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+        tx.set(
+          dayRef,
+          { count: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() },
+          { merge: true },
+        );
+        return;
+      }
+
+      throw new HttpsError(
+        "resource-exhausted",
+        "You've used all your questions. Purchase a chat pack to keep going.",
+      );
+    });
+  }
+
+  const payload: Record<string, unknown> = {
+    userMessage: input.userMessage,
+    prompt: sanitizePrompt(input.prompt),
+    createTime: FieldValue.serverTimestamp(),
+  };
+  if (input.connectionId) payload.connectionId = input.connectionId;
+  if (input.connectionName) payload.connectionName = input.connectionName;
+
+  const created = await chatRef.add(payload);
+
+  return { messageId: created.id };
 });
 
 // ─── Push helper ─────────────────────────────────────────────────────────────
@@ -1127,7 +1438,15 @@ export const notifyBreakdownReady = onDocumentUpdated(
       );
       return;
     }
-    if (!userData?.isEmailVerified) {
+    // Check the Auth record, not users/{uid}.isEmailVerified — the mirror is a
+    // display field that can lag an email change, and historically the client
+    // could seed it at signup.
+    const verified = await admin
+      .auth()
+      .getUser(userId)
+      .then((u) => u.emailVerified)
+      .catch(() => false);
+    if (!verified) {
       console.info(
         `[notifyBreakdownReady] Skip — user ${userId} email not verified`,
       );
