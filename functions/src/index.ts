@@ -471,8 +471,8 @@ const ROLLOVER_PUSH_LOCAL_HOUR = 0;
 // Each user is assigned a stable per-UID hour in [HOUR_BASE, HOUR_BASE + HOUR_SPAN)
 // so we don't blast every user at exactly 8:00 AM (Expo throttles, and we'd also
 // burst Google AI generation if the rollover/horoscope generation kicks in).
-const HOUR_BASE = 6; // earliest local hour
-const HOUR_SPAN = 5; // 6,7,8,9,10
+const HOUR_BASE = 8; // earliest local hour
+const HOUR_SPAN = 3; // 8,9,10
 const SUNDAY = 0; // Date.getUTCDay()
 
 // Premium entitlement id used by RevenueCat (must match the entitlement
@@ -771,9 +771,21 @@ export const dailyHoroscopeNotifications = onSchedule(
       }
     }
 
+    // Collapse duplicates before sending. The loop above iterates user docs,
+    // but a single device token can sit on more than one doc (a dev/test
+    // account signed in and abandoned without logging out keeps its token) —
+    // without this the device receives the same reminder once per stale doc.
+    const seen = new Set<string>();
+    const unique = messages.filter((m) => {
+      const key = `${m.to}|${m.title}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
     // Send the timing-based pushes.
-    for (let i = 0; i < messages.length; i += PUSH_CHUNK_SIZE) {
-      const chunk = messages.slice(i, i + PUSH_CHUNK_SIZE);
+    for (let i = 0; i < unique.length; i += PUSH_CHUNK_SIZE) {
+      const chunk = unique.slice(i, i + PUSH_CHUNK_SIZE);
       await fetch(EXPO_PUSH_URL, {
         method: "POST",
         headers: {
@@ -788,7 +800,8 @@ export const dailyHoroscopeNotifications = onSchedule(
     const drained = await drainScheduledPushes(now);
 
     console.info(
-      `[dailyHoroscopeNotifications] sent ${messages.length} timed + ${drained} drained pushes`,
+      `[dailyHoroscopeNotifications] sent ${unique.length} timed ` +
+        `(${messages.length - unique.length} deduped) + ${drained} drained pushes`,
     );
   },
 );
