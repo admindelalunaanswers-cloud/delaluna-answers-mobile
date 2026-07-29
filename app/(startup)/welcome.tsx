@@ -1,13 +1,16 @@
-import React, { useRef } from 'react';
-import { ImageBackground, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { router } from 'expo-router';
-import LottieView from 'lottie-react-native';
-import { StatusBar } from 'expo-status-bar';
+import { router } from "expo-router";
+import LottieView from "lottie-react-native";
+import { useRef } from "react";
+import {
+  ImageBackground,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from "react-native";
 
-import ButtonText from '@/src/components/typography/button-text';
-import PrimaryButton from '@/src/assets/buttons/primary-button-component';
-import SecondaryButton from '@/src/assets/buttons/secondary-button-component';
-import { scale, verticalScale } from '@/src/utils/responsive';
+import PrimaryButton from "@/src/assets/buttons/primary-button-component";
+import { scale, verticalScale } from "@/src/utils/responsive";
+import { LinearGradient } from "expo-linear-gradient";
 
 export default function Welcome() {
   const { width } = useWindowDimensions();
@@ -16,49 +19,44 @@ export default function Welcome() {
 
   const handleGetStarted = () => {
     galaxyRef.current?.pause();
-    setTimeout(() => router.replace('/sign-up'), 120);
+    setTimeout(() => router.replace("/sign-up"), 120);
   };
 
   return (
     <ImageBackground
-      source={require('@/src/assets/start-up/welcome-background.jpg')}
+      source={require("@/src/assets/start-up/welcome-background.jpg")}
       style={styles.container}
       resizeMode="cover"
     >
-      <StatusBar style="light" />
-
-      {/* TOP: galaxy animation fills, logo centered on top */}
       <View pointerEvents="none" style={styles.topContainer}>
         <LottieView
           ref={galaxyRef}
-          source={require('@/src/assets/animations/galaxy.json')}
+          source={require("@/src/assets/animations/galaxy.json")}
           autoPlay
           loop
           style={styles.topAnimation}
         />
         <View pointerEvents="none" style={styles.logoWrap}>
           <LottieView
-            source={require('@/src/assets/animations/logo.json')}
+            source={require("@/src/assets/animations/logo.json")}
             autoPlay
             loop={false}
-            style={{ width: '100%', height: '100%' }}
+            style={{ width: "100%", height: "100%" }}
           />
         </View>
       </View>
 
-      {/* BOTTOM: buttons */}
+      <LinearGradient
+        pointerEvents="none"
+        colors={["transparent", "rgba(10,9,24,0.55)", "rgba(10,9,24,0.85)"]}
+        locations={[0, 0.35, 1]}
+        style={styles.scrim}
+      />
+
       <View style={styles.bottomContainer}>
-        <PrimaryButton title="Get Started" onPress={handleGetStarted} />
-
-        <View style={styles.divider} />
-
-        <ButtonText>
-          <SecondaryButton
-            title="Already a member?"
-            linkString="Log In"
-            onPress={() => router.replace('/login')}
-          />
-        </ButtonText>
+        <View style={styles.card}>
+          <PrimaryButton title="Get Started" onPress={handleGetStarted} />
+        </View>
       </View>
     </ImageBackground>
   );
@@ -70,13 +68,13 @@ const styles = StyleSheet.create({
   },
   topContainer: {
     flex: 3.5,
-    position: 'relative',
+    position: "relative",
     paddingBottom: verticalScale(75),
   },
   bottomContainer: {
     flex: 2,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
+    alignItems: "center",
+    justifyContent: "flex-start",
     paddingTop: verticalScale(75),
     paddingBottom: verticalScale(30),
     gap: verticalScale(15),
@@ -89,14 +87,24 @@ const styles = StyleSheet.create({
   },
   logoWrap: {
     ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     zIndex: 2,
   },
   divider: {
-    width: '80%',
+    width: "80%",
     height: StyleSheet.hairlineWidth,
-    backgroundColor: '#D4D6DD',
+    backgroundColor: "#D4D6DD",
     marginVertical: verticalScale(15),
+  },
+  card: {
+    width: "100%",
+    backgroundColor: "#0A0918",
+    borderRadius: scale(12),
+    paddingVertical: verticalScale(20),
+    paddingHorizontal: scale(24),
+  },
+  scrim: {
+    ...StyleSheet.absoluteFillObject,
   },
 });
