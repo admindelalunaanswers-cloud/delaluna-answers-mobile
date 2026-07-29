@@ -8,6 +8,7 @@
     "dev": "concurrently -k -n EMU,EXPO -c cyan,magenta \"firebase emulators:start --only auth,functions,firestore,storage,eventarc,extensions --import=./seed --export-on-exit=./seed\" \"expo start\"",
     "seed:export": "firebase emulators:export ./seed",
     "reset-project": "node ./scripts/reset-project.js",
+    "eas-build-pre-install": "node ./scripts/exclude-dev-client.js",
     "migrate:users-to-dllap": "node ./scripts/migrate-users-to-dllap.js",
     "android": "expo run:android",
     "ios": "expo run:ios",
@@ -53,6 +54,7 @@
     "expo-linking": "~8.0.11",
     "expo-notifications": "~0.32.16",
     "expo-router": "~6.0.23",
+    "expo-screen-orientation": "~9.0.9",
     "expo-secure-store": "~15.0.8",
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
@@ -108,5 +110,8 @@
     "@firebase/util@1.15.1": true,
     "protobufjs@7.6.5": true,
     "unrs-resolver@1.12.2": true
+  },
+  "volta": {
+    "node": "20.19.5"
   }
 }
