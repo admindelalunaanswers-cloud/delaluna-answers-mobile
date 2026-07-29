@@ -34,6 +34,7 @@ import { useUser } from '@/src/context/user-context';
 import { Events } from '@/src/services/analytics.service';
 
 import LoadingScreen from '../(util)/loading-screen';
+import { logger } from '@/src/utils/logger';
 
 // Safe AsyncStorage wrapper (mirrors theme-context pattern)
 let AsyncStorage: { getItem(k: string): Promise<string | null>; setItem(k: string, v: string): Promise<void> };
@@ -114,7 +115,7 @@ export default function Login() {
       // Record login timestamp on every login
       updateUserDoc(cred.user.uid, {
         lastLoggedInAt: serverTimestamp() as any,
-      }).catch(console.error);
+      }).catch(logger.catchAsync('login_touch_last_login'));
 
       const key = await resolveThemeBeforeNavigate(cred.user.uid);
       await Promise.resolve(setThemeKey(key));

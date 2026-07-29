@@ -4,6 +4,7 @@ import Constants from 'expo-constants';
 import { doc, onSnapshot } from 'firebase/firestore';
 
 import { db } from '../../firebaseConfig';
+import { logger } from '@/src/utils/logger';
 
 type Status = 'loading' | 'ok' | 'update-required';
 
@@ -60,7 +61,7 @@ export function useMinVersion(): {
       },
       // Fail open: a Firestore read error must not lock users out.
       (err) => {
-        console.warn('[useMinVersion] config read failed:', err);
+        logger.warn('[useMinVersion] config read failed:', err);
         setStatus('ok');
       },
     );

@@ -44,6 +44,7 @@ import {
   type UserSearchResult,
 } from "@/src/services/admin-entitlements.service";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
+import { logger } from "@/src/utils/logger";
 
 const NAV_BAR_HEIGHT = 44;
 const SHOW_ENTITLEMENT_OVERRIDES = false;
@@ -186,7 +187,7 @@ export default function AdminScreen() {
       try {
         setResults(await searchUsersByUidPrefix(prefix));
       } catch (err) {
-        console.error("[Admin] searchUsersByUidPrefix error:", err);
+        logger.error("[Admin] searchUsersByUidPrefix failed", err, "admin_user_search");
       } finally {
         setSearching(false);
       }
@@ -206,7 +207,7 @@ export default function AdminScreen() {
     try {
       setEntitlements(await getEntitlementMirror(uid));
     } catch (err) {
-      console.error("[Admin] getEntitlementMirror error:", err);
+      logger.error("[Admin] getEntitlementMirror failed", err, "admin_entitlement_mirror");
       setEntitlements(null);
     } finally {
       setLoadingEntitlements(false);

@@ -27,6 +27,7 @@ import { useUser } from "@/src/context/user-context";
 import { calculateNatalChart } from "@/src/services/astroEngine";
 import { NavigationStore } from "@/src/stores/navigation-store";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
+import { logger } from "@/src/utils/logger";
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -186,7 +187,7 @@ export default function PurchasedReportsScreen() {
         setLoading(false);
       },
       (err) => {
-        console.error("[purchased-reports] listener error:", err);
+        logger.error("[purchased-reports] listener failed", err, "purchased_reports_listener");
         setLoading(false);
       },
     );
@@ -198,7 +199,7 @@ export default function PurchasedReportsScreen() {
     const fp = c.firstPerson;
     const sp = c.secondPerson;
     if (!fp?.birthday || !sp?.birthday) {
-      console.warn("[purchased-reports] missing birthday on connection", c.id);
+      logger.warn("[purchased-reports] missing birthday on connection", c.id);
       return;
     }
 
@@ -214,7 +215,7 @@ export default function PurchasedReportsScreen() {
       });
       router.push(`/connection/${c.id}/synastry`);
     } catch (err) {
-      console.error("[purchased-reports] failed to open synastry", err);
+      logger.error("[purchased-reports] failed to open synastry", err, "purchased_reports_open_synastry");
     } finally {
       setOpeningId(null);
     }

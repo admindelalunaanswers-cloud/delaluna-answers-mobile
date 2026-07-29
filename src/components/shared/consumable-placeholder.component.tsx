@@ -28,6 +28,7 @@ import { PRODUCT_IDS, REVENUECAT_ENABLED, purchaseProduct } from '@/src/services
 import { Events } from '@/src/services/analytics.service';
 import { recordError } from '@/src/services/crashlytics.service';
 import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
+import { logger } from '@/src/utils/logger';
 
 // ─── Chat pack tiers ─────────────────────────────────────────────────────────
 
@@ -83,7 +84,7 @@ export default function ConsumablePlaceholder({ visible, onClose, onPurchased, o
         for (const p of products) map[p.identifier] = p;
         setStoreProducts(map);
       } catch (e) {
-        console.warn('[ConsumablePlaceholder] failed to fetch products:', e);
+        logger.warn('[ConsumablePlaceholder] failed to fetch products:', e);
         // Non-fatal — fall back to placeholder prices
       } finally {
         if (!cancelled) setLoadingProducts(false);
@@ -115,7 +116,7 @@ export default function ConsumablePlaceholder({ visible, onClose, onPurchased, o
       onClose();
     } catch (e: any) {
       if (e?.userCancelled) return;
-      console.error('[ConsumablePlaceholder] purchase error:', e);
+      logger.error('[ConsumablePlaceholder] purchase failed', e, 'consumable_purchase');
       recordError(e, 'consumable_purchase');
       Events.purchaseFailed({ product_id: tier.productId, reason: String(e?.message ?? e) });
       setErrorMsg('Purchase failed. Please try again.');

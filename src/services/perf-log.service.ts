@@ -20,6 +20,7 @@ import { addDoc, collection, doc, serverTimestamp, setDoc } from 'firebase/fires
 import { db } from '@/firebaseConfig';
 import { APP_ENV } from '@/src/constants/env';
 import { screenLabelForPath } from '@/src/services/analytics.service';
+import { logger } from '@/src/utils/logger';
 
 // ─── Session context ────────────────────────────────────────────────────────
 // sessionId is generated once at module load; other fields are gathered at call time.
@@ -69,7 +70,7 @@ function safeWrite(fn: () => Promise<void>, label: string): void {
     // "already-exists" is Firestore offline persistence replaying a prior
     // Fast Refresh session's write — the event was already committed.
     if (__DEV__ && err?.code !== 'already-exists') {
-      console.warn(`[perf-log] ${label} failed:`, err);
+      logger.warn(`[perf-log] ${label} failed:`, err);
     }
   });
 }

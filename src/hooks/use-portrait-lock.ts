@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { Dimensions, Platform, type ScaledSize } from 'react-native';
 
+import { logger } from '@/src/utils/logger';
+
 /**
  * expo-screen-orientation resolves its native module at import time, so a client
  * built before it was added throws on `require`. Orientation is cosmetic — degrade
@@ -11,7 +13,7 @@ let ScreenOrientation: typeof import('expo-screen-orientation') | null = null;
 try {
   ScreenOrientation = require('expo-screen-orientation');
 } catch {
-  console.warn(
+  logger.warn(
     '[usePortraitLock] expo-screen-orientation is unavailable — rebuild the native app to enable the portrait lock.',
   );
 }

@@ -13,6 +13,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { z } from "zod";
 import { DailyTarotSchema } from "../schemas/dailyTarot.schema";
+import { logger } from "@/src/utils/logger";
 
 // ----------------------------
 // 🔑 Cache Key Helpers
@@ -33,7 +34,7 @@ export async function clearTarotCache(userId: string) {
     const keys = [tarotDailyKey(userId), tarotHistoryKey(userId)];
     await AsyncStorage.multiRemove(keys);
   } catch (err) {
-    console.warn("⚠️ Failed to clear tarot cache:", err);
+    logger.warn("⚠️ Failed to clear tarot cache:", err);
   }
 }
 
@@ -48,7 +49,7 @@ export async function saveDailyCardToCache(
     const key = tarotDailyKey(userId);
     await AsyncStorage.setItem(key, JSON.stringify(card));
   } catch (err) {
-    console.warn("⚠️ Failed to save daily tarot card to cache:", err);
+    logger.warn("⚠️ Failed to save daily tarot card to cache:", err);
   }
 }
 
@@ -67,14 +68,14 @@ export async function getDailyCardFromCache(
     const result = DailyTarotSchema.safeParse(parsed);
 
     if (!result.success) {
-      console.warn("⚠️ Cached tarot card was invalid. Clearing.");
+      logger.warn("⚠️ Cached tarot card was invalid. Clearing.");
       await AsyncStorage.removeItem(key);
       return null;
     }
 
     return result.data;
   } catch (err) {
-    console.warn("⚠️ Failed to read tarot cache:", err);
+    logger.warn("⚠️ Failed to read tarot cache:", err);
     return null;
   }
 }
@@ -103,6 +104,6 @@ export async function appendToTarotHistory(
     history.unshift(entry);
     await AsyncStorage.setItem(key, JSON.stringify(history));
   } catch (err) {
-    console.warn("⚠️ Failed to update tarot history:", err);
+    logger.warn("⚠️ Failed to update tarot history:", err);
   }
 }

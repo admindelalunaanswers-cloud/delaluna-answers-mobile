@@ -5,6 +5,7 @@ import * as Notifications from 'expo-notifications';
 import { doc, setDoc } from 'firebase/firestore';
 
 import { db } from '@/firebaseConfig';
+import { logger } from '@/src/utils/logger';
 
 const EXPO_PROJECT_ID = 'a267fc5e-e587-4e94-b9ab-1cddd6decb94';
 
@@ -28,7 +29,7 @@ export async function registerForPushNotifications(uid: string): Promise<void> {
   }
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  console.log('[push] existing permission status:', existingStatus);
+  logger.debug('[push] existing permission status:', existingStatus);
   let finalStatus = existingStatus;
 
   if (existingStatus !== 'granted') {
@@ -38,11 +39,12 @@ export async function registerForPushNotifications(uid: string): Promise<void> {
     finalStatus = status;
   }
 
-  console.log('[push] final permission status:', finalStatus);
+  logger.debug('[push] final permission status:', finalStatus);
   if (finalStatus !== 'granted') return; // User declined — skip silently
 
   const token = await Notifications.getExpoPushTokenAsync({ projectId: EXPO_PROJECT_ID });
-  console.log('[push] token:', token.data);
+  // The token itself is a send-credential for this device — never log its value.
+  logger.debug('[push] token acquired');
 
   // Capture the device's current UTC offset so the daily-reminder Cloud Function can
   // send pushes at the user's local time. getTimezoneOffset() returns minutes WEST of
@@ -55,7 +57,7 @@ export async function registerForPushNotifications(uid: string): Promise<void> {
     { expoPushToken: token.data, timezoneOffsetMinutes },
     { merge: true },
   );
-  console.log('[push] token saved to Firestore (offset', timezoneOffsetMinutes, 'min)');
+  logger.debug('[push] token saved to Firestore (offset', timezoneOffsetMinutes, 'min)');
 }
 
 // ─── Unregistration ──────────────────────────────────────────────────────────
@@ -68,9 +70,9 @@ export async function unregisterPushToken(uid: string): Promise<void> {
   try {
     const { deleteField } = await import('firebase/firestore');
     await setDoc(doc(db, 'users', uid), { expoPushToken: deleteField() }, { merge: true });
-    console.log('[push] token removed from Firestore for user', uid);
+    logger.debug('[push] token removed from Firestore');
   } catch (err) {
-    console.error('[push] failed to remove token:', err);
+    logger.error('[push] failed to remove token', err, 'push_unregister');
   }
 }
 

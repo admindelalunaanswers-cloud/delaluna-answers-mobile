@@ -17,6 +17,7 @@ import { db } from '../../firebaseConfig';
 import { ThemeContext } from "@/src/context/theme-context";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import HeaderNav from "@/src/components/shared/header-nav";
+import { logger } from "@/src/utils/logger";
 
 
 export default function ChangeThemeScreen() {
@@ -44,7 +45,7 @@ export default function ChangeThemeScreen() {
           { merge: true }
         );
       } catch (err) {
-        console.error("Failed to save themeKey:", err);
+        logger.error("[update-theme] failed to save themeKey", err, "theme_save");
       }
     }
     router.replace("/(settings)/profile");

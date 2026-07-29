@@ -28,6 +28,7 @@ import { C } from "@/src/constants/theme";
 import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
 import { renderRichText } from "@/src/utils/rich-text";
 import { ThemedView } from "@/src/components/themed-view";
+import { logger } from "@/src/utils/logger";
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -186,7 +187,7 @@ export default function SynastryAnalysisScreen() {
           setLoading(false);
         });
       } catch (err) {
-        console.error("[synastry] failed to load reading", err);
+        logger.error("[synastry] failed to load reading", err, "synastry_load");
         if (!cancelled) setLoading(false);
       }
     })();

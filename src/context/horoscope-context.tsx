@@ -16,7 +16,7 @@ import { calculateTransits, type MoonData, type TransitData } from '@/src/servic
 import { recordError } from '@/src/services/crashlytics.service';
 
 const reportError = (label: string) => (e: unknown) => {
-  console.error(label, e);
+  logger.error(label, e, 'horoscope_context');
   recordError(e, label);
 };
 import {
@@ -52,6 +52,7 @@ import type { TransitReadingResult } from '@/src/types/transit-reading.types';
 import type { NatalChartDetailsDoc } from '@/src/types/user.type';
 
 import { useUser } from './user-context';
+import { logger } from '@/src/utils/logger';
 
 // ─── Transit cache ────────────────────────────────────────────────────────────
 // Avoids re-running the native Swiss Ephemeris calculation across re-mounts
@@ -153,7 +154,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     });
     unsubBreakdownRef.current = unsub;
 
-    if (!pending) requestBreakdown(uid, chart, pronouns).catch(console.error);
+    if (!pending) requestBreakdown(uid, chart, pronouns).catch(logger.catchAsync('horoscope_breakdown'));
   };
 
   const subscribeTransitReading = (
@@ -177,7 +178,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
     });
     unsubTransitRef.current = unsub;
 
-    if (!prefetched.pending) requestTransitReading(uid, dateId, chart, transits, pronouns).catch(console.error);
+    if (!prefetched.pending) requestTransitReading(uid, dateId, chart, transits, pronouns).catch(logger.catchAsync('horoscope_transit_reading'));
   };
 
   // ─── Main load ──────────────────────────────────────────────────────────────
@@ -242,7 +243,7 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
       if (chart) {
         subscribeBreakdown(uid, chart, signal, breakdownFetch, pronouns);
         if (transits) subscribeTransitReading(uid, weekDateId, chart, transits, signal, transitReadingFetch, pronouns);
-        requestSurroundingHoroscopes(uid, dateId, chart, pronouns).catch(console.error);
+        requestSurroundingHoroscopes(uid, dateId, chart, pronouns).catch(logger.catchAsync('horoscope_surrounding'));
       }
       return;
     }
@@ -280,14 +281,14 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
                 if (!signal.cancelled) {
                   subscribeBreakdown(uid, newChart, signal, freshBreakdownFetch, pronouns);
                 }
-              }).catch(console.error);
+              }).catch(logger.catchAsync('horoscope_fresh_breakdown'));
             }
             // Generate yesterday + tomorrow now that the chart exists.
             // Without this, new users only ever get today's horoscope until
             // the next day's rollover.
-            requestSurroundingHoroscopes(uid, dateId, newChart, pronouns).catch(console.error);
+            requestSurroundingHoroscopes(uid, dateId, newChart, pronouns).catch(logger.catchAsync('horoscope_surrounding'));
           }
-        }).catch(console.error);
+        }).catch(logger.catchAsync('horoscope_chart_ensure'));
       });
       unsubHoroscopeRef.current = unsubHoro;
 
@@ -322,14 +323,14 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
         .then(() => {
           subscribeBreakdown(uid, chart, signal, breakdownFetch, pronouns);
           if (transits) subscribeTransitReading(uid, weekDateId, chart, transits, signal, transitReadingFetch, pronouns);
-          requestSurroundingHoroscopes(uid, dateId, chart, pronouns).catch(console.error);
+          requestSurroundingHoroscopes(uid, dateId, chart, pronouns).catch(logger.catchAsync('horoscope_surrounding'));
         })
-        .catch(console.error);
+        .catch(logger.catchAsync('horoscope_bootstrap'));
     } else {
       // Horoscope already in-flight — subscribe transit + breakdown now, then surrounding.
       subscribeBreakdown(uid, chart, signal, breakdownFetch, pronouns);
       if (transits) subscribeTransitReading(uid, weekDateId, chart, transits, signal, transitReadingFetch, pronouns);
-      requestSurroundingHoroscopes(uid, dateId, chart, pronouns).catch(console.error);
+      requestSurroundingHoroscopes(uid, dateId, chart, pronouns).catch(logger.catchAsync('horoscope_surrounding'));
     }
   };
 
@@ -382,17 +383,17 @@ export function HoroscopeProvider({ children }: { children: ReactNode }) {
       if (g.breakdown) {
         fetchBreakdown(uid).then(({ result }) => {
           if (result) { setBreakdown(result); setBreakdownGenerating(false); }
-        }).catch(console.error);
+        }).catch(logger.catchAsync('horoscope_fetch_breakdown'));
       }
       if (g.transit) {
         fetchTransitReading(uid, getThisWeekDateId()).then(({ result }) => {
           if (result) { setTransitReading(result); setTransitReadingGenerating(false); }
-        }).catch(console.error);
+        }).catch(logger.catchAsync('horoscope_fetch_transit'));
       }
       if (g.horoscope) {
         fetchHoroscope(uid, getTodayDateId()).then(({ result }) => {
           if (result) { setHoroscope(result); setHoroscopeGenerating(false); }
-        }).catch(console.error);
+        }).catch(logger.catchAsync('horoscope_fetch_today'));
       }
     };
 

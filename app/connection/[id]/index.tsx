@@ -32,6 +32,7 @@ import { NavigationStore } from "@/src/stores/navigation-store";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { renderRichText } from "@/src/utils/rich-text";
 import { ThemedView } from "@/src/components/themed-view";
+import { logger } from "@/src/utils/logger";
 
 const NAV_BAR_HEIGHT = 44;
 const BAR_MAX_WIDTH = Dimensions.get("window").width - scale(18) * 2;
@@ -246,7 +247,7 @@ export default function ConnectionViewScreen() {
         setLoading(false);
       },
       (err) => {
-        console.error("Firestore listener error:", err);
+        logger.error("[connection] Firestore listener failed", err, "connection_listener");
         setError("Something went wrong loading this connection.");
         setLoading(false);
       }
@@ -328,7 +329,7 @@ export default function ConnectionViewScreen() {
     const sp = connection?.secondPerson;
 
     if (!fp?.birthday || !sp?.birthday) {
-      console.warn("Missing birthday info for one or both persons");
+      logger.warn("[connection] missing birthday info for one or both persons");
       return;
     }
 
@@ -379,7 +380,7 @@ export default function ConnectionViewScreen() {
       
       router.push(`/connection/${connectionId}/synastry`);
     } catch (e) {
-      console.error("Error calculating synastry:", e);
+      logger.error("[connection] synastry calculation failed", e, "connection_synastry_calc");
     } finally {
       setComputingSynastry(false);
     }

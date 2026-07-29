@@ -38,6 +38,7 @@ import { recordError } from "@/src/services/crashlytics.service";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { getContentPadding } from "@/src/utils/layout";
 import { db, functions } from "../../firebaseConfig";
+import { logger } from "@/src/utils/logger";
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -218,7 +219,7 @@ export default function ConnectionsScreen() {
         ConnectionsCache.save(uid, fresh);
       },
       (err) => {
-        console.error("Firestore listener error:", err);
+        logger.error("[connections] Firestore listener failed", err, "connections_listener");
         setLoading(false);
       }
     );
@@ -245,7 +246,7 @@ export default function ConnectionsScreen() {
             deleteFn({ userId: uid, connectionId })
               .then(() => Events.connectionDeleted())
               .catch((err) => {
-                console.error("Error deleting connection:", err);
+                logger.error("[connections] delete failed", err, "connection_delete");
                 recordError(err, 'connection_delete');
                 setConnections(previous);
                 ConnectionsCache.save(uid, previous);

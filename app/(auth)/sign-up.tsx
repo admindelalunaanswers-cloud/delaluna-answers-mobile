@@ -34,6 +34,7 @@ import type { NatalChartDetailsDoc } from '@/src/types/user.type';
 import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
 import { Ionicons } from '@expo/vector-icons';
 import LoadingScreen from '../(util)/loading-screen';
+import { logger } from '@/src/utils/logger';
 
 // ─── Fallback coordinates (Greenwich) ─────────────────────────────────────────
 
@@ -219,12 +220,12 @@ export default function SignUpChatScreen() {
         .then(transits => {
           const RETROGRADE_PLANETS = new Set(['Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto']);
           const retrogrades = transits.planets.filter(p => p.isRetrograde && RETROGRADE_PLANETS.has(p.name)).map(p => p.name);
-          requestTransitReading(uid, weekDateId, chartDetailsDoc, transits).catch(console.error);
+          requestTransitReading(uid, weekDateId, chartDetailsDoc, transits).catch(logger.catchAsync('signup_transit_reading'));
           return requestHoroscope(uid, dateId, chartDetailsDoc, transits.moon, retrogrades);
         })
         .catch(() => requestHoroscope(uid, dateId, chartDetailsDoc, natalChart.moon))
         .then(() => requestBreakdown(uid, chartDetailsDoc))
-        .catch(console.error);
+        .catch(logger.catchAsync('signup_breakdown'));
 
       // Navigate to email verification — user enters code while AI generation runs in background.
       setIsLoading(false);

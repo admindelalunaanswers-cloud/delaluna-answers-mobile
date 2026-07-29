@@ -17,6 +17,7 @@ import { BodyText } from '@/src/components/typography/body-text';
 import { TitleText } from '@/src/components/typography/title-text';
 import { C, R, S } from '@/src/constants/theme';
 import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
+import { logger } from '@/src/utils/logger';
 
 const DELALUNA_URL = 'https://www.delalunaanswers.com';
 
@@ -52,7 +53,7 @@ export default function AdBannerShop({
   }, [slideY]);
 
   const handleOpen = () => {
-    Linking.openURL(url).catch((e) => console.error('AdBannerShop open failed', e));
+    Linking.openURL(url).catch((e) => logger.error('[AdBannerShop] open failed', e, 'ad_banner_open'));
   };
 
   return (

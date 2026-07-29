@@ -21,6 +21,7 @@ import {
 } from '@react-native-firebase/analytics';
 
 import { APP_ENV, isProduction } from '@/src/constants/env';
+import { logger } from '@/src/utils/logger';
 
 // Disable collection outside production. Runs at module load — before any
 // event is logged. Note: setAnalyticsCollectionEnabled is persisted across
@@ -34,7 +35,7 @@ import { APP_ENV, isProduction } from '@/src/constants/env';
     await fbSetAnalyticsCollectionEnabled(getAnalytics(), isProduction);
     await fbSetUserProperty(getAnalytics(), 'app_environment', APP_ENV);
   } catch (err) {
-    if (__DEV__) console.warn('[analytics] init failed:', err);
+    logger.warn('[analytics] init failed:', err);
   }
 })();
 
@@ -42,7 +43,7 @@ type Params = Record<string, string | number | boolean | null | undefined>;
 
 function safe<T>(fn: () => Promise<T>, label: string): Promise<T | void> {
   return fn().catch((err) => {
-    if (__DEV__) console.warn(`[analytics] ${label} failed:`, err);
+    logger.warn(`[analytics] ${label} failed:`, err);
   });
 }
 

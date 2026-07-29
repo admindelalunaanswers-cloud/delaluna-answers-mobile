@@ -9,6 +9,7 @@ import { doc, getDoc, onSnapshot, collection, getDocs, Unsubscribe } from 'fireb
 import { httpsCallable } from 'firebase/functions';
 import { auth, db, functions } from '@/firebaseConfig';
 import type { UserDoc, PurchaseDoc } from '@/src/types/user.type';
+import { logger } from '@/src/utils/logger';
 
 /**
  * Reconciles the caller's `admin` custom claim against the server-side
@@ -30,7 +31,7 @@ async function syncAdminClaim(user: User): Promise<void> {
   } catch (err) {
     // Fail open — admin status is a privilege grant, not a gate. A failure
     // here just means non-admins stay non-admin until next sign-in.
-    console.warn('[UserContext] syncAdminClaim failed:', err);
+    logger.warn('[UserContext] syncAdminClaim failed:', err);
   }
 }
 
@@ -84,11 +85,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
       doc(db, 'users', uid),
       (snap) => {
         const next = snap.exists() ? (snap.data() as UserDoc) : null;
-        console.log('[UserContext] userDoc snapshot:', next);
+        // The doc carries the user's name and birth details — log its
+        // presence, never its contents.
+        logger.debug('[UserContext] userDoc snapshot:', next ? 'present' : 'missing');
         setUserDoc(next);
       },
       (err) => {
-        console.error('[UserContext] userDoc snapshot error:', err);
+        logger.error('[UserContext] userDoc snapshot failed', err, 'user_doc_snapshot');
         setUserDoc(null);
       },
     );
@@ -104,7 +107,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       setUserDoc(snap.exists() ? (snap.data() as UserDoc) : null);
       setPurchases(purcs);
     } catch (err) {
-      console.error('[UserContext] refresh error:', err);
+      logger.error('[UserContext] refresh failed', err, 'user_refresh');
     }
   };
 
@@ -126,7 +129,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         try {
           setPurchases(await fetchPurchases(user.uid));
         } catch (err) {
-          console.error('[UserContext] fetchPurchases error:', err);
+          logger.error('[UserContext] fetchPurchases failed', err, 'user_fetch_purchases');
           setPurchases([]);
         }
       } else {

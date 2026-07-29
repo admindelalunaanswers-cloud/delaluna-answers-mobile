@@ -7,6 +7,7 @@ import { calculateTransits } from '@/src/services/astroEngine';
 import { getTarotCardDraw } from '@/src/services/tarot-card.service';
 import { measure } from '@/src/services/performance.service';
 import { HOROSCOPE_PROMPT_TEMPLATE } from '@/src/prompts/horoscope-prompt';
+import { logger } from '@/src/utils/logger';
 
 const RETROGRADE_PLANETS = new Set([
   'Mercury', 'Venus', 'Mars',
@@ -254,7 +255,7 @@ export async function requestSurroundingHoroscopes(
         tarotDraw?.yesterday.keywordString ?? '',
         pronouns,
       ))
-      .catch(console.error);
+      .catch(logger.catchAsync('horoscope_generate_adjacent'));
   }
 
   if (needsTomorrow) {
@@ -266,7 +267,7 @@ export async function requestSurroundingHoroscopes(
         tarotDraw?.tomorrow.keywordString ?? '',
         pronouns,
       ))
-      .catch(console.error);
+      .catch(logger.catchAsync('horoscope_generate_adjacent'));
   }
 }
 
@@ -321,7 +322,7 @@ export async function rolloverHoroscope(
           pronouns,
         );
       } catch (e) {
-        console.error('rolloverHoroscope: failed to generate today', e);
+        logger.error('[horoscope] rollover failed to generate today', e, 'horoscope_rollover');
       }
     }
 
@@ -335,7 +336,7 @@ export async function rolloverHoroscope(
           tarotDraw?.tomorrow.keywordString ?? '',
           pronouns,
         ))
-        .catch(console.error);
+        .catch(logger.catchAsync('horoscope_rollover_adjacent'));
     }
   });
 }

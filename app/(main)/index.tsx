@@ -32,6 +32,7 @@ import { useResponsive } from '@/src/hooks/use-responsive';
 import { verticalScale } from '@/src/utils/responsive';
 import { getContentPadding } from '@/src/utils/layout';
 import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
+import { logger } from '@/src/utils/logger';
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -66,7 +67,7 @@ export default function HomeScreen() {
           [packs.tomorrow.date]:  packs.tomorrow,
         });
       })
-      .catch(console.error);
+      .catch(logger.catchAsync('home_bootstrap'));
 
     const offset = (days: number) => {
       const d = new Date();
@@ -89,7 +90,7 @@ export default function HomeScreen() {
         [yesterdayId]: { phaseName: yestTransits.moon.phase, illumination: yestTransits.moon.illumination, moonSign: yestTransits.moon.sign },
         [tomorrowId]:  { phaseName: tmrwTransits.moon.phase, illumination: tmrwTransits.moon.illumination, moonSign: tmrwTransits.moon.sign },
       }));
-    }).catch(console.error);
+    }).catch(logger.catchAsync('home_moon_phases'));
 
     // Subscribe to yesterday/tomorrow horoscope docs so they populate when the
     // extension finishes generating them — can lag 10-30s on real devices.
