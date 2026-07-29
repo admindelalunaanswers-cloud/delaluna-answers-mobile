@@ -1,27 +1,34 @@
 const { withAndroidManifest } = require("@expo/config-plugins");
 
-// Restricts Android distribution to phones only (< 600dp width).
-// Tablets are >= 600dp and will be filtered out on Google Play.
-const withPhoneOnly = (config) =>
+// Keeps the Android manifest free of large-screen restrictions.
+//
+// From Android 16, orientation and resizability restrictions are ignored on
+// displays >= 600dp, and Google Play flags them as large-screen usability
+// issues. So instead of `android:screenOrientation`, phones are held in portrait
+// at runtime (src/hooks/use-portrait-lock.ts) while tablets and unfolded
+// foldables get the full window. iOS keeps its portrait lock via the top-level
+// `orientation` field, which only reaches Info.plist once the attribute below
+// is stripped.
+const withAndroidLargeScreenSupport = (config) =>
   withAndroidManifest(config, (mod) => {
     const manifest = mod.modResults.manifest;
 
-    // Restrict to phone screen sizes; tablets (≥600dp) are excluded via largestWidthLimitDp
-    manifest["supports-screens"] = [
-      {
-        $: {
-          "android:smallScreens": "true",
-          "android:normalScreens": "true",
-          "android:largeScreens": "false",
-          "android:xlargeScreens": "false",
-          "android:requiresSmallestWidthDp": "320",
-          "android:largestWidthLimitDp": "600",
-        },
-      },
-    ];
+    // A <supports-screens> filter would drop foldables and ChromeOS off the Play
+    // listing alongside tablets. Tablet exclusion belongs in the Play Console
+    // device catalog (Release > Device catalog), not here.
+    delete manifest["supports-screens"];
 
-    // Declare telephony as not required so Google Play targets phones without blocking
-    // non-phone form factors via hardware.type.* (Play rejects required="false" on those)
+    const application = manifest.application?.[0];
+    if (application) {
+      application.$["android:resizeableActivity"] = "true";
+
+      for (const activity of application.activity ?? []) {
+        delete activity.$["android:screenOrientation"];
+      }
+    }
+
+    // Declare telephony optional so Google Play does not filter out non-phone
+    // hardware on its behalf.
     const existing = manifest["uses-feature"] ?? [];
     if (
       !existing.some(
@@ -75,7 +82,7 @@ module.exports = {
       googleServicesFile: "./google-services.json",
     },
     plugins: [
-      withPhoneOnly,
+      withAndroidLargeScreenSupport,
       "./plugins/with-adi-registration",
       "expo-router",
       "@react-native-firebase/app",
@@ -139,9 +146,11 @@ module.exports = {
       REVENUECAT_AAS_API_KEY: process.env.REVENUECAT_AAS_API_KEY,
       REVENUECAT_GPS_API_KEY: process.env.REVENUECAT_GPS_API_KEY,
       REVENUECAT_TST_API_KEY: process.env.REVENUECAT_TST_API_KEY,
-      // Server-side secret keys — use only in Cloud Functions / trusted server code, never in client SDK calls
-      REVENUECAT_KEY_V1: process.env.REVENUECAT_KEY_V1,
-      REVENUECAT_KEY_V2: process.env.REVENUECAT_KEY_V2,
+      // No RevenueCat secret (sk_) keys here. Everything under `extra` is
+      // serialized into the app manifest and readable from any installed build
+      // via `Constants.expoConfig.extra`, so an sk_ key placed here is public.
+      // Secret-key calls live in Cloud Functions, which read REVENUECAT_KEY_V2
+      // from Firebase Secret Manager (functions/src/index.ts).
     },
     runtimeVersion: "1.1.0",
     updates: {
