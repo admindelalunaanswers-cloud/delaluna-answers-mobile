@@ -116,24 +116,6 @@ export const getChartFolderRef = (uid: string) =>
 export const functions = getFunctions(app, "us-central1");
 
 // Firebase AI Logic
-// const ai = getAI(app, { backend: new GoogleAIBackend() });
-
-/**
- * Raw Model for text/image generation (birth charts, interpretations)
- * Uses Google AI Backend (not Vertex)
- */
-// export const rawGeminiModel = getGenerativeModel(ai, {
-//   model: "gemini-3-pro-image-preview"
-// });
-
-/**
- * Grounded Model with Google Search
- * Uses real-time web data for current astrological events
- */
-// export const groundedGeminiModel = getGenerativeModel(ai, {
-//   model: "gemini-2.5-flash",
-//   tools: [{ googleSearch: {} }],
-// });
 
 // Emulator Support (DEV only)
 //
