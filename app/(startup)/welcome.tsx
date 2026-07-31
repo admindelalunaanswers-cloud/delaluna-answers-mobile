@@ -9,8 +9,9 @@ import {
 } from "react-native";
 
 import PrimaryButton from "@/src/assets/buttons/primary-button-component";
+import SecondaryButton from "@/src/assets/buttons/secondary-button-component";
+import { ButtonText } from "@/src/components/typography/button-text";
 import { scale, verticalScale } from "@/src/utils/responsive";
-import { LinearGradient } from "expo-linear-gradient";
 
 export default function Welcome() {
   const { width } = useWindowDimensions();
@@ -46,17 +47,16 @@ export default function Welcome() {
         </View>
       </View>
 
-      <LinearGradient
-        pointerEvents="none"
-        colors={["transparent", "rgba(10,9,24,0.55)", "rgba(10,9,24,0.85)"]}
-        locations={[0, 0.35, 1]}
-        style={styles.scrim}
-      />
-
       <View style={styles.bottomContainer}>
-        <View style={styles.card}>
-          <PrimaryButton title="Get Started" onPress={handleGetStarted} />
-        </View>
+        <PrimaryButton title="Get Started" onPress={handleGetStarted} />
+
+        <ButtonText>
+          <SecondaryButton
+            title="Already a member?"
+            linkString="Log In"
+            onPress={() => router.replace("/login")}
+          />
+        </ButtonText>
       </View>
     </ImageBackground>
   );
@@ -96,15 +96,5 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: "#D4D6DD",
     marginVertical: verticalScale(15),
-  },
-  card: {
-    width: "100%",
-    backgroundColor: "#0A0918",
-    borderRadius: scale(12),
-    paddingVertical: verticalScale(20),
-    paddingHorizontal: scale(24),
-  },
-  scrim: {
-    ...StyleSheet.absoluteFillObject,
   },
 });
