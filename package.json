@@ -4,6 +4,7 @@
   "version": "1.1.0",
   "scripts": {
     "start": "expo start -c",
+    "Firebase Reauth": "firebase login --reauth",
     "emulators": "firebase emulators:start --only auth,functions,firestore,storage,eventarc,extensions --import=./seed --export-on-exit=./seed",
     "dev": "concurrently -k -n EMU,EXPO -c cyan,magenta \"firebase emulators:start --only auth,functions,firestore,storage,eventarc,extensions --import=./seed --export-on-exit=./seed\" \"expo start\"",
     "seed:export": "firebase emulators:export ./seed",
@@ -113,5 +114,14 @@
   },
   "volta": {
     "node": "20.19.5"
+  },
+  "expo": {
+    "autolinking": {
+      "exclude": [
+        "expo-dev-client",
+        "expo-dev-launcher",
+        "expo-dev-menu"
+      ]
+    }
   }
 }
