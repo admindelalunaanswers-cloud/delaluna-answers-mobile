@@ -12,24 +12,24 @@
  * FIRESTORE_DATABASE_ID at the bottom of this file.
  */
 
-import Constants from 'expo-constants';
+import Constants from "expo-constants";
 
-export type AppEnv = 'development' | 'preview' | 'production';
+export type AppEnv = "development" | "preview" | "production";
 
-const raw = (Constants.expoConfig?.extra?.APP_ENV as string | undefined) ?? '';
+const raw = (Constants.expoConfig?.extra?.APP_ENV as string | undefined) ?? "";
 
 function normalize(value: string): AppEnv {
-  if (value === 'production') return 'production';
+  if (value === "production") return "production";
   // Both `preview` and `preview-device` profiles map to the preview env.
-  if (value.startsWith('preview')) return 'preview';
-  return 'development';
+  if (value.startsWith("preview")) return "preview";
+  return "development";
 }
 
 export const APP_ENV: AppEnv = normalize(raw);
 
-export const isProduction = APP_ENV === 'production';
-export const isPreview    = APP_ENV === 'preview';
-export const isDevelopment = APP_ENV === 'development';
+export const isProduction = APP_ENV === "production";
+export const isPreview = APP_ENV === "preview";
+export const isDevelopment = APP_ENV === "development";
 
 /**
  * Firestore database ID per environment, passed to `getFirestore(app, id)`
@@ -42,9 +42,9 @@ export const isDevelopment = APP_ENV === 'development';
  * wired up here — production reads and writes `(default)`.
  */
 const DATABASE_IDS: Record<AppEnv, string> = {
-  development: 'dllad',
-  preview:     'dllat',
-  production:  '(default)',
+  development: "(default)",
+  preview: "(default)",
+  production: "(default)",
 };
 
 export const FIRESTORE_DATABASE_ID: string = DATABASE_IDS[APP_ENV];
