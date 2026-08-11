@@ -11,9 +11,7 @@
         "firebase-debug.*.log",
         "*.local"
       ],
-      "predeploy": [
-        "npm --prefix \"$RESOURCE_DIR\" run build"
-      ]
+      "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
     }
   ],
   "emulators": {
@@ -46,10 +44,7 @@
       "host": "0.0.0.0"
     },
     "singleProjectMode": true,
-    "extensions": {},
-    "dataconnect": {
-      "dataDir": "dataconnect/.dataconnect/pgliteData"
-    }
+    "extensions": {}
   },
   "extensions": {
     "delete-user-data": "firebase/delete-user-data@0.1.28",
@@ -69,8 +64,5 @@
   },
   "storage": {
     "rules": "storage.rules"
-  },
-  "dataconnect": {
-    "source": "dataconnect"
   }
 }

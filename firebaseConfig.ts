@@ -55,6 +55,7 @@ const { getReactNativePersistence } = require("firebase/auth");
 
 // Firestore
 import { FIRESTORE_DATABASE_ID } from "@/src/constants/env";
+import { logger } from "@/src/utils/logger";
 import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
 
 // Functions
@@ -82,6 +83,16 @@ const firebaseConfig: FirebaseOptions = {
 
 // Initialize Firebase
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+
+// Which project this build is actually talking to. Fast Refresh preserves the
+// already-initialized app above, so after changing .env this can lag the served
+// manifest until a full reload — log the live value, not the intended one.
+logger.debug(
+  "[firebase] project:",
+  app.options.projectId,
+  "db:",
+  FIRESTORE_DATABASE_ID,
+);
 
 // Auth — persist tokens in SecureStore (Keychain on iOS, EncryptedSharedPreferences
 // on Android) instead of plaintext AsyncStorage. Existing users on prior builds
@@ -133,7 +144,7 @@ if (USE_EMULATOR) {
   connectFirestoreEmulator(db, host, 8080);
   connectFunctionsEmulator(functions, host, 5001);
   connectStorageEmulator(storage, host, 9199);
-  console.log("USING EMULATOR: ", host);
+  logger.debug("[firebase] emulators attached at", host);
 }
 
 export { app };
