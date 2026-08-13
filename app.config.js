@@ -47,6 +47,21 @@ const withAndroidLargeScreenSupport = (config) =>
     return mod;
   });
 
+// Normalised build environment, matching src/constants/env.ts: `production` and
+// `preview*` are their own envs, anything else (including unset) is development.
+const APP_ENV = (() => {
+  const raw = process.env.APP_ENV ?? "";
+  if (raw === "production") return "production";
+  if (raw.startsWith("preview")) return "preview";
+  return "development";
+})();
+
+// Emulators are a development-only affordance. Gating here as well as in
+// firebaseConfig.ts keeps `USE_EMULATOR=true` left over in a .env from ever
+// reaching a preview or production build's manifest.
+const USE_EMULATOR =
+  APP_ENV === "development" && process.env.USE_EMULATOR === "true";
+
 module.exports = {
   expo: {
     name: "Delaluna Answers",
@@ -140,7 +155,7 @@ module.exports = {
       FIREBASE_MESSAGING_SENDER_ID: process.env.FIREBASE_MESSAGING_SENDER_ID,
       FIREBASE_APP_ID: process.env.FIREBASE_APP_ID,
       APP_ENV: process.env.APP_ENV,
-      USE_EMULATOR: process.env.USE_EMULATOR === "true",
+      USE_EMULATOR,
       EMULATOR_HOST_ANDROID: process.env.EMULATOR_HOST_ANDROID,
       EMULATOR_HOST_IOS: process.env.EMULATOR_HOST_IOS,
       REVENUECAT_AAS_API_KEY: process.env.REVENUECAT_AAS_API_KEY,

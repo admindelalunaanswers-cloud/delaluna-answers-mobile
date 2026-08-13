@@ -54,7 +54,7 @@ import {
 const { getReactNativePersistence } = require("firebase/auth");
 
 // Firestore
-import { FIRESTORE_DATABASE_ID } from "@/src/constants/env";
+import { FIRESTORE_DATABASE_ID, isDevelopment } from "@/src/constants/env";
 import { logger } from "@/src/utils/logger";
 import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
 
@@ -128,13 +128,19 @@ export const functions = getFunctions(app, "us-central1");
 
 // Firebase AI Logic
 
-// Emulator Support (DEV only)
+// Emulator Support (development env only)
+//
+// Three conditions must all hold: a debug build (`__DEV__`), the development
+// APP_ENV, and USE_EMULATOR opted in. The APP_ENV check is what keeps a preview
+// or production build from attaching to emulators even if it were somehow built
+// with USE_EMULATOR=true.
 //
 // Android and iOS reach the dev machine differently on this team's setup, so
 // each platform gets its own override: EMULATOR_HOST_ANDROID / EMULATOR_HOST_IOS
 // in .env. Both default to "localhost"; set EMULATOR_HOST_IOS to the dev
 // machine's LAN IP for physical iOS device testing.
-export const USE_EMULATOR = __DEV__ && extra?.USE_EMULATOR === true;
+export const USE_EMULATOR =
+  __DEV__ && isDevelopment && extra?.USE_EMULATOR === true;
 if (USE_EMULATOR) {
   const host: string =
     Platform.OS === "android"
