@@ -99,6 +99,7 @@ module.exports = {
     plugins: [
       withAndroidLargeScreenSupport,
       "./plugins/with-adi-registration",
+      "./plugins/with-fmt-consteval-fix",
       "expo-router",
       "@react-native-firebase/app",
       "@react-native-firebase/perf",

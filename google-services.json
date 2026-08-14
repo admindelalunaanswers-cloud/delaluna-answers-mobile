@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "459270515344",
+    "project_id": "delaluna-answers-test",
+    "storage_bucket": "delaluna-answers-test.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:459270515344:android:0781b032377cf9399d0615",
+        "android_client_info": {
+          "package_name": "delaluna.answers.test"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCy_bbRu1hCR7IJrhg8BI7QspcNOAcx_uk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
