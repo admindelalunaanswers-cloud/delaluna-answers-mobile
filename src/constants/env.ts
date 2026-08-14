@@ -33,9 +33,13 @@ export const isDevelopment = APP_ENV === "development";
 
 /**
  * Firestore database ID per environment, passed to `getFirestore(app, id)`
- * in firebaseConfig.ts. Production stays on `(default)`, the database the
- * live app has always used; dev and preview get their own so local and
- * internal-test traffic never touches real user data.
+ * in firebaseConfig.ts.
+ *
+ * All three environments map to `(default)` in the single `delaluna-answers`
+ * project. There is no longer a separate dev project or a per-environment
+ * database, so **a development build reads and writes live user data** —
+ * the Firebase emulators are the only isolation. The map is kept so a future
+ * environment split has one place to change.
  *
  * Note: `scripts/migrate-users-to-dllap.js` copied a batch of users from
  * `(default)` into a `dllap` database. That database is deliberately NOT

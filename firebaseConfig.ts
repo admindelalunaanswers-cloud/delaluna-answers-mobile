@@ -112,8 +112,8 @@ try {
 }
 export { auth };
 
-// Firestore — routed per environment (development → dllad, preview → dllat,
-// production → (default)). See src/constants/env.ts for the mapping.
+// Firestore — every environment uses the `(default)` database of the single
+// `delaluna-answers` project. See src/constants/env.ts for FIRESTORE_DATABASE_ID.
 export const db = getFirestore(app, FIRESTORE_DATABASE_ID);
 
 // Storage
