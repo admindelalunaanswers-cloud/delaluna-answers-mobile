@@ -87,6 +87,10 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 // Which project this build is actually talking to. Fast Refresh preserves the
 // already-initialized app above, so after changing .env this can lag the served
 // manifest until a full reload — log the live value, not the intended one.
+//
+// This line is dev-only. The release-visible version of the same question —
+// including the native SDK's project and the OTA channel — is the `[runtime]`
+// banner in src/utils/runtime-info.ts, printed from app/_layout.tsx.
 logger.debug(
   "[firebase] project:",
   app.options.projectId,

@@ -13,6 +13,8 @@
  *
  * Behaviour by level:
  *   debug — dev only. Pure developer chatter; compiled out of release builds.
+ *   info  — every build, including release. Reserved for a handful of startup
+ *           facts that must be readable off a shipped device. See below.
  *   warn  — dev only. Recoverable oddities that don't need a dashboard entry.
  *   error — always records to Crashlytics; also prints in dev for immediacy.
  *
@@ -37,6 +39,28 @@ const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
  */
 function debug(...args: unknown[]): void {
   if (isDev) console.log(...args);
+}
+
+/**
+ * Prints in **every** build, release included — so everything passed here is
+ * readable by anyone with the device via `adb logcat` / Console.app. That is
+ * the entire point: it exists so a tester or TestFlight build can be asked
+ * "which backend are you actually talking to?" without a debug build.
+ *
+ * The bar for using it is therefore high. Only build-identity facts that are
+ * already public in the shipped binary qualify — the Firebase project id,
+ * the Firestore database id, APP_ENV, the update channel. All of those are
+ * recoverable from the app manifest or `google-services.json` by anyone who
+ * can read the logs anyway, so printing them discloses nothing new.
+ *
+ * Never a uid, token, email, birth datum, or anything the user typed — for
+ * those, `debug` is the level, and it disappears in release.
+ *
+ * Today the only caller is `logRuntimeBanner()` in src/utils/runtime-info.ts.
+ * Keep it that way unless there's a similarly strong reason.
+ */
+function info(...args: unknown[]): void {
+  console.log(...args);
 }
 
 /**
@@ -78,4 +102,4 @@ function catchAsync(tag: string): (err: unknown) => void {
   return (err: unknown) => error(`[${tag}] unhandled rejection`, err, tag);
 }
 
-export const logger = { debug, warn, error, catchAsync };
+export const logger = { debug, info, warn, error, catchAsync };

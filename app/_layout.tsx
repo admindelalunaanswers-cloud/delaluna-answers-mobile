@@ -31,6 +31,12 @@ import {
   setUserId as setCrashlyticsUserId,
 } from '@/src/services/crashlytics.service';
 import { logger } from '@/src/utils/logger';
+import { logRuntimeBanner } from '@/src/utils/runtime-info';
+
+// Which project, which database, which update channel — printed once at module
+// load, in every build including release, before any screen mounts or any read
+// hits Firestore. `adb logcat | grep '\[runtime\]'`, or Console.app on iOS.
+logRuntimeBanner();
 
 function AuthGate() {
   const { authUser, userDoc, loading: userLoading } = useUser();
