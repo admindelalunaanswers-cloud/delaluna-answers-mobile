@@ -37,12 +37,18 @@ function shuffleDeck<T>(deck: T[], seed: string): T[] {
   return shuffled;
 }
 
-function drawDailySpread(
-  userId: string,
-  date: string,
-  count: number,
-): DrawnTarotCard[] {
-  const seed = `${userId}_${date}`;
+/**
+ * Draws `count` cards for an arbitrary seed.
+ *
+ * This is the one place the deck is shuffled and orientations are rolled —
+ * the daily horoscope spread and the tarot chat both go through it, so they
+ * share a deck, a shuffle, and the per-card reversal probabilities. Only the
+ * seed differs: the daily draw seeds on user + date so the cards hold for the
+ * day, the chat seeds on the question so each one gets its own pull.
+ *
+ * Deterministic: the same seed always yields the same cards.
+ */
+export function drawTarotSpread(seed: string, count: number): DrawnTarotCard[] {
   const shuffledDeck = shuffleDeck(TAROT_CARDS, seed);
   const rand = createSeededRng(seed + "_rev");
 
@@ -65,6 +71,35 @@ function drawDailySpread(
             : card.meaningUpright,
     });
   });
+}
+
+/** The daily spread: seeded on user + date, so it holds for the whole day. */
+function drawDailySpread(
+  userId: string,
+  date: string,
+  count: number,
+): DrawnTarotCard[] {
+  return drawTarotSpread(`${userId}_${date}`, count);
+}
+
+/**
+ * The spread for one tarot chat question.
+ *
+ * Seeded on the question itself, so a distinct question gets a distinct pull
+ * while re-sending the same question — which is what a retry is — pulls the
+ * same card back. `ordinal` keeps a user who asks the same thing twice in one
+ * day from getting the same card twice.
+ */
+export function drawChatSpread(
+  userId: string,
+  question: string,
+  ordinal: number,
+  count: number = 1,
+): DrawnTarotCard[] {
+  return drawTarotSpread(
+    `${userId}_${localDateId()}_${ordinal}_${question.trim().toLowerCase()}`,
+    count,
+  );
 }
 
 function buildTarotJSON(cards: DrawnTarotCard[]): string {
