@@ -101,13 +101,23 @@ function slugify(input: string): string {
 // JSON payloads. Replaces ASCII control chars with spaces and folds
 // whitespace runs so we don't slip terminator sequences through to the
 // Handlebars-substituted prompt template.
+//
+// Newlines are deliberately preserved. Folding them into spaces flattened the
+// chat prompt — persona, natal chart, subject context and the current message
+// — into one unbroken paragraph, which is measurably harder for the model to
+// segment. Runs are still capped at a single blank line, so the terminator-
+// sequence concern the fold existed for is unchanged.
 function sanitizePrompt(input: string | undefined, maxLen = 32000): string {
   if (!input) return "";
   return (
     input
-      // eslint-disable-next-line no-control-regex
-      .replace(/[\u0000-\u001F\u007F]/g, " ")
-      .replace(/\s+/g, " ")
+      // Every ASCII control char except LF (\u000A) and CR (\u000D).
+      .replace(/[\u0000-\u0009\u000B\u000C\u000E-\u001F\u007F]/g, " ")
+      .replace(/\r\n?/g, "\n")
+      // Fold horizontal whitespace runs, leaving line structure intact.
+      .replace(/[^\S\n]+/g, " ")
+      .replace(/ *\n */g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
       .slice(0, maxLen)
       .trim()
   );
@@ -197,6 +207,12 @@ const CreateConnectionSchema = z.object({
 const SendChatMessageSchema = z.object({
   userMessage: z.string().min(1).max(4000),
   prompt: z.string().min(1).max(32000),
+  /**
+   * Which persona the conversation is running under. Stored so a saved or
+   * resumed session keeps its mode; the prompt itself is built client-side, so
+   * this is a label rather than something the server acts on.
+   */
+  mode: z.enum(["astrology", "tarot"]).optional(),
   connectionId: z
     .string()
     .min(1)
@@ -1344,6 +1360,7 @@ export const sendChatMessage = onCall({ invoker: "public" }, async (request) => 
   };
   if (input.connectionId) payload.connectionId = input.connectionId;
   if (input.connectionName) payload.connectionName = input.connectionName;
+  if (input.mode) payload.mode = input.mode;
 
   const created = await chatRef.add(payload);
 
