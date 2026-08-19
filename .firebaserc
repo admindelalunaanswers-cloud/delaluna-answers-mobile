@@ -1,6 +1,7 @@
 {
   "projects": {
-    "default": "delaluna-answers"
+    "default": "delaluna-answers",
+    "testing": "delaluna-answers-test"
   },
   "targets": {},
   "etags": {

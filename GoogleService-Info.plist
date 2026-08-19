@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.mobile.delaluna.answers</string>
+	<string>com.app.delaluna.answers</string>
 	<key>PROJECT_ID</key>
 	<string>delaluna-answers</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:497678885238:ios:4acc16d018effd27a5da57</string>
+	<string>1:497678885238:ios:5ff4965d4c4d1b11a5da57</string>
 </dict>
 </plist>
