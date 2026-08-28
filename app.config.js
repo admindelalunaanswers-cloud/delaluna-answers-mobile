@@ -75,7 +75,7 @@ module.exports = {
     platforms: ["ios", "android"],
     ios: {
       supportsTablet: false,
-      bundleIdentifier: "com.mobile.delaluna.answers",
+      bundleIdentifier: "com.app.delaluna.answers",
       appleTeamId: "RG6859Q9LQ",
       newArchEnabled: true,
       googleServicesFile: "./GoogleService-Info.plist",
