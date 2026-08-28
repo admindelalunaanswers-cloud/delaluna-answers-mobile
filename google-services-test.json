@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "459270515344",
+    "project_id": "delaluna-answers-test",
+    "storage_bucket": "delaluna-answers-test.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:459270515344:android:05596a965ccd15659d0615",
+        "android_client_info": {
+          "package_name": "com.mobile.delaluna.answers"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "459270515344-psc1t0go6lg2umrtuhnp3g9hgk5cvamh.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCy_bbRu1hCR7IJrhg8BI7QspcNOAcx_uk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "459270515344-psc1t0go6lg2umrtuhnp3g9hgk5cvamh.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "459270515344-8v6sp6ololcd8vntr88j8j8k2nvh5o5e.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "delaluna.answers.test"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
