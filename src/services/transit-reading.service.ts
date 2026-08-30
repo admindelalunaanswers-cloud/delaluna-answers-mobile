@@ -1,4 +1,5 @@
 import { doc, getDoc, setDoc, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { logger } from '@/src/utils/logger';
 
 import { db } from '@/firebaseConfig';
 import type { TransitReadingResult } from '@/src/types/transit-reading.types';
@@ -182,6 +183,9 @@ export function subscribeToTransitReading(
       if (state !== 'complete' && state !== 'completed') return;
       const result = parseResult(data);
       if (result) onResult(result);
+    },
+    (err) => {
+      logger.error('[transits] reading listener failed', err, 'transit_snapshot');
     },
   );
 }
