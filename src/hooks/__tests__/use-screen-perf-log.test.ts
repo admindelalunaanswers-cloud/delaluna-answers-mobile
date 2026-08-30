@@ -84,18 +84,43 @@ describe('useScreenPerfLog', () => {
       );
     });
 
-    it('passes userId = undefined when authUser is null', () => {
+    it('writes nothing while signed out — the rules deny it', () => {
       mockUseUser.mockReturnValue({ authUser: null });
       mockUseRevenueCat.mockReturnValue({ isPro: false });
 
       const { result } = renderHook(() => useScreenPerfLog('/(main)/chat'));
       act(() => { result.current.markReady(); });
 
-      expect(perfLog.logScreenLoad).toHaveBeenCalledWith(
-        '/(main)/chat',
-        expect.any(Number),
-        { userId: undefined, isPro: false },
-      );
+      expect(perfLog.logScreenLoad).not.toHaveBeenCalled();
+    });
+
+    it('flushes the held load time once authUser resolves', () => {
+      mockUseUser.mockReturnValue({ authUser: null });
+      mockUseRevenueCat.mockReturnValue({ isPro: false });
+
+      const { result, rerender } = renderHook(() => useScreenPerfLog('/(main)/chat'));
+      act(() => {
+        jest.advanceTimersByTime(500);
+        result.current.markReady();
+      });
+      expect(perfLog.logScreenLoad).not.toHaveBeenCalled();
+
+      mockUseUser.mockReturnValue({ authUser: { uid: 'uid-late' } });
+      act(() => { rerender({}); });
+
+      expect(perfLog.logScreenLoad).toHaveBeenCalledTimes(1);
+      const [path, duration, opts] = (perfLog.logScreenLoad as jest.Mock).mock.calls[0];
+      expect(path).toBe('/(main)/chat');
+      expect(duration).toBeGreaterThanOrEqual(500);
+      expect(opts).toEqual({ userId: 'uid-late', isPro: false });
+    });
+
+    it('reports the load only once when auth resolves after a successful write', () => {
+      const { result, rerender } = renderHook(() => useScreenPerfLog('/(main)/chat'));
+      act(() => { result.current.markReady(); });
+      act(() => { rerender({}); });
+
+      expect(perfLog.logScreenLoad).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -148,6 +173,21 @@ describe('useScreenPerfLog', () => {
       const first = result.current.logError;
       rerender({});
       expect(result.current.logError).toBe(first);
+    });
+  });
+  describe('signed out', () => {
+    it('logOp and logError write nothing', () => {
+      mockUseUser.mockReturnValue({ authUser: null });
+      mockUseRevenueCat.mockReturnValue({ isPro: false });
+
+      const { result } = renderHook(() => useScreenPerfLog('/(main)/chat'));
+      act(() => {
+        result.current.logOp('chat_send', 2400);
+        result.current.logError('boom');
+      });
+
+      expect(perfLog.logOperation).not.toHaveBeenCalled();
+      expect(perfLog.logError).not.toHaveBeenCalled();
     });
   });
 });
