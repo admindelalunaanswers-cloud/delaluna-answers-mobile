@@ -10,6 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { logger } from '@/src/utils/logger';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { db } from '@/firebaseConfig';
@@ -51,6 +52,12 @@ export default function ConnectionPickerSheet({ visible, uid, onClose, onSelect 
         };
       });
       setConnections(fresh);
+    },
+    // connections is gated on isVerifiedOwner; show an empty picker instead of
+    // an uncaught listener error.
+    (err) => {
+      logger.error('[connection-picker] listener failed', err, 'connection_picker_snapshot');
+      setConnections([]);
     });
     return () => unsub();
   }, [visible, uid]);
