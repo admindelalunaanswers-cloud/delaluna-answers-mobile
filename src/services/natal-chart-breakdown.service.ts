@@ -1,4 +1,5 @@
 import { doc, getDoc, setDoc, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { logger } from '@/src/utils/logger';
 
 import { db } from '@/firebaseConfig';
 import type { NatalChartBreakdownResult } from '@/src/types/natal-chart-breakdown.types';
@@ -105,6 +106,9 @@ export function subscribeToBreakdown(
       if (!snap.exists()) return;
       const result = parseResult(snap.data());
       if (result) onResult(result);
+    },
+    (err) => {
+      logger.error('[natal-chart] breakdown listener failed', err, 'natal_breakdown_snapshot');
     },
   );
 }
