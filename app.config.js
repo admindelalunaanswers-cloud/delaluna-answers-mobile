@@ -59,8 +59,17 @@ const APP_ENV = (() => {
 // Emulators are a development-only affordance. Gating here as well as in
 // firebaseConfig.ts keeps `USE_EMULATOR=true` left over in a .env from ever
 // reaching a preview or production build's manifest.
-const USE_EMULATOR =
-  APP_ENV === "development" && process.env.USE_EMULATOR === "true";
+const USE_EMULATOR = process.env.USE_EMULATOR === "true";
+
+// Which Firebase project this build talks to. `production` uses
+// delaluna-answers; development and preview use delaluna-answers-test.
+//
+// This selects the *native* config file (Analytics, Crashlytics, Performance,
+// FCM) so it cannot drift from the JS SDK credentials below — the two halves
+// resolving to different projects is invisible at runtime except for the
+// PROJECT MISMATCH line in logRuntimeBanner(), and it presents as healthy
+// crash reporting alongside a Firestore that denies every read.
+const USES_TEST_BACKEND = APP_ENV !== "production";
 
 module.exports = {
   expo: {
@@ -78,7 +87,9 @@ module.exports = {
       bundleIdentifier: "com.app.delaluna.answers",
       appleTeamId: "RG6859Q9LQ",
       newArchEnabled: true,
-      googleServicesFile: "./GoogleService-Info.plist",
+      googleServicesFile: USES_TEST_BACKEND
+        ? "./firebase/test/GoogleService-Info.plist"
+        : "./GoogleService-Info.plist",
       deploymentTarget: "15.1",
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
@@ -94,7 +105,9 @@ module.exports = {
         monochromeImage: "./src/assets/images/android-icon-monochrome.png",
       },
       package: "com.mobile.delaluna.answers",
-      googleServicesFile: "./google-services.json",
+      googleServicesFile: USES_TEST_BACKEND
+        ? "./firebase/test/google-services.json"
+        : "./google-services.json",
     },
     plugins: [
       withAndroidLargeScreenSupport,
