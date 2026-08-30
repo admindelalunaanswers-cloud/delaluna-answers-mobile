@@ -4,6 +4,7 @@ import {
     revokeMyRefreshTokens,
     signIn,
     signUp,
+    updateUserDoc,
 } from '@/src/services/user.service';
 import {
     createUserWithEmailAndPassword,
@@ -226,6 +227,42 @@ describe('user.service.ts', () => {
       await expect(signIn('test@example.com', 'password123')).rejects.toThrow(
         'Auth error'
       );
+    });
+  });
+  describe('updateUserDoc', () => {
+    it('sends createdAt when the doc does not exist yet', async () => {
+      (getDoc as jest.Mock).mockResolvedValue({ exists: () => false });
+      (setDoc as jest.Mock).mockResolvedValue(undefined);
+
+      await updateUserDoc('test-uid', { firstName: 'Ada' } as any);
+
+      const [, payload, opts] = (setDoc as jest.Mock).mock.calls[0];
+      // A merge write onto a missing doc is a create to the rules, which
+      // require createdAt == request.time.
+      expect(payload).toHaveProperty('createdAt');
+      expect(opts).toEqual({ merge: true });
+    });
+
+    it('omits createdAt when the doc already exists', async () => {
+      (getDoc as jest.Mock).mockResolvedValue({ exists: () => true });
+      (setDoc as jest.Mock).mockResolvedValue(undefined);
+
+      await updateUserDoc('test-uid', { firstName: 'Ada' } as any);
+
+      const [, payload] = (setDoc as jest.Mock).mock.calls[0];
+      // noProtectedFieldsChanged() rejects an update that touches createdAt.
+      expect(payload).not.toHaveProperty('createdAt');
+      expect(payload).toHaveProperty('lastUpdatedAt');
+    });
+
+    it('lowercases email before writing', async () => {
+      (getDoc as jest.Mock).mockResolvedValue({ exists: () => true });
+      (setDoc as jest.Mock).mockResolvedValue(undefined);
+
+      await updateUserDoc('test-uid', { email: 'Mixed@Case.COM' } as any);
+
+      const [, payload] = (setDoc as jest.Mock).mock.calls[0];
+      expect(payload.email).toBe('mixed@case.com');
     });
   });
 });

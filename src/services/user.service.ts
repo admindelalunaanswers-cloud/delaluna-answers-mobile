@@ -207,8 +207,17 @@ export async function updateUserDoc(userId: string, userData: Partial<UserDoc>):
       ...(normalizedEmail ? { email: normalizedEmail } : {}),
     });
 
+    // A merge write onto a document that does not exist yet counts as a
+    // *create* to the security rules, which require `createdAt == request.time`
+    // — so without this the first write for a user is denied, and confusingly
+    // not for the reason it looks like (missing createdAt, not verification).
+    // On an existing doc createdAt must be left alone: noProtectedFieldsChanged()
+    // rejects any update that touches it.
+    const docSnap = await getDoc(userDocRef);
+
     await setDoc(userDocRef, {
       ...sanitizedData,
+      ...(docSnap.exists() ? {} : { createdAt: serverTimestamp() }),
       lastUpdatedAt: serverTimestamp(),
     }, { merge: true });
   } catch (error) {
