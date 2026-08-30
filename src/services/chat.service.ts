@@ -1,5 +1,6 @@
 import { httpsCallable } from 'firebase/functions';
 import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore';
+import { logger } from '@/src/utils/logger';
 
 import { db, functions } from '@/firebaseConfig';
 import { buildChatTurnPrompt } from '@/src/prompts/chat-continuity';
@@ -130,6 +131,13 @@ export function subscribeToChatHistory(
         };
       });
       onMessages(messages);
+    },
+    // updayedChat is gated on isVerifiedOwner, so an unverified account is
+    // denied here. Surface an empty history rather than letting the SDK report
+    // an uncaught listener error.
+    (err) => {
+      logger.error('[chat] chat history listener failed', err, 'chat_history_snapshot');
+      onMessages([]);
     },
   );
 }
@@ -329,6 +337,11 @@ export function subscribeToChatSessions(
         };
       });
       onSessions(sessions);
+    },
+    // savedChats is gated on isVerifiedOwner — same denial as chat history.
+    (err) => {
+      logger.error('[chat] saved sessions listener failed', err, 'chat_sessions_snapshot');
+      onSessions([]);
     },
   );
 }

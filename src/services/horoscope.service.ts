@@ -357,5 +357,8 @@ export function subscribeToHoroscope(
       const result = parseResult(snap.data());
       if (result) onResult(result);
     },
+    (err) => {
+      logger.error('[horoscope] reading listener failed', err, 'horoscope_snapshot');
+    },
   );
 }
