@@ -36,14 +36,32 @@ import { Ionicons } from "@expo/vector-icons";
 import { CARD_LINKS } from "@/src/constants/links";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 
+// The home screen's slot size. The transcript column is narrower than the home
+// screen, so three of these can overflow it — the cards shrink to fit and keep
+// this aspect ratio, matching home exactly wherever there is room for it.
 const CARD_WIDTH = scale(120);
 const CARD_HEIGHT = scale(190);
+const CARD_ASPECT = CARD_HEIGHT / CARD_WIDTH;
 const SLOT_GAP = scale(2);
-const SLOT_PITCH = CARD_WIDTH + SLOT_GAP;
 
 const FLIP_DURATION = 500;
+/** Per-card delay on the turn-over, so the spread reads left to right. */
 const FLIP_STAGGER_MS = 140;
 const MIX_ROUNDS = 4;
+
+/**
+ * How long the flip will wait on the card art.
+ *
+ * The fronts come from Firebase Storage, so turning a card over the instant the
+ * shuffle ends showed three empty faces filling in one after another as each
+ * download landed. They are prefetched from mount — the shuffle alone buys
+ * around four seconds — and the flip waits on that, capped here so a slow
+ * network delays the reveal rather than stalling it.
+ */
+const FRONT_PREFETCH_WAIT_MS = 2_500;
+
+/** Fade for the spread's first appearance, once every back has decoded. */
+const INTRO_FADE_MS = 220;
 
 /** Nearby points the stack hops between while mixing, in slot-relative px. */
 const MIX_POINTS = [
@@ -105,6 +123,49 @@ export default function ChatTarotDraw({
   );
   const [drawing, setDrawing] = useState(false);
   const [revealed, setRevealed] = useState(alreadyRevealed);
+  const [frameWidth, setFrameWidth] = useState(0);
+  const [backsLoaded, setBacksLoaded] = useState(0);
+
+  // The backs decode independently, so the spread used to assemble itself card
+  // by card — and the row jumps once when onLayout reports the real width and
+  // the cards resize to fit. Hold the whole thing transparent until every back
+  // is decoded at a known width, then fade it in as one piece. Opacity still
+  // lays out, so the measurement this waits on happens underneath it.
+  const introOpacity = useRef(new Animated.Value(0)).current;
+  const introReady = frameWidth > 0 && backsLoaded >= count;
+  useEffect(() => {
+    if (!introReady) return;
+    Animated.timing(introOpacity, {
+      toValue: 1,
+      duration: INTRO_FADE_MS,
+      useNativeDriver: true,
+    }).start();
+  }, [introReady, introOpacity]);
+
+  // Counts errors as well as loads: a back that will never decode must not
+  // leave the spread invisible.
+  const onBackSettled = useCallback(() => setBacksLoaded((n) => n + 1), []);
+
+  // Warm the card art as soon as the draw is on screen, long before the button
+  // is pressed. Failures resolve rather than reject: a front that will not load
+  // is the Image component's problem, not a reason to hold up the animation.
+  const frontUris = cardNumber.map(getTarotCardImageUrl);
+  const frontUriKey = frontUris.join("|");
+  const frontsReady = useRef<Promise<unknown>>(Promise.resolve());
+  useEffect(() => {
+    frontsReady.current = Promise.all(
+      frontUriKey
+        .split("|")
+        .map((uri) => Image.prefetch(uri).catch(() => false)),
+    );
+  }, [frontUriKey]);
+
+  const cardWidth =
+    frameWidth > 0
+      ? Math.min(CARD_WIDTH, (frameWidth - SLOT_GAP * (count - 1)) / count)
+      : CARD_WIDTH;
+  const cardHeight = cardWidth * CARD_ASPECT;
+  const slotPitch = cardWidth + SLOT_GAP;
 
   // Storage answers after the first render, so a draw that was already turned
   // over snaps face up rather than sitting there asking to be drawn again.
@@ -126,8 +187,8 @@ export default function ChatTarotDraw({
 
   /** How far card `i` has to travel to sit on the middle of the stack. */
   const gatherX = useCallback(
-    (i: number) => ((count - 1) / 2 - i) * SLOT_PITCH,
-    [count],
+    (i: number) => ((count - 1) / 2 - i) * slotPitch,
+    [count, slotPitch],
   );
 
   const animateXY = (
@@ -167,7 +228,9 @@ export default function ChatTarotDraw({
     setDrawing(true);
 
     const shuffledOrder = () =>
-      Array.from({ length: count }, (_, i) => i).sort(() => Math.random() - 0.5);
+      Array.from({ length: count }, (_, i) => i).sort(
+        () => Math.random() - 0.5,
+      );
 
     // phase 1: gather — every card slides onto the middle slot
     await Promise.all(
@@ -217,7 +280,9 @@ export default function ChatTarotDraw({
     );
     await wait(80);
 
-    // phase 4: turn them over
+    // phase 4: turn them over, one after the next. The art is already warm by
+    // here, so the stagger is the animation and not three downloads landing.
+    await Promise.race([frontsReady.current, wait(FRONT_PREFETCH_WAIT_MS)]);
     if (mounted.current) setRevealed(true);
     await Promise.all(
       cards.map((c, i) =>
@@ -245,8 +310,11 @@ export default function ChatTarotDraw({
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.frame}>
+    <Animated.View style={[styles.container, { opacity: introOpacity }]}>
+      <View
+        style={styles.frame}
+        onLayout={(e) => setFrameWidth(e.nativeEvent.layout.width)}
+      >
         {cardNumber.map((num, idx) => {
           const c = cards[idx];
           const backRotate = c.flip.interpolate({
@@ -266,8 +334,9 @@ export default function ChatTarotDraw({
             <Animated.View
               key={`${num}-${idx}`}
               style={[
-                styles.cardSlot,
                 {
+                  width: cardWidth,
+                  height: cardHeight,
                   zIndex: zOrder[idx],
                   transform: [
                     { translateX: c.translate.x },
@@ -285,7 +354,12 @@ export default function ChatTarotDraw({
                   },
                 ]}
               >
-                <Image source={determineCardBack(num)} style={styles.cardImage} />
+                <Image
+                  source={determineCardBack(num)}
+                  style={styles.cardImage}
+                  onLoad={onBackSettled}
+                  onError={onBackSettled}
+                />
               </Animated.View>
 
               <Animated.View
@@ -345,7 +419,7 @@ export default function ChatTarotDraw({
           />
         </TouchableOpacity>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -360,10 +434,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: SLOT_GAP,
     width: "100%",
-  },
-  cardSlot: {
-    width: CARD_WIDTH,
-    height: CARD_HEIGHT,
   },
   face: {
     position: "absolute",
