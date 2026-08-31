@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -600,6 +606,52 @@ export default function ChatScreen() {
   const showSuggestions = historyLoaded && messages.length === 0;
   const sendDisabled = isSending || !inputText.trim();
 
+  // The same five rotating prompts back both the empty-state list and the
+  // scrolling panel above the input once a conversation is under way.
+  const visibleSuggestions = useMemo(() => {
+    const pool = selectedConnection ? CONNECTION_SUGGESTIONS : SUGGESTIONS;
+    return Array.from(
+      { length: VISIBLE_SUGGESTIONS },
+      (_, i) => pool[(suggestionOffset + i) % pool.length],
+    );
+  }, [selectedConnection, suggestionOffset]);
+
+  const handleSuggestionPress = useCallback(
+    (q: string) => {
+      if (chatLocked) {
+        handleLimitReached(q);
+      } else {
+        handleSend(q);
+      }
+    },
+    [chatLocked, handleLimitReached, handleSend],
+  );
+
+  const connectionChip = selectedConnection ? (
+    <TouchableOpacity
+      style={styles.contextChipActive}
+      onPress={handleClearConnection}
+      activeOpacity={0.7}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+    >
+      <Ionicons name="person-circle-outline" size={14} color={C.purpleLight} />
+      <Text style={styles.contextChipText}>
+        Talking about {selectedConnection.name}
+      </Text>
+      <Ionicons name="close" size={14} color={C.purpleLight} />
+    </TouchableOpacity>
+  ) : (
+    <TouchableOpacity
+      style={styles.contextChipAdd}
+      onPress={() => setPickerOpen(true)}
+      activeOpacity={0.7}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+    >
+      <Ionicons name="add" size={14} color={C.muted} />
+      <Text style={styles.contextChipAddText}>Add a Connection</Text>
+    </TouchableOpacity>
+  );
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -824,25 +876,11 @@ export default function ChatScreen() {
                     ? `What do you want to know about ${selectedConnection.name}?`
                     : "What's on your mind?"}
                 </Text>
-                {(() => {
-                  const pool = selectedConnection
-                    ? CONNECTION_SUGGESTIONS
-                    : SUGGESTIONS;
-                  return Array.from(
-                    { length: VISIBLE_SUGGESTIONS },
-                    (_, i) => pool[(suggestionOffset + i) % pool.length],
-                  );
-                })().map((q) => (
+                {visibleSuggestions.map((q) => (
                   <TouchableOpacity
                     key={q}
                     style={styles.suggestionChip}
-                    onPress={() => {
-                      if (chatLocked) {
-                        handleLimitReached(q);
-                      } else {
-                        handleSend(q);
-                      }
-                    }}
+                    onPress={() => handleSuggestionPress(q)}
                     activeOpacity={0.7}
                   >
                     <Text style={styles.suggestionText}>{q}</Text>
@@ -875,38 +913,31 @@ export default function ChatScreen() {
               />
             )}
 
-            <View style={styles.contextRow}>
-              {selectedConnection ? (
-                <TouchableOpacity
-                  style={styles.contextChipActive}
-                  onPress={handleClearConnection}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Ionicons
-                    name="person-circle-outline"
-                    size={14}
-                    color={C.purpleLight}
-                  />
-                  <Text style={styles.contextChipText}>
-                    Talking about {selectedConnection.name}
-                  </Text>
-                  <Ionicons name="close" size={14} color={C.purpleLight} />
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  style={styles.contextChipAdd}
-                  onPress={() => setPickerOpen(true)}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Ionicons name="add" size={14} color={C.muted} />
-                  <Text style={styles.contextChipAddText}>
-                    About a connection
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
+            {showSuggestions ? (
+              <View style={styles.contextRow}>{connectionChip}</View>
+            ) : (
+              <ScrollView
+                horizontal
+                style={styles.quickPanel}
+                contentContainerStyle={styles.quickPanelContent}
+                showsHorizontalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
+                {connectionChip}
+                {visibleSuggestions.map((q) => (
+                  <TouchableOpacity
+                    key={q}
+                    style={styles.quickChip}
+                    onPress={() => handleSuggestionPress(q)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.quickChipText} numberOfLines={1}>
+                      {q}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
             <View style={[styles.inputBar, { paddingBottom: S.sm }]}>
               <TextInput
                 style={styles.textInput}
@@ -1082,10 +1113,37 @@ const styles = StyleSheet.create({
   contextRow: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: S.sm + 2,
     paddingTop: S.sm,
     paddingBottom: 2,
-    backgroundColor: C.cosmos + "33",
+  },
+  // Mid-conversation the same chip heads a scrolling row of prompts. flexGrow 0
+  // keeps the ScrollView at its content height instead of claiming the space
+  // the transcript needs.
+  quickPanel: {
+    flexGrow: 0,
+  },
+  quickPanelContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: S.sm,
+    paddingHorizontal: S.sm + 2,
+    paddingTop: S.sm,
+    paddingBottom: 2,
+  },
+  quickChip: {
+    borderWidth: 1,
+    borderColor: C.inactiveTabs + "59",
+    borderRadius: R.pill,
+    paddingVertical: 8,
+    paddingHorizontal: S.md,
+    backgroundColor: C.inactiveTabs + "12",
+  },
+  quickChipText: {
+    color: C.purpleLight,
+    fontSize: 13,
+    lineHeight: 18,
   },
   contextChipActive: {
     flexDirection: "row",
