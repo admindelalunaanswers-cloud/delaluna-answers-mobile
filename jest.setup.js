@@ -123,10 +123,19 @@ jest.mock('expo-device', () => ({
   isDevice: true,
 }));
 
+// Accessibility constants mirror SecureStoreAccessible.swift raw values. They
+// come from the native module at runtime, so they have to be stated here.
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(),
   setItemAsync: jest.fn(),
   deleteItemAsync: jest.fn(),
+  AFTER_FIRST_UNLOCK: 0,
+  AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 1,
+  ALWAYS: 2,
+  WHEN_PASSCODE_SET_THIS_DEVICE_ONLY: 3,
+  ALWAYS_THIS_DEVICE_ONLY: 4,
+  WHEN_UNLOCKED: 5,
+  WHEN_UNLOCKED_THIS_DEVICE_ONLY: 6,
 }));
 
 // Mock Expo modules
