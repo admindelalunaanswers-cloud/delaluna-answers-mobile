@@ -58,6 +58,23 @@ export const CHAT_PACK_QUANTITIES: Record<string, number> = {
   [PRODUCT_IDS.chatPack10]: 10,
 };
 
+/**
+ * Counts the chat-pack questions this customer has ever bought.
+ *
+ * Mirrors `purchasedChatCredits()` in functions/src/index.ts, which reads the
+ * same purchases from the RevenueCat extension's Firestore mirror
+ * (`subscriber.non_subscriptions`). The server is the authority on what may be
+ * spent; this exists so the in-app counter can show the same balance without
+ * waiting for the webhook that populates the mirror. Both count one entry per
+ * purchase, so a product bought twice grants twice.
+ */
+export function purchasedChatCredits(customerInfo: CustomerInfo): number {
+  return customerInfo.nonSubscriptionTransactions.reduce(
+    (total, tx) => total + (CHAT_PACK_QUANTITIES[tx.productIdentifier] ?? 0),
+    0,
+  );
+}
+
 // ─── Initialization ──────────────────────────────────────────────────────────
 
 let _configured = false;
