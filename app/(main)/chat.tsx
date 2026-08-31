@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  AppState,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -23,6 +24,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import ChatTarotDraw from "@/src/components/chat/tarot-draw.component";
 import ConnectionPickerSheet, {
   type PickerConnection,
 } from "@/src/components/connection-picker-sheet";
@@ -43,22 +45,34 @@ import type {
   ChatConnectionContext,
   ChatMessageDoc,
   ChatMode,
+  ChatUsage,
   SavedChatSession,
 } from "@/src/services/chat.service";
 import {
   ChatQuotaExceededError,
+  ChatRetryNotReadyError,
+  chatUsageDayId,
   deleteChatSession,
+  drawForTurn,
   resumeChatSession,
   retryChatMessage,
   saveChatAndClear,
   sendChatMessage,
   subscribeToChatHistory,
+  msUntilNextChatUsageDay,
   subscribeToChatSessions,
+  subscribeToChatUsage,
 } from "@/src/services/chat.service";
 import { buildConnectionContextSummary } from "@/src/services/connection-context.service";
 import { recordError } from "@/src/services/crashlytics.service";
 import { buildNatalChartSummary } from "@/src/services/natal-chart-breakdown.service";
+import {
+  getRevealedChatDraws,
+  markChatDrawRevealed,
+} from "@/src/services/tarotCache.service";
+import { purchasedChatCredits } from "@/src/services/revenuecat.service";
 import { ChatStore } from "@/src/stores/chat-store";
+import { resolveChatAllowance } from "@/src/utils/chat-allowance";
 import { checkForHarm, HARM_ALERTS } from "@/src/utils/harm-filter";
 import { getContentPadding, MAX_CONTENT_WIDTH } from "@/src/utils/layout";
 import { logger } from "@/src/utils/logger";
@@ -147,16 +161,56 @@ function TypingDots() {
   );
 }
 
+/**
+ * How long a message must sit unanswered before Retry is offered.
+ *
+ * This has to clear GENERATION_STUCK_MS in functions/src/index.ts, which is
+ * what the server uses to decide a generation is genuinely dead. It used to be
+ * 60s — well inside that window — so a retry there started a *second*
+ * generation alongside the first: two paid Gemini calls, a second question
+ * billed, and the same question rendered twice with a reply under each. The
+ * extra 5s absorbs drift between the device clock and the server timestamp
+ * this is measured against.
+ */
+const RETRY_ELIGIBLE_MS = 3 * 60 * 1000 + 5_000;
+
+/** When to admit the answer is running late, while still waiting on it. */
+const SLOW_REPLY_MS = 45_000;
+
 function MessageBubble({
   msg,
   onRetry,
+  isRetrying = false,
+  accessory,
+  holdReply = false,
 }: {
   msg: ChatMessageDoc;
   onRetry: (msg: ChatMessageDoc) => void;
+  /** A retry for this message is already in flight. */
+  isRetrying?: boolean;
+  /** Rendered between the question and the reply — the tarot draw sits here. */
+  accessory?: React.ReactNode;
+  /**
+   * Keep the reply behind the typing indicator. The read is the card, so it
+   * would spoil the draw to print it while the cards are still face down.
+   */
+  holdReply?: boolean;
 }) {
-  const isStuck =
-    msg.isPending && Date.now() - msg.createdAt.getTime() > 60_000;
+  // Nothing re-renders this bubble while a generation is in flight — the
+  // snapshot that would is the very thing that hasn't arrived — so age the
+  // message on a timer rather than reading the clock once and never again.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!msg.isPending) return;
+    const id = setInterval(() => setNow(Date.now()), 5_000);
+    return () => clearInterval(id);
+  }, [msg.isPending]);
+
+  const age = now - msg.createdAt.getTime();
+  const isStuck = msg.isPending && age > RETRY_ELIGIBLE_MS;
+  const isSlow = msg.isPending && !isStuck && age > SLOW_REPLY_MS;
   const showRetry = msg.isError || isStuck;
+  const waiting = (msg.isPending && !isStuck) || (holdReply && !msg.isError);
 
   return (
     <View style={styles.messageGroup}>
@@ -169,13 +223,22 @@ function MessageBubble({
         </View>
       </View>
 
+      {accessory ? <View style={styles.accessoryRow}>{accessory}</View> : null}
+
       <View style={styles.aiBubbleRow}>
         <View style={styles.aiBubble}>
-          {msg.isPending && !isStuck ? (
-            <TypingDots />
+          {waiting ? (
+            <>
+              <TypingDots />
+              {isSlow && (
+                <Text style={styles.slowHint}>
+                  Still thinking — this one&apos;s taking a while.
+                </Text>
+              )}
+            </>
           ) : msg.isError || isStuck ? (
             <Text style={[styles.aiBubbleText, { color: C.retro }]}>
-              Something went wrong. Try again.
+              Something went wrong. Try again — this one&apos;s on us.
             </Text>
           ) : (
             <Text style={styles.aiBubbleText}>
@@ -186,9 +249,12 @@ function MessageBubble({
         {showRetry && (
           <TouchableOpacity
             onPress={() => onRetry(msg)}
-            style={styles.retryButton}
+            disabled={isRetrying}
+            style={[styles.retryButton, isRetrying && styles.retryButtonBusy]}
           >
-            <Text style={styles.retryText}>Retry</Text>
+            <Text style={styles.retryText}>
+              {isRetrying ? "Retrying…" : "Retry"}
+            </Text>
           </TouchableOpacity>
         )}
       </View>
@@ -204,6 +270,8 @@ export default function ChatScreen() {
   const { dailyChatLimit, premiumDailyChatLimit } = useAdmin();
   const {
     isPro,
+    customerInfo,
+    isDevMode,
     loading: rcLoading,
     presentChatPackPaywall,
     refresh: refreshRevenueCat,
@@ -231,29 +299,83 @@ export default function ChatScreen() {
     useState<ChatConnectionContext | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [mode, setMode] = useState<ChatMode>("astrology");
+  /** A quick question handed over from home, waiting on a mode choice. */
+  const [pendingInitial, setPendingInitial] = useState<string | null>(null);
+  /** Ids of chat draws already turned over. Empty until storage answers. */
+  const [revealedDraws, setRevealedDraws] = useState<string[]>([]);
+  /**
+   * Messages with a retry already in flight. A second tap would race the first
+   * — the winner deletes the failed document, so the loser finds nothing to
+   * retry and the user gets an error for a retry that actually worked.
+   */
+  const [retryingIds, setRetryingIds] = useState<string[]>([]);
   const [modeTrackWidth, setModeTrackWidth] = useState(0);
   const modeAnim = useRef(new Animated.Value(0)).current;
 
-  const [extraQuestionsPurchased, setExtraQuestionsPurchased] = useState(0);
+  // Questions granted by the fallback sheet when RevenueCat can't sell — no
+  // real transaction stands behind them, so the server won't honour them
+  // either. Kept only so the placeholder still demoes in a build without RC.
+  const [mockExtraQuestions, setMockExtraQuestions] = useState(0);
   const [showQuestionConsumable, setShowQuestionConsumable] = useState(false);
+  const [usage, setUsage] = useState<ChatUsage | null>(null);
+
+  const tzOffset = userDoc?.timezoneOffsetMinutes;
+  const [usageDayId, setUsageDayId] = useState(() => chatUsageDayId(tzOffset));
+
+  // Follow the user's local day across a rollover. The timer covers the app
+  // being left open; JS timers don't run while backgrounded, so foregrounding
+  // re-checks as well. Both no-op unless the day id actually changed.
+  useEffect(() => {
+    const sync = () => setUsageDayId(chatUsageDayId(tzOffset));
+    sync();
+    const timer = setTimeout(sync, msUntilNextChatUsageDay(tzOffset));
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") sync();
+    });
+    return () => {
+      clearTimeout(timer);
+      sub.remove();
+    };
+  }, [tzOffset, usageDayId]);
+
+  // The server's ledger is the only honest source for this counter. It used to
+  // be derived from the chat documents plus a purchase count held in component
+  // state, which drifted two ways: the purchased questions vanished on the next
+  // mount (state resets to 0, so a bought pack disappeared from the counter and
+  // the chat re-locked), and deleting chat history reset the day's usage on the
+  // client while the server still counted it.
+  useEffect(() => {
+    if (!authUser) return;
+    return subscribeToChatUsage(authUser.uid, usageDayId, setUsage);
+  }, [authUser?.uid, usageDayId]);
 
   const baseDailyChatLimit = hasPremiumAccess
     ? premiumDailyChatLimit
     : dailyChatLimit;
-  const questionLimit = baseDailyChatLimit + extraQuestionsPurchased;
 
-  // Count ALL questions sent today (active chat + saved sessions)
+  // Until the ledger arrives, approximate from the messages on screen (active
+  // chat + saved sessions, both billed) rather than showing a full allowance.
+  // A failed turn is refunded server-side, so counting it here would lock the
+  // chat — and open the paywall — over a question the user still has.
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
-  const activeToday = messages.filter((m) => m.createdAt >= todayStart).length;
+  const activeToday = messages.filter(
+    (m) => m.createdAt >= todayStart && !m.isError,
+  ).length;
   const savedToday = savedSessions.reduce(
     (count, session) =>
       count + session.messages.filter((m) => m.createdAt >= todayStart).length,
     0,
   );
-  const questionsUsed = activeToday + savedToday;
-  const questionsRemaining = Math.max(0, questionLimit - questionsUsed);
-  const chatLocked = questionsUsed >= questionLimit;
+
+  const { questionLimit, questionsRemaining, chatLocked } =
+    resolveChatAllowance({
+      dailyLimit: baseDailyChatLimit,
+      usage,
+      purchasedCredits: customerInfo ? purchasedChatCredits(customerInfo) : 0,
+      fallbackUsedToday: activeToday + savedToday,
+      mockExtraQuestions,
+    });
 
   // When the limit is hit: show the RC paywall first.
   const handleLimitReached = useCallback(
@@ -262,9 +384,9 @@ export default function ChatScreen() {
       const result = await presentChatPackPaywall();
       if (result === "unavailable") {
         setShowQuestionConsumable(true);
-      } else if (typeof result === "object" && result.purchased) {
-        setExtraQuestionsPurchased((n) => n + result.quantity);
       }
+      // A completed purchase needs no local bookkeeping — presentChatPackPaywall
+      // refreshes CustomerInfo, which is what `creditsLeft` counts.
       // 'dismissed' → user closed the RC paywall, do nothing
     },
     [presentChatPackPaywall],
@@ -366,15 +488,35 @@ export default function ChatScreen() {
   useEffect(() => {
     if (!historyLoaded) return;
     const initial = ChatStore.popInitialMessage();
-    if (initial) {
-      if (chatLocked) {
-        handleLimitReached(initial);
-      } else {
-        handleSend(initial);
-      }
+    if (!initial) return;
+    if (chatLocked) {
+      handleLimitReached(initial);
+      return;
     }
+    // A quick question tapped on home carries no mode with it, and the mode is
+    // fixed for the life of a conversation — so ask which reader answers it
+    // rather than spending the question on whichever mode happened to be set.
+    setPendingInitial(initial);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [historyLoaded]);
+
+  // ─── Revealed tarot draws ─────────────────────────────────────────────────
+
+  // Like the daily spread, a chat draw that has been turned over stays turned
+  // over. Firestore rules deny client updates on `updayedChat`, so the fact
+  // lives in local storage rather than on the message.
+  useEffect(() => {
+    if (!authUser) return;
+    let cancelled = false;
+    getRevealedChatDraws(authUser.uid)
+      .then((ids) => {
+        if (!cancelled) setRevealedDraws(ids);
+      })
+      .catch(logger.catchAsync("chat_draw_reveal_load"));
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser]);
 
   // ─── Rotate suggestions ────────────────────────────────────────────────────
 
@@ -410,7 +552,11 @@ export default function ChatScreen() {
     : undefined;
 
   const handleSend = useCallback(
-    async (text?: string) => {
+    async (
+      text?: string,
+      modeOverride?: ChatMode,
+      historyOverride?: ChatMessageDoc[],
+    ) => {
       const msg = (text ?? inputText).trim();
       if (!msg || !authUser || isSending) return;
 
@@ -438,11 +584,11 @@ export default function ChatScreen() {
         await sendChatMessage({
           uid: authUser.uid,
           userMessage: msg,
-          mode,
+          mode: modeOverride ?? mode,
           natalChartSummary: chartSummary,
           connection: selectedConnection ?? undefined,
           pronouns: userDoc?.pronouns,
-          history: messages,
+          history: historyOverride ?? messages,
         });
         logOp("chat_send", Date.now() - t);
         Events.chatMessageSent({ length: msg.length });
@@ -479,6 +625,8 @@ export default function ChatScreen() {
   const handleRetry = useCallback(
     async (msg: ChatMessageDoc) => {
       if (!authUser) return;
+      if (retryingIds.includes(msg.id)) return;
+      setRetryingIds((ids) => [...ids, msg.id]);
       try {
         // Prefer the chip's current connection; fall back to whatever was on the message.
         let retryCtx: ChatConnectionContext | undefined =
@@ -504,8 +652,17 @@ export default function ChatScreen() {
         });
         Events.chatRetry();
       } catch (e) {
+        // The server refuses a retry it hasn't given up on yet, so the answer
+        // is still coming — say so rather than logging a failure the user
+        // can't act on.
+        if (e instanceof ChatRetryNotReadyError) {
+          Alert.alert("Hang tight", e.message, [{ text: "OK" }]);
+          return;
+        }
         logger.error("[chat] retry failed", e, "chat_retry");
         recordError(e, "chat_retry");
+      } finally {
+        setRetryingIds((ids) => ids.filter((id) => id !== msg.id));
       }
     },
     [
@@ -514,6 +671,7 @@ export default function ChatScreen() {
       selectedConnection,
       messages,
       mode,
+      retryingIds,
       userDoc?.pronouns,
     ],
   );
@@ -584,6 +742,21 @@ export default function ChatScreen() {
     }).start();
   }, [mode, modeAnim]);
 
+  const handleChooseInitialMode = useCallback(
+    async (next: ChatMode) => {
+      const question = pendingInitial;
+      setPendingInitial(null);
+      if (!question) return;
+
+      // Switching parks whatever thread is open, so the question that follows
+      // must not carry the parked conversation along as its history.
+      const parked = next !== mode && messagesRef.current.length > 0;
+      await handleSelectMode(next);
+      handleSend(question, next, parked ? [] : undefined);
+    },
+    [pendingInitial, mode, handleSelectMode, handleSend],
+  );
+
   // ─── Resume saved chat ─────────────────────────────────────────────────────
 
   const handleResumeSession = useCallback(
@@ -605,6 +778,45 @@ export default function ChatScreen() {
 
   const showSuggestions = historyLoaded && messages.length === 0;
   const sendDisabled = isSending || !inputText.trim();
+
+  // The opening tarot turn shows the card it was read from. Nothing is stored:
+  // the draw is seeded on uid + question + turn index, so recomputing it here
+  // with turn index 0 reproduces exactly the card the prompt was built around,
+  // and it survives a reload of the conversation.
+  const openingMessage = messages[0];
+  const openingTarotQuestion =
+    openingMessage && (openingMessage.mode ?? mode) === "tarot"
+      ? openingMessage.userMessage
+      : null;
+
+  // The seed carries the local date of the turn, so it comes off the message
+  // rather than off the clock — otherwise a conversation left open across
+  // midnight would redraw a card the model was never given.
+  const openingCreatedAt = openingMessage?.createdAt.getTime() ?? null;
+
+  const openingDraw = useMemo(() => {
+    if (!authUser || !openingTarotQuestion || openingCreatedAt === null) {
+      return null;
+    }
+    return drawForTurn(
+      authUser.uid,
+      openingTarotQuestion,
+      0,
+      new Date(openingCreatedAt),
+    );
+  }, [authUser, openingTarotQuestion, openingCreatedAt]);
+
+  const openingDrawRevealed =
+    !!openingMessage && revealedDraws.includes(openingMessage.id);
+
+  const handleDrawComplete = useCallback(() => {
+    if (!authUser || !openingMessage) return;
+    const id = openingMessage.id;
+    setRevealedDraws((prev) => (prev.includes(id) ? prev : [id, ...prev]));
+    markChatDrawRevealed(authUser.uid, id).catch(
+      logger.catchAsync("chat_draw_reveal"),
+    );
+  }, [authUser, openingMessage]);
 
   // The same five rotating prompts back both the empty-state list and the
   // scrolling panel above the input once a conversation is under way.
@@ -893,9 +1105,27 @@ export default function ChatScreen() {
                 style={styles.flex}
                 data={messages}
                 keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                  <MessageBubble msg={item} onRetry={handleRetry} />
-                )}
+                renderItem={({ item, index }) => {
+                  const showsDraw = index === 0 && !!openingDraw;
+                  return (
+                    <MessageBubble
+                      msg={item}
+                      onRetry={handleRetry}
+                      isRetrying={retryingIds.includes(item.id)}
+                      holdReply={showsDraw && !openingDrawRevealed}
+                      accessory={
+                        showsDraw ? (
+                          <ChatTarotDraw
+                            cardNumber={openingDraw!.map((c) => c.id)}
+                            reversed={openingDraw!.map((c) => c.reversed)}
+                            alreadyRevealed={openingDrawRevealed}
+                            onDrawComplete={handleDrawComplete}
+                          />
+                        ) : null
+                      }
+                    />
+                  );
+                }}
                 contentContainerStyle={[
                   styles.messageList,
                   {
@@ -984,10 +1214,59 @@ export default function ChatScreen() {
         visible={showQuestionConsumable}
         onClose={() => setShowQuestionConsumable(false)}
         onPurchased={(quantity) => {
-          setExtraQuestionsPurchased((n) => n + quantity);
+          // A real purchase shows up in CustomerInfo via onRefresh; only the
+          // mock path needs crediting by hand.
+          if (isDevMode) setMockExtraQuestions((n) => n + quantity);
         }}
         onRefresh={refreshRevenueCat}
       />
+
+      <Modal
+        visible={!!pendingInitial}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPendingInitial(null)}
+      >
+        <View style={styles.chooserOverlay}>
+          <View style={styles.chooserCard}>
+            <Text style={styles.chooserTitle}>How should Delaluna answer?</Text>
+            <Text style={styles.chooserQuestion}>{pendingInitial}</Text>
+
+            {CHAT_MODES.map((m) => (
+              <TouchableOpacity
+                key={m}
+                style={styles.chooserOption}
+                onPress={() => handleChooseInitialMode(m)}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name={m === "astrology" ? "planet-outline" : "sparkles-outline"}
+                  size={18}
+                  color={C.purpleLight}
+                />
+                <View style={styles.flex}>
+                  <Text style={styles.chooserOptionText}>
+                    {m === "astrology" ? "Astrology" : "Tarot"}
+                  </Text>
+                  <Text style={styles.chooserOptionHint}>
+                    {m === "astrology"
+                      ? "Read from your chart and the current transits"
+                      : "Pull a card and read the question from it"}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+
+            <TouchableOpacity
+              style={styles.chooserCancel}
+              onPress={() => setPendingInitial(null)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.chooserCancelText}>Not now</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       <ConnectionPickerSheet
         visible={pickerOpen}
@@ -1082,10 +1361,18 @@ const styles = StyleSheet.create({
     borderColor: C.retro,
     alignSelf: "flex-start",
   },
+  retryButtonBusy: {
+    opacity: 0.5,
+  },
   retryText: {
     color: C.retro,
     fontSize: 12,
     fontWeight: "600",
+  },
+  slowHint: {
+    color: C.muted,
+    fontSize: 12,
+    marginTop: 6,
   },
 
   typingRow: {
@@ -1222,6 +1509,11 @@ const styles = StyleSheet.create({
     color: C.purpleLight,
     fontWeight: "700",
   },
+  accessoryRow: {
+    alignItems: "center",
+    width: "100%",
+    paddingVertical: S.sm,
+  },
   aboutTag: {
     alignSelf: "flex-end",
     color: C.purpleLight,
@@ -1275,6 +1567,60 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 
+  chooserOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    padding: S.lg,
+    backgroundColor: C.cosmos + "CC",
+  },
+  chooserCard: {
+    borderRadius: R.lg,
+    padding: S.md,
+    gap: S.sm,
+    backgroundColor: C.nebula,
+    borderWidth: 1,
+    borderColor: C.white + "1A",
+  },
+  chooserTitle: {
+    color: C.white,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  chooserQuestion: {
+    color: C.muted,
+    fontSize: 13,
+    fontStyle: "italic",
+    marginBottom: S.sm,
+  },
+  chooserOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: S.sm + 2,
+    padding: S.sm + 4,
+    borderRadius: R.md,
+    backgroundColor: C.purple + "1F",
+    borderWidth: 1,
+    borderColor: C.purple,
+  },
+  chooserOptionText: {
+    color: C.purpleLight,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  chooserOptionHint: {
+    color: C.muted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  chooserCancel: {
+    alignSelf: "center",
+    paddingVertical: S.sm,
+    paddingHorizontal: S.md,
+  },
+  chooserCancelText: {
+    color: C.muted,
+    fontSize: 13,
+  },
   historyModal: {
     flex: 1,
     backgroundColor: C.nebula,
