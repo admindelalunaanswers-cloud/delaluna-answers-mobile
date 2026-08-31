@@ -1,4 +1,9 @@
-import { buildChatTurnPrompt, type ContinuityTurn } from '@/src/prompts/chat-continuity';
+import {
+  buildChatTurnPrompt,
+  MAX_READER_SWITCHES,
+  readerSwitchesUsed,
+  type ContinuityTurn,
+} from '@/src/prompts/chat-continuity';
 
 const SYSTEM = 'PERSONA_BLOB You are Delaluna.';
 const CHART = 'Sun in Leo, Moon in Pisces, Scorpio rising.';
@@ -224,11 +229,12 @@ describe('buildChatTurnPrompt', () => {
       const prompt = buildChatTurnPrompt({
         userMessage: 'should I text him',
         systemContext: SYSTEM,
+        mode: 'tarot',
         tarotDraw: DRAW,
       });
 
       expect(prompt).toContain(SYSTEM);
-      expect(prompt).toContain(`[[CARD]] The card drawn for this question: ${DRAW}`);
+      expect(prompt).toContain(`[[CARD]] The spread drawn for this question: ${DRAW}`);
     });
 
     it('sends a fresh card on every follow-up, unlike the persona', () => {
@@ -236,8 +242,9 @@ describe('buildChatTurnPrompt', () => {
       const prompt = buildChatTurnPrompt({
         userMessage: 'and after that',
         systemContext: SYSTEM,
+        mode: 'tarot',
         tarotDraw: next,
-        history: [visible({ prompt: `${SYSTEM} [[CARD]] ${DRAW}` })],
+        history: [visible({ prompt: `[[READER:tarot]] ${SYSTEM} [[CARD]] ${DRAW}` })],
       });
 
       expect(prompt).not.toContain(SYSTEM);
@@ -248,6 +255,7 @@ describe('buildChatTurnPrompt', () => {
       const prompt = buildChatTurnPrompt({
         userMessage: 'should I text him',
         systemContext: SYSTEM,
+        mode: 'tarot',
         tarotDraw: DRAW,
       });
 
@@ -268,10 +276,219 @@ describe('buildChatTurnPrompt', () => {
       const prompt = buildChatTurnPrompt({
         userMessage: 'hi',
         systemContext: SYSTEM,
+        mode: 'tarot',
         tarotDraw: '   ',
       });
 
       expect(prompt).not.toContain('[[CARD]]');
+    });
+  });
+
+  describe('switching reader', () => {
+    const TAROT_PERSONA = 'TAROT_BLOB You read cards.';
+    const DRAW = 'The Tower (reversed) — upheaval. The structure was never sound.';
+
+    /** A completed astrology turn as this module now writes them. */
+    const astrologyTurn = () =>
+      visible({ prompt: `[[READER:astrology]] ${SYSTEM}\n\n[[NOW]] is he into me` });
+
+    it('marks the reader on the turn that opens a conversation', () => {
+      const prompt = buildChatTurnPrompt({
+        userMessage: 'should I text him',
+        systemContext: SYSTEM,
+        mode: 'astrology',
+      });
+
+      expect(prompt).toContain('[[READER:astrology]]');
+      expect(prompt).not.toContain('[[READER_CHANGE]]');
+    });
+
+    it('does not re-send the persona while the reader is unchanged', () => {
+      const prompt = buildChatTurnPrompt({
+        userMessage: 'why though',
+        systemContext: SYSTEM,
+        mode: 'astrology',
+        history: [astrologyTurn()],
+      });
+
+      expect(prompt).toBe('[[NOW]] why though');
+    });
+
+    it('re-sends the persona and hands the conversation over on a switch', () => {
+      const prompt = buildChatTurnPrompt({
+        userMessage: 'pull me something',
+        systemContext: TAROT_PERSONA,
+        mode: 'tarot',
+        tarotDraw: DRAW,
+        history: [astrologyTurn()],
+      });
+
+      expect(prompt).toContain(`[[READER:tarot]] ${TAROT_PERSONA}`);
+      expect(prompt).toContain('[[READER_CHANGE]]');
+      expect(prompt).toContain('from the astrologer to the tarot reader');
+      // A handover, not a fresh start.
+      expect(prompt).toContain('do not start the conversation over');
+      expect(prompt).toContain(DRAW);
+    });
+
+    it('names the direction of the switch the other way too', () => {
+      const prompt = buildChatTurnPrompt({
+        userMessage: 'what does my chart say',
+        systemContext: SYSTEM,
+        mode: 'astrology',
+        history: [
+          visible({ prompt: `[[READER:tarot]] ${TAROT_PERSONA} [[CARD]] ${DRAW}` }),
+        ],
+      });
+
+      expect(prompt).toContain('from the tarot reader to the astrologer');
+      expect(prompt).toContain('Stop pulling cards');
+    });
+
+    it('inherits the reader a switch established, without repeating it', () => {
+      const prompt = buildChatTurnPrompt({
+        userMessage: 'and after that',
+        systemContext: TAROT_PERSONA,
+        mode: 'tarot',
+        tarotDraw: DRAW,
+        history: [
+          astrologyTurn(),
+          visible({ prompt: `[[READER:tarot]] ${TAROT_PERSONA} [[READER_CHANGE]] …` }),
+        ],
+      });
+
+      expect(prompt).not.toContain(TAROT_PERSONA);
+      expect(prompt).not.toContain('[[READER_CHANGE]]');
+      expect(prompt).toContain(DRAW);
+    });
+
+    it('switches back and forth without losing track of the anchor', () => {
+      const history = [
+        astrologyTurn(),
+        visible({ prompt: `[[READER:tarot]] ${TAROT_PERSONA} [[READER_CHANGE]] …` }),
+        visible({ prompt: `[[READER:astrology]] ${SYSTEM} [[READER_CHANGE]] …` }),
+      ];
+
+      expect(
+        buildChatTurnPrompt({
+          userMessage: 'still on the chart',
+          systemContext: SYSTEM,
+          mode: 'astrology',
+          history,
+        }),
+      ).toBe('[[NOW]] still on the chart');
+
+      expect(
+        buildChatTurnPrompt({
+          userMessage: 'cards again',
+          systemContext: TAROT_PERSONA,
+          mode: 'tarot',
+          tarotDraw: DRAW,
+          history,
+        }),
+      ).toContain('[[READER_CHANGE]]');
+    });
+
+    it('reads a pre-marker tarot thread off the draw it carried', () => {
+      const prompt = buildChatTurnPrompt({
+        userMessage: 'what does my chart say',
+        systemContext: SYSTEM,
+        mode: 'astrology',
+        history: [visible({ prompt: `${TAROT_PERSONA} [[CARD]] ${DRAW}` })],
+      });
+
+      expect(prompt).toContain('from the tarot reader to the astrologer');
+    });
+
+    it('reads a pre-marker astrology thread as astrology', () => {
+      const prompt = buildChatTurnPrompt({
+        userMessage: 'go on',
+        systemContext: SYSTEM,
+        mode: 'astrology',
+        history: [visible({ prompt: `${SYSTEM} User: hi` })],
+      });
+
+      expect(prompt).toBe('[[NOW]] go on');
+    });
+
+    it('opens rather than hands over when no earlier turn is replayable', () => {
+      const prompt = buildChatTurnPrompt({
+        userMessage: 'pull me something',
+        systemContext: TAROT_PERSONA,
+        mode: 'tarot',
+        tarotDraw: DRAW,
+        history: [visible({ response: null, isError: true })],
+      });
+
+      expect(prompt).toContain(`[[READER:tarot]] ${TAROT_PERSONA}`);
+      expect(prompt).not.toContain('[[READER_CHANGE]]');
+    });
+
+    it('keeps [[NOW]] last when a switch lands on the same turn as a card', () => {
+      const prompt = buildChatTurnPrompt({
+        userMessage: 'pull me something',
+        systemContext: TAROT_PERSONA,
+        mode: 'tarot',
+        tarotDraw: DRAW,
+        history: [astrologyTurn()],
+      });
+
+      expect(prompt.indexOf('[[READER_CHANGE]]')).toBeLessThan(
+        prompt.indexOf('[[CARD]]'),
+      );
+      expect(prompt.endsWith('[[NOW]] pull me something')).toBe(true);
+    });
+  });
+
+  describe('the switch budget', () => {
+    const handover = (reader: string) =>
+      visible({ prompt: `[[READER:${reader}]] PERSONA [[READER_CHANGE]] …` });
+
+    it('counts no switches in a thread that has never changed reader', () => {
+      expect(readerSwitchesUsed([])).toBe(0);
+      expect(readerSwitchesUsed([visible({ prompt: `[[READER:astrology]] ${SYSTEM}` })])).toBe(
+        0,
+      );
+    });
+
+    it('counts one per handover the model will be replayed', () => {
+      expect(
+        readerSwitchesUsed([
+          visible({ prompt: `[[READER:astrology]] ${SYSTEM}` }),
+          handover('tarot'),
+          visible(),
+          handover('astrology'),
+        ]),
+      ).toBe(2);
+    });
+
+    it('does not count a handover the extension will never replay', () => {
+      expect(
+        readerSwitchesUsed([
+          // Failed, so it is dropped from the replay along with its persona.
+          { ...handover('tarot'), response: null, isError: true },
+          // Restored from a saved session — no prompt, nothing replayed.
+          { ...restored(), prompt: '' },
+        ]),
+      ).toBe(0);
+    });
+
+    it('counts what buildChatTurnPrompt actually writes', () => {
+      const history: ContinuityTurn[] = [
+        visible({ prompt: `[[READER:astrology]] ${SYSTEM}` }),
+      ];
+
+      for (let i = 0; i < MAX_READER_SWITCHES; i++) {
+        const prompt = buildChatTurnPrompt({
+          userMessage: 'switch',
+          systemContext: SYSTEM,
+          mode: i % 2 === 0 ? 'tarot' : 'astrology',
+          history,
+        });
+        history.push(visible({ prompt }));
+      }
+
+      expect(readerSwitchesUsed(history)).toBe(MAX_READER_SWITCHES);
     });
   });
 

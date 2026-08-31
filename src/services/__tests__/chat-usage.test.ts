@@ -12,11 +12,17 @@ jest.mock('@/firebaseConfig', () => ({
 
 type SnapshotCall = [
   unknown,
-  (snap: { data: () => Record<string, unknown> | undefined }) => void,
+  (snap: {
+    exists: () => boolean;
+    data: () => Record<string, unknown> | undefined;
+  }) => void,
   (err: Error) => void,
 ];
 
-const snapshot = (data?: Record<string, unknown>) => ({ data: () => data });
+const snapshot = (data?: Record<string, unknown>) => ({
+  exists: () => data !== undefined,
+  data: () => data,
+});
 
 describe('chat usage ledger', () => {
   beforeEach(() => {
@@ -124,16 +130,22 @@ describe('chat usage ledger', () => {
       expect(onUsage).toHaveBeenLastCalledWith({
         usedToday: 2,
         creditsConsumed: 0,
+        hasLedger: true,
       });
 
       creditCall[1](snapshot({ consumed: 3 }));
       expect(onUsage).toHaveBeenLastCalledWith({
         usedToday: 2,
         creditsConsumed: 3,
+        hasLedger: true,
       });
     });
 
-    it('treats a missing document as zero', () => {
+    it('reports a missing day document as having no ledger at all', () => {
+      // Not the same as a ledger reading zero: no document means the server
+      // isn't metering this account (an admin send is exempt, and a build
+      // predating metering never writes one), and the counter has to fall back
+      // to the messages on screen instead of showing a full allowance.
       (onSnapshot as jest.Mock).mockReturnValue(jest.fn());
       const onUsage = jest.fn();
 
@@ -144,6 +156,7 @@ describe('chat usage ledger', () => {
       expect(onUsage).toHaveBeenLastCalledWith({
         usedToday: 0,
         creditsConsumed: 0,
+        hasLedger: false,
       });
     });
 

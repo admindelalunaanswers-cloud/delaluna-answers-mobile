@@ -9,6 +9,7 @@ describe('resolveChatAllowance', () => {
   const ledger = (usedToday: number, creditsConsumed = 0) => ({
     usedToday,
     creditsConsumed,
+    hasLedger: true,
   });
 
   describe('daily allowance', () => {
@@ -201,6 +202,53 @@ describe('resolveChatAllowance', () => {
       });
 
       expect(a.creditsLeft).toBe(3);
+      expect(a.chatLocked).toBe(false);
+    });
+  });
+
+  describe('when the server writes no ledger', () => {
+    // The day document is absent for an admin (never billed) and for any build
+    // whose sendChatMessage predates metering. Reading that as "nothing used
+    // yet" is what left the counter showing a full allowance all day.
+    const noLedger = { usedToday: 0, creditsConsumed: 0, hasLedger: false };
+
+    it('falls back to the message-derived count rather than reporting zero used', () => {
+      const a = resolveChatAllowance({
+        dailyLimit: 5,
+        usage: noLedger,
+        purchasedCredits: 0,
+        fallbackUsedToday: 3,
+      });
+
+      expect(a.questionsUsed).toBe(3);
+      expect(a.questionsRemaining).toBe(2);
+    });
+
+    it('still reads a real zero off a ledger that exists', () => {
+      const a = resolveChatAllowance({
+        dailyLimit: 5,
+        usage: ledger(0),
+        purchasedCredits: 0,
+        // Deleting chat history empties this; the ledger is what counts.
+        fallbackUsedToday: 3,
+      });
+
+      expect(a.questionsUsed).toBe(0);
+      expect(a.questionsRemaining).toBe(5);
+    });
+  });
+
+  describe('unmetered accounts', () => {
+    it('never locks an admin, whose sends the server does not bill', () => {
+      const a = resolveChatAllowance({
+        dailyLimit: 2,
+        usage: null,
+        purchasedCredits: 0,
+        fallbackUsedToday: 9,
+        unmetered: true,
+      });
+
+      expect(a.unmetered).toBe(true);
       expect(a.chatLocked).toBe(false);
     });
   });
