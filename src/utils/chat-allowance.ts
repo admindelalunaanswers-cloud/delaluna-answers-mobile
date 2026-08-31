@@ -20,10 +20,18 @@ export interface ChatAllowanceInput {
   /** Chat-pack questions ever bought, from RevenueCat. */
   purchasedCredits: number;
   /**
-   * Message-derived count used only until the ledger loads — showing a full
-   * allowance in that gap would invite a send the server then rejects.
+   * Message-derived count, used whenever there is no ledger to read: before
+   * the first snapshot arrives, and for any account the server isn't metering
+   * (an admin, or a build whose `sendChatMessage` predates metering). Showing a
+   * full allowance in either case is what made the counter look frozen.
    */
   fallbackUsedToday: number;
+  /**
+   * The server exempts admins from billing outright, so no ledger is ever
+   * written for them and no send is ever refused. Keeps the chat unlocked
+   * rather than counting down toward a limit that isn't enforced.
+   */
+  unmetered?: boolean;
   /**
    * Questions handed out by the fallback sheet when RevenueCat can't sell.
    * No transaction stands behind them, so the server won't honour them; they
@@ -34,6 +42,8 @@ export interface ChatAllowanceInput {
 
 export interface ChatAllowance {
   questionsUsed: number;
+  /** True when the server isn't billing this account — see `unmetered`. */
+  unmetered: boolean;
   /** Purchased questions still unspent. */
   creditsLeft: number;
   /** Denominator for the "N of M" counter: today's allowance plus credits. */
@@ -48,8 +58,12 @@ export function resolveChatAllowance({
   purchasedCredits,
   fallbackUsedToday,
   mockExtraQuestions = 0,
+  unmetered = false,
 }: ChatAllowanceInput): ChatAllowance {
-  const questionsUsed = usage?.usedToday ?? fallbackUsedToday;
+  // A ledger that doesn't exist is not a ledger reading zero — see
+  // `ChatUsage.hasLedger`. Reading the absent document as "nothing used yet"
+  // is what pinned the counter at a full allowance.
+  const questionsUsed = usage?.hasLedger ? usage.usedToday : fallbackUsedToday;
 
   // Purchased questions are a separate, non-expiring bucket the server draws
   // from once the daily allowance is gone — both sides count them the same
@@ -64,9 +78,10 @@ export function resolveChatAllowance({
 
   return {
     questionsUsed,
+    unmetered,
     creditsLeft,
     questionLimit,
     questionsRemaining,
-    chatLocked: questionsRemaining <= 0,
+    chatLocked: !unmetered && questionsRemaining <= 0,
   };
 }

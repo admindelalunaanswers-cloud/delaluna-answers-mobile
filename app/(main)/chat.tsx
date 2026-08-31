@@ -22,6 +22,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import ChatTarotDraw from "@/src/components/chat/tarot-draw.component";
@@ -41,6 +42,10 @@ import { useUser } from "@/src/context/user-context";
 import { useResponsive } from "@/src/hooks/use-responsive";
 import { useScreenPerfLog } from "@/src/hooks/use-screen-perf-log";
 import { Events } from "@/src/services/analytics.service";
+import {
+  MAX_READER_SWITCHES,
+  readerSwitchesUsed,
+} from "@/src/prompts/chat-continuity";
 import type {
   ChatConnectionContext,
   ChatMessageDoc,
@@ -54,6 +59,7 @@ import {
   chatUsageDayId,
   deleteChatSession,
   drawForTurn,
+  lastChatMode,
   resumeChatSession,
   retryChatMessage,
   saveChatAndClear,
@@ -72,6 +78,7 @@ import {
 } from "@/src/services/tarotCache.service";
 import { purchasedChatCredits } from "@/src/services/revenuecat.service";
 import { ChatStore } from "@/src/stores/chat-store";
+import type { DrawnTarotCard } from "@/src/types/tarot-cards.type";
 import { resolveChatAllowance } from "@/src/utils/chat-allowance";
 import { checkForHarm, HARM_ALERTS } from "@/src/utils/harm-filter";
 import { getContentPadding, MAX_CONTENT_WIDTH } from "@/src/utils/layout";
@@ -182,7 +189,7 @@ function MessageBubble({
   onRetry,
   isRetrying = false,
   accessory,
-  holdReply = false,
+  holdForDraw = false,
 }: {
   msg: ChatMessageDoc;
   onRetry: (msg: ChatMessageDoc) => void;
@@ -191,10 +198,12 @@ function MessageBubble({
   /** Rendered between the question and the reply — the tarot draw sits here. */
   accessory?: React.ReactNode;
   /**
-   * Keep the reply behind the typing indicator. The read is the card, so it
-   * would spoil the draw to print it while the cards are still face down.
+   * Hold the answer behind the draw. The question still shows — it is what the
+   * cards are being pulled on — but the reply, typing indicator and all, waits
+   * until they land: the read *is* the card, and typing out an answer over the
+   * top of the shuffle both spoils it and reads as two things at once.
    */
-  holdReply?: boolean;
+  holdForDraw?: boolean;
 }) {
   // Nothing re-renders this bubble while a generation is in flight — the
   // snapshot that would is the very thing that hasn't arrived — so age the
@@ -210,7 +219,10 @@ function MessageBubble({
   const isStuck = msg.isPending && age > RETRY_ELIGIBLE_MS;
   const isSlow = msg.isPending && !isStuck && age > SLOW_REPLY_MS;
   const showRetry = msg.isError || isStuck;
-  const waiting = (msg.isPending && !isStuck) || (holdReply && !msg.isError);
+  const waiting = msg.isPending && !isStuck;
+  // A failure ends the hold whatever the cards are doing — otherwise the error
+  // and its Retry button would sit behind a draw the user may never complete.
+  const holdAnswer = holdForDraw && !showRetry;
 
   return (
     <View style={styles.messageGroup}>
@@ -225,39 +237,41 @@ function MessageBubble({
 
       {accessory ? <View style={styles.accessoryRow}>{accessory}</View> : null}
 
-      <View style={styles.aiBubbleRow}>
-        <View style={styles.aiBubble}>
-          {waiting ? (
-            <>
-              <TypingDots />
-              {isSlow && (
-                <Text style={styles.slowHint}>
-                  Still thinking — this one&apos;s taking a while.
-                </Text>
-              )}
-            </>
-          ) : msg.isError || isStuck ? (
-            <Text style={[styles.aiBubbleText, { color: C.retro }]}>
-              Something went wrong. Try again — this one&apos;s on us.
-            </Text>
-          ) : (
-            <Text style={styles.aiBubbleText}>
-              {renderRichText(msg.response ?? "")}
-            </Text>
+      {!holdAnswer && (
+        <View style={styles.aiBubbleRow}>
+          <View style={styles.aiBubble}>
+            {waiting ? (
+              <>
+                <TypingDots />
+                {isSlow && (
+                  <Text style={styles.slowHint}>
+                    Still thinking — this one&apos;s taking a while.
+                  </Text>
+                )}
+              </>
+            ) : msg.isError || isStuck ? (
+              <Text style={[styles.aiBubbleText, { color: C.retro }]}>
+                Something went wrong. Try again — this one&apos;s on us.
+              </Text>
+            ) : (
+              <Text style={styles.aiBubbleText}>
+                {renderRichText(msg.response ?? "")}
+              </Text>
+            )}
+          </View>
+          {showRetry && (
+            <TouchableOpacity
+              onPress={() => onRetry(msg)}
+              disabled={isRetrying}
+              style={[styles.retryButton, isRetrying && styles.retryButtonBusy]}
+            >
+              <Text style={styles.retryText}>
+                {isRetrying ? "Retrying…" : "Retry"}
+              </Text>
+            </TouchableOpacity>
           )}
         </View>
-        {showRetry && (
-          <TouchableOpacity
-            onPress={() => onRetry(msg)}
-            disabled={isRetrying}
-            style={[styles.retryButton, isRetrying && styles.retryButtonBusy]}
-          >
-            <Text style={styles.retryText}>
-              {isRetrying ? "Retrying…" : "Retry"}
-            </Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      )}
     </View>
   );
 }
@@ -368,6 +382,12 @@ export default function ChatScreen() {
     0,
   );
 
+  // Display only. The claim is the real authority on admin — `users/{uid}.isAdmin`
+  // is a mirror of it — but nothing is gated on this: the server decides what it
+  // bills, and this only keeps the counter from counting down against a limit it
+  // is not applying.
+  const unmetered = !!userDoc?.isAdmin;
+
   const { questionLimit, questionsRemaining, chatLocked } =
     resolveChatAllowance({
       dailyLimit: baseDailyChatLimit,
@@ -375,6 +395,7 @@ export default function ChatScreen() {
       purchasedCredits: customerInfo ? purchasedChatCredits(customerInfo) : 0,
       fallbackUsedToday: activeToday + savedToday,
       mockExtraQuestions,
+      unmetered,
     });
 
   // When the limit is hit: show the RC paywall first.
@@ -394,6 +415,16 @@ export default function ChatScreen() {
 
   const flatListRef = useRef<FlatList>(null);
   const chatStarted = useRef(false);
+  /**
+   * Whether the toggle has already been pointed at the open thread.
+   *
+   * The thread's reader is only adopted once, when the conversation is first
+   * loaded (or resumed). Re-adopting it on every snapshot would quietly undo a
+   * toggle tap the moment an in-flight answer landed — the user taps Tarot,
+   * the astrology reply they were still waiting on arrives, and the toggle
+   * flips back under them before they have typed anything.
+   */
+  const modeAdopted = useRef(false);
   const messagesRef = useRef<ChatMessageDoc[]>([]);
   messagesRef.current = messages;
   const fromNotification = useRef(false);
@@ -407,11 +438,15 @@ export default function ChatScreen() {
       if (msgs.length > 0) chatStarted.current = true;
       setMessages(msgs);
       setHistoryLoaded(true);
-      // The conversation owns the mode, not the toggle: an app restart or a
-      // resumed session has to put the toggle back where the thread left it,
-      // or the next turn would be built with the wrong persona.
-      const threadMode = msgs.find((m) => m.mode)?.mode;
-      if (threadMode) setMode(threadMode);
+      // An app restart drops back into whatever conversation was open, so the
+      // toggle has to land on the reader that thread was last in — otherwise
+      // the user sees Astrology selected over a tarot reply. Only once, though;
+      // see `modeAdopted`.
+      if (!modeAdopted.current && msgs.length > 0) {
+        const threadMode = lastChatMode(msgs);
+        if (threadMode) setMode(threadMode);
+        modeAdopted.current = true;
+      }
     });
     return unsub;
   }, [authUser?.uid]);
@@ -485,20 +520,28 @@ export default function ChatScreen() {
 
   // ─── Auto-send initial message from ChatStore ──────────────────────────────
 
-  useEffect(() => {
-    if (!historyLoaded) return;
-    const initial = ChatStore.popInitialMessage();
-    if (!initial) return;
-    if (chatLocked) {
-      handleLimitReached(initial);
-      return;
-    }
-    // A quick question tapped on home carries no mode with it, and the mode is
-    // fixed for the life of a conversation — so ask which reader answers it
-    // rather than spending the question on whichever mode happened to be set.
-    setPendingInitial(initial);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [historyLoaded]);
+  // On focus, not on mount. Chat is a tab, so it stays mounted after the first
+  // visit — an effect keyed on `historyLoaded` runs once and never again, and
+  // every later hand-off from home left its question sitting unread in the
+  // store. useFocusEffect also re-runs when the callback changes while the
+  // screen is focused, which covers the first navigation, where focus lands
+  // before the history has loaded.
+  useFocusEffect(
+    useCallback(() => {
+      if (!historyLoaded) return;
+      const initial = ChatStore.popInitialMessage();
+      if (!initial) return;
+      if (chatLocked) {
+        handleLimitReached(initial);
+        return;
+      }
+      // A quick question tapped on home carries no reader with it, so ask which
+      // one answers it rather than spending the question on whichever the
+      // toggle happened to be left on. Whatever conversation is already open
+      // carries on underneath the answer either way.
+      setPendingInitial(initial);
+    }, [historyLoaded, chatLocked, handleLimitReached]),
+  );
 
   // ─── Revealed tarot draws ─────────────────────────────────────────────────
 
@@ -555,6 +598,12 @@ export default function ChatScreen() {
     async (
       text?: string,
       modeOverride?: ChatMode,
+      /**
+       * The conversation to build the prompt against, when it is not the one in
+       * state. Parking clears the thread server-side, but `messages` still
+       * holds it until the snapshot lands — sending in that gap would anchor
+       * the prompt to turns that no longer exist.
+       */
       historyOverride?: ChatMessageDoc[],
     ) => {
       const msg = (text ?? inputText).trim();
@@ -708,24 +757,68 @@ export default function ChatScreen() {
   const handleNewChat = useCallback(async () => {
     if (!authUser) return;
     chatStarted.current = false;
+    // The next thread is a different conversation, so it gets to point the
+    // toggle again.
+    modeAdopted.current = false;
     await saveChatAndClear(authUser.uid, messages);
   }, [authUser, messages]);
 
   // ─── Mode switch ───────────────────────────────────────────────────────────
 
-  // A conversation is single-mode: the persona is anchored on its opening turn
-  // and inherited from there, so switching parks the current thread and opens a
-  // fresh one rather than swapping personas underneath the model.
+  // Both readers share the one conversation. The toggle picks who answers the
+  // *next* question and nothing else: the thread stays open, and the handover
+  // is made in the prompt (see `[[READER_CHANGE]]` in chat-continuity.ts) so
+  // the incoming reader keeps everything the outgoing one was told. Switching
+  // used to park the thread and start a fresh one on every change, which is
+  // what left the user with two half-conversations and no way to carry context
+  // between them.
+  //
+  // It still parks on the switch past `MAX_READER_SWITCHES`, because each
+  // handover leaves another persona copy in the extension's replay — see the
+  // constant for why that is a budget and not a prompt-wording problem. That is
+  // a visible reset of what the user is looking at, so it is asked, not done.
+  //
+  // Resolves true when the thread was parked, so a caller that sends straight
+  // afterwards knows not to hand the old conversation on as history.
   const handleSelectMode = useCallback(
-    async (next: ChatMode) => {
-      if (next === mode || !authUser) return;
+    async (next: ChatMode): Promise<boolean> => {
+      if (next === mode) return false;
+
+      // The user has now had their say either way, so a later snapshot must not
+      // put the toggle back on the reader the thread happens to have been in.
+      modeAdopted.current = true;
+
+      if (readerSwitchesUsed(messagesRef.current) < MAX_READER_SWITCHES) {
+        setMode(next);
+        return false;
+      }
+
+      const startFresh = await new Promise<boolean>((resolve) => {
+        Alert.alert(
+          "Start a new chat?",
+          `You've handed this conversation back and forth ${MAX_READER_SWITCHES} times — ` +
+            "switching again starts a fresh one. This chat is saved to your history.",
+          [
+            { text: "Stay here", style: "cancel", onPress: () => resolve(false) },
+            { text: "Start new chat", onPress: () => resolve(true) },
+          ],
+          { onDismiss: () => resolve(false) },
+        );
+      });
+      if (!startFresh) return false;
+
       setMode(next);
-      if (messagesRef.current.length === 0) return;
+      if (!authUser) return true;
       try {
         chatStarted.current = false;
         await saveChatAndClear(authUser.uid, messagesRef.current);
+        return true;
       } catch (e) {
-        logger.error("[chat] mode switch park failed", e, "chat_mode_switch");
+        // Nothing was cleared, so the thread the caller has is still the real
+        // one — report it as unparked and let the switch land on it. That
+        // overshoots the budget by one, which is the mild failure here.
+        logger.error("[chat] reader budget park failed", e, "chat_mode_switch");
+        return false;
       }
     },
     [authUser, mode],
@@ -748,13 +841,13 @@ export default function ChatScreen() {
       setPendingInitial(null);
       if (!question) return;
 
-      // Switching parks whatever thread is open, so the question that follows
-      // must not carry the parked conversation along as its history.
-      const parked = next !== mode && messagesRef.current.length > 0;
-      await handleSelectMode(next);
+      // The reader is per-question, so this only decides who answers this one —
+      // whatever conversation is already open carries on underneath it, unless
+      // the switch spent the last of the budget and parked it.
+      const parked = await handleSelectMode(next);
       handleSend(question, next, parked ? [] : undefined);
     },
-    [pendingInitial, mode, handleSelectMode, handleSend],
+    [pendingInitial, handleSelectMode, handleSend],
   );
 
   // ─── Resume saved chat ─────────────────────────────────────────────────────
@@ -765,6 +858,12 @@ export default function ChatScreen() {
       try {
         await resumeChatSession(authUser.uid, session, messagesRef.current);
         chatStarted.current = true;
+        // The restored thread replaces the open one, so point the toggle at the
+        // reader it was left in rather than waiting on a snapshot that would be
+        // ignored (`modeAdopted` is already set by then).
+        const resumedMode = lastChatMode(session.messages) ?? session.mode;
+        if (resumedMode) setMode(resumedMode);
+        modeAdopted.current = true;
         setViewingSession(null);
         setShowHistory(false);
       } catch (e) {
@@ -779,44 +878,43 @@ export default function ChatScreen() {
   const showSuggestions = historyLoaded && messages.length === 0;
   const sendDisabled = isSending || !inputText.trim();
 
-  // The opening tarot turn shows the card it was read from. Nothing is stored:
-  // the draw is seeded on uid + question + turn index, so recomputing it here
-  // with turn index 0 reproduces exactly the card the prompt was built around,
-  // and it survives a reload of the conversation.
-  const openingMessage = messages[0];
-  const openingTarotQuestion =
-    openingMessage && (openingMessage.mode ?? mode) === "tarot"
-      ? openingMessage.userMessage
-      : null;
+  // Every tarot turn shows the spread it was read from — a thread holds both
+  // readers, so these can sit anywhere in it, not only at the top.
+  //
+  // Nothing is stored. The draw is seeded on uid + question + turn index, so
+  // recomputing it here reproduces exactly the cards the prompt was built
+  // around, and it survives a reload of the conversation. The index is the
+  // message's position in the thread, which is the prior-turn count
+  // `buildPrompt` seeded on, and the date comes off the message rather than
+  // off the clock — otherwise a conversation left open across midnight would
+  // redraw cards the model was never given.
+  //
+  // A turn with no stored mode predates tarot entirely, so it is astrology and
+  // draws nothing; the toggle is deliberately not used as a fallback here,
+  // since it now says nothing about turns already in the thread.
+  const uid = authUser?.uid;
+  const tarotDraws = useMemo(() => {
+    const draws = new Map<string, DrawnTarotCard[]>();
+    if (!uid) return draws;
+    messages.forEach((msg, index) => {
+      if (msg.mode !== "tarot") return;
+      draws.set(msg.id, drawForTurn(uid, msg.userMessage, index, msg.createdAt));
+    });
+    return draws;
+  }, [uid, messages]);
 
-  // The seed carries the local date of the turn, so it comes off the message
-  // rather than off the clock — otherwise a conversation left open across
-  // midnight would redraw a card the model was never given.
-  const openingCreatedAt = openingMessage?.createdAt.getTime() ?? null;
-
-  const openingDraw = useMemo(() => {
-    if (!authUser || !openingTarotQuestion || openingCreatedAt === null) {
-      return null;
-    }
-    return drawForTurn(
-      authUser.uid,
-      openingTarotQuestion,
-      0,
-      new Date(openingCreatedAt),
-    );
-  }, [authUser, openingTarotQuestion, openingCreatedAt]);
-
-  const openingDrawRevealed =
-    !!openingMessage && revealedDraws.includes(openingMessage.id);
-
-  const handleDrawComplete = useCallback(() => {
-    if (!authUser || !openingMessage) return;
-    const id = openingMessage.id;
-    setRevealedDraws((prev) => (prev.includes(id) ? prev : [id, ...prev]));
-    markChatDrawRevealed(authUser.uid, id).catch(
-      logger.catchAsync("chat_draw_reveal"),
-    );
-  }, [authUser, openingMessage]);
+  const handleDrawComplete = useCallback(
+    (messageId: string) => {
+      if (!authUser) return;
+      setRevealedDraws((prev) =>
+        prev.includes(messageId) ? prev : [messageId, ...prev],
+      );
+      markChatDrawRevealed(authUser.uid, messageId).catch(
+        logger.catchAsync("chat_draw_reveal"),
+      );
+    },
+    [authUser],
+  );
 
   // The same five rotating prompts back both the empty-state list and the
   // scrolling panel above the input once a conversation is under way.
@@ -1063,7 +1161,9 @@ export default function ChatScreen() {
                   >
                     <Ionicons
                       name={
-                        m === "astrology" ? "planet-outline" : "sparkles-outline"
+                        m === "astrology"
+                          ? "planet-outline"
+                          : "sparkles-outline"
                       }
                       size={16}
                       color={mode === m ? C.purpleLight : C.muted}
@@ -1105,21 +1205,22 @@ export default function ChatScreen() {
                 style={styles.flex}
                 data={messages}
                 keyExtractor={(item) => item.id}
-                renderItem={({ item, index }) => {
-                  const showsDraw = index === 0 && !!openingDraw;
+                renderItem={({ item }) => {
+                  const draw = tarotDraws.get(item.id);
+                  const revealed = revealedDraws.includes(item.id);
                   return (
                     <MessageBubble
                       msg={item}
                       onRetry={handleRetry}
                       isRetrying={retryingIds.includes(item.id)}
-                      holdReply={showsDraw && !openingDrawRevealed}
+                      holdForDraw={!!draw && !revealed}
                       accessory={
-                        showsDraw ? (
+                        draw ? (
                           <ChatTarotDraw
-                            cardNumber={openingDraw!.map((c) => c.id)}
-                            reversed={openingDraw!.map((c) => c.reversed)}
-                            alreadyRevealed={openingDrawRevealed}
-                            onDrawComplete={handleDrawComplete}
+                            cardNumber={draw.map((c) => c.id)}
+                            reversed={draw.map((c) => c.reversed)}
+                            alreadyRevealed={revealed}
+                            onDrawComplete={() => handleDrawComplete(item.id)}
                           />
                         ) : null
                       }
@@ -1199,11 +1300,13 @@ export default function ChatScreen() {
             </View>
             <View style={[styles.counterBar]}>
               <Text style={styles.counterText}>
-                {baseDailyChatLimit === 0
-                  ? questionLimit === 0
-                    ? "Buy additional questions to continue chatting"
-                    : `${questionsRemaining} of ${questionLimit} purchased question${questionLimit === 1 ? "" : "s"} remaining`
-                  : `${questionsRemaining} of ${questionLimit} questions remaining today`}
+                {unmetered
+                  ? "Admin account — questions aren't metered"
+                  : baseDailyChatLimit === 0
+                    ? questionLimit === 0
+                      ? "Buy additional questions to continue chatting"
+                      : `${questionsRemaining} of ${questionLimit} purchased question${questionLimit === 1 ? "" : "s"} remaining`
+                    : `${questionsRemaining} of ${questionLimit} questions remaining today`}
               </Text>
             </View>
           </View>
@@ -1240,7 +1343,9 @@ export default function ChatScreen() {
                 activeOpacity={0.8}
               >
                 <Ionicons
-                  name={m === "astrology" ? "planet-outline" : "sparkles-outline"}
+                  name={
+                    m === "astrology" ? "planet-outline" : "sparkles-outline"
+                  }
                   size={18}
                   color={C.purpleLight}
                 />
