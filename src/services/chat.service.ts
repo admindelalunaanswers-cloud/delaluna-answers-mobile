@@ -6,6 +6,7 @@ import { db, functions } from '@/firebaseConfig';
 import { buildChatTurnPrompt } from '@/src/prompts/chat-continuity';
 import { buildTarotSystemContext, formatTarotDraw } from '@/src/prompts/tarot-chat-prompt';
 import { drawChatSpread } from '@/src/services/tarot-card.service';
+import type { DrawnTarotCard } from '@/src/types/tarot-cards.type';
 
 /**
  * Chat comes in two flavours, each with its own persona.
@@ -20,6 +21,31 @@ export type ChatMode = 'astrology' | 'tarot';
 
 /** Cards pulled per tarot question. One card, one read. */
 const TAROT_CHAT_CARD_COUNT = 1;
+
+/**
+ * The card(s) the prompt for a given turn is built around.
+ *
+ * `drawChatSpread` is deterministic on its seed, so this returns exactly what
+ * `buildPrompt` draws for the same turn — the screen can show the user the card
+ * the model is actually reading without anything being stored or re-drawn.
+ * `turnIndex` is the number of prior turns in the conversation, matching the
+ * `history.length` the prompt seeds on, and `drawnAt` is the message's
+ * `createdAt`, matching the instant the prompt was composed.
+ */
+export function drawForTurn(
+  uid: string,
+  userMessage: string,
+  turnIndex: number,
+  drawnAt: Date,
+): DrawnTarotCard[] {
+  return drawChatSpread(
+    uid,
+    userMessage,
+    turnIndex,
+    drawnAt,
+    TAROT_CHAT_CARD_COUNT,
+  );
+}
 
 // ─── Persona / system context ─────────────────────────────────────────────────
 // Sent on the turn that opens a conversation and inherited by every turn after
@@ -113,23 +139,29 @@ export function subscribeToChatHistory(
   return onSnapshot(
     query(collection(db, 'users', uid, 'updayedChat'), orderBy('createTime', 'asc')),
     (snap) => {
-      const messages: ChatMessageDoc[] = snap.docs.map(docSnap => {
-        const data = docSnap.data();
-        const state: string = (data?.status?.state ?? '').toUpperCase();
-        const response = parseResponse(data);
-        return {
-          id: docSnap.id,
-          prompt: data.prompt ?? '',
-          userMessage: data.userMessage ?? '',
-          response,
-          isPending: !response && state !== 'ERROR',
-          isError: state === 'ERROR',
-          createdAt: (data.createTime as Timestamp)?.toDate() ?? new Date(),
-          connectionId: typeof data.connectionId === 'string' ? data.connectionId : undefined,
-          connectionName: typeof data.connectionName === 'string' ? data.connectionName : undefined,
-          mode: parseMode(data.mode),
-        };
-      });
+      const messages: ChatMessageDoc[] = snap.docs
+        // A retry deletes the failed document it replaces. If that generation
+        // then finishes anyway, the extension's write recreates the document
+        // as a bare `response` with no question attached — render that and the
+        // user sees an orphan reply next to the real one.
+        .filter(docSnap => !!docSnap.data()?.userMessage)
+        .map(docSnap => {
+          const data = docSnap.data();
+          const state: string = (data?.status?.state ?? '').toUpperCase();
+          const response = parseResponse(data);
+          return {
+            id: docSnap.id,
+            prompt: data.prompt ?? '',
+            userMessage: data.userMessage ?? '',
+            response,
+            isPending: !response && state !== 'ERROR',
+            isError: state === 'ERROR',
+            createdAt: (data.createTime as Timestamp)?.toDate() ?? new Date(),
+            connectionId: typeof data.connectionId === 'string' ? data.connectionId : undefined,
+            connectionName: typeof data.connectionName === 'string' ? data.connectionName : undefined,
+            mode: parseMode(data.mode),
+          };
+        });
       onMessages(messages);
     },
     // updayedChat is gated on isVerifiedOwner, so an unverified account is
@@ -140,6 +172,98 @@ export function subscribeToChatHistory(
       onMessages([]);
     },
   );
+}
+
+/** The server's view of what the user has spent. */
+export interface ChatUsage {
+  /** Questions billed against today's daily allowance. */
+  usedToday: number;
+  /** Purchased chat-pack questions spent so far, all time. */
+  creditsConsumed: number;
+}
+
+/**
+ * Builds the `chatUsage` document id for the user's current local day.
+ *
+ * `sendChatMessage` bills against the day derived from the
+ * `timezoneOffsetMinutes` stored on the user doc, not the device clock — so
+ * the counter has to name the day the same way or it would read a different
+ * ledger document than the one the server writes. Falls back to the UTC date
+ * when the offset is missing, exactly as the server does.
+ */
+export function chatUsageDayId(offsetMinutes?: number): string {
+  const d =
+    typeof offsetMinutes === 'number' && Number.isFinite(offsetMinutes)
+      ? new Date(Date.now() + offsetMinutes * 60 * 1000)
+      : new Date();
+  return [
+    d.getUTCFullYear(),
+    String(d.getUTCMonth() + 1).padStart(2, '0'),
+    String(d.getUTCDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+/**
+ * Milliseconds until the user's local day rolls over — i.e. until
+ * `chatUsageDayId` starts naming a different document. Callers watching the
+ * ledger use this to re-point the listener instead of showing yesterday's
+ * usage to someone who left the app open overnight.
+ */
+export function msUntilNextChatUsageDay(offsetMinutes?: number): number {
+  const now =
+    typeof offsetMinutes === 'number' && Number.isFinite(offsetMinutes)
+      ? new Date(Date.now() + offsetMinutes * 60 * 1000)
+      : new Date();
+  const nextDay = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate() + 1,
+  );
+  return nextDay - now.getTime();
+}
+
+/**
+ * Real-time listener for the server's question ledger on a given day. Returns
+ * an unsubscribe function.
+ *
+ * This is deliberately not derived from the chat documents: the user can
+ * delete their own chat history, which would otherwise reset the counter (and
+ * the daily allowance with it). `chatUsage` is server-write-only and readable
+ * by its owner — see firestore.rules.
+ *
+ * A listener error leaves the caller's last value in place rather than
+ * reporting zero usage, so a denied read can't present a full allowance.
+ */
+export function subscribeToChatUsage(
+  uid: string,
+  dayId: string,
+  onUsage: (usage: ChatUsage) => void,
+): () => void {
+  const usage: ChatUsage = { usedToday: 0, creditsConsumed: 0 };
+  const usageCol = collection(db, 'users', uid, 'chatUsage');
+
+  const unsubDay = onSnapshot(
+    doc(usageCol, dayId),
+    (snap) => {
+      usage.usedToday = Number(snap.data()?.count ?? 0);
+      onUsage({ ...usage });
+    },
+    (err) => logger.error('[chat] usage listener failed', err, 'chat_usage_snapshot'),
+  );
+
+  const unsubCredits = onSnapshot(
+    doc(usageCol, '_credits'),
+    (snap) => {
+      usage.creditsConsumed = Number(snap.data()?.consumed ?? 0);
+      onUsage({ ...usage });
+    },
+    (err) => logger.error('[chat] credit listener failed', err, 'chat_credits_snapshot'),
+  );
+
+  return () => {
+    unsubDay();
+    unsubCredits();
+  };
 }
 
 /**
@@ -180,6 +304,11 @@ export interface ChatTurnOptions {
 function buildPrompt(opts: ChatTurnOptions, excludeId?: string): string {
   const history = (opts.history ?? []).filter(m => m.id !== excludeId);
 
+  // The instant this turn is composed, which is what the message's `createdAt`
+  // will be. Passed explicitly so that redrawing the card for display later
+  // reads the same date out of the message rather than off the clock.
+  const drawnAt = new Date();
+
   const tarotDraw =
     opts.mode === 'tarot'
       ? formatTarotDraw(
@@ -187,6 +316,7 @@ function buildPrompt(opts: ChatTurnOptions, excludeId?: string): string {
             opts.uid,
             opts.userMessage,
             history.length,
+            drawnAt,
             TAROT_CHAT_CARD_COUNT,
           ),
         )
@@ -216,6 +346,23 @@ export class ChatQuotaExceededError extends Error {
   }
 }
 
+/**
+ * Raised when a retry is refused because the original generation is still in
+ * flight, or because the message was already retried.
+ *
+ * The server will not start a second generation for a message it hasn't given
+ * up on — doing so billed a second question and left two copies of the same
+ * question in the thread, each with its own reply. The button is only offered
+ * once the message is old enough to qualify, so this is a clock-skew or
+ * double-tap backstop rather than something the user should hit routinely.
+ */
+export class ChatRetryNotReadyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ChatRetryNotReadyError';
+  }
+}
+
 const sendChatMessageFn = httpsCallable<
   Record<string, unknown>,
   { messageId: string }
@@ -227,6 +374,11 @@ async function submit(payload: Record<string, unknown>): Promise<void> {
   } catch (err: any) {
     if (err?.code === 'functions/resource-exhausted') {
       throw new ChatQuotaExceededError(err?.message ?? 'Out of questions.');
+    }
+    if (err?.code === 'functions/failed-precondition') {
+      throw new ChatRetryNotReadyError(
+        err?.message ?? 'That answer is still generating.',
+      );
     }
     throw err;
   }
@@ -252,8 +404,10 @@ export async function sendChatMessage(opts: ChatTurnOptions): Promise<void> {
 
 /**
  * Re-submits a stuck/errored message. The server verifies the message really
- * did fail before deleting it and re-running the generation without charging
- * another question.
+ * did fail before deleting it and re-running the generation — a retry against
+ * a generation still in flight is refused (`ChatRetryNotReadyError`) rather
+ * than started alongside it. The failed turn's question is refunded, so a
+ * question is spent per answer received, not per attempt.
  *
  * `history` can be the full current conversation: the failed document is
  * replaced by a new one with a fresh `createTime`, so it sorts to the end and
