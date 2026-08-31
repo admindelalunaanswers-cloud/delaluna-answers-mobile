@@ -140,7 +140,28 @@ service cloud.firestore {
     }
 
     // ─── RevenueCat extension destination ──────────────────────────────────
-    match /subscriptions/{uid} {
+    // The extension writes both of these with the admin SDK, so it bypasses
+    // these rules; the client is read-only and sees only its own document.
+    //
+    // The uid is the FOURTH path segment, not the second — the destinations are
+    // configured in extensions/firestore-revenuecat-purchases.env as
+    //   REVENUECAT_CUSTOMERS_COLLECTION = subscriptions/purchaser-info/customers
+    //   REVENUECAT_EVENTS_COLLECTION    = subscriptions/purchases/users
+    // A `match /subscriptions/{uid}` binds {uid} to the literal segment
+    // "purchaser-info" / "purchases", so isOwner(uid) is false for every
+    // caller and no user can read their own mirror. That is what this block
+    // used to say; it only ever appeared to work because the admin catch-all
+    // at the top of this file covers the one screen that reads it.
+
+    // Purchaser-info mirror: the document purchasedChatCredits() and the
+    // server-side premium check both read.
+    match /subscriptions/purchaser-info/customers/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+    }
+
+    // Webhook event log, one document per user with the events nested beneath.
+    match /subscriptions/purchases/users/{uid} {
       allow read: if isOwner(uid);
       allow write: if false;
 
