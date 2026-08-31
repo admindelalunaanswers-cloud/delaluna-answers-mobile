@@ -89,15 +89,21 @@ function drawDailySpread(
  * while re-sending the same question — which is what a retry is — pulls the
  * same card back. `ordinal` keeps a user who asks the same thing twice in one
  * day from getting the same card twice.
+ *
+ * `drawnAt` is the instant the turn was composed — the message's `createdAt`,
+ * not the current clock. The seed carries a local date, so reading the clock
+ * here would make a conversation held across midnight recompute a different
+ * card than the one the model was actually given.
  */
 export function drawChatSpread(
   userId: string,
   question: string,
   ordinal: number,
+  drawnAt: Date,
   count: number = 1,
 ): DrawnTarotCard[] {
   return drawTarotSpread(
-    `${userId}_${localDateId()}_${ordinal}_${question.trim().toLowerCase()}`,
+    `${userId}_${toLocalDateId(drawnAt)}_${ordinal}_${question.trim().toLowerCase()}`,
     count,
   );
 }
@@ -163,13 +169,18 @@ async function getOrCreateCardsForDate(
   return pack;
 }
 
+/** `YYYY-MM-DD` for a given instant, in the device's local timezone. */
+export function toLocalDateId(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function localDateId(offsetDays: number = 0): string {
   const d = new Date();
   d.setDate(d.getDate() + offsetDays);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return toLocalDateId(d);
 }
 
 export async function getTarotCardDraw(
