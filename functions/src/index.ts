@@ -274,7 +274,11 @@ const FREE_DAILY_CHAT_LIMIT = 2;
 const PREMIUM_DAILY_CHAT_LIMIT = 2;
 
 // A chat document with no response older than this is treated as a failed
-// generation for the purposes of an unbilled retry.
+// generation, and only then may it be retried. Mirrored (plus a skew buffer)
+// by RETRY_ELIGIBLE_MS in app/(main)/chat.tsx, which is what decides when the
+// Retry button appears. Keep it comfortably longer than a slow generation:
+// a retry deletes the document it replaces, so anything shorter risks
+// discarding an answer that was about to arrive and paying Gemini twice.
 const GENERATION_STUCK_MS = 3 * 60 * 1000;
 
 // Consumable chat packs. Must match PRODUCT_IDS / CHAT_PACK_QUANTITIES in
@@ -1225,6 +1229,79 @@ async function purchasedChatCredits(uid: string): Promise<number> {
 }
 
 /**
+ * Hands back the question a chat message was billed for, at most once.
+ *
+ * The charge has to happen when the message is submitted — the quota is only
+ * enforceable before the generation starts — but a user should only pay for an
+ * answer they actually received. So a generation that ends in ERROR, or one
+ * superseded by a retry, refunds itself here.
+ *
+ * Idempotent through the `refunded` flag on the message: the ERROR trigger and
+ * an explicit retry can both reach this for the same document, and only the
+ * first moves the ledger. The counters are recomputed and floored at zero
+ * rather than blindly decremented, so even a refund that somehow ran twice
+ * cannot manufacture allowance out of nothing.
+ */
+async function refundChatQuestion(
+  uid: string,
+  msgRef: admin.firestore.DocumentReference,
+): Promise<void> {
+  const usageRef = db.collection("users").doc(uid).collection("chatUsage");
+
+  try {
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(msgRef);
+      if (!snap.exists) return;
+
+      const data = snap.data()!;
+      const dayId = data.billedDay;
+      // Nothing was charged: an admin send, or a message written before
+      // billing receipts existed.
+      if (typeof dayId !== "string" || !dayId) return;
+      if (data.refunded === true) return;
+
+      const fromCredit = data.billedCredit === true;
+      const dayRef = usageRef.doc(dayId);
+      const creditsRef = usageRef.doc("_credits");
+
+      // Every read before any write — a transaction rejects the other order.
+      const daySnap = await tx.get(dayRef);
+      const creditsSnap = fromCredit ? await tx.get(creditsRef) : null;
+
+      tx.set(
+        dayRef,
+        {
+          count: Math.max(0, Number(daySnap.data()?.count ?? 0) - 1),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      if (creditsSnap) {
+        tx.set(
+          creditsRef,
+          {
+            consumed: Math.max(
+              0,
+              Number(creditsSnap.data()?.consumed ?? 0) - 1,
+            ),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
+
+      tx.set(msgRef, { refunded: true }, { merge: true });
+    });
+  } catch (err) {
+    // A failed refund must not fail the retry that asked for it — that would
+    // leave the user both charged and unable to get the answer. The ledger
+    // stays one high in that case, which is the survivable direction.
+    console.error(`[chat] refund failed for ${uid}:`, err);
+  }
+}
+
+/**
  * The only path that may submit a chat prompt for AI generation.
  *
  * Previously the client wrote straight into `users/{uid}/updayedChat` and the
@@ -1237,6 +1314,10 @@ async function purchasedChatCredits(uid: string): Promise<number> {
  * counting chat documents, because the client can delete its own chat history
  * (clearChatHistory / deleteChatSession) and would otherwise reset its quota
  * at will. That collection is server-write-only.
+ *
+ * A question is charged here, before the generation runs, but is only ever
+ * kept for an answer that arrived: a failure refunds it (refundFailedChat),
+ * and so does the retry that supersedes it.
  */
 export const sendChatMessage = onCall({ invoker: "public" }, async (request) => {
   if (!request.auth) {
@@ -1260,32 +1341,59 @@ export const sendChatMessage = onCall({ invoker: "public" }, async (request) => 
   // them adds nothing, and it keeps the admin screen's limit sliders usable.
   const isAdmin = request.auth.token.admin === true;
 
-  // Re-running a generation that actually failed is free. The retried document
-  // must be in the extension's ERROR state (or have been stuck without a
-  // response past the generation timeout) and is consumed here, so this can't
-  // be looped to farm unbilled generations off an in-flight message.
-  let freeRetry = false;
+  // A retry must never start a second generation for a message that is still
+  // in flight. It used to: a message only counted as failed once it was in the
+  // extension's ERROR state or older than GENERATION_STUCK_MS, and a retry
+  // arriving before then fell straight through to the billing below — charging
+  // a second question and adding a second document, so the user saw their
+  // question and two separate replies and paid twice for one answer. The
+  // client only offers the button once the message is eligible, but clock skew
+  // can beat it there, so the refusal is enforced here.
   if (input.retryOf) {
     const prevRef = chatRef.doc(input.retryOf);
     const prev = await prevRef.get();
-    if (prev.exists) {
-      const prevData = prev.data()!;
-      const state = String(prevData.status?.state ?? "").toUpperCase();
-      const createdMs =
-        (prevData.createTime as Timestamp | undefined)?.toMillis() ?? 0;
-      const stuck =
-        !prevData.response &&
-        createdMs > 0 &&
-        Date.now() - createdMs > GENERATION_STUCK_MS;
 
-      if (state === "ERROR" || stuck) {
-        await prevRef.delete();
-        freeRetry = true;
-      }
+    if (!prev.exists) {
+      // An eligible retry consumes the document it replaces, so a missing one
+      // means this is the second tap on the same button.
+      throw new HttpsError(
+        "failed-precondition",
+        "That message has already been retried.",
+      );
     }
+
+    const prevData = prev.data()!;
+    const state = String(prevData.status?.state ?? "").toUpperCase();
+    const createdMs =
+      (prevData.createTime as Timestamp | undefined)?.toMillis() ?? 0;
+    const stuck =
+      !prevData.response &&
+      createdMs > 0 &&
+      Date.now() - createdMs > GENERATION_STUCK_MS;
+
+    if (state !== "ERROR" && !stuck) {
+      throw new HttpsError(
+        "failed-precondition",
+        "That answer is still generating. Give it a moment.",
+      );
+    }
+
+    // The failed turn hands its question back instead of the retry being
+    // waived. Same net cost — one question for one answer — but the new
+    // document carries its own billing record, so a retry that fails in turn
+    // is refunded too rather than the chain leaking a question per failure.
+    // The refund is awaited, so the ledger the transaction below reads has
+    // already been credited and a user at their limit is not bounced to the
+    // paywall for a question they never got an answer to.
+    await refundChatQuestion(uid, prevRef);
+    await prevRef.delete();
   }
 
-  if (!isAdmin && !freeRetry) {
+  // What this message was billed for, recorded on the document so it can be
+  // handed back if the generation fails. Null when nothing was charged.
+  let billed: { dayId: string; fromCredit: boolean } | null = null;
+
+  if (!isAdmin) {
     const [premium, purchased, userSnap] = await Promise.all([
       isUserPremium(uid),
       purchasedChatCredits(uid),
@@ -1306,8 +1414,10 @@ export const sendChatMessage = onCall({ invoker: "public" }, async (request) => 
       : FREE_DAILY_CHAT_LIMIT;
 
     // Read-modify-write in a transaction so parallel sends can't both pass the
-    // check and overspend the allowance.
-    await db.runTransaction(async (tx) => {
+    // check and overspend the allowance. What it charged is returned rather
+    // than assigned from inside, because a contended transaction runs its
+    // callback more than once.
+    billed = await db.runTransaction(async (tx) => {
       const dayRef = usageRef.doc(dayId);
       const creditsRef = usageRef.doc("_credits");
       const [daySnap, creditsSnap] = await Promise.all([
@@ -1325,7 +1435,7 @@ export const sendChatMessage = onCall({ invoker: "public" }, async (request) => 
           { count: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() },
           { merge: true },
         );
-        return;
+        return { dayId, fromCredit: false };
       }
 
       if (creditsLeft > 0) {
@@ -1343,7 +1453,7 @@ export const sendChatMessage = onCall({ invoker: "public" }, async (request) => 
           { count: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() },
           { merge: true },
         );
-        return;
+        return { dayId, fromCredit: true };
       }
 
       throw new HttpsError(
@@ -1361,6 +1471,12 @@ export const sendChatMessage = onCall({ invoker: "public" }, async (request) => 
   if (input.connectionId) payload.connectionId = input.connectionId;
   if (input.connectionName) payload.connectionName = input.connectionName;
   if (input.mode) payload.mode = input.mode;
+  // The receipt refundChatQuestion reads. Absent for an admin send, which is
+  // never metered and so has nothing to give back.
+  if (billed) {
+    payload.billedDay = billed.dayId;
+    payload.billedCredit = billed.fromCredit;
+  }
 
   const created = await chatRef.add(payload);
 
@@ -1480,6 +1596,38 @@ export const notifyBreakdownReady = onDocumentUpdated(
       },
       "notifyBreakdownReady",
     );
+  },
+);
+
+// ─── refundFailedChat ────────────────────────────────────────────────────────
+
+/**
+ * Gives the question back when a generation fails.
+ *
+ * Without this a failed turn still cost the user a question, whether or not
+ * they ever pressed Retry — the charge is taken at submit time and nothing
+ * reversed it. Fires on the extension's ERROR status rather than waiting for a
+ * retry, so a user who simply gives up is not billed for silence either.
+ */
+export const refundFailedChat = onDocumentUpdated(
+  "users/{userId}/updayedChat/{messageId}",
+  async (event) => {
+    const after = event.data?.after;
+    const afterData = after?.data();
+    if (!after || !afterData) return;
+
+    const state = String(afterData.status?.state ?? "").toUpperCase();
+    if (state !== "ERROR") return;
+    // An error written alongside a response still answered the question.
+    if (afterData.response) return;
+    // Only on the transition into ERROR; refundChatQuestion is idempotent
+    // anyway, but there is no reason to open a transaction per later write.
+    const beforeState = String(
+      event.data?.before?.data()?.status?.state ?? "",
+    ).toUpperCase();
+    if (beforeState === "ERROR") return;
+
+    await refundChatQuestion(event.params.userId, after.ref);
   },
 );
 
