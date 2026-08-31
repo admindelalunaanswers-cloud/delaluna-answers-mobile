@@ -82,6 +82,14 @@ const CONNECTION_SUGGESTIONS = [
 
 const VISIBLE_SUGGESTIONS = 5;
 
+const CHAT_MODES = ["astrology", "tarot"] as const;
+
+// The sliding thumb is absolutely positioned, which Yoga measures from the
+// track's padding box — so its travel has to exclude both the track padding and
+// its border, neither of which onLayout's width leaves out.
+const MODE_TRACK_PADDING = 5;
+const MODE_TRACK_BORDER = 1;
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatTime(date: Date): string {
@@ -217,6 +225,8 @@ export default function ChatScreen() {
     useState<ChatConnectionContext | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [mode, setMode] = useState<ChatMode>("astrology");
+  const [modeTrackWidth, setModeTrackWidth] = useState(0);
+  const modeAnim = useRef(new Animated.Value(0)).current;
 
   const [extraQuestionsPurchased, setExtraQuestionsPurchased] = useState(0);
   const [showQuestionConsumable, setShowQuestionConsumable] = useState(false);
@@ -557,6 +567,17 @@ export default function ChatScreen() {
     [authUser, mode],
   );
 
+  const modeThumbWidth =
+    (modeTrackWidth - (MODE_TRACK_PADDING + MODE_TRACK_BORDER) * 2) / 2;
+
+  useEffect(() => {
+    Animated.timing(modeAnim, {
+      toValue: CHAT_MODES.indexOf(mode),
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  }, [mode, modeAnim]);
+
   // ─── Resume saved chat ─────────────────────────────────────────────────────
 
   const handleResumeSession = useCallback(
@@ -738,33 +759,62 @@ export default function ChatScreen() {
 
         <KeyboardAvoidingView style={styles.flex} behavior="padding">
           <View style={[styles.flex, { paddingTop: headerHeight }]}>
-            <View style={styles.modeBar}>
-              {(["astrology", "tarot"] as const).map((m) => (
-                <TouchableOpacity
-                  key={m}
-                  onPress={() => handleSelectMode(m)}
-                  style={[styles.modeTab, mode === m && styles.modeTabActive]}
-                  activeOpacity={0.8}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: mode === m }}
-                >
-                  <Ionicons
-                    name={
-                      m === "astrology" ? "planet-outline" : "sparkles-outline"
-                    }
-                    size={14}
-                    color={mode === m ? C.white : C.muted}
-                  />
-                  <Text
+            <View
+              style={[
+                styles.modeBar,
+                { paddingHorizontal: getContentPadding(screenWidth) },
+              ]}
+            >
+              <View
+                style={styles.modeTrack}
+                onLayout={(e) => setModeTrackWidth(e.nativeEvent.layout.width)}
+              >
+                {modeTrackWidth > 0 && (
+                  <Animated.View
+                    pointerEvents="none"
                     style={[
-                      styles.modeTabText,
-                      mode === m && styles.modeTabTextActive,
+                      styles.modeThumb,
+                      {
+                        width: modeThumbWidth,
+                        transform: [
+                          {
+                            translateX: modeAnim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0, modeThumbWidth],
+                            }),
+                          },
+                        ],
+                      },
                     ]}
+                  />
+                )}
+                {CHAT_MODES.map((m) => (
+                  <TouchableOpacity
+                    key={m}
+                    onPress={() => handleSelectMode(m)}
+                    style={styles.modeTab}
+                    activeOpacity={0.8}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: mode === m }}
                   >
-                    {m === "astrology" ? "Astrology" : "Tarot"}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <Ionicons
+                      name={
+                        m === "astrology" ? "planet-outline" : "sparkles-outline"
+                      }
+                      size={16}
+                      color={mode === m ? C.purpleLight : C.muted}
+                    />
+                    <Text
+                      style={[
+                        styles.modeTabText,
+                        mode === m && styles.modeTabTextActive,
+                      ]}
+                    >
+                      {m === "astrology" ? "Astrology" : "Tarot"}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
 
             {showSuggestions ? (
@@ -1068,32 +1118,51 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   modeBar: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: S.sm,
     paddingVertical: S.sm,
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: MAX_CONTENT_WIDTH,
+  },
+  modeTrack: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    height: 52,
+    padding: MODE_TRACK_PADDING,
+    borderRadius: R.lg,
+    backgroundColor: C.white + "0A",
+    borderWidth: MODE_TRACK_BORDER,
+    borderColor: C.white + "12",
+  },
+  modeThumb: {
+    position: "absolute",
+    top: MODE_TRACK_PADDING,
+    bottom: MODE_TRACK_PADDING,
+    left: MODE_TRACK_PADDING,
+    borderRadius: R.md + 2,
+    backgroundColor: C.purple + "1F",
+    borderWidth: 1,
+    borderColor: C.purple,
+    shadowColor: C.purple,
+    shadowOpacity: 0.55,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 6,
   },
   modeTab: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: S.md,
-    paddingVertical: 6,
-    borderRadius: R.pill,
-    borderWidth: 1,
-    borderColor: C.purpleDim,
-  },
-  modeTabActive: {
-    backgroundColor: C.purpleDim,
-    borderColor: C.purple,
+    justifyContent: "center",
+    gap: 7,
   },
   modeTabText: {
     color: C.muted,
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: "600",
   },
   modeTabTextActive: {
-    color: C.white,
+    color: C.purpleLight,
+    fontWeight: "700",
   },
   aboutTag: {
     alignSelf: "flex-end",
