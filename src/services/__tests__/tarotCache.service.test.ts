@@ -3,6 +3,7 @@ import {
     clearTarotCache,
     getDailyCardFromCache,
     saveDailyCardToCache,
+    chatDrawRevealKey,
     tarotDailyKey,
     tarotHistoryKey,
 } from '@/src/services/tarotCache.service';
@@ -83,7 +84,7 @@ describe('tarotCache.service.ts', () => {
   });
 
   describe('clearTarotCache', () => {
-    it('should remove both daily and history keys', async () => {
+    it('should remove the daily, history and revealed-draw keys', async () => {
       (AsyncStorage.multiRemove as jest.Mock).mockResolvedValue(undefined);
 
       await clearTarotCache(mockUserId);
@@ -91,6 +92,7 @@ describe('tarotCache.service.ts', () => {
       expect(AsyncStorage.multiRemove).toHaveBeenCalledWith([
         tarotDailyKey(mockUserId),
         tarotHistoryKey(mockUserId),
+        chatDrawRevealKey(mockUserId),
       ]);
     });
 
