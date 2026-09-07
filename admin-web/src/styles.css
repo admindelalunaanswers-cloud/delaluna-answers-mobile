@@ -1,0 +1,212 @@
+/* Delaluna Admin — a deliberately plain, dense operations UI.
+   Legibility and "am I about to do something irreversible" clarity matter far
+   more here than matching the app's visual identity. */
+
+:root {
+  --bg: #0f1117;
+  --surface: #171a23;
+  --surface-2: #1e222d;
+  --border: #2a2f3d;
+  --text: #e6e8ee;
+  --text-dim: #9aa1b1;
+  --text-faint: #6b7284;
+  --accent: #8b7fd4;
+  --accent-dim: #6f63bb;
+  --danger: #e0555f;
+  --danger-dim: #b8404a;
+  --warn: #d99a3a;
+  --ok: #4fa87a;
+  --radius: 8px;
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Layout ───────────────────────────────────────────────────────────────── */
+
+.shell { display: flex; min-height: 100vh; }
+
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.brand {
+  font-size: 15px;
+  font-weight: 600;
+  padding: 0 10px 16px;
+  letter-spacing: -0.01em;
+}
+
+.nav-link {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-size: 13.5px;
+}
+.nav-link:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
+.nav-link.active { background: var(--surface-2); color: var(--text); font-weight: 500; }
+
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.content { padding: 24px; flex: 1; }
+
+.page-title { font-size: 19px; font-weight: 600; margin: 0 0 4px; }
+.page-sub { color: var(--text-dim); margin: 0 0 20px; font-size: 13px; }
+
+/* ── Environment banner ───────────────────────────────────────────────────── */
+
+.env-badge {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-family: var(--mono);
+}
+.env-badge.prod { background: var(--danger-dim); color: #fff; }
+.env-badge.test { background: var(--surface-2); color: var(--text-dim); border: 1px solid var(--border); }
+
+/* ── Cards, tables, fields ────────────────────────────────────────────────── */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.card-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 0 0 12px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+.row:last-child { border-bottom: none; }
+.row-label { color: var(--text-dim); flex-shrink: 0; }
+.row-value { text-align: right; word-break: break-all; }
+.mono { font-family: var(--mono); font-size: 12.5px; }
+
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  font-weight: 600;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
+tbody tr:hover { background: var(--surface-2); cursor: pointer; }
+tbody tr:last-child td { border-bottom: none; }
+
+input, select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13.5px;
+  font-family: inherit;
+  width: 100%;
+}
+input:focus, select:focus { outline: none; border-color: var(--accent); }
+label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 5px; }
+.field { margin-bottom: 12px; }
+
+button {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 13.5px;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { background: var(--accent-dim); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+button.secondary:hover:not(:disabled) { background: var(--border); }
+button.danger { background: var(--danger); }
+button.danger:hover:not(:disabled) { background: var(--danger-dim); }
+
+.pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 100px;
+  font-family: var(--mono);
+}
+.pill.ok { background: rgba(79,168,122,0.15); color: var(--ok); }
+.pill.off { background: var(--surface-2); color: var(--text-faint); }
+.pill.danger { background: rgba(224,85,95,0.15); color: var(--danger); }
+.pill.warn { background: rgba(217,154,58,0.15); color: var(--warn); }
+
+.msg { padding: 10px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 12px; }
+.msg.error { background: rgba(224,85,95,0.12); color: #f0959c; border: 1px solid rgba(224,85,95,0.3); }
+.msg.ok { background: rgba(79,168,122,0.12); color: #7fc9a2; border: 1px solid rgba(79,168,122,0.3); }
+.msg.info { background: var(--surface-2); color: var(--text-dim); border: 1px solid var(--border); }
+
+.muted { color: var(--text-dim); }
+.faint { color: var(--text-faint); }
+.stack { display: flex; gap: 8px; flex-wrap: wrap; }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+
+/* ── Centred screens (sign-in, gate) ──────────────────────────────────────── */
+
+.centre {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.centre .card { width: 100%; max-width: 360px; margin: 0; }
