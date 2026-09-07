@@ -10,6 +10,10 @@
       ]
     }
   },
+  // admin-web/ is a separate Vite app with its own tsconfig, its own
+  // React types and DOM lib. Compiling it under the React Native config
+  // fails on import.meta.env and would keep this typecheck permanently red.
+  "exclude": ["node_modules", "admin-web"],
   "include": [
     "**/*.ts",
     "**/*.tsx",

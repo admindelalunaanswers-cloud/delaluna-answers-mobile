@@ -48,6 +48,24 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // ─── Moderation ─────────────────────────────────────────────────────────
+    // Per-account bans and feature blocks, written ONLY by the setUserDisabled
+    // and setUserFeatureBlocks cloud functions (the Admin SDK bypasses rules).
+    //
+    // This deliberately does NOT live on users/{uid}. That document is
+    // delete-able by its owner — `allow delete: if isOwner(uid)` below, which
+    // account deletion depends on — so a blocked user could delete their
+    // profile and re-create it without the block, and every server check that
+    // read the field would see an unmoderated account. Keeping the state in a
+    // collection the subject cannot write or delete closes that off.
+    //
+    // The owner may READ it so the app can explain why a feature is missing,
+    // rather than failing with an opaque permission error.
+    match /moderation/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+    }
+
     // ─── Users ──────────────────────────────────────────────────────────────
     match /users/{uid} {
       allow read: if isOwner(uid);
