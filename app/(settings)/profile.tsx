@@ -100,7 +100,8 @@ const NAV_BAR_HEIGHT = 44;
 export default function ProfileScreen() {
   const { authUser, userDoc, loading: userLoading } = useUser();
   const {} = useHoroscope();
-  const { isPro, presentCustomerCenter, restorePurchases } = useRevenueCat();
+  const { hasFullAccess, presentCustomerCenter, restorePurchases } =
+    useRevenueCat();
   const insets = useSafeAreaInsets();
   const ud = userDoc as any;
 
@@ -116,7 +117,7 @@ export default function ProfileScreen() {
   >("Privacy Policy");
   const [uidCopied, setUidCopied] = useState(false);
 
-  const isPremium = isPro;
+  const isPremium = hasFullAccess;
   const profileImageSource =
     getProfileImageSource(ud?.profileImageId) ??
     getProfileImageSource("profile8")!;

@@ -137,7 +137,8 @@ function Stepper({
 
 export default function AdminScreen() {
   const insets = useSafeAreaInsets();
-  const { devPlan, setDevPlan, isPro } = useRevenueCat();
+  const { devPlan, setDevPlan, isPro, isAdmin, hasFullAccess } =
+    useRevenueCat();
   const {
     dailyChatLimit,
     premiumDailyChatLimit,
@@ -361,6 +362,21 @@ export default function AdminScreen() {
           <View style={ss.detailRow}>
             <Text style={ss.detailLabel}>isPro</Text>
             <Text style={ss.detailValue}>{isPro ? "true" : "false"}</Text>
+          </View>
+          <View style={ss.separator} />
+          <View style={ss.detailRow}>
+            <Text style={ss.detailLabel}>isAdmin</Text>
+            <Text style={ss.detailValue}>{isAdmin ? "true" : "false"}</Text>
+          </View>
+          <View style={ss.separator} />
+          {/* What the UI actually gates on. Split out from isPro so it is
+              obvious whether an unlock came from paying or from being an
+              admin — the two used to be indistinguishable from this screen. */}
+          <View style={ss.detailRow}>
+            <Text style={ss.detailLabel}>hasFullAccess</Text>
+            <Text style={ss.detailValue}>
+              {hasFullAccess ? "true" : "false"}
+            </Text>
           </View>
         </View>
 

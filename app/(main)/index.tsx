@@ -44,9 +44,9 @@ export default function HomeScreen() {
     transitMoon,
     breakdown,
   } = useHoroscope();
-  const { isPro, loading: rcLoading } = useRevenueCat();
+  const { hasFullAccess, loading: rcLoading } = useRevenueCat();
   const { markReady } = useScreenPerfLog('/(main)/index');
-  const hasPremiumAccess = rcLoading || isPro;
+  const hasPremiumAccess = rcLoading || hasFullAccess;
 
 
   const todayDateId = getTodayDateId();

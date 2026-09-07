@@ -114,8 +114,8 @@ const AnimatedConnectionItem = memo(
 );
 
 export default function ConnectionsScreen() {
-  const { authUser, userDoc } = useUser();
-  const { isPro } = useRevenueCat();
+  const { authUser } = useUser();
+  const { isAdmin, hasFullAccess } = useRevenueCat();
   const {
     premiumConnectionLimit: PREMIUM_CONNECTION_LIMIT,
   } = useAdmin();
@@ -130,16 +130,15 @@ export default function ConnectionsScreen() {
 
   const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
 
-  // Admins are unmetered, same carve-out as chat. The `admin` claim is the real
-  // authority and `users/{uid}.isAdmin` is a mirror of it, but nothing is gated on
-  // this server-side — the rules already let any verified owner write their own
-  // connections — so a stale mirror only changes what this screen offers.
-  const unmetered = !!userDoc?.isAdmin;
-
-  // Connection allowance: Premium subscribers get PREMIUM_CONNECTION_LIMIT; free users get 0.
-  const accessLimit = unmetered
+  // Connection allowance: admins are unmetered, premium subscribers get
+  // PREMIUM_CONNECTION_LIMIT, free users get 0. `isAdmin` comes from the
+  // RevenueCat context rather than the user doc directly so every screen reads
+  // the admin carve-out from one place — nothing is gated on it server-side
+  // (the rules already let any verified owner write their own connections), so
+  // a stale mirror only changes what this screen offers.
+  const accessLimit = isAdmin
     ? Number.POSITIVE_INFINITY
-    : isPro
+    : hasFullAccess
       ? PREMIUM_CONNECTION_LIMIT
       : 0;
   const canAddNew = connections.length < accessLimit;
@@ -164,7 +163,7 @@ export default function ConnectionsScreen() {
 
   const goToNewConnectionScreen = () => {
     if (!canAddNew) {
-      if (isPro) {
+      if (hasFullAccess) {
         Alert.alert(
           'Connection limit reached',
           `You can save up to ${accessLimit} connections. Remove one to add a new one.`,
@@ -326,7 +325,7 @@ export default function ConnectionsScreen() {
             <Text style={styles.slotCounter}>
               {accessLimit === 0
                 ? `${connections.length} connection${connections.length === 1 ? '' : 's'} locked — upgrade to unlock`
-                : unmetered
+                : isAdmin
                   ? `${connections.length} connection${connections.length === 1 ? '' : 's'} — unlimited`
                   : `${connections.length} of ${accessLimit} connections`}
             </Text>

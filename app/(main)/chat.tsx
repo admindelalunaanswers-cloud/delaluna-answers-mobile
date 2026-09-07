@@ -283,7 +283,8 @@ export default function ChatScreen() {
   const { chartDetails } = useHoroscope();
   const { dailyChatLimit, premiumDailyChatLimit } = useAdmin();
   const {
-    isPro,
+    isAdmin,
+    hasFullAccess,
     customerInfo,
     isDevMode,
     loading: rcLoading,
@@ -295,7 +296,7 @@ export default function ChatScreen() {
     logOp,
     logError: logPerfError,
   } = useScreenPerfLog("/(main)/chat");
-  const hasPremiumAccess = rcLoading || isPro;
+  const hasPremiumAccess = rcLoading || hasFullAccess;
   const insets = useSafeAreaInsets();
   const { scale, width: screenWidth } = useResponsive();
   const headerHeight = insets.top + scale(44);
@@ -385,8 +386,10 @@ export default function ChatScreen() {
   // Display only. The claim is the real authority on admin — `users/{uid}.isAdmin`
   // is a mirror of it — but nothing is gated on this: the server decides what it
   // bills, and this only keeps the counter from counting down against a limit it
-  // is not applying.
-  const unmetered = !!userDoc?.isAdmin;
+  // is not applying. Same source as `hasPremiumAccess` above, so the counter and
+  // the paywall can no longer disagree — an admin used to be shown "unlimited"
+  // and then hit the premium gate anyway.
+  const unmetered = isAdmin;
 
   const { questionLimit, questionsRemaining, chatLocked } =
     resolveChatAllowance({

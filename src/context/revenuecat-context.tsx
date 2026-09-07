@@ -63,6 +63,25 @@ export type DevPlan = "auto" | "free" | "premium";
 interface RevenueCatContextValue {
   /** Whether the user has the "Delaluna Answers Pro" entitlement */
   isPro: boolean;
+  /**
+   * Mirror of the `admin` auth claim, read from `users/{uid}.isAdmin`.
+   *
+   * Safe to read here despite the "never gate premium on a Firestore field"
+   * rule: `firestore.rules` lists `isAdmin` among the protected fields on both
+   * create and update, so only `syncAdminClaim` can ever write it. A client
+   * cannot promote itself. Still display-only — the server meters chat off the
+   * claim, not this.
+   */
+  isAdmin: boolean;
+  /**
+   * Premium *access*, whether paid for or granted by being an admin. This is
+   * what UI gates should read.
+   *
+   * Kept distinct from `isPro` on purpose: `isPro` means "is actually paying"
+   * and is reported per-screen by `use-screen-perf-log`, so folding admins into
+   * it would quietly corrupt the free-vs-premium performance split.
+   */
+  hasFullAccess: boolean;
   /** Latest CustomerInfo from RevenueCat */
   customerInfo: CustomerInfo | null;
   /** True while the initial customer info is loading */
@@ -103,6 +122,8 @@ interface RevenueCatContextValue {
 
 const RevenueCatContext = createContext<RevenueCatContextValue>({
   isPro: false,
+  isAdmin: false,
+  hasFullAccess: false,
   customerInfo: null,
   loading: true,
   refresh: async () => {},
@@ -121,7 +142,7 @@ const RevenueCatContext = createContext<RevenueCatContextValue>({
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function RevenueCatProvider({ children }: { children: ReactNode }) {
-  const { authUser } = useUser();
+  const { authUser, userDoc } = useUser();
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [loading, setLoading] = useState(REVENUECAT_ENABLED);
   const configuredRef = useRef(false);
@@ -141,6 +162,19 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
     if (!REVENUECAT_ENABLED || customerInfo === null) return false;
     return hasEntitlement(customerInfo);
   }, [customerInfo, devPlan]);
+
+  // Admins get premium access without paying. `userDoc` arrives from a live
+  // snapshot, so this follows a claim change as soon as syncAdminClaim mirrors
+  // it — no reload needed. Deliberately NOT folded into `isPro`; see the type.
+  const isAdmin = !!userDoc?.isAdmin;
+
+  // An explicit `free` dev plan is an admin deliberately testing the non-paying
+  // experience, so it has to win over the admin unlock — otherwise the admin
+  // screen's own free/premium toggle would do nothing for the people who use it.
+  const hasFullAccess = useMemo(
+    () => (devPlan === "free" ? false : isPro || isAdmin),
+    [devPlan, isPro, isAdmin],
+  );
 
   // Hydrate devPlan from AsyncStorage when the auth user changes.
   useEffect(() => {
@@ -440,6 +474,8 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
     <RevenueCatContext.Provider
       value={{
         isPro,
+        isAdmin,
+        hasFullAccess,
         customerInfo,
         loading,
         refresh,
