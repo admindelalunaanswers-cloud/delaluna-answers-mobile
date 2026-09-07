@@ -80,6 +80,11 @@ import { purchasedChatCredits } from "@/src/services/revenuecat.service";
 import { ChatStore } from "@/src/stores/chat-store";
 import type { DrawnTarotCard } from "@/src/types/tarot-cards.type";
 import { resolveChatAllowance } from "@/src/utils/chat-allowance";
+import {
+  blockedMessage,
+  isFeatureBlocked,
+  type BlockableFeature,
+} from "@/src/constants/moderation";
 import { checkForHarm, HARM_ALERTS } from "@/src/utils/harm-filter";
 import { getContentPadding, MAX_CONTENT_WIDTH } from "@/src/utils/layout";
 import { logger } from "@/src/utils/logger";
@@ -279,7 +284,7 @@ function MessageBubble({
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function ChatScreen() {
-  const { authUser, userDoc } = useUser();
+  const { authUser, userDoc, moderation } = useUser();
   const { chartDetails } = useHoroscope();
   const { dailyChatLimit, premiumDailyChatLimit } = useAdmin();
   const {
@@ -390,6 +395,19 @@ export default function ChatScreen() {
   // the paywall can no longer disagree — an admin used to be shown "unlimited"
   // and then hit the premium gate anyway.
   const unmetered = isAdmin;
+
+  // Moderation block for this thread's current reader. The server refuses a
+  // blocked send regardless; this exists so the refusal reads as a decision
+  // rather than as the app being broken. `isFeatureBlocked` widens a chat
+  // block to cover tarot, matching sendChatMessage.
+  const blockedFeature: BlockableFeature | null = isFeatureBlocked(
+    moderation,
+    'chat',
+  )
+    ? 'chat'
+    : isFeatureBlocked(moderation, 'tarot') && mode === 'tarot'
+      ? 'tarot'
+      : null;
 
   const { questionLimit, questionsRemaining, chatLocked } =
     resolveChatAllowance({
@@ -617,6 +635,13 @@ export default function ChatScreen() {
         const { title, message: alertMsg } = HARM_ALERTS[harmType];
         Alert.alert(title, alertMsg, [{ text: "OK" }]);
         setInputText("");
+        return;
+      }
+
+      if (blockedFeature) {
+        Alert.alert('Unavailable', blockedMessage(blockedFeature), [
+          { text: 'OK' },
+        ]);
         return;
       }
 

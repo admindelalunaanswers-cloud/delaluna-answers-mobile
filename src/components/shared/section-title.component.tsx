@@ -1,9 +1,9 @@
-import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { Ionicons } from "@expo/vector-icons";
-import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
+import React from "react";
+import { StyleSheet, Text, View } from "react-native";
 
-type SectionName = 
+type SectionName =
   | "quote"
   | "advice"
   | "dos"
@@ -37,17 +37,16 @@ const SECTION_ICONS: Partial<
   warning: { name: "alert-circle-outline", color: "#FF5252" },
 };
 
-
 interface SectionTitleProps {
   sectionName: SectionName;
   title: string;
   showIcon?: boolean;
 }
 
-export default function SectionTitle({ 
-  sectionName, 
-  title, 
-  showIcon = true 
+export default function SectionTitle({
+  sectionName,
+  title,
+  showIcon = true,
 }: SectionTitleProps) {
   const iconConfig = SECTION_ICONS[sectionName];
   const iconSize = scale(20);
@@ -57,11 +56,7 @@ export default function SectionTitle({
   return (
     <View style={styles.titleContainer}>
       {showIcon && iconConfig && (
-        <Ionicons
-          name={iconConfig.name}
-          size={iconSize}
-          color={"#f9f9f9ff"} 
-        />
+        <Ionicons name={iconConfig.name} size={iconSize} color={"#f9f9f9ff"} />
       )}
       <Text style={styles.title}>{title}</Text>
     </View>
@@ -79,7 +74,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: moderateScale(16),
-    fontWeight: "700",
+    fontWeight: "900",
     color: "#5BC0BE",
   },
 });
