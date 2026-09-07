@@ -114,7 +114,7 @@ const AnimatedConnectionItem = memo(
 );
 
 export default function ConnectionsScreen() {
-  const { authUser } = useUser();
+  const { authUser, userDoc } = useUser();
   const { isPro } = useRevenueCat();
   const {
     premiumConnectionLimit: PREMIUM_CONNECTION_LIMIT,
@@ -130,8 +130,18 @@ export default function ConnectionsScreen() {
 
   const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
 
+  // Admins are unmetered, same carve-out as chat. The `admin` claim is the real
+  // authority and `users/{uid}.isAdmin` is a mirror of it, but nothing is gated on
+  // this server-side — the rules already let any verified owner write their own
+  // connections — so a stale mirror only changes what this screen offers.
+  const unmetered = !!userDoc?.isAdmin;
+
   // Connection allowance: Premium subscribers get PREMIUM_CONNECTION_LIMIT; free users get 0.
-  const accessLimit = isPro ? PREMIUM_CONNECTION_LIMIT : 0;
+  const accessLimit = unmetered
+    ? Number.POSITIVE_INFINITY
+    : isPro
+      ? PREMIUM_CONNECTION_LIMIT
+      : 0;
   const canAddNew = connections.length < accessLimit;
 
   const presentUpgradePaywall = () => {
@@ -316,7 +326,9 @@ export default function ConnectionsScreen() {
             <Text style={styles.slotCounter}>
               {accessLimit === 0
                 ? `${connections.length} connection${connections.length === 1 ? '' : 's'} locked — upgrade to unlock`
-                : `${connections.length} of ${accessLimit} connections`}
+                : unmetered
+                  ? `${connections.length} connection${connections.length === 1 ? '' : 's'} — unlimited`
+                  : `${connections.length} of ${accessLimit} connections`}
             </Text>
           </ScrollView>
         ) : (

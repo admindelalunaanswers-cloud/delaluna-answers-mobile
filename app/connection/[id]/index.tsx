@@ -194,9 +194,13 @@ export default function ConnectionViewScreen() {
     secondFirst?: string;
     secondLast?: string;
   }>();
-  const { authUser } = useUser();
+  const { authUser, userDoc } = useUser();
   const { isPro, loading: rcLoading, presentPaywall } = useRevenueCat();
-  const hasPremiumAccess = rcLoading || isPro;
+  // Admins are unmetered — mirrors the carve-out on the chat and connections
+  // screens. Display/UX only: `users/{uid}.isAdmin` mirrors the `admin` claim,
+  // and no server-side gate reads it.
+  const unmetered = !!userDoc?.isAdmin;
+  const hasPremiumAccess = rcLoading || isPro || unmetered;
   const insets = useSafeAreaInsets();
   const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
 
