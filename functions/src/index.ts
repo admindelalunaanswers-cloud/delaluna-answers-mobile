@@ -1,12 +1,24 @@
-import { randomInt } from "crypto";
+import { createHash, randomInt } from "crypto";
 import * as admin from "firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
-import { onDocumentUpdated } from "firebase-functions/v2/firestore";
+import {
+  onDocumentUpdated,
+  onDocumentWritten,
+} from "firebase-functions/v2/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as nodemailer from "nodemailer";
 import { z, ZodError, ZodType } from "zod";
+
+import { generateWithAnchor, invalidateAnchor } from "./anchor";
+import { runChatGeneration } from "./chat-generation";
+import {
+  COMPATIBILITY_SCHEMA,
+  NATAL_BREAKDOWN_SCHEMA,
+  TRANSITS_SCHEMA,
+  geminiApiKey,
+} from "./interactions";
 
 // ─── Secrets (set via: firebase functions:secrets:set EMAIL_USER) ─────────────
 const emailUser = defineSecret("EMAIL_USER");
@@ -1390,6 +1402,10 @@ export const createConnection = onCall(async (request) => {
     { merge: true },
   );
 
+  // The anchor profile lists saved connections, so it is now out of date —
+  // drop it and let the next generation rebuild with this person included.
+  await invalidateAnchor(userId);
+
   return { connectionId };
 });
 
@@ -2021,6 +2037,8 @@ export const parseConnectionCompatibility = onDocumentUpdated(
         compatibility: parsed,
         "status.state": "complete",
       });
+      // Scores feed the anchor profile's "strongest / weakest" line.
+      await invalidateAnchor(userId);
       parseOk = true;
     } catch (err) {
       console.error("[parseConnectionCompatibility] Parse error:", err);
@@ -2103,6 +2121,284 @@ export const parseConnectionCompatibility = onDocumentUpdated(
       },
       pushDocId,
     );
+  },
+);
+
+// ─── AI generation (replaces the GenAI extension instances) ─────────────────
+
+/**
+ * Generates into a document that also *triggers* this function, which is the
+ * one hazard the extension handled internally and we now own.
+ *
+ * The guard is a hash of `requestedAt` + `prompt`, claimed in a transaction
+ * before the model is called. Every write this function makes carries the hash
+ * of the request it is answering and touches neither field, so the write-back
+ * re-fires the trigger, matches, and stops.
+ *
+ * Both fields are load-bearing:
+ *   - `prompt`, because `requestSynastryReading` merges a new prompt over the
+ *     old document *without* clearing `response`, so "does a response already
+ *     exist" would never regenerate.
+ *   - `requestedAt`, because `createConnection` deletes `connection.compatibility`
+ *     on every call while re-stamping the timestamp. Hashing the prompt alone
+ *     meant an unchanged resubmit was skipped as a duplicate — and since the
+ *     compatibility field had already been cleared, the connection would sit on
+ *     `status.state: "pending"` forever with nothing on the way to fix it.
+ *
+ * The transaction is what makes it safe under Firestore's at-least-once
+ * delivery: two concurrent deliveries of one event race to claim the same hash
+ * and exactly one wins. Without it, both would call Gemini.
+ *
+ * The prompt is read inside the transaction rather than taken from the event,
+ * so a burst of writes generates from the document as it actually stands.
+ */
+async function runAnchoredGeneration(opts: {
+  uid: string;
+  ref: FirebaseFirestore.DocumentReference;
+  schema?: Record<string, unknown>;
+  label: string;
+}): Promise<void> {
+  const prompt = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(opts.ref);
+    if (!snap.exists) return null;
+
+    const data = snap.data() ?? {};
+    const current = data.prompt;
+    if (typeof current !== "string" || !current) return null;
+
+    const requestedAt = data.requestedAt;
+    const stamp =
+      requestedAt instanceof Timestamp ? String(requestedAt.toMillis()) : "";
+    const requestHash = createHash("sha256")
+      .update(`${stamp}\n${current}`)
+      .digest("hex");
+
+    if (data.requestHash === requestHash) return null;
+
+    tx.update(opts.ref, {
+      requestHash,
+      status: { state: "PROCESSING" },
+      // Drop the previous answer up front so the client's listener shows the
+      // pending state for the whole generation instead of a stale reading.
+      response: FieldValue.delete(),
+    });
+    return current;
+  });
+
+  if (!prompt) return;
+
+  try {
+    const { text, interactionId, model } = await generateWithAnchor(opts.uid, {
+      prompt,
+      schema: opts.schema,
+      label: opts.label,
+    });
+    await opts.ref.update({
+      response: text,
+      status: { state: "COMPLETED" },
+      generatedAt: FieldValue.serverTimestamp(),
+      // Kept so a later feature can continue from this specific reading rather
+      // than from the anchor — nothing does yet, but it is free to record and
+      // impossible to recover afterwards.
+      interactionId,
+      // Which model produced this. The client logs it, and its absence marks a
+      // document as having been written by the legacy GenAI extension instead.
+      model,
+    });
+  } catch (err) {
+    // Cap and flatten before this touches a log line. The prompts these
+    // functions send carry two people's names and birth data, and an SDK
+    // error can quote the request it failed on — Cloud Logging persists, so
+    // the message gets a hard length limit and the stack is dropped.
+    const reason = (
+      err instanceof Error ? `${err.name}: ${err.message}` : "Generation failed"
+    ).slice(0, 200);
+
+    console.error(`[${opts.label}] Generation failed — ${reason}`);
+
+    // Mirrors the shape the extension wrote on failure, which is what any
+    // already-installed build is prepared to see.
+    await opts.ref.update({ status: { state: "ERROR", error: reason } });
+  }
+}
+
+/**
+ * Compatibility report — replaces the `firestore-genai-chatbot` instance that
+ * watched `users/{uid}/connections/{id}/report`.
+ *
+ * `createConnection` writes the prompt here; `parseConnectionCompatibility`
+ * (below) picks the `response` back up, parses it onto the connection document
+ * and schedules the push. Neither of those changed.
+ */
+export const generateConnectionReport = onDocumentWritten(
+  {
+    document: "users/{userId}/connections/{connectionId}/report/{reportId}",
+    secrets: [geminiApiKey],
+    timeoutSeconds: 300,
+    memory: "256MiB",
+  },
+  async (event) => {
+    const after = event.data?.after;
+    const prompt = after?.data()?.prompt;
+    if (!after?.exists || typeof prompt !== "string" || !prompt) return;
+
+    await runAnchoredGeneration({
+      uid: event.params.userId,
+      ref: after.ref,
+      schema: COMPATIBILITY_SCHEMA,
+      label: "generateConnectionReport",
+    });
+  },
+);
+
+/**
+ * Synastry reading — replaces the `firestore-genai-chatbot-1rrn` instance that
+ * watched `users/{uid}/connections/{id}/synastryReading`.
+ *
+ * The client writes the prompt (`requestSynastryReading`) and reads the
+ * response straight off the same document (`subscribeToSynastryReading`), so
+ * unlike the report there is no server-side parse step — only
+ * `notifySynastryReady`, which is unchanged.
+ *
+ * No response schema here: see the SYNASTRY_SCHEMA note in interactions.ts.
+ */
+export const generateSynastryReading = onDocumentWritten(
+  {
+    document:
+      "users/{userId}/connections/{connectionId}/synastryReading/{docId}",
+    secrets: [geminiApiKey],
+    timeoutSeconds: 300,
+    memory: "256MiB",
+  },
+  async (event) => {
+    const after = event.data?.after;
+    const prompt = after?.data()?.prompt;
+    if (!after?.exists || typeof prompt !== "string" || !prompt) return;
+
+    await runAnchoredGeneration({
+      uid: event.params.userId,
+      ref: after.ref,
+      label: "generateSynastryReading",
+    });
+  },
+);
+
+
+/**
+ * Natal chart breakdown — replaces `firestore-natal-chart-chatbot-6ppy`.
+ *
+ * `requestBreakdown` deletes the document before rewriting it, so this arrives
+ * as a create rather than an update. The `requestHash` guard handles both
+ * identically: a deleted-and-recreated document has no stored hash, so it is
+ * always treated as a new request.
+ *
+ * Note this is the same document the chart itself lives in — the rewrite
+ * replaces the stored chart with `{ prompt, natalChart, requestedAt }`, which
+ * is why anchor.ts has to read the chart out of the `natalChart` string.
+ */
+export const generateNatalBreakdown = onDocumentWritten(
+  {
+    document: "users/{userId}/natalChart/{docId}",
+    secrets: [geminiApiKey],
+    timeoutSeconds: 540,
+    memory: "256MiB",
+  },
+  async (event) => {
+    const after = event.data?.after;
+    const prompt = after?.data()?.prompt;
+    if (!after?.exists || typeof prompt !== "string" || !prompt) return;
+
+    await runAnchoredGeneration({
+      uid: event.params.userId,
+      ref: after.ref,
+      schema: NATAL_BREAKDOWN_SCHEMA,
+      label: "generateNatalBreakdown",
+    });
+  },
+);
+
+/**
+ * Daily horoscope — replaces `horoscope-chatbot-b6wc`.
+ *
+ * One document per day at `users/{uid}/horoscope/{YYYY-MM-DD}`. No response
+ * schema; see the HOROSCOPE_SCHEMA note in interactions.ts.
+ */
+export const generateHoroscope = onDocumentWritten(
+  {
+    document: "users/{userId}/horoscope/{dateId}",
+    secrets: [geminiApiKey],
+    timeoutSeconds: 300,
+    memory: "256MiB",
+  },
+  async (event) => {
+    const after = event.data?.after;
+    const prompt = after?.data()?.prompt;
+    if (!after?.exists || typeof prompt !== "string" || !prompt) return;
+
+    await runAnchoredGeneration({
+      uid: event.params.userId,
+      ref: after.ref,
+      label: "generateHoroscope",
+    });
+  },
+);
+
+/**
+ * Weekly transits — replaces `firestore-transits-chatbot-cgl7`.
+ *
+ * Both `fetchTransitReading` and `subscribeToTransitReading` refuse to surface
+ * a reading until `status.state` lowercases to "complete" or "completed", so
+ * the "COMPLETED" written by runAnchoredGeneration is load-bearing here in a
+ * way it is not for the other features. Don't change that string without
+ * changing `src/services/transit-reading.service.ts` with it.
+ */
+export const generateTransitReading = onDocumentWritten(
+  {
+    document: "users/{userId}/transits/{dateId}",
+    secrets: [geminiApiKey],
+    timeoutSeconds: 540,
+    memory: "256MiB",
+  },
+  async (event) => {
+    const after = event.data?.after;
+    const prompt = after?.data()?.prompt;
+    if (!after?.exists || typeof prompt !== "string" || !prompt) return;
+
+    await runAnchoredGeneration({
+      uid: event.params.userId,
+      ref: after.ref,
+      schema: TRANSITS_SCHEMA,
+      label: "generateTransitReading",
+    });
+  },
+);
+
+
+/**
+ * AI chat — replaces `firestore-genai-chatbot-update-5i5h`.
+ *
+ * Both personas ride this one collection; the mode is a field on the message,
+ * not a separate path. All of the replay and continuity reasoning lives in
+ * chat-generation.ts.
+ *
+ * `sendChatMessage` is the only writer of a non-empty `prompt` — the Firestore
+ * rules allow a client `create` only when `prompt == ''` and deny `update`
+ * outright, because a non-empty prompt is what starts a billable generation.
+ * This trigger therefore never fires for anything the client wrote directly.
+ */
+export const generateChatMessage = onDocumentWritten(
+  {
+    document: "users/{userId}/updayedChat/{messageId}",
+    secrets: [geminiApiKey],
+    timeoutSeconds: 300,
+    memory: "256MiB",
+  },
+  async (event) => {
+    const after = event.data?.after;
+    const prompt = after?.data()?.prompt;
+    if (!after?.exists || typeof prompt !== "string" || !prompt) return;
+
+    await runChatGeneration(event.params.userId, after.ref);
   },
 );
 
