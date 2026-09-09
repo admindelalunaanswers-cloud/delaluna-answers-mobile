@@ -21,7 +21,6 @@
       "extensionInstances": {
         "delete-user-data": "fcbc0853e9d8d6c8e22b0813c8c902abc7a65089b39068206827dfc9f3d3ecbb",
         "firestore-genai-chatbot": "dd9366ca862bc6c0bbdba9d15eb7e121de445e206a604be40b4716563d1f7af8",
-        "firestore-genai-chatbot-1rrn": "bf4d109073ffe063a6c2081644d72cd9a9c524f298640f0b7e924457b6dc1ad3",
         "firestore-genai-chatbot-update-5i5h": "97c104c86d948c2b90b07ef9cc6d09ea2694eee11924d0515723268ed7e03ffc",
         "firestore-natal-chart-chatbot-6ppy": "f78ed17907b5c00cf3405b47424eb9f5895c7e83521960ed636695f591ee5d35",
         "firestore-revenuecat-purchases": "bb4beb0a00af8d02891de266f8a99d2d3891c707163136f3b250bf96667db454",
