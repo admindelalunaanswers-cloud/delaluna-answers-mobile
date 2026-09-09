@@ -184,3 +184,5 @@ firebase-export-1787752942958xZrT0x/auth_export/config.json
 
 # local snapshots taken by scripts/reconcile-test-extensions.sh
 .ext-backups/
+.agents/skills/gemini-api-dev/SKILL.md
+.agents/skills/gemini-api-dev/references/migration.md
