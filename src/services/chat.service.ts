@@ -1,6 +1,7 @@
 import { httpsCallable } from 'firebase/functions';
 import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore';
 import { logger } from '@/src/utils/logger';
+import { logGenerationModel } from '@/src/utils/generation-model';
 
 import { db, functions } from '@/firebaseConfig';
 import { buildChatTurnPrompt, type ChatMode } from '@/src/prompts/chat-continuity';
@@ -166,6 +167,7 @@ export function subscribeToChatHistory(
         .filter(docSnap => !!docSnap.data()?.userMessage)
         .map(docSnap => {
           const data = docSnap.data();
+          logGenerationModel('chat', data);
           const state: string = (data?.status?.state ?? '').toUpperCase();
           const response = parseResponse(data);
           return {
