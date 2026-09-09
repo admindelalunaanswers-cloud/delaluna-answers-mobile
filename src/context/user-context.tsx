@@ -140,6 +140,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const reloadAuthUser = async () => {
     if (auth.currentUser) {
       await auth.currentUser.reload();
+      // reload() refreshes the account profile but does NOT re-mint the ID
+      // token. Security rules (isVerifiedOwner) and sendChatMessage both gate
+      // on the token's `email_verified` claim, not the Auth record, and
+      // verifyCode flips that record server-side via the Admin SDK — which
+      // leaves the cached token stale for up to an hour. Without this refresh
+      // the user reads as verified in-app (authUser.emailVerified is true)
+      // while every updayedChat/savedChats listener and every chat send is
+      // denied. Same applies after an email change, which resets the claim.
+      await auth.currentUser.getIdToken(true);
       setAuthUser({ ...auth.currentUser });
     }
   };
