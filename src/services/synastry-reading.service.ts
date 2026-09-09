@@ -1,5 +1,6 @@
 import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { logger } from '@/src/utils/logger';
+import { logGenerationModel } from '@/src/utils/generation-model';
 
 import { db } from '@/firebaseConfig';
 import type { NatalChart } from '@/src/services/astroEngine';
@@ -171,6 +172,7 @@ export function subscribeToSynastryReading(
     doc(db, 'users', uid, 'connections', connectionId, 'synastryReading', READING_DOC),
     (snap) => {
       if (!snap.exists()) return;
+      logGenerationModel('synastry', snap.data());
       const result = parseResult(snap.data());
       if (result) onResult(result);
     },

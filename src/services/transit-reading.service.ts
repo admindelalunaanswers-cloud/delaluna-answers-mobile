@@ -1,5 +1,6 @@
 import { doc, getDoc, setDoc, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { logger } from '@/src/utils/logger';
+import { logGenerationModel } from '@/src/utils/generation-model';
 
 import { db } from '@/firebaseConfig';
 import type { TransitReadingResult } from '@/src/types/transit-reading.types';
@@ -179,6 +180,7 @@ export function subscribeToTransitReading(
     (snap) => {
       if (!snap.exists()) return;
       const data = snap.data();
+      logGenerationModel('transits', data);
       const state: string = (data?.status?.state ?? '').toLowerCase();
       if (state !== 'complete' && state !== 'completed') return;
       const result = parseResult(data);

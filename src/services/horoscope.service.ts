@@ -8,6 +8,7 @@ import { getTarotCardDraw } from '@/src/services/tarot-card.service';
 import { measure } from '@/src/services/performance.service';
 import { HOROSCOPE_PROMPT_TEMPLATE } from '@/src/prompts/horoscope-prompt';
 import { logger } from '@/src/utils/logger';
+import { logGenerationModel } from '@/src/utils/generation-model';
 
 const RETROGRADE_PLANETS = new Set([
   'Mercury', 'Venus', 'Mars',
@@ -354,6 +355,7 @@ export function subscribeToHoroscope(
     doc(db, 'users', uid, 'horoscope', dateId),
     (snap) => {
       if (!snap.exists()) return;
+      logGenerationModel('horoscope', snap.data());
       const result = parseResult(snap.data());
       if (result) onResult(result);
     },

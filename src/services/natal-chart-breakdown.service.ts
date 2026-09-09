@@ -1,5 +1,6 @@
 import { doc, getDoc, setDoc, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { logger } from '@/src/utils/logger';
+import { logGenerationModel } from '@/src/utils/generation-model';
 
 import { db } from '@/firebaseConfig';
 import type { NatalChartBreakdownResult } from '@/src/types/natal-chart-breakdown.types';
@@ -104,6 +105,7 @@ export function subscribeToBreakdown(
     doc(db, 'users', uid, 'natalChart', BREAKDOWN_DOC),
     (snap) => {
       if (!snap.exists()) return;
+      logGenerationModel('natal-chart', snap.data());
       const result = parseResult(snap.data());
       if (result) onResult(result);
     },
