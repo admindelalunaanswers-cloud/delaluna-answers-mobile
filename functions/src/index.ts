@@ -14,9 +14,18 @@ import { z, ZodError, ZodType } from "zod";
 import { generateWithAnchor, invalidateAnchor } from "./anchor";
 import { runChatGeneration } from "./chat-generation";
 import {
+  BIRTH_CHART_BODIES,
+  CHAT_REPLY_BODIES,
+  COMPATIBILITY_BODIES,
+  DAILY_HOROSCOPE_BODIES,
+  TRANSIT_BODIES,
+  pickPushBody,
+} from "./push-copy";
+import {
   COMPATIBILITY_SCHEMA,
   NATAL_BREAKDOWN_SCHEMA,
   TRANSITS_SCHEMA,
+  generateJson,
   geminiApiKey,
 } from "./interactions";
 
@@ -850,6 +859,11 @@ export const dailyHoroscopeNotifications = onSchedule(
     const now = new Date();
     const messages: ExpoPushMessage[] = [];
 
+    // Rotates the body copy once per UTC day. Every user in this run shares the
+    // key, so the salt still has to carry the uid to avoid sending the whole
+    // user base the same line.
+    const copyDayKey = now.toISOString().slice(0, 10);
+
     const snap = await db
       .collection("users")
       .where("expoPushToken", "!=", null)
@@ -901,7 +915,10 @@ export const dailyHoroscopeNotifications = onSchedule(
           to: token,
           sound: "default",
           title: "🌙 Your Daily Reading",
-          body: "Your horoscope and cards for today are ready.",
+          body: pickPushBody(
+            DAILY_HOROSCOPE_BODIES,
+            hashUid(uid, `horoscope-copy:${copyDayKey}`),
+          ),
           channelId: "default",
           data: { screen: "/(main)" },
           priority: "high",
@@ -914,7 +931,10 @@ export const dailyHoroscopeNotifications = onSchedule(
           to: token,
           sound: "default",
           title: "✨ This Week in the Stars",
-          body: "Your fresh weekly transits just dropped. Tap to see what the week has in store.",
+          body: pickPushBody(
+            TRANSIT_BODIES,
+            hashUid(uid, `transits-copy:${copyDayKey}`),
+          ),
           channelId: "default",
           data: { screen: "/(main)/transits" },
           priority: "high",
@@ -941,9 +961,10 @@ export const dailyHoroscopeNotifications = onSchedule(
           return !ct || ct.toMillis() <= cutoff24h.toMillis();
         });
         if (premium && hasEstablishedConnection) {
-          // The two runs are distinct products, so the copy differs — and the
+          // The two runs are distinct products, so the titles differ — and the
           // dedupe pass below keys on title, so identical titles on the same
-          // token would collapse into one.
+          // token would collapse into one. The body rotates out of the shared
+          // compatibility pool; the day key keeps Thursday and Sunday apart.
           const isWeekendRomance = localDay === THURSDAY;
           messages.push({
             to: token,
@@ -951,9 +972,10 @@ export const dailyHoroscopeNotifications = onSchedule(
             title: isWeekendRomance
               ? "💘 Weekend Romance Report"
               : "💞 Weekly Connection Update",
-            body: isWeekendRomance
-              ? "Your weekend romance report is ready. See what the stars have lined up."
-              : "New transits for your connections are ready. See what shifted this week.",
+            body: pickPushBody(
+              COMPATIBILITY_BODIES,
+              hashUid(uid, `connections-copy:${copyDayKey}`),
+            ),
             channelId: "default",
             data: { screen: "/(main)/connections" },
             priority: "high",
@@ -1825,7 +1847,10 @@ export const notifyBreakdownReady = onDocumentUpdated(
       token,
       {
         title: "Your Birth Chart is Ready",
-        body: "Your natal chart breakdown is complete. Tap to explore your cosmic blueprint.",
+        body: pickPushBody(
+          BIRTH_CHART_BODIES,
+          hashUid(userId, "birth-chart-copy"),
+        ),
         data: { screen: "/(home)/birth-chart-view" },
       },
       "notifyBreakdownReady",
@@ -1903,7 +1928,10 @@ export const notifyChatReply = onDocumentUpdated(
       token,
       {
         title: "New Message",
-        body: "Your cosmic advisor has replied. Tap to read.",
+        body: pickPushBody(
+          CHAT_REPLY_BODIES,
+          hashUid(userId, `chat-copy:${event.params.messageId}`),
+        ),
         data: { screen: "/(main)/chat" },
       },
       "notifyChatReply",
@@ -1992,7 +2020,10 @@ export const notifyTransitsReady = onDocumentUpdated(
       token,
       {
         title: "✨ Transit Reading Ready",
-        body: "Your weekly transit reading is ready. Tap to see what the stars have in store.",
+        body: pickPushBody(
+          TRANSIT_BODIES,
+          hashUid(userId, `transits-ready-copy:${event.params.dateId}`),
+        ),
         data: { screen: "/(main)/transits" },
       },
       "notifyTransitsReady",
@@ -2077,7 +2108,10 @@ export const parseConnectionCompatibility = onDocumentUpdated(
           token,
           {
             title: "Connection Report Ready",
-            body: "Your new compatibility report just dropped. Tap to read.",
+            body: pickPushBody(
+              COMPATIBILITY_BODIES,
+              hashUid(userId, `connection-report-copy:${connectionId}`),
+            ),
             data: { screen: "/connection/[id]", connectionId },
           },
           "parseConnectionCompatibility",
@@ -2116,7 +2150,10 @@ export const parseConnectionCompatibility = onDocumentUpdated(
       sendAfter,
       {
         title: "Connection Report Ready",
-        body: "Your new compatibility report just dropped. Tap to read.",
+        body: pickPushBody(
+          COMPATIBILITY_BODIES,
+          hashUid(userId, `connection-report-copy:${connectionId}`),
+        ),
         data: { screen: "/connection/[id]", connectionId },
       },
       pushDocId,
@@ -2707,3 +2744,112 @@ export const aggregatePerfLogs = onSchedule("every day 02:00", async () => {
       (failedScreens > 0 ? `, ${failedScreens} screen(s) failed` : ""),
   );
 });
+
+
+// ─── Prompt testing ──────────────────────────────────────────────────────────
+
+/**
+ * An admin-only scratchpad for the generation stack.
+ *
+ * This exists because there was no way to try a prompt change without shipping
+ * it: every AI feature builds its prompt on the client, writes it to Firestore
+ * and waits for a trigger, so "does this wording work?" meant a rebuild, a real
+ * user document, and a push notification. This runs the same `generateJson`
+ * path the live features use, against a context and prompt typed into the
+ * dashboard.
+ *
+ * Four things it deliberately does not do:
+ *
+ * 1. **Write to Firestore.** The result is returned and forgotten — no document
+ *    to clean up, no trigger to accidentally fire, no push to a real person.
+ * 2. **Touch a user's anchor.** A conversation here chains only to its own
+ *    prior turns (see `previousInteractionId` below). Testing a prompt must not
+ *    alter what the model remembers about someone real.
+ * 3. **Ask for JSON.** Every turn runs `plainText`, because this is a
+ *    conversation. Asking for `application/json` here would make the model wrap
+ *    a conversational reply in a JSON string, which is the same reason chat
+ *    itself runs plain.
+ * 4. **Use the production token ceiling.** A runaway here is a bill with nobody
+ *    waiting on the other end, so the cap sits an order of magnitude below the
+ *    32k the real features allow.
+ *
+ * Retention applies as it does everywhere else: `generateJson` sets
+ * `store: true` (the Interactions API refuses `previous_interaction_id`
+ * without it), so anything typed here is retained by Google for 55 days. Test
+ * with invented birth data, not a real user's.
+ */
+
+/** See point 4 above — a circuit breaker, not a size estimate. */
+const PROMPT_TEST_MAX_TOKENS = 4096;
+
+function requireAdminCaller(request: {
+  auth?: { uid: string; token: Record<string, unknown> };
+}): string {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in.");
+  }
+  if (request.auth.token?.admin !== true) {
+    throw new HttpsError("permission-denied", "Admin privileges required.");
+  }
+  return request.auth.uid;
+}
+
+const RunPromptTestSchema = z.object({
+  prompt: z.string().min(1).max(100_000),
+  /**
+   * Sent verbatim as `system_instruction`. An empty string is a real choice —
+   * "run with no persona at all" — and is distinct from omitting the field,
+   * which lets generateJson fall back to DELALUNA_CONTEXT.
+   */
+  systemInstruction: z.string().max(100_000).optional(),
+  /**
+   * The previous turn's interaction id, which is what makes this a
+   * conversation rather than a series of unrelated one-shots. The client sends
+   * back whatever the last successful turn returned; the server does not track
+   * sessions, so a reload with a stale id simply continues from wherever that
+   * id points, and omitting it starts fresh.
+   */
+  previousInteractionId: z.string().max(500).optional(),
+});
+
+export const runPromptTest = onCall(
+  { secrets: [geminiApiKey], invoker: "public", timeoutSeconds: 300 },
+  async (request) => {
+    requireAdminCaller(request);
+    const input = parseInput(RunPromptTestSchema, request.data);
+
+    const started = Date.now();
+    try {
+      const result = await generateJson({
+        prompt: input.prompt,
+        systemInstruction: input.systemInstruction,
+        previousInteractionId: input.previousInteractionId,
+        plainText: true,
+        maxOutputTokens: PROMPT_TEST_MAX_TOKENS,
+        label: "promptTest",
+      });
+
+      return {
+        ok: true as const,
+        text: result.text,
+        model: result.model,
+        interactionId: result.interactionId,
+        elapsedMs: Date.now() - started,
+      };
+    } catch (err) {
+      // Returned rather than thrown. Every interesting failure here — a
+      // truncated generation, a model that stopped early, a dead interaction id
+      // — is a *result* the admin needs to read, and an HttpsError would reach
+      // the browser as a generic "internal" with the detail stripped.
+      const message = err instanceof Error ? err.message : String(err);
+      console.info(
+        `[promptTest] failed in ${Date.now() - started}ms: ${message}`,
+      );
+      return {
+        ok: false as const,
+        error: message,
+        elapsedMs: Date.now() - started,
+      };
+    }
+  },
+);
