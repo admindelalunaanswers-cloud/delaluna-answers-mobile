@@ -2826,6 +2826,10 @@ export const runPromptTest = onCall(
         previousInteractionId: input.previousInteractionId,
         plainText: true,
         maxOutputTokens: PROMPT_TEST_MAX_TOKENS,
+        // PROMPT_TEST_MAX_TOKENS is a hard cutoff that counts thought tokens,
+        // so the generateJson default would eat into the 4096 an admin's test
+        // reply has to fit in and truncate it. Cheap and fast is the point here.
+        thinkingLevel: "low" as const,
         label: "promptTest",
       });
 

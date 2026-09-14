@@ -21,13 +21,18 @@
  * untouched, and installed builds keep working across the cutover.
  *
  * What did NOT survive the move, and why:
- *   - TEMPERATURE=1 is not carried over. The SDK's `GenerationConfig` type omits
- *     `temperature`, though the server does accept it if you cast past the type
- *     (verified 2026-09-08). It is left unset rather than smuggled through: the
- *     field is undeclared for these models, so its effect is unspecified. If the
- *     writing reads flatter than it used to, this is the first thing to try.
+ *   - TEMPERATURE=1 is not carried over, and there is nothing to carry it to.
+ *     Gemini 3 dropped the sampling parameters outright: Google's 3.8 Flash
+ *     migration checklist says to strip `temperature`, `top_p` and `top_k`, and
+ *     the SDK's `GenerationConfig` type omits them to match. The server does
+ *     still accept `temperature` if you cast past the type (verified
+ *     2026-09-08) — don't. It is undeclared for these models, so its effect is
+ *     unspecified, and it has no successor knob. What shapes the writing now is
+ *     the prompt, the `response_format` schema, and `thinking_level`; that last
+ *     one is the dial to reach for if a reading ever comes back flat.
  *   - CANDIDATE_COUNT / CANDIDATES_FIELD are gone. Only one response is
- *     generated and `response` is the only field written.
+ *     generated and `response` is the only field written. (Gemini 3 removed
+ *     `candidate_count` as well, so this was not a choice either.)
  *   - "Always return valid JSON" is no longer a plea in the persona text. Both
  *     features now pass a real JSON schema in `response_format`, which the
  *     model is constrained to. The fence-stripping in the existing parsers
@@ -65,6 +70,27 @@ export const CONNECTION_MODEL = "gemini-3.8-flash";
  * and `status` turns it into a visible error rather than corrupt output.
  */
 const MAX_OUTPUT_TOKENS = 32768;
+
+/** The levels `gemini-3.8-flash` accepts — `minimal` is not one of them. */
+export type ThinkingLevel = "low" | "medium" | "high";
+
+/**
+ * How much the model reasons before writing.
+ *
+ * This is the model's own default, and with the Gemini 3 sampling parameters
+ * gone (see the header note on TEMPERATURE) it is the only remaining dial over
+ * how considered the prose is. It ran at "low" through the migration, on the
+ * theory that these long, highly-specified prompts leave little to reason
+ * about — the schema does the structuring. Raised to the default because the
+ * prose quality of a connection reading is the product, and "low" was a
+ * latency/cost choice made when `temperature` was still believed to be the
+ * quality lever. Drop it back if spend or latency on the connection functions
+ * becomes the complaint; that is a real tradeoff, not a regression.
+ *
+ * Thought tokens count against `max_output_tokens`, so raising this narrows the
+ * headroom under a tight ceiling — hence the per-call override.
+ */
+const DEFAULT_THINKING_LEVEL: ThinkingLevel = "medium";
 
 /**
  * The Delaluna persona, lifted verbatim from the CONTEXT env var the two
@@ -137,9 +163,15 @@ export interface GenerateJsonOptions {
   label: string;
   /**
    * Ceiling on generated tokens. Exists to bound a runaway, not to size the
-   * response — see MAX_OUTPUT_TOKENS.
+   * response — see MAX_OUTPUT_TOKENS. Note the cap counts thought tokens too,
+   * so a caller that sets a tight one should lower `thinkingLevel` with it.
    */
   maxOutputTokens?: number;
+  /**
+   * How much the model reasons before writing. Defaults to DEFAULT_THINKING_LEVEL.
+   * `minimal` is documented but rejected by `gemini-3.8-flash`.
+   */
+  thinkingLevel?: ThinkingLevel;
   /**
    * The interaction this generation continues from — normally the user's
    * anchor (see anchor.ts). Requires `store: true`; the API rejects the pair
@@ -213,10 +245,7 @@ export async function generateJson(
           ],
         }),
     generation_config: {
-      // These are long, highly-specified prompts that leave little to reason
-      // about — the schema does the structuring. "low" keeps latency and
-      // thinking-token spend down without flattening the writing.
-      thinking_level: "low",
+      thinking_level: opts.thinkingLevel ?? DEFAULT_THINKING_LEVEL,
       max_output_tokens: opts.maxOutputTokens ?? MAX_OUTPUT_TOKENS,
     },
     ...(opts.previousInteractionId
@@ -404,8 +433,10 @@ export async function createChainRoot(
     model: CONNECTION_MODEL,
     input,
     system_instruction: systemInstruction,
-    // "minimal" is documented but rejected by gemini-3.8-flash — it allows only
-    // medium/low/high. Verified 2026-09-08.
+    // Deliberately below DEFAULT_THINKING_LEVEL: the reply is a throwaway
+    // acknowledgement and nobody reads it — what matters is that the chain
+    // exists. ("minimal" would be cheaper still but is rejected by
+    // gemini-3.8-flash, which allows only low/medium/high. Verified 2026-09-08.)
     generation_config: { thinking_level: "low" },
     store: true,
   })) as Interactions.Interaction;
