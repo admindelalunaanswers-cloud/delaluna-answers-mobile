@@ -7,11 +7,16 @@ import {
   getChatUsage,
   getSubscriber,
   getUser,
+  listUsers,
   searchUsers,
   type AdminUserDoc,
   type ChatUsage,
   type SubscriberInfo,
+  type UserPage,
 } from '../lib/users';
+
+/** The cursor half of a UserPage, which is all the screen needs to hold. */
+type UserCursor = UserPage['cursor'];
 
 function fmtDate(ts?: Timestamp): string {
   if (!ts?.toDate) return '—';
@@ -216,15 +221,80 @@ function UserDetail({ uid }: { uid: string }) {
   );
 }
 
-// ─── Search ──────────────────────────────────────────────────────────────────
+// ─── Listing ─────────────────────────────────────────────────────────────────
+
+function UserTable({
+  rows,
+  onPick,
+}: {
+  rows: AdminUserDoc[];
+  onPick: (uid: string) => void;
+}) {
+  return (
+    <div className="card" style={{ padding: 0 }}>
+      <table>
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Name</th>
+            <th>UID</th>
+            <th>Joined</th>
+            <th>Premium</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((u) => (
+            <tr key={u.uid} onClick={() => onPick(u.uid)}>
+              <td className="mono">{u.email || '—'}</td>
+              <td>{u.fullName || '—'}</td>
+              <td className="mono faint">{u.uid.slice(0, 12)}…</td>
+              <td className="faint">{fmtDate(u.createdAt)}</td>
+              <td>
+                <Bool value={u.isPremiumMember} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export default function Users() {
   const { uid } = useParams();
   const navigate = useNavigate();
+
   const [term, setTerm] = useState('');
+  // `null` means "not searching" — the browse list shows instead. An empty
+  // array is a real search that matched nothing, which is a different message.
   const [results, setResults] = useState<AdminUserDoc[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [list, setList] = useState<AdminUserDoc[]>([]);
+  const [cursor, setCursor] = useState<UserCursor>(null);
+  const [listBusy, setListBusy] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
+
+  const loadMore = useCallback(async (after: UserCursor) => {
+    setListBusy(true);
+    setListError(null);
+    try {
+      const page = await listUsers(after);
+      // Append rather than replace, so "Load more" accumulates. The first load
+      // passes `null` and this still starts from an empty list.
+      setList((prev) => (after ? [...prev, ...page.users] : page.users));
+      setCursor(page.cursor);
+    } catch (err) {
+      setListError((err as Error).message);
+    } finally {
+      setListBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadMore(null);
+  }, [loadMore]);
 
   const run = useCallback(async (value: string) => {
     setBusy(true);
@@ -244,12 +314,21 @@ export default function Users() {
     void run(term);
   }
 
+  function clearSearch() {
+    setTerm('');
+    setResults(null);
+    setError(null);
+  }
+
+  const searching = results !== null;
+
   return (
     <>
       <h1 className="page-title">Users</h1>
       <p className="page-sub">
-        Search by email or UID. Matches are prefix-only — &ldquo;jea&rdquo;
-        finds &ldquo;jeanai@…&rdquo;, but &ldquo;anai&rdquo; finds nothing.
+        Newest signups first. Search by email or UID to find anyone else —
+        matches are prefix-only, so &ldquo;jea&rdquo; finds
+        &ldquo;jeanai@…&rdquo;, but &ldquo;anai&rdquo; finds nothing.
       </p>
 
       <form className="card" onSubmit={onSubmit}>
@@ -265,40 +344,56 @@ export default function Users() {
           <button type="submit" disabled={busy || term.trim().length < 3}>
             {busy ? 'Searching…' : 'Search'}
           </button>
+          {searching && (
+            <button type="button" className="secondary" onClick={clearSearch}>
+              Clear
+            </button>
+          )}
         </div>
       </form>
 
       {error && <div className="msg error">{error}</div>}
 
-      {results && results.length === 0 && (
-        <div className="msg info">No users matched that prefix.</div>
-      )}
+      {searching ? (
+        results.length === 0 ? (
+          <div className="msg info">No users matched that prefix.</div>
+        ) : (
+          <UserTable rows={results} onPick={(id) => navigate(`/users/${id}`)} />
+        )
+      ) : (
+        <>
+          {listError && <div className="msg error">{listError}</div>}
 
-      {results && results.length > 0 && (
-        <div className="card" style={{ padding: 0 }}>
-          <table>
-            <thead>
-              <tr>
-                <th>Email</th>
-                <th>Name</th>
-                <th>UID</th>
-                <th>Premium</th>
-              </tr>
-            </thead>
-            <tbody>
-              {results.map((u) => (
-                <tr key={u.uid} onClick={() => navigate(`/users/${u.uid}`)}>
-                  <td className="mono">{u.email || '—'}</td>
-                  <td>{u.fullName || '—'}</td>
-                  <td className="mono faint">{u.uid.slice(0, 12)}…</td>
-                  <td>
-                    <Bool value={u.isPremiumMember} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+          {list.length > 0 && (
+            <UserTable rows={list} onPick={(id) => navigate(`/users/${id}`)} />
+          )}
+
+          {!listBusy && !listError && list.length === 0 && (
+            <div className="msg info">
+              No user documents in this project yet. Sign up in the mobile app
+              pointed at the same Firebase project and the account will appear
+              here.
+            </div>
+          )}
+
+          <div className="stack" style={{ marginTop: 12 }}>
+            {listBusy && <span className="muted">Loading…</span>}
+            {!listBusy && cursor && (
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => void loadMore(cursor)}
+              >
+                Load more
+              </button>
+            )}
+            {!listBusy && !cursor && list.length > 0 && (
+              <span className="faint">
+                {list.length} user{list.length === 1 ? '' : 's'} · end of list
+              </span>
+            )}
+          </div>
+        </>
       )}
 
       {uid && (

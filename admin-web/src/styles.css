@@ -210,3 +210,52 @@ button.danger:hover:not(:disabled) { background: var(--danger-dim); }
   padding: 24px;
 }
 .centre .card { width: 100%; max-width: 360px; margin: 0; }
+
+/* ─── Prompt testing ─────────────────────────────────────────────────────────
+   Textareas hold personas measured in kilobytes, so they get a monospace face
+   and a resize handle rather than a fixed height — judging a prompt means
+   seeing its shape, not scrolling a 3-line box. */
+
+textarea {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  line-height: 1.55;
+  width: 100%;
+  resize: vertical;
+}
+textarea:focus { outline: none; border-color: var(--accent); }
+
+.output {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  margin: 0 0 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  /* Model output is unbounded in both directions: JSON with no newlines runs
+     off the right, a long reading runs off the bottom. Wrap one, scroll the
+     other, so the card never stretches the page layout. */
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+/* The echoed prompt is context for the answer below it, not the subject of the
+   card — dimmed and capped short so a 5KB prompt cannot bury its own reply. */
+.output.prompt-echo {
+  color: var(--text-dim);
+  max-height: 12em;
+  margin-bottom: 0;
+}
+
+textarea:disabled {
+  color: var(--text-dim);
+  cursor: not-allowed;
+}

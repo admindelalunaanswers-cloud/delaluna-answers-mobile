@@ -17,7 +17,10 @@ import {
   limit,
   orderBy,
   query,
+  startAfter,
   startAt,
+  type DocumentData,
+  type QueryDocumentSnapshot,
   type Timestamp,
 } from 'firebase/firestore';
 
@@ -47,6 +50,45 @@ export interface AdminUserDoc {
 }
 
 const MIN_PREFIX = 3;
+const PAGE_SIZE = 50;
+
+export interface UserPage {
+  users: AdminUserDoc[];
+  /** Opaque cursor for the next page. `null` means the end was reached. */
+  cursor: QueryDocumentSnapshot<DocumentData> | null;
+}
+
+/**
+ * Browse listing, newest signup first.
+ *
+ * Ordered by `createdAt` rather than by document id, because ordering by uid
+ * is ordering by random string — the first page would be arbitrary rather than
+ * the people who just signed up. The cost of that choice: Firestore's
+ * `orderBy` silently **drops documents that lack the field**, so a legacy user
+ * doc written before `createdAt` existed is invisible here. That is what the
+ * search box is for — it also scans by document id, which every doc has.
+ *
+ * Paginates by cursor rather than by `offset` because Firestore bills a skipped
+ * document the same as a returned one; page 10 by offset costs ten pages.
+ */
+export async function listUsers(
+  after?: QueryDocumentSnapshot<DocumentData> | null,
+): Promise<UserPage> {
+  const users = collection(db, 'users');
+  const snap = await getDocs(
+    after
+      ? query(users, orderBy('createdAt', 'desc'), startAfter(after), limit(PAGE_SIZE))
+      : query(users, orderBy('createdAt', 'desc'), limit(PAGE_SIZE)),
+  );
+
+  return {
+    users: snap.docs.map((d) => ({ ...(d.data() as AdminUserDoc), uid: d.id })),
+    // A short page means there is nothing after it. A full page might be the
+    // exact end, in which case the next fetch returns empty and settles it.
+    cursor:
+      snap.docs.length === PAGE_SIZE ? snap.docs[snap.docs.length - 1] : null,
+  };
+}
 
 /**
  * Prefix search over email, then UID. Firestore has no substring search, so
