@@ -90,6 +90,17 @@ Two behaviours this imposes on the services layer:
 - Model JSON is unreliable, so every `parseResult` strips code fences and trailing commas
   before parsing.
 
+#### Horoscope quote variety
+
+Each day's horoscope is generated independently, so the `quote` field used to repeat. The
+`generateHoroscope` Cloud Function now appends two things to the prompt at generation time
+(`functions/src/quote-history.ts`); neither is stored and no extra data is kept per user:
+
+- **A daily topic and style** — rotated per user (11 topics × 4 styles, e.g. "moving on" as
+  "a clapback"), so consecutive days always differ and a combination recurs every 44 days.
+- **A do-not-repeat list** — the quotes from the surrounding days' horoscopes already in
+  Firestore.
+
 ### Subscriptions -- RevenueCat
 - `react-native-purchases` + `react-native-purchases-ui` v9.x (native)
 - "Delaluna Answers Pro" entitlement gates premium features -- screens read `useRevenueCat().isPro`, not Firestore
