@@ -14,6 +14,11 @@ import { z, ZodError, ZodType } from "zod";
 import { generateWithAnchor, invalidateAnchor } from "./anchor";
 import { runChatGeneration } from "./chat-generation";
 import {
+  recentHoroscopeQuotes,
+  withQuoteDirection,
+  withQuotesToAvoid,
+} from "./quote-history";
+import {
   BIRTH_CHART_BODIES,
   CHAT_REPLY_BODIES,
   COMPATIBILITY_BODIES,
@@ -2194,6 +2199,12 @@ async function runAnchoredGeneration(opts: {
   ref: FirebaseFirestore.DocumentReference;
   schema?: Record<string, unknown>;
   label: string;
+  /**
+   * Adds generation-time context to the prompt after the request is claimed.
+   * The result is sent to the model only — never written back — because the
+   * stored prompt is half of the request hash above.
+   */
+  augmentPrompt?: (prompt: string) => Promise<string>;
 }): Promise<void> {
   const prompt = await db.runTransaction(async (tx) => {
     const snap = await tx.get(opts.ref);
@@ -2226,7 +2237,7 @@ async function runAnchoredGeneration(opts: {
 
   try {
     const { text, interactionId, model } = await generateWithAnchor(opts.uid, {
-      prompt,
+      prompt: opts.augmentPrompt ? await opts.augmentPrompt(prompt) : prompt,
       schema: opts.schema,
       label: opts.label,
     });
@@ -2359,6 +2370,11 @@ export const generateNatalBreakdown = onDocumentWritten(
  *
  * One document per day at `users/{uid}/horoscope/{YYYY-MM-DD}`. No response
  * schema; see the HOROSCOPE_SCHEMA note in interactions.ts.
+ *
+ * Each day's quote gets a rotating topic and style, and the quotes from the
+ * surrounding days' horoscopes go out as a do-not-repeat list — see
+ * quote-history.ts. A failed history lookup generates without the list rather
+ * than failing the reading.
  */
 export const generateHoroscope = onDocumentWritten(
   {
@@ -2372,10 +2388,28 @@ export const generateHoroscope = onDocumentWritten(
     const prompt = after?.data()?.prompt;
     if (!after?.exists || typeof prompt !== "string" || !prompt) return;
 
+    const { userId, dateId } = event.params;
     await runAnchoredGeneration({
-      uid: event.params.userId,
+      uid: userId,
       ref: after.ref,
       label: "generateHoroscope",
+      augmentPrompt: async (prompt) => {
+        const directed = withQuoteDirection(
+          prompt,
+          hashUid(userId, "quote-direction"),
+          dateId,
+        );
+        try {
+          return withQuotesToAvoid(
+            directed,
+            await recentHoroscopeQuotes(userId, dateId),
+          );
+        } catch (err) {
+          const reason = err instanceof Error ? err.name : "unknown";
+          console.warn(`[generateHoroscope] quote history skipped — ${reason}`);
+          return directed;
+        }
+      },
     });
   },
 );
