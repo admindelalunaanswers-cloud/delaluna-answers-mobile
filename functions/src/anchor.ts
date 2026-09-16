@@ -19,7 +19,8 @@
  * Cross-feature memory comes from the *profile*, not from sibling readings —
  * which is why the profile carries saved connections. That is what lets a
  * horoscope mention the user's situationship by name without ever having read
- * the compatibility report.
+ * the compatibility report. The daily horoscope is the exception — it opts
+ * out of the anchor (`anchored: false` in index.ts) so it never mentions them.
  *
  * Anchors expire. Interactions are retained 55 days on the paid tier, so the
  * anchor is rebuilt well before that (`ANCHOR_TTL_MS`), and any generation that

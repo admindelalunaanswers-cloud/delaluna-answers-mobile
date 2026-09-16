@@ -2205,6 +2205,12 @@ async function runAnchoredGeneration(opts: {
    * stored prompt is half of the request hash above.
    */
   augmentPrompt?: (prompt: string) => Promise<string>;
+  /**
+   * Continue from the user's anchor (the default). The anchor profile lists
+   * saved connections, so a feature that must not reference them passes false
+   * and generates from its own prompt alone.
+   */
+  anchored?: boolean;
 }): Promise<void> {
   const prompt = await db.runTransaction(async (tx) => {
     const snap = await tx.get(opts.ref);
@@ -2236,11 +2242,15 @@ async function runAnchoredGeneration(opts: {
   if (!prompt) return;
 
   try {
-    const { text, interactionId, model } = await generateWithAnchor(opts.uid, {
+    const request = {
       prompt: opts.augmentPrompt ? await opts.augmentPrompt(prompt) : prompt,
       schema: opts.schema,
       label: opts.label,
-    });
+    };
+    const { text, interactionId, model } =
+      opts.anchored === false
+        ? await generateJson(request)
+        : await generateWithAnchor(opts.uid, request);
     await opts.ref.update({
       response: text,
       status: { state: "COMPLETED" },
@@ -2371,6 +2381,12 @@ export const generateNatalBreakdown = onDocumentWritten(
  * One document per day at `users/{uid}/horoscope/{YYYY-MM-DD}`. No response
  * schema; see the HOROSCOPE_SCHEMA note in interactions.ts.
  *
+ * Deliberately **not** anchored: the anchor profile names the user's saved
+ * connections and their compatibility highlights, and the daily horoscope is
+ * meant to stay about the user alone. The prompt already carries the full
+ * chart, so the only thing the anchor added besides connections was pronouns —
+ * appended here instead, since the client template has no slot for them.
+ *
  * Each day's quote gets a rotating topic and style, and the quotes from the
  * surrounding days' horoscopes go out as a do-not-repeat list — see
  * quote-history.ts. A failed history lookup generates without the list rather
@@ -2393,9 +2409,12 @@ export const generateHoroscope = onDocumentWritten(
       uid: userId,
       ref: after.ref,
       label: "generateHoroscope",
+      anchored: false,
       augmentPrompt: async (prompt) => {
+        const userSnap = await db.collection("users").doc(userId).get();
+        const pronouns = String(userSnap.data()?.pronouns ?? "").trim();
         const directed = withQuoteDirection(
-          prompt,
+          `${prompt}\n\nUser pronouns: ${pronouns || "they/them"}.`,
           hashUid(userId, "quote-direction"),
           dateId,
         );

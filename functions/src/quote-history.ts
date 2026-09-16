@@ -1,8 +1,8 @@
 /**
  * quote-history.ts — keeps the daily horoscope quote from repeating.
  *
- * Every horoscope branches from the same per-user anchor (see anchor.ts), so a
- * generation never sees what the previous day produced, and Gemini 3 has no
+ * Every horoscope generates from its own prompt alone (no anchor, no chain), so
+ * a generation never sees what the previous day produced, and Gemini 3 has no
  * `temperature` to push it off its most likely answer. Against a near-static
  * natal chart the "quote" field converged on the same few lines.
  *
