@@ -66,11 +66,13 @@ coverage/
 /android
 app.apk
 
-# local-only scripts, except the EAS build hooks referenced from package.json
+# local-only scripts, except the ones package.json references by path — those
+# have to survive a fresh clone or the npm script fails with a missing module
 # (note: /scripts/* not /scripts — git won't descend into an excluded directory,
 # so the negation below only works if the directory itself stays untracked-eligible)
 /scripts/*
 !/scripts/exclude-dev-client.js
+!/scripts/sync-admin-env.js
 
 # credentials
 /credentials.json
