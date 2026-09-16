@@ -9,5 +9,9 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   server: { port: 5173 },
-  build: { outDir: 'dist', sourcemap: true },
+  // No sourcemaps in either environment. The dashboard deploys to a public
+  // Firebase Hosting URL — the noindex header keeps it out of search, but it is
+  // readable by anyone with the link, and a sourcemap hands them the full admin
+  // source. Debug against `npm run admin:dev`, where Vite serves maps anyway.
+  build: { outDir: 'dist', sourcemap: false },
 });
