@@ -61,14 +61,7 @@ export function drawTarotSpread(seed: string, count: number): DrawnTarotCard[] {
       imagePath: card.imagePath,
       reversed,
       keywords: reversed ? card.keywordsReversed : card.keywordsUpright,
-      meaning:
-        card.arcana !== "Oracle"
-          ? reversed
-            ? (card.meaningReversedOracle ?? card.meaningReversed)
-            : (card.meaningUprightOracle ?? card.meaningUpright)
-          : reversed
-            ? card.meaningReversed
-            : card.meaningUpright,
+      meaning: reversed ? card.meaningReversed : card.meaningUpright,
     });
   });
 }

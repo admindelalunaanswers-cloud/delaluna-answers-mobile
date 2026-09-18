@@ -23,6 +23,7 @@ import type { DailyCardPack } from '@/src/schemas/dailyCardPack.schema';
 import { calculateTransits } from '@/src/services/astroEngine';
 import { getTodayDateId, subscribeToHoroscope } from '@/src/services/horoscope.service';
 import { getTarotCardDraw } from '@/src/services/tarot-card.service';
+import { tarotCardImageUrl } from '@/src/utils/tarot-image';
 import { ChatStore } from '@/src/stores/chat-store';
 import type { HoroscopeResult } from '@/src/types/horoscope.types';
 import { useHoroscope } from '@/src/context/horoscope-context';
@@ -126,9 +127,7 @@ export default function HomeScreen() {
     const allCards = Object.values(cardDraw).flatMap(pack => pack.cards ?? []);
     const uniqueIds = Array.from(new Set(allCards.map(card => card.id)));
     uniqueIds.forEach(id => {
-      Image.prefetch(
-        `https://firebasestorage.googleapis.com/v0/b/delaluna-answers.firebasestorage.app/o/tarot-card-front%2F${id}.png?alt=media`
-      ).catch(() => {});
+      Image.prefetch(tarotCardImageUrl(id)).catch(() => {});
     });
   }, [cardDraw]);
 

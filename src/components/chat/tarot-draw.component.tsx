@@ -35,6 +35,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { CARD_LINKS } from "@/src/constants/links";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
+import { isOracleCard, tarotCardImageUrl } from "@/src/utils/tarot-image";
 
 // The home screen's slot size. The transcript column is narrower than the home
 // screen, so three of these can overflow it — the cards shrink to fit and keep
@@ -94,11 +95,8 @@ interface CardAnim {
 const wait = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
-const getTarotCardImageUrl = (num: number) =>
-  `https://firebasestorage.googleapis.com/v0/b/delaluna-answers.firebasestorage.app/o/tarot-card-front%2F${num}.png?alt=media`;
-
 const determineCardBack = (num: number): ImageSourcePropType =>
-  num <= 53
+  isOracleCard(num)
     ? require("@/src/assets/card_backs/ORACLE_CARD_BACK.png")
     : require("@/src/assets/card_backs/TAROT_CARD_BACK.png");
 
@@ -149,7 +147,7 @@ export default function ChatTarotDraw({
   // Warm the card art as soon as the draw is on screen, long before the button
   // is pressed. Failures resolve rather than reject: a front that will not load
   // is the Image component's problem, not a reason to hold up the animation.
-  const frontUris = cardNumber.map(getTarotCardImageUrl);
+  const frontUris = cardNumber.map(tarotCardImageUrl);
   const frontUriKey = frontUris.join("|");
   const frontsReady = useRef<Promise<unknown>>(Promise.resolve());
   useEffect(() => {
@@ -375,7 +373,7 @@ export default function ChatTarotDraw({
                 ]}
               >
                 <Image
-                  source={{ uri: getTarotCardImageUrl(num) }}
+                  source={{ uri: tarotCardImageUrl(num) }}
                   style={styles.cardImage}
                 />
               </Animated.View>
