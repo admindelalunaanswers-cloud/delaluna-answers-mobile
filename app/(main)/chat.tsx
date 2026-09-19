@@ -788,6 +788,12 @@ export default function ChatScreen() {
     // The next thread is a different conversation, so it gets to point the
     // toggle again.
     modeAdopted.current = false;
+    // The chip is scoped to the conversation it was picked in — carrying it
+    // into a fresh thread would silently attach the connection's context to a
+    // question the user asked about something else. Clearing it before the
+    // save keeps the empty thread honest; the rehydrate effect can't put it
+    // back, since an empty thread has no last `connectionId`.
+    setSelectedConnection(null);
     await saveChatAndClear(authUser.uid, messages);
   }, [authUser, messages]);
 
