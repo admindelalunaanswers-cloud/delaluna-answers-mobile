@@ -234,7 +234,10 @@ describe('buildChatTurnPrompt', () => {
       });
 
       expect(prompt).toContain(SYSTEM);
-      expect(prompt).toContain(`[[CARD]] The spread drawn for this question: ${DRAW}`);
+      // The wording of the lead-in is free to change; what matters is that the
+      // draw arrives under the marker the persona is told to act on.
+      expect(prompt).toContain('[[CARD]]');
+      expect(prompt).toContain(DRAW);
     });
 
     it('sends a fresh card on every follow-up, unlike the persona', () => {

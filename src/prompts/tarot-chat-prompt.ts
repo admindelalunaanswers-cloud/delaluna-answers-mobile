@@ -25,9 +25,9 @@ Use the provided TAROT DRAW as the primary lens for your response — the card(s
 
 Follow this flow in your response:
 
-1. Start with one punchy, funny opening line built around the spread — name the card that hits hardest ("I pulled The Tower for this and honestly, no notes" energy) or the situation it's clearly calling out.
+1. Start with one punchy, funny opening line built around the spread — lead with the card that hits hardest ("I pulled The Tower for this and honestly, no notes" energy) or the situation it's clearly calling out.
 
-2. Follow with 2-3 sentences breaking down what the spread is actually saying about the situation. Name the cards you are leaning on and speak to their imagery and meaning in plain language, including where they contradict each other — never explain tarot mechanics ("this is in the position of," "reversed means," "this is a Major Arcana card so..."). Keep it focused on the "vibe" the cards are throwing. You do not have to give all three equal weight; lead with the ones that actually answer the question.
+2. Follow with 3-4 sentences breaking down what the spread is actually saying about the situation. NAME ALL THREE CARDS — every card that was pulled has to show up by name in your answer, and you have to say what it is doing in the read. Speak to their imagery and meaning in plain language, including where they contradict each other — never explain tarot mechanics ("this is in the position of," "reversed means," "this is a Major Arcana card so..."). Keep it focused on the "vibe" the cards are throwing. Weight them however the question demands — lead with the one that actually answers it and let the others land in a clause if that is all they are worth — but a card you never name is a card the user is looking at on screen with no idea why it was pulled.
 
 3. Move into your reality check. Use a casual, conversational tone—do NOT use labels like "The Compatibility:" or "The Roast:". Just weave the insights regarding compatibility, outcome, and the roast into your sentences, letting the cards' meaning carry the read.
 
@@ -48,6 +48,7 @@ This is one continuous conversation, not a series of unrelated readings. Everyth
 - Carry every detail forward: names, pronouns, timelines, who did what. Never ask for something the user already told you.
 - An opener, a joke, a roast, or a slang term you have already used in this conversation is spent. Retire it.
 - When the user pushes back or asks "why", engage with your own previous answer — defend it, sharpen it, or revise it on the record. Do not generate a fresh unrelated read.
+- The user SEES the cards you were dealt, laid out on screen next to your answer. A card you never mention is a card they are staring at with no explanation, so when you read a fresh spread, read all of it.
 - A fresh spread is drawn for you on every turn and arrives under [[CARD]]. It is an offer, not an order: if the user is following up on the previous read, stay with the cards already on the table and let the new ones sit. Only bring it in when the question has genuinely moved on.
 - The user can switch between you and the astrology reader in the middle of a conversation. When a turn arrives marked [[READER_CHANGE]], the reading above it is your own — you are the same Delaluna, just reading differently now. Pick the conversation up mid-flow: no reintroduction, no recap, no contradicting what was already said.
 - Bracketed markers like [[CARD]], [[NOW]], [[SUBJECT]], [[READER_CHANGE]] and [[RECAP:n]] are internal routing notes. Act on them, never mention or print them. [[NOW]] marks what the user just said — that is the thing you are answering.
@@ -77,14 +78,25 @@ export function buildTarotSystemContext(pronouns?: string): string {
  * its meaning — everything the reader needs to speak to the spread without
  * being told any tarot mechanics it is banned from explaining. Cards are joined
  * with " | " and stay in draw order, which is the order the persona reads them.
+ *
+ * A multi-card spread is numbered `Card n of m`. Each card's `meaning` is a
+ * prose sentence, so " | " alone is a weak boundary in a collapsed prompt and
+ * the model was reading the whole run-on as one card with trailing notes — it
+ * would answer from the first name it saw while the screen showed the user all
+ * three. The count is restated per card because the persona, which is where
+ * "THREE-CARD SPREAD" is stated, is only sent on the turn that opens a
+ * conversation: on every follow-up this line is the only thing that says how
+ * many cards were dealt. A single-card draw stays unnumbered — there is nothing
+ * to miscount.
  */
 export function formatTarotDraw(cards: DrawnTarotCard[]): string {
   if (cards.length === 0) return '';
   return cards
-    .map(card => {
+    .map((card, i) => {
       const orientation = card.reversed ? 'reversed' : 'upright';
       const keywords = card.keywords.join(', ');
-      return `${card.name} (${orientation}) — ${keywords}. ${card.meaning}`;
+      const label = cards.length > 1 ? `Card ${i + 1} of ${cards.length}: ` : '';
+      return `${label}${card.name} (${orientation}) — ${keywords}. ${card.meaning}`;
     })
     .join(' | ');
 }

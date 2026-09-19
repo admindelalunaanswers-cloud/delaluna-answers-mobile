@@ -63,7 +63,28 @@ describe('formatTarotDraw', () => {
     expect(out.split(' | ')).toHaveLength(2);
   });
 
+  it('numbers a multi-card spread so the count survives a collapsed prompt', () => {
+    // Each meaning is a prose sentence, so " | " alone let the reader take the
+    // whole run-on for one card and answer from the first name it saw — while
+    // the screen showed the user every card that was drawn.
+    const out = formatTarotDraw([
+      card(),
+      card({ id: 3, name: 'The Star' }),
+      card({ id: 13, name: 'Death' }),
+    ]);
+
+    expect(out).toContain('Card 1 of 3: The Tower');
+    expect(out).toContain('Card 2 of 3: The Star');
+    expect(out).toContain('Card 3 of 3: Death');
+  });
+
   it('returns empty string for an empty draw', () => {
     expect(formatTarotDraw([])).toBe('');
+  });
+
+  it('tells the reader every card has to be named', () => {
+    // The user sees the whole spread, so a card the read never mentions looks
+    // like a bug to them.
+    expect(TAROT_CHAT_SYSTEM_PROMPT).toContain('NAME ALL THREE CARDS');
   });
 });

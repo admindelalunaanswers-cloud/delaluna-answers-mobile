@@ -345,9 +345,13 @@ export function buildChatTurnPrompt(input: ChatTurnInput): string {
   const recap = buildRecap(restored, visible);
   if (recap) parts.push(recap);
 
+  // Every card here is on screen next to the answer, so one the reader never
+  // names reads as a bug to the user. The persona says the same thing, but it
+  // is only sent on the opening turn — this line rides every tarot turn.
   if (input.tarotDraw?.trim()) {
     parts.push(
-      `${MARK_CARD} The spread drawn for this question: ${input.tarotDraw.trim()}`,
+      `${MARK_CARD} The spread drawn for this question, in order — the user can see all of ` +
+        `these cards, so name every one of them in your read: ${input.tarotDraw.trim()}`,
     );
   }
 
