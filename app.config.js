@@ -75,7 +75,7 @@ module.exports = {
   expo: {
     name: "Delaluna Answers",
     slug: "delaluna-answers-mobile",
-    version: "1.1.0",
+    version: "2.0.0",
     orientation: "portrait",
     icon: "./src/assets/dlla-branded/delaluna_app_icon.png",
     scheme: "delalunaanswersmobile",
@@ -195,7 +195,7 @@ module.exports = {
       // Secret-key calls live in Cloud Functions, which read REVENUECAT_KEY_V2
       // from Firebase Secret Manager (functions/src/index.ts).
     },
-    runtimeVersion: "1.1.0",
+    runtimeVersion: "2.0.0",
     updates: {
       url: "https://u.expo.dev/a267fc5e-e587-4e94-b9ab-1cddd6decb94",
     },
