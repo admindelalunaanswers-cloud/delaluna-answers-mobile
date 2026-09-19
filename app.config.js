@@ -141,8 +141,22 @@ module.exports = {
         "expo-build-properties",
         {
           android: {
-            compileSdkVersion: 35,
-            targetSdkVersion: 35,
+            // Google Play has required API 36 for new uploads since 2026-08-31;
+            // API 35 no longer accepts an update at all. 36 is also what Expo
+            // SDK 54 / React Native 0.81 default to, so this block only pins
+            // what it needs to and does not hold the project a level behind.
+            //
+            // The Android 16 behaviour changes that apply at this target are
+            // already handled: edge-to-edge is enforced with no opt-out and
+            // `android.edgeToEdgeEnabled` is on; orientation and resizability
+            // restrictions are ignored at >= 600dp, which is exactly what
+            // withAndroidLargeScreenSupport and src/hooks/use-portrait-lock.ts
+            // were written for; and predictive back stays off via
+            // `android.predictiveBackGestureEnabled`, whose
+            // `android:enableOnBackInvokedCallback="false"` is still honoured
+            // at API 36 (it stops being honoured at API 37).
+            compileSdkVersion: 36,
+            targetSdkVersion: 36,
             AGPVersion: "8.10.2",
           },
           ios: {

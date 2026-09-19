@@ -11,6 +11,7 @@
     "reset-project": "node ./scripts/reset-project.js",
     "eas-build-pre-install": "node ./scripts/exclude-dev-client.js",
     "migrate:users-to-dllap": "node ./scripts/migrate-users-to-dllap.js",
+    "regen:user": "node ./scripts/regenerate-user.js",
     "admin:dev": "node ./scripts/sync-admin-env.js test && npm --prefix admin-web run dev",
     "admin:build:test": "node ./scripts/sync-admin-env.js test && npm --prefix admin-web run build",
     "admin:build:prod": "node ./scripts/sync-admin-env.js prod && npm --prefix admin-web run build",
