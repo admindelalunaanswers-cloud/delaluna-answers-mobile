@@ -327,7 +327,7 @@ function birthDetailsDiffer(
 // (see sendChatMessage) so that testing workflow still works without letting a
 // client-side setting relax a server-side limit.
 const FREE_DAILY_CHAT_LIMIT = 2;
-const PREMIUM_DAILY_CHAT_LIMIT = 2;
+const PREMIUM_DAILY_CHAT_LIMIT = 5;
 
 // A chat document with no response older than this is treated as a failed
 // generation, and only then may it be retried. Mirrored (plus a skew buffer)

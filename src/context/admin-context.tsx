@@ -23,7 +23,7 @@ try {
 // ─── Defaults ─────────────────────────────────────────────────────────────────
 
 export const DEFAULT_DAILY_CHAT_LIMIT = 2;
-export const DEFAULT_PREMIUM_DAILY_CHAT_LIMIT = 2;
+export const DEFAULT_PREMIUM_DAILY_CHAT_LIMIT = 5;
 export const DEFAULT_FREE_CONNECTION_LIMIT = 0;
 export const DEFAULT_TRIAL_CONNECTION_LIMIT = 3;
 export const DEFAULT_PREMIUM_CONNECTION_LIMIT = 10;
