@@ -597,7 +597,7 @@ export default function EditProfileScreen() {
 
   return (
     <ImageBackground source={theme.backgroundImage} style={ss.bg} resizeMode="cover">
-      <StatusBar style="light" translucent />
+      <StatusBar style="light" />
       <BlurView intensity={15} tint="dark" style={ss.overlay}>
 
         {/* Header */}
@@ -1076,7 +1076,7 @@ const ss = StyleSheet.create({
 
   // Confirmation modal
   confirmOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'center',
     alignItems: 'center',

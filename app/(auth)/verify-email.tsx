@@ -212,7 +212,7 @@ export default function VerifyEmail() {
 
   return (
     <>
-      <StatusBar style="light" translucent />
+      <StatusBar style="light" />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ImageBackground
@@ -230,7 +230,7 @@ export default function VerifyEmail() {
                 "rgba(0,0,0,0.05)",
               ]}
               locations={[0, 0.49, 1]}
-              style={StyleSheet.absoluteFillObject}
+              style={StyleSheet.absoluteFill}
             >
               {/* Back button */}
               <SafeAreaView style={styles.topBar}>

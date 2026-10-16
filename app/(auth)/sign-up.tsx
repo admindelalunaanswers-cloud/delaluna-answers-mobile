@@ -266,7 +266,7 @@ export default function SignUpChatScreen() {
     <ImageBackground source={theme.backgroundImage} style={styles.background} resizeMode="cover">
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <ThemedView style={{ flex: 1 }}>
-          <StatusBar style="light" translucent />
+          <StatusBar style="light" />
 
           <BlurView intensity={10} tint="dark" style={[styles.overlay, Platform.OS === 'android' && { paddingTop: insets.top + verticalScale(12) }]}>
             <ThemedView
@@ -311,7 +311,7 @@ export default function SignUpChatScreen() {
 
           {/* Loading overlay — keeps ChatFlow mounted so answers are preserved */}
           {isLoading && (
-            <ThemedView style={StyleSheet.absoluteFillObject}>
+            <ThemedView style={StyleSheet.absoluteFill}>
               <LoadingScreen message={loadingMessage || undefined} />
             </ThemedView>
           )}
@@ -360,7 +360,7 @@ const styles = StyleSheet.create({
   cancelText: { color: '#6FFFE9', fontSize: moderateScale(18), fontWeight: '500' },
   chatFlowWrapper: { flex: 1, width: '100%' },
   modalOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'center',
     alignItems: 'center',

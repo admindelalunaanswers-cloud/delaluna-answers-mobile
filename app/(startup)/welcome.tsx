@@ -82,11 +82,11 @@ const styles = StyleSheet.create({
     marginTop: -verticalScale(90),
   },
   topAnimation: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 1,
   },
   logoWrap: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: "center",
     alignItems: "center",
     zIndex: 2,

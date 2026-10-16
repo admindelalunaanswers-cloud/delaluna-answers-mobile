@@ -150,7 +150,7 @@ export default function Login() {
 
   return (
     <>
-      <StatusBar style="light" translucent />
+      <StatusBar style="light" />
 
       <ImageBackground
         source={require("@/src/assets/start-up/welcome-background.jpg")}
@@ -180,7 +180,7 @@ export default function Login() {
                   "rgba(0,0,0,0.05)",
                 ]}
                 locations={[0, 0.49, 1]}
-                style={StyleSheet.absoluteFillObject}
+                style={StyleSheet.absoluteFill}
               />
 
               <View style={styles.bodyContainer}>

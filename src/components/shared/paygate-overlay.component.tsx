@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   tint: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(10, 6, 30, 0.45)',
   },
   cta: {

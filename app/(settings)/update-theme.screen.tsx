@@ -100,10 +100,7 @@ export default function ChangeThemeScreen() {
   return renderBackground(
     <View style={[styles.container, { backgroundColor: "transparent" }]}>
       {/* Dynamic StatusBar based on theme */}
-      <StatusBar
-        style={theme.isDark ? "light" : "dark"}
-        translucent
-      />
+      <StatusBar style={theme.isDark ? "light" : "dark"} />
 
 
       {/* Absolute Header */}
@@ -153,7 +150,7 @@ export default function ChangeThemeScreen() {
 
 /* Styles */
 const styles = StyleSheet.create({
-  absoluteFill: { ...StyleSheet.absoluteFillObject },
+  absoluteFill: { ...StyleSheet.absoluteFill },
   container: { flex: 1 },
   listContent: {
     paddingTop: verticalScale(90), // space below the header

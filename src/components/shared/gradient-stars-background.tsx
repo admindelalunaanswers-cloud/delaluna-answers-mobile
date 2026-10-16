@@ -721,7 +721,7 @@ export default function GradientStarsBackground() {
   return (
     <Svg
       viewBox="0 0 400 800"
-      style={StyleSheet.absoluteFillObject}
+      style={StyleSheet.absoluteFill}
       preserveAspectRatio="xMidYMid slice"
     >
       <Defs>

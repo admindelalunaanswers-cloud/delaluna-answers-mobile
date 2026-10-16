@@ -26,7 +26,7 @@ export default function ForgotPasswordScreen() {
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
             style={styles.background}>
-            <StatusBar style="light" translucent />
+            <StatusBar style="light" />
             <View style={styles.container}>
                 <TouchableOpacity
                     style={[styles.cancelButton, { top: cancelTop }]}

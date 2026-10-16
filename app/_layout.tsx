@@ -4,11 +4,10 @@ import { AppState, type AppStateStatus, Image, ImageBackground, View } from 'rea
 import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
 
-import { Slot, usePathname, useRouter, useSegments } from 'expo-router';
+import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider, Slot, usePathname, useRouter, useSegments } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 
 // Keep the native splash visible until AuthGate decides what to render.

@@ -86,10 +86,7 @@ export default function HeaderNav({
 
   return (
     <>
-      <StatusBar
-        style={theme.isDark ? "light" : "dark"}
-        translucent
-      />
+      <StatusBar style={theme.isDark ? "light" : "dark"} />
 
       <ThemedView
         style={[
