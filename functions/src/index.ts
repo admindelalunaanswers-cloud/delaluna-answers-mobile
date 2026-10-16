@@ -9,7 +9,7 @@ import {
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as nodemailer from "nodemailer";
-import { z, ZodError, ZodType } from "zod";
+import { ZodError, ZodType, z } from "zod";
 
 import { generateWithAnchor, invalidateAnchor } from "./anchor";
 import { runChatGeneration } from "./chat-generation";
@@ -313,7 +313,9 @@ function birthDetailsDiffer(
 ): boolean {
   if (!stored || typeof stored !== "object") return false; // nothing to compare against
   const prev = stored as Record<string, unknown>;
-  return BIRTH_DETAIL_FIELDS.some((f) => (prev[f] ?? null) !== (incoming[f] ?? null));
+  return BIRTH_DETAIL_FIELDS.some(
+    (f) => (prev[f] ?? null) !== (incoming[f] ?? null),
+  );
 }
 
 // ─── Chat quota ──────────────────────────────────────────────────────────────
@@ -1162,41 +1164,46 @@ async function assertTargetIsNotAdmin(targetUid: string): Promise<void> {
  * state without an Auth lookup per row. It lives in `moderation/`, not on the
  * user document, because that document is delete-able by its owner.
  */
-export const setUserDisabled = onCall({ invoker: "public" }, async (request) => {
-  const input = parseInput(SetUserDisabledSchema, request.data);
-  const adminUid = requireAdminActingOnOther(request, input.targetUid);
-  await assertTargetIsNotAdmin(input.targetUid);
+export const setUserDisabled = onCall(
+  { invoker: "public" },
+  async (request) => {
+    const input = parseInput(SetUserDisabledSchema, request.data);
+    const adminUid = requireAdminActingOnOther(request, input.targetUid);
+    await assertTargetIsNotAdmin(input.targetUid);
 
-  await admin.auth().updateUser(input.targetUid, { disabled: input.disabled });
+    await admin
+      .auth()
+      .updateUser(input.targetUid, { disabled: input.disabled });
 
-  if (input.disabled) {
-    // Order matters: disable first, then revoke. Revoking first would leave a
-    // window where the user could obtain a fresh token from a still-enabled
-    // account and keep it for another hour.
-    await admin.auth().revokeRefreshTokens(input.targetUid);
-  }
+    if (input.disabled) {
+      // Order matters: disable first, then revoke. Revoking first would leave a
+      // window where the user could obtain a fresh token from a still-enabled
+      // account and keep it for another hour.
+      await admin.auth().revokeRefreshTokens(input.targetUid);
+    }
 
-  await db
-    .collection("moderation")
-    .doc(input.targetUid)
-    .set(
-      {
-        disabled: input.disabled,
-        note: input.note ?? "",
-        updatedAt: FieldValue.serverTimestamp(),
-        updatedBy: adminUid,
-      },
-      { merge: true },
+    await db
+      .collection("moderation")
+      .doc(input.targetUid)
+      .set(
+        {
+          disabled: input.disabled,
+          note: input.note ?? "",
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: adminUid,
+        },
+        { merge: true },
+      );
+
+    // Both uids are document keys, not PII. The note is admin free-text and is
+    // deliberately not logged.
+    console.info(
+      `[setUserDisabled] admin=${adminUid} set disabled=${input.disabled} for targetUid=${input.targetUid}`,
     );
 
-  // Both uids are document keys, not PII. The note is admin free-text and is
-  // deliberately not logged.
-  console.info(
-    `[setUserDisabled] admin=${adminUid} set disabled=${input.disabled} for targetUid=${input.targetUid}`,
-  );
-
-  return { success: true, disabled: input.disabled };
-});
+    return { success: true, disabled: input.disabled };
+  },
+);
 
 // ─── setUserFeatureBlocks ────────────────────────────────────────────────────
 
@@ -1561,189 +1568,198 @@ async function refundChatQuestion(
  * kept for an answer that arrived: a failure refunds it (refundFailedChat),
  * and so does the retry that supersedes it.
  */
-export const sendChatMessage = onCall({ invoker: "public" }, async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Must be signed in.");
-  }
-  if (request.auth.token.email_verified !== true) {
-    throw new HttpsError(
-      "permission-denied",
-      "Please verify your email address first.",
-    );
-  }
-
-  const uid = request.auth.uid;
-  const input = parseInput(SendChatMessageSchema, request.data);
-
-  const userRef = db.collection("users").doc(uid);
-  const usageRef = userRef.collection("chatUsage");
-  const chatRef = userRef.collection("updayedChat");
-
-  // Admins are exempt — they already hold a full read/write claim, so metering
-  // them adds nothing, and it keeps the admin screen's limit sliders usable.
-  const isAdmin = request.auth.token.admin === true;
-
-  // Moderation gate. This is the half of feature-blocking that actually bites:
-  // the client hides blocked features, but only this stops a modified or stale
-  // build from spending Gemini budget. Read before any billing happens so a
-  // blocked user is never charged for a question that will not be answered.
-  //
-  // A tarot turn is blocked by either "tarot" or "chat" — tarot rides the chat
-  // pipeline, so blocking chat and leaving tarot open would be a hole rather
-  // than a finer-grained setting.
-  if (!isAdmin) {
-    const modSnap = await db.collection("moderation").doc(uid).get();
-    const blocked = (modSnap.data()?.blockedFeatures ?? []) as string[];
-    const wanted = input.mode === "tarot" ? ["tarot", "chat"] : ["chat"];
-    if (wanted.some((f) => blocked.includes(f))) {
+export const sendChatMessage = onCall(
+  { invoker: "public" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+    if (request.auth.token.email_verified !== true) {
       throw new HttpsError(
         "permission-denied",
-        "This feature is not available on your account.",
-      );
-    }
-  }
-
-  // A retry must never start a second generation for a message that is still
-  // in flight. It used to: a message only counted as failed once it was in the
-  // extension's ERROR state or older than GENERATION_STUCK_MS, and a retry
-  // arriving before then fell straight through to the billing below — charging
-  // a second question and adding a second document, so the user saw their
-  // question and two separate replies and paid twice for one answer. The
-  // client only offers the button once the message is eligible, but clock skew
-  // can beat it there, so the refusal is enforced here.
-  if (input.retryOf) {
-    const prevRef = chatRef.doc(input.retryOf);
-    const prev = await prevRef.get();
-
-    if (!prev.exists) {
-      // An eligible retry consumes the document it replaces, so a missing one
-      // means this is the second tap on the same button.
-      throw new HttpsError(
-        "failed-precondition",
-        "That message has already been retried.",
+        "Please verify your email address first.",
       );
     }
 
-    const prevData = prev.data()!;
-    const state = String(prevData.status?.state ?? "").toUpperCase();
-    const createdMs =
-      (prevData.createTime as Timestamp | undefined)?.toMillis() ?? 0;
-    const stuck =
-      !prevData.response &&
-      createdMs > 0 &&
-      Date.now() - createdMs > GENERATION_STUCK_MS;
+    const uid = request.auth.uid;
+    const input = parseInput(SendChatMessageSchema, request.data);
 
-    if (state !== "ERROR" && !stuck) {
-      throw new HttpsError(
-        "failed-precondition",
-        "That answer is still generating. Give it a moment.",
-      );
+    const userRef = db.collection("users").doc(uid);
+    const usageRef = userRef.collection("chatUsage");
+    const chatRef = userRef.collection("updayedChat");
+
+    // Admins are exempt — they already hold a full read/write claim, so metering
+    // them adds nothing, and it keeps the admin screen's limit sliders usable.
+    const isAdmin = request.auth.token.admin === true;
+
+    // Moderation gate. This is the half of feature-blocking that actually bites:
+    // the client hides blocked features, but only this stops a modified or stale
+    // build from spending Gemini budget. Read before any billing happens so a
+    // blocked user is never charged for a question that will not be answered.
+    //
+    // A tarot turn is blocked by either "tarot" or "chat" — tarot rides the chat
+    // pipeline, so blocking chat and leaving tarot open would be a hole rather
+    // than a finer-grained setting.
+    if (!isAdmin) {
+      const modSnap = await db.collection("moderation").doc(uid).get();
+      const blocked = (modSnap.data()?.blockedFeatures ?? []) as string[];
+      const wanted = input.mode === "tarot" ? ["tarot", "chat"] : ["chat"];
+      if (wanted.some((f) => blocked.includes(f))) {
+        throw new HttpsError(
+          "permission-denied",
+          "This feature is not available on your account.",
+        );
+      }
     }
 
-    // The failed turn hands its question back instead of the retry being
-    // waived. Same net cost — one question for one answer — but the new
-    // document carries its own billing record, so a retry that fails in turn
-    // is refunded too rather than the chain leaking a question per failure.
-    // The refund is awaited, so the ledger the transaction below reads has
-    // already been credited and a user at their limit is not bounced to the
-    // paywall for a question they never got an answer to.
-    await refundChatQuestion(uid, prevRef);
-    await prevRef.delete();
-  }
+    // A retry must never start a second generation for a message that is still
+    // in flight. It used to: a message only counted as failed once it was in the
+    // extension's ERROR state or older than GENERATION_STUCK_MS, and a retry
+    // arriving before then fell straight through to the billing below — charging
+    // a second question and adding a second document, so the user saw their
+    // question and two separate replies and paid twice for one answer. The
+    // client only offers the button once the message is eligible, but clock skew
+    // can beat it there, so the refusal is enforced here.
+    if (input.retryOf) {
+      const prevRef = chatRef.doc(input.retryOf);
+      const prev = await prevRef.get();
 
-  // What this message was billed for, recorded on the document so it can be
-  // handed back if the generation fails. Null when nothing was charged.
-  let billed: { dayId: string; fromCredit: boolean } | null = null;
+      if (!prev.exists) {
+        // An eligible retry consumes the document it replaces, so a missing one
+        // means this is the second tap on the same button.
+        throw new HttpsError(
+          "failed-precondition",
+          "That message has already been retried.",
+        );
+      }
 
-  if (!isAdmin) {
-    const [premium, purchased, userSnap] = await Promise.all([
-      isUserPremium(uid),
-      purchasedChatCredits(uid),
-      userRef.get(),
-    ]);
+      const prevData = prev.data()!;
+      const state = String(prevData.status?.state ?? "").toUpperCase();
+      const createdMs =
+        (prevData.createTime as Timestamp | undefined)?.toMillis() ?? 0;
+      const stuck =
+        !prevData.response &&
+        createdMs > 0 &&
+        Date.now() - createdMs > GENERATION_STUCK_MS;
 
-    // Bill against the user's local day so the quota resets at their midnight,
-    // matching what the in-app counter shows.
-    const offset = userSnap.data()?.timezoneOffsetMinutes;
-    const nowLocal =
-      typeof offset === "number" && Number.isFinite(offset)
-        ? new Date(Date.now() + offset * 60 * 1000)
-        : new Date();
-    const dayId = formatDateId(nowLocal);
+      if (state !== "ERROR" && !stuck) {
+        throw new HttpsError(
+          "failed-precondition",
+          "That answer is still generating. Give it a moment.",
+        );
+      }
 
-    const dailyLimit = premium
-      ? PREMIUM_DAILY_CHAT_LIMIT
-      : FREE_DAILY_CHAT_LIMIT;
+      // The failed turn hands its question back instead of the retry being
+      // waived. Same net cost — one question for one answer — but the new
+      // document carries its own billing record, so a retry that fails in turn
+      // is refunded too rather than the chain leaking a question per failure.
+      // The refund is awaited, so the ledger the transaction below reads has
+      // already been credited and a user at their limit is not bounced to the
+      // paywall for a question they never got an answer to.
+      await refundChatQuestion(uid, prevRef);
+      await prevRef.delete();
+    }
 
-    // Read-modify-write in a transaction so parallel sends can't both pass the
-    // check and overspend the allowance. What it charged is returned rather
-    // than assigned from inside, because a contended transaction runs its
-    // callback more than once.
-    billed = await db.runTransaction(async (tx) => {
-      const dayRef = usageRef.doc(dayId);
-      const creditsRef = usageRef.doc("_credits");
-      const [daySnap, creditsSnap] = await Promise.all([
-        tx.get(dayRef),
-        tx.get(creditsRef),
+    // What this message was billed for, recorded on the document so it can be
+    // handed back if the generation fails. Null when nothing was charged.
+    let billed: { dayId: string; fromCredit: boolean } | null = null;
+
+    if (!isAdmin) {
+      const [premium, purchased, userSnap] = await Promise.all([
+        isUserPremium(uid),
+        purchasedChatCredits(uid),
+        userRef.get(),
       ]);
 
-      const usedToday = Number(daySnap.data()?.count ?? 0);
-      const creditsSpent = Number(creditsSnap.data()?.consumed ?? 0);
-      const creditsLeft = Math.max(0, purchased - creditsSpent);
+      // Bill against the user's local day so the quota resets at their midnight,
+      // matching what the in-app counter shows.
+      const offset = userSnap.data()?.timezoneOffsetMinutes;
+      const nowLocal =
+        typeof offset === "number" && Number.isFinite(offset)
+          ? new Date(Date.now() + offset * 60 * 1000)
+          : new Date();
+      const dayId = formatDateId(nowLocal);
 
-      if (usedToday < dailyLimit) {
-        tx.set(
-          dayRef,
-          { count: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() },
-          { merge: true },
+      const dailyLimit = premium
+        ? PREMIUM_DAILY_CHAT_LIMIT
+        : FREE_DAILY_CHAT_LIMIT;
+
+      // Read-modify-write in a transaction so parallel sends can't both pass the
+      // check and overspend the allowance. What it charged is returned rather
+      // than assigned from inside, because a contended transaction runs its
+      // callback more than once.
+      billed = await db.runTransaction(async (tx) => {
+        const dayRef = usageRef.doc(dayId);
+        const creditsRef = usageRef.doc("_credits");
+        const [daySnap, creditsSnap] = await Promise.all([
+          tx.get(dayRef),
+          tx.get(creditsRef),
+        ]);
+
+        const usedToday = Number(daySnap.data()?.count ?? 0);
+        const creditsSpent = Number(creditsSnap.data()?.consumed ?? 0);
+        const creditsLeft = Math.max(0, purchased - creditsSpent);
+
+        if (usedToday < dailyLimit) {
+          tx.set(
+            dayRef,
+            {
+              count: FieldValue.increment(1),
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+          return { dayId, fromCredit: false };
+        }
+
+        if (creditsLeft > 0) {
+          // Daily allowance is spent — draw down a purchased chat-pack question.
+          tx.set(
+            creditsRef,
+            {
+              consumed: FieldValue.increment(1),
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+          tx.set(
+            dayRef,
+            {
+              count: FieldValue.increment(1),
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+          return { dayId, fromCredit: true };
+        }
+
+        throw new HttpsError(
+          "resource-exhausted",
+          "You've used all your questions. Purchase a chat pack to keep going.",
         );
-        return { dayId, fromCredit: false };
-      }
+      });
+    }
 
-      if (creditsLeft > 0) {
-        // Daily allowance is spent — draw down a purchased chat-pack question.
-        tx.set(
-          creditsRef,
-          {
-            consumed: FieldValue.increment(1),
-            updatedAt: FieldValue.serverTimestamp(),
-          },
-          { merge: true },
-        );
-        tx.set(
-          dayRef,
-          { count: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() },
-          { merge: true },
-        );
-        return { dayId, fromCredit: true };
-      }
+    const payload: Record<string, unknown> = {
+      userMessage: input.userMessage,
+      prompt: sanitizePrompt(input.prompt),
+      createTime: FieldValue.serverTimestamp(),
+    };
+    if (input.connectionId) payload.connectionId = input.connectionId;
+    if (input.connectionName) payload.connectionName = input.connectionName;
+    if (input.mode) payload.mode = input.mode;
+    // The receipt refundChatQuestion reads. Absent for an admin send, which is
+    // never metered and so has nothing to give back.
+    if (billed) {
+      payload.billedDay = billed.dayId;
+      payload.billedCredit = billed.fromCredit;
+    }
 
-      throw new HttpsError(
-        "resource-exhausted",
-        "You've used all your questions. Purchase a chat pack to keep going.",
-      );
-    });
-  }
+    const created = await chatRef.add(payload);
 
-  const payload: Record<string, unknown> = {
-    userMessage: input.userMessage,
-    prompt: sanitizePrompt(input.prompt),
-    createTime: FieldValue.serverTimestamp(),
-  };
-  if (input.connectionId) payload.connectionId = input.connectionId;
-  if (input.connectionName) payload.connectionName = input.connectionName;
-  if (input.mode) payload.mode = input.mode;
-  // The receipt refundChatQuestion reads. Absent for an admin send, which is
-  // never metered and so has nothing to give back.
-  if (billed) {
-    payload.billedDay = billed.dayId;
-    payload.billedCredit = billed.fromCredit;
-  }
-
-  const created = await chatRef.add(payload);
-
-  return { messageId: created.id };
-});
+    return { messageId: created.id };
+  },
+);
 
 // ─── Push helper ─────────────────────────────────────────────────────────────
 
@@ -2340,7 +2356,6 @@ export const generateSynastryReading = onDocumentWritten(
   },
 );
 
-
 /**
  * Natal chart breakdown — replaces `firestore-natal-chart-chatbot-6ppy`.
  *
@@ -2461,7 +2476,6 @@ export const generateTransitReading = onDocumentWritten(
     });
   },
 );
-
 
 /**
  * AI chat — replaces `firestore-genai-chatbot-update-5i5h`.
@@ -2796,7 +2810,6 @@ export const aggregatePerfLogs = onSchedule("every day 02:00", async () => {
       (failedScreens > 0 ? `, ${failedScreens} screen(s) failed` : ""),
   );
 });
-
 
 // ─── Prompt testing ──────────────────────────────────────────────────────────
 
