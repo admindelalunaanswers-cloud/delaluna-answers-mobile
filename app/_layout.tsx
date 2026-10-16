@@ -225,24 +225,20 @@ function ThemedRoot({ children }: { children: ReactNode }) {
   const segments = useSegments();
   const isMain = segments[0] !== '(auth)' && segments[0] !== '(startup)';
 
-  const inner = (
-    <NavThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      {children}
-      <StatusBar style="auto" />
-    </NavThemeProvider>
-  );
-
-  if (!isMain) {
-    return <>{inner}</>;
-  }
-
+  // Always render the same wrapper and only toggle its image. Swapping the root
+  // element type between route groups remounts the whole subtree — including
+  // <Slot />, the navigator — in the middle of AuthGate's router.replace(), and
+  // React then warns about a state update on a component that hasn't mounted.
   return (
     <ImageBackground
-      source={theme.backgroundImage}
+      source={isMain ? theme.backgroundImage : undefined}
       style={{ flex: 1 }}
       resizeMode="cover"
     >
-      {inner}
+      <NavThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        {children}
+        <StatusBar style="auto" />
+      </NavThemeProvider>
     </ImageBackground>
   );
 }
