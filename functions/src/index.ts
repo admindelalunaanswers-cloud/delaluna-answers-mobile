@@ -14,10 +14,13 @@ import { z, ZodError, ZodType } from "zod";
 import { generateWithAnchor, invalidateAnchor } from "./anchor";
 import { runChatGeneration } from "./chat-generation";
 import {
-  recentHoroscopeQuotes,
-  withQuoteDirection,
-  withQuotesToAvoid,
-} from "./quote-history";
+  COMPATIBILITY_SCHEMA,
+  NATAL_BREAKDOWN_SCHEMA,
+  TRANSITS_SCHEMA,
+  describeGenerationError,
+  geminiApiKey,
+  generateJson,
+} from "./interactions";
 import {
   BIRTH_CHART_BODIES,
   CHAT_REPLY_BODIES,
@@ -27,12 +30,10 @@ import {
   pickPushBody,
 } from "./push-copy";
 import {
-  COMPATIBILITY_SCHEMA,
-  NATAL_BREAKDOWN_SCHEMA,
-  TRANSITS_SCHEMA,
-  generateJson,
-  geminiApiKey,
-} from "./interactions";
+  recentHoroscopeQuotes,
+  withQuoteDirection,
+  withQuotesToAvoid,
+} from "./quote-history";
 
 // ─── Secrets (set via: firebase functions:secrets:set EMAIL_USER) ─────────────
 const emailUser = defineSecret("EMAIL_USER");
@@ -2268,9 +2269,7 @@ async function runAnchoredGeneration(opts: {
     // functions send carry two people's names and birth data, and an SDK
     // error can quote the request it failed on — Cloud Logging persists, so
     // the message gets a hard length limit and the stack is dropped.
-    const reason = (
-      err instanceof Error ? `${err.name}: ${err.message}` : "Generation failed"
-    ).slice(0, 200);
+    const reason = describeGenerationError(err);
 
     console.error(`[${opts.label}] Generation failed — ${reason}`);
 

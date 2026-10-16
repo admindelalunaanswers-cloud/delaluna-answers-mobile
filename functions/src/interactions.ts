@@ -295,6 +295,30 @@ export async function generateJson(
 }
 
 /**
+ * A one-line, length-capped description of a failed generation, for the log
+ * line and the document's `status.error`.
+ *
+ * `err.message` alone is not enough. When the API answers 4xx/5xx with a body
+ * that is not the `{ error: { message } }` shape, the SDK falls back to
+ * stringifying its own wrapper, and the message reads
+ * `400 API error occurred: {"httpMeta":{"response":{},"request":{}}}` — the
+ * Response object serialises to `{}`, so the actual reason is lost. It
+ * survives on `err.body` (the raw response text), so that is appended.
+ *
+ * Still capped and flattened: an API error can quote the request it failed on,
+ * and these prompts carry birth data. Cloud Logging persists.
+ */
+export function describeGenerationError(err: unknown): string {
+  if (!(err instanceof Error)) return "Generation failed";
+  const e = err as Error & { statusCode?: number; body?: unknown };
+  const body =
+    typeof e.body === "string" && e.body && !e.message.includes(e.body)
+      ? ` | status=${e.statusCode ?? "?"} body=${e.body}`
+      : "";
+  return `${e.name}: ${e.message}${body}`.replace(/\s+/g, " ").slice(0, 400);
+}
+
+/**
  * Pulls the response text out of an interaction.
  *
  * `output_text` is the documented convenience accessor, but it returns only the
