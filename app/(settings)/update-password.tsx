@@ -135,6 +135,7 @@ export default function UpdatePasswordScreen() {
         <TextInput
           testID={testID}
           style={styles.input}
+          accessibilityLabel={label}
           placeholder={placeholder}
           placeholderTextColor="rgba(255,255,255,0.6)"
           secureTextEntry={!visible}
@@ -148,6 +149,8 @@ export default function UpdatePasswordScreen() {
         <TouchableOpacity
           onPress={() => setVisible(!visible)}
           style={styles.eyeButton}
+          accessibilityRole="button"
+          accessibilityLabel={`${visible ? 'Hide' : 'Show'} ${label.toLowerCase()}`}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons

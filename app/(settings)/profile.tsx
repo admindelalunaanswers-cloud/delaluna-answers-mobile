@@ -691,6 +691,7 @@ export default function ProfileScreen() {
             </Text>
             <TextInput
               style={ss.reauthInput}
+              accessibilityLabel="Password"
               placeholder="Password"
               placeholderTextColor="rgba(255,255,255,0.4)"
               secureTextEntry

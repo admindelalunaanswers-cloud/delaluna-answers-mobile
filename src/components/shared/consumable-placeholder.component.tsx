@@ -29,6 +29,7 @@ import { Events } from '@/src/services/analytics.service';
 import { recordError } from '@/src/services/crashlytics.service';
 import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
 import { logger } from '@/src/utils/logger';
+import { useAnnounce } from '@/src/hooks/use-announce';
 
 // ─── Chat pack tiers ─────────────────────────────────────────────────────────
 
@@ -68,6 +69,7 @@ export default function ConsumablePlaceholder({ visible, onClose, onPurchased, o
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  useAnnounce(errorMsg);
 
   // Fetch real store products when sheet opens
   useEffect(() => {

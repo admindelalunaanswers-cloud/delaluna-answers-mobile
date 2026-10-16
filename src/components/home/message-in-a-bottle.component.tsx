@@ -58,6 +58,7 @@ export default function MessageInABottleComponent({
       <View style={styles.container}>
         <TextInput
           style={styles.input}
+          accessibilityLabel={placeholder}
           placeholder={placeholder}
           placeholderTextColor="#1F2024"
           value={message}

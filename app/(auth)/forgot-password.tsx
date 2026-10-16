@@ -41,6 +41,7 @@ export default function ForgotPasswordScreen() {
                 <View style={styles.spacer} />
                 <TextInput
                     style={styles.input}
+                    accessibilityLabel="Email"
                     placeholder="Email"
                     placeholderTextColor="#fff"
                     onChangeText={(text) => email = text}

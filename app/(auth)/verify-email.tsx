@@ -22,6 +22,7 @@ import { ThemedView } from "@/src/components/themed-view";
 import { useHoroscope } from "@/src/context/horoscope-context";
 import { ThemeContext } from "@/src/context/theme-context";
 import { useUser } from "@/src/context/user-context";
+import { useAnnounce } from "@/src/hooks/use-announce";
 import { useScreenPerfLog } from "@/src/hooks/use-screen-perf-log";
 import { Events } from "@/src/services/analytics.service";
 import { signOut } from "@/src/services/user.service";
@@ -52,6 +53,8 @@ export default function VerifyEmail() {
   const [sendError, setSendError] = useState<string | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
+  useAnnounce(sendError ? `Could not send code. ${sendError}` : null);
+  useAnnounce(verifyError);
 
   // Don't gate on transitReadingGenerating — transit reading populates the
   // transits screen separately and can lag well behind today's horoscope.
@@ -284,6 +287,7 @@ export default function VerifyEmail() {
                         styles.digitBox,
                         d ? styles.digitBoxFilled : null,
                       ]}
+                      accessibilityLabel={`Verification code, character ${i + 1} of ${CODE_LENGTH}`}
                       value={d}
                       onChangeText={(text) => handleDigitChange(text, i)}
                       onKeyPress={({ nativeEvent }) =>

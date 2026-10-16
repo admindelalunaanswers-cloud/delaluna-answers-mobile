@@ -17,6 +17,14 @@ import { ThemedView } from "../themed-view";
 
 const NAV_BAR_HEIGHT = 44;
 
+// Icon-only buttons have no text for VoiceOver/TalkBack to read, so every side
+// button needs an explicit name. Back arrows are common enough to default.
+function defaultIconLabel(name?: string): string | undefined {
+  if (!name) return undefined;
+  if (name.startsWith("arrow-back") || name.startsWith("chevron-back")) return "Back";
+  return undefined;
+}
+
 type HeaderNavProps = {
   title?: string;
   leftLabel?: string;
@@ -28,6 +36,9 @@ type HeaderNavProps = {
   rightAvatarSource?: ImageSourcePropType;
   onLeftPress?: () => void;
   onRightPress?: () => void;
+  /** Screen-reader name for an icon-only side button. Back icons and the avatar get a default. */
+  leftAccessibilityLabel?: string;
+  rightAccessibilityLabel?: string;
   backgroundColor?: string;
   textColor?: string;
 };
@@ -43,6 +54,8 @@ export default function HeaderNav({
   rightAvatarSource,
   onLeftPress,
   onRightPress,
+  leftAccessibilityLabel,
+  rightAccessibilityLabel,
   backgroundColor,
   textColor,
 }: HeaderNavProps) {
@@ -52,6 +65,12 @@ export default function HeaderNav({
 
   const bg = backgroundColor ?? theme.colors.headerBg;
   const tc = textColor ?? theme.colors.headerText;
+
+  const leftHasContent = !!(leftIconName || leftIconSource || leftLabel);
+  const rightHasContent = !!(rightAvatarSource || rightIconName || rightIconSource || rightLabel);
+  const leftA11yLabel = leftAccessibilityLabel ?? leftLabel ?? defaultIconLabel(leftIconName);
+  const rightA11yLabel =
+    rightAccessibilityLabel ?? rightLabel ?? (rightAvatarSource ? "Profile" : defaultIconLabel(rightIconName));
 
   const headerHeight = insets.top + scale(NAV_BAR_HEIGHT);
   const navHeight = scale(NAV_BAR_HEIGHT);
@@ -100,6 +119,11 @@ export default function HeaderNav({
             onPress={onLeftPress}
             style={[styles.sideContainer, dynamic.sideContainer]}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            // An empty slot is layout only — keep it out of the screen-reader order.
+            accessible={leftHasContent}
+            accessibilityRole="button"
+            accessibilityLabel={leftA11yLabel}
+            importantForAccessibility={leftHasContent ? "yes" : "no-hide-descendants"}
           >
             {leftIconName ? (
               <Ionicons name={leftIconName} size={moderateScale(30)} color={tc} />
@@ -114,7 +138,11 @@ export default function HeaderNav({
 
           {/* TITLE */}
           <ThemedView style={styles.centerContainer} pointerEvents="none">
-            <ThemedText style={[styles.title, dynamic.title, { color: tc }]} numberOfLines={1}>
+            <ThemedText
+              style={[styles.title, dynamic.title, { color: tc }]}
+              numberOfLines={1}
+              accessibilityRole="header"
+            >
               {title}
             </ThemedText>
           </ThemedView>
@@ -124,6 +152,10 @@ export default function HeaderNav({
             onPress={onRightPress}
             style={[styles.sideContainer, styles.rightContainer, dynamic.sideContainer]}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessible={rightHasContent}
+            accessibilityRole="button"
+            accessibilityLabel={rightA11yLabel}
+            importantForAccessibility={rightHasContent ? "yes" : "no-hide-descendants"}
           >
             {rightAvatarSource ? (
               <Image source={rightAvatarSource} style={[styles.avatar, dynamic.avatarIcon]} />

@@ -295,6 +295,7 @@ export default function FeedbackScreen() {
           <TextInput
             value={comment}
             onChangeText={setComment}
+            accessibilityLabel="Your thoughts"
             placeholder="The stars are listening..."
             placeholderTextColor={COLORS.placeholder}
             style={s.textarea}

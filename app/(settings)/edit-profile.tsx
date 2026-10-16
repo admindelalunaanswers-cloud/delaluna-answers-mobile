@@ -632,6 +632,7 @@ export default function EditProfileScreen() {
                 style={ss.input}
                 value={firstName}
                 onChangeText={setFirstName}
+                accessibilityLabel="First name"
                 placeholder="First name"
                 placeholderTextColor="rgba(255,255,255,0.35)"
                 autoCorrect={false}
@@ -642,6 +643,7 @@ export default function EditProfileScreen() {
                 style={ss.input}
                 value={lastName}
                 onChangeText={setLastName}
+                accessibilityLabel="Last name"
                 placeholder="Last name"
                 placeholderTextColor="rgba(255,255,255,0.35)"
                 autoCorrect={false}
@@ -665,6 +667,7 @@ export default function EditProfileScreen() {
                 style={ss.input}
                 value={email}
                 onChangeText={setEmail}
+                accessibilityLabel="Email"
                 placeholder="Email address"
                 placeholderTextColor="rgba(255,255,255,0.35)"
                 autoCapitalize="none"
@@ -702,6 +705,8 @@ export default function EditProfileScreen() {
                     style={[ss.inputText, { flex: 1 }]}
                     value={birthtimeText}
                     onChangeText={onTimeTextChange}
+                    accessibilityLabel="Birth time"
+                    accessibilityHint="Format hour, minutes, A M or P M"
                     placeholder="H:MM AM/PM"
                     placeholderTextColor="rgba(255,255,255,0.35)"
                     keyboardType="numbers-and-punctuation"
@@ -737,6 +742,7 @@ export default function EditProfileScreen() {
                       style={[ss.inputText, { flex: 1 }]}
                       value={locationQuery}
                       onChangeText={handleLocationSearch}
+                      accessibilityLabel="Place of birth"
                       placeholder="Search city…"
                       placeholderTextColor="rgba(255,255,255,0.35)"
                       autoCorrect={false}

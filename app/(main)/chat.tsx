@@ -1004,8 +1004,10 @@ export default function ChatScreen() {
         title="Chat"
         leftIconName="time-outline"
         onLeftPress={() => setShowHistory(true)}
+        leftAccessibilityLabel="Chat history"
         rightIconName="add"
         onRightPress={handleNewChat}
+        rightAccessibilityLabel="New chat"
       />
 
       <PaygateOverlay
@@ -1308,6 +1310,7 @@ export default function ChatScreen() {
                 style={styles.textInput}
                 value={inputText}
                 onChangeText={setInputText}
+                accessibilityLabel="Message Delaluna"
                 placeholder="Ask Delaluna anything..."
                 placeholderTextColor={C.muted}
                 multiline

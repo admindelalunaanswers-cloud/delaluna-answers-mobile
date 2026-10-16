@@ -390,6 +390,7 @@ export default function AdminScreen() {
               style={ss.searchInput}
               value={uidPrefix}
               onChangeText={setUidPrefix}
+              accessibilityLabel="App User ID prefix"
               placeholder="First 8-10 chars of App User ID"
               placeholderTextColor="rgba(255,255,255,0.3)"
               autoCapitalize="none"

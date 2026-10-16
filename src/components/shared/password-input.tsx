@@ -41,6 +41,8 @@ const PasswordInput = forwardRef<TextInput, PasswordInputProps>(
           ref={innerRef}
           style={[styles.input, style]}
           secureTextEntry={!isVisible}
+          // Placeholder text vanishes once typing starts, so it is not a label.
+          accessibilityLabel={props.placeholder}
           {...props}
         />
         <TouchableOpacity
@@ -48,6 +50,8 @@ const PasswordInput = forwardRef<TextInput, PasswordInputProps>(
           onPress={handleToggle}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           focusable={false}
+          accessibilityRole="button"
+          accessibilityLabel={isVisible ? 'Hide password' : 'Show password'}
         >
           <Image
             source={
@@ -57,6 +61,7 @@ const PasswordInput = forwardRef<TextInput, PasswordInputProps>(
             }
             style={styles.icon}
             resizeMode="contain"
+            accessible={false}
           />
         </TouchableOpacity>
       </View>

@@ -187,6 +187,7 @@ export default function Login() {
                 <View style={styles.form}>
                   {/* EMAIL */}
                   <TextInput
+                    accessibilityLabel="Email"
                     placeholder="Email"
                     placeholderTextColor="rgba(255, 255, 255, 0.5)"
                     style={styles.textField}
@@ -204,6 +205,7 @@ export default function Login() {
                   <View style={styles.passwordWrapper}>
                     <TextInput
                       ref={passwordRef}
+                      accessibilityLabel="Password"
                       placeholder="Password"
                       placeholderTextColor="rgba(255, 255, 255, 0.5)"
                       style={[styles.textField, styles.passwordField]}
@@ -218,6 +220,8 @@ export default function Login() {
                     <TouchableOpacity
                       style={styles.eyeButton}
                       onPress={() => setShowPassword((v) => !v)}
+                      accessibilityRole="button"
+                      accessibilityLabel={showPassword ? "Hide password" : "Show password"}
                     >
                       <Ionicons
                         name={showPassword ? "eye-off" : "eye"}

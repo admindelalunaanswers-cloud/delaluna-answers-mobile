@@ -279,6 +279,7 @@ export default function ConnectionsScreen() {
           title="Connections"
           rightIconName={hasConnections && !isPaygated ? "add" : undefined}
           onRightPress={hasConnections && !isPaygated ? goToNewConnectionScreen : undefined}
+          rightAccessibilityLabel="Add connection"
         />
          <ThemedText type="definition" style={{ marginTop: headerHeight, paddingHorizontal: scale(10), paddingVertical: scale(25), textAlign: "center" }}>
             {CONNECTIONS_DEFINITION}

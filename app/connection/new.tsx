@@ -169,6 +169,7 @@ function DelalunaInputRow({
               paddingVertical: verticalScale(6),
               fontSize: moderateScale(15),
             }}
+            accessibilityLabel={field.label}
             placeholder={field.placeholder}
             placeholderTextColor="rgba(255,255,255,0.4)"
             value={typeof field.value === "string" ? field.value : ""}
@@ -279,6 +280,8 @@ function ConnectionsBirthdayField({
             style={fieldStyles.textInput}
             value={textValue}
             onChangeText={onDateTextChange}
+            accessibilityLabel="Birthday"
+            accessibilityHint="Format month, day, year"
             placeholder="MM/DD/YYYY"
             placeholderTextColor="rgba(255,255,255,0.4)"
             keyboardType="numbers-and-punctuation"
@@ -405,6 +408,7 @@ const ConnectionsPlaceOfBirthField = React.forwardRef<
             <TextInput
               ref={inputRef}
               style={fieldStyles.textInput}
+              accessibilityLabel="Place of birth"
               placeholder="City, State, Country"
               placeholderTextColor="rgba(255,255,255,0.4)"
               value={query}
@@ -545,6 +549,8 @@ function ConnectionsTimeOfBirthField({
                 style={fieldStyles.textInput}
                 value={textValue}
                 onChangeText={onTimeTextChange}
+                accessibilityLabel="Time of birth"
+                accessibilityHint="Format hour, minutes, A M or P M"
                 placeholder="H:MM AM/PM"
                 placeholderTextColor="rgba(255,255,255,0.4)"
                 keyboardType="numbers-and-punctuation"

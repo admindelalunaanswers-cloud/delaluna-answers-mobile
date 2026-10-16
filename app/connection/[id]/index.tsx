@@ -440,6 +440,7 @@ export default function ConnectionViewScreen() {
         onRightPress={report ? () =>
           router.push({ pathname: "/connection/[id]/edit", params: { id: connectionId } })
         : undefined}
+        rightAccessibilityLabel="Edit connection"
       />
 
       <View style={[styles.mainContent, { marginTop: headerHeight }]}>
