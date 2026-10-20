@@ -185,7 +185,17 @@ function AuthGate() {
 
   return (
     <ThemedRoot>
-      <Slot />
+      {/* Always rendered so the navigator is never remounted; only its
+          accessibility visibility toggles. Without this, screen readers can
+          reach the route behind SplashFallback — pointerEvents blocks touch,
+          not VoiceOver/TalkBack activation. */}
+      <View
+        style={{ flex: 1 }}
+        accessibilityElementsHidden={shouldHoldRender}
+        importantForAccessibility={shouldHoldRender ? 'no-hide-descendants' : 'auto'}
+      >
+        <Slot />
+      </View>
       {shouldHoldRender ? <SplashFallback /> : null}
     </ThemedRoot>
   );
@@ -198,6 +208,7 @@ function SplashFallback() {
   return (
     <View
       pointerEvents="auto"
+      accessibilityViewIsModal
       style={{
         position: 'absolute',
         top: 0,
@@ -214,6 +225,9 @@ function SplashFallback() {
         source={require('@/src/assets/dlla-branded/delaluna_app_icon.png')}
         style={{ width: 200, height: 200 }}
         resizeMode="contain"
+        accessible
+        accessibilityRole="image"
+        accessibilityLabel="Delaluna Answers, loading"
       />
     </View>
   );
