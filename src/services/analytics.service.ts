@@ -12,16 +12,16 @@
  */
 
 import {
-  getAnalytics,
   logEvent as fbLogEvent,
   setAnalyticsCollectionEnabled as fbSetAnalyticsCollectionEnabled,
   setUserId as fbSetUserId,
   setUserProperties as fbSetUserProperties,
   setUserProperty as fbSetUserProperty,
-} from '@react-native-firebase/analytics';
+  getAnalytics,
+} from "@react-native-firebase/analytics";
 
-import { APP_ENV, isProduction } from '@/src/constants/env';
-import { logger } from '@/src/utils/logger';
+import { APP_ENV, isProduction } from "@/src/constants/env";
+import { logger } from "@/src/utils/logger";
 
 // Disable collection outside production. Runs at module load — before any
 // event is logged. Note: setAnalyticsCollectionEnabled is persisted across
@@ -33,9 +33,9 @@ import { logger } from '@/src/utils/logger';
 (async () => {
   try {
     await fbSetAnalyticsCollectionEnabled(getAnalytics(), isProduction);
-    await fbSetUserProperty(getAnalytics(), 'app_environment', APP_ENV);
+    await fbSetUserProperty(getAnalytics(), "app_environment", APP_ENV);
   } catch (err) {
-    logger.warn('[analytics] init failed:', err);
+    logger.warn("[analytics] init failed:", err);
   }
 })();
 
@@ -56,22 +56,33 @@ function safe<T>(fn: () => Promise<T>, label: string): Promise<T | void> {
 export function setAnalyticsEnabled(enabled: boolean): Promise<void | void> {
   return safe(
     () => fbSetAnalyticsCollectionEnabled(getAnalytics(), enabled),
-    'setAnalyticsCollectionEnabled',
+    "setAnalyticsCollectionEnabled",
   );
 }
 
 // ─── User identification ────────────────────────────────────────────────────
 
 export function setUserId(uid: string | null): Promise<void | void> {
-  return safe(() => fbSetUserId(getAnalytics(), uid), 'setUserId');
+  return safe(() => fbSetUserId(getAnalytics(), uid), "setUserId");
 }
 
-export function setUserProperty(name: string, value: string | null): Promise<void | void> {
-  return safe(() => fbSetUserProperty(getAnalytics(), name, value), `setUserProperty:${name}`);
+export function setUserProperty(
+  name: string,
+  value: string | null,
+): Promise<void | void> {
+  return safe(
+    () => fbSetUserProperty(getAnalytics(), name, value),
+    `setUserProperty:${name}`,
+  );
 }
 
-export function setUserProperties(props: Record<string, string | null>): Promise<void | void> {
-  return safe(() => fbSetUserProperties(getAnalytics(), props), 'setUserProperties');
+export function setUserProperties(
+  props: Record<string, string | null>,
+): Promise<void | void> {
+  return safe(
+    () => fbSetUserProperties(getAnalytics(), props),
+    "setUserProperties",
+  );
 }
 
 // ─── Screen tracking ────────────────────────────────────────────────────────
@@ -80,35 +91,36 @@ export function setUserProperties(props: Record<string, string | null>): Promise
 // GA4's "Pages and screens" report. Anything not listed falls back to the
 // raw path with the leading slash and group-segment parens stripped.
 const ROUTE_LABELS: Record<string, string> = {
-  '/(main)': 'Home',
-  '/(main)/home': 'Home',
-  '/(main)/index': 'Birth Data Input',
-  '/(main)/connections': 'Connections',
-  '/(main)/transits': 'Transits',
-  '/(main)/chat': 'Chat',
-  '/(testing)/ResultsScreen': 'Natal Chart Results',
-  '/(home)/birth-chart-view': 'Birth Chart',
-  '/connection/new': 'New Connection',
-  '/connection/SynastryScreen': 'Synastry',
-  '/(auth)/login': 'Login',
-  '/(auth)/sign-up': 'Sign Up',
-  '/(auth)/verify-email': 'Verify Email',
-  '/(auth)/forgot-password': 'Forgot Password',
-  '/(startup)/welcome': 'Welcome',
-  '/(startup)/splash': 'Splash',
-  '/(settings)/profile': 'Profile',
-  '/(settings)/edit-profile': 'Edit Profile',
-  '/(settings)/paywall': 'Paywall',
-  '/(util)/loading-screen': 'Loading',
+  "/(main)": "Home",
+  "/(main)/home": "Home",
+  "/(main)/index": "Birth Data Input",
+  "/(main)/connections": "Connections",
+  "/(main)/transits": "Transits",
+  "/(main)/chat": "Chat",
+  "/(testing)/ResultsScreen": "Natal Chart Results",
+  "/(home)/birth-chart-view": "Birth Chart",
+  "/connection/new": "New Connection",
+  "/connection/SynastryScreen": "Synastry",
+  "/(auth)/login": "Login",
+  "/(auth)/sign-up": "Sign Up",
+  "/(auth)/verify-email": "Verify Email",
+  "/(auth)/forgot-password": "Forgot Password",
+  "/(startup)/welcome": "Welcome",
+  "/(settings)/profile": "Profile",
+  "/(settings)/edit-profile": "Edit Profile",
+  "/(settings)/paywall": "Paywall",
+  "/(util)/loading-screen": "Loading",
 };
 
 function fallbackLabel(pathname: string): string {
-  return pathname
-    .replace(/\/\([^)]+\)/g, '')   // strip group segments like (main), (auth)
-    .replace(/^\/+|\/+$/g, '')     // trim leading/trailing slashes
-    .replace(/\//g, ' / ')
-    .replace(/-/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase()) || 'Home';
+  return (
+    pathname
+      .replace(/\/\([^)]+\)/g, "") // strip group segments like (main), (auth)
+      .replace(/^\/+|\/+$/g, "") // trim leading/trailing slashes
+      .replace(/\//g, " / ")
+      .replace(/-/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase()) || "Home"
+  );
 }
 
 export function screenLabelForPath(pathname: string): string {
@@ -120,10 +132,13 @@ export function screenLabelForPath(pathname: string): string {
 
 // `screen_view` is a reserved GA4 event; logging it via logEvent populates the
 // same screen reports as the deprecated logScreenView helper.
-export function logScreenView(screenName: string, screenClass?: string): Promise<void | void> {
+export function logScreenView(
+  screenName: string,
+  screenClass?: string,
+): Promise<void | void> {
   return safe(
     () =>
-      fbLogEvent(getAnalytics(), 'screen_view', {
+      fbLogEvent(getAnalytics(), "screen_view", {
         screen_name: screenName,
         screen_class: screenClass ?? screenName,
       }),
@@ -134,7 +149,10 @@ export function logScreenView(screenName: string, screenClass?: string): Promise
 // ─── Generic event ──────────────────────────────────────────────────────────
 
 export function logEvent(name: string, params?: Params): Promise<void | void> {
-  return safe(() => fbLogEvent(getAnalytics(), name, params as any), `event:${name}`);
+  return safe(
+    () => fbLogEvent(getAnalytics(), name, params as any),
+    `event:${name}`,
+  );
 }
 
 // ─── Domain events ──────────────────────────────────────────────────────────
@@ -142,36 +160,48 @@ export function logEvent(name: string, params?: Params): Promise<void | void> {
 
 export const Events = {
   // Auth
-  signUp: (method: 'email' | 'apple' | 'google') => logEvent('sign_up', { method }),
-  login: (method: 'email' | 'apple' | 'google') => logEvent('login', { method }),
-  emailVerified: () => logEvent('email_verified'),
+  signUp: (method: "email" | "apple" | "google") =>
+    logEvent("sign_up", { method }),
+  login: (method: "email" | "apple" | "google") =>
+    logEvent("login", { method }),
+  emailVerified: () => logEvent("email_verified"),
 
   // Birth chart / core flows
   birthChartGenerated: (params?: { has_time?: boolean }) =>
-    logEvent('birth_chart_generated', params),
-  transitsViewed: () => logEvent('transits_viewed'),
-  horoscopeViewed: () => logEvent('horoscope_viewed'),
-  tarotDrawn: (card?: string) => logEvent('tarot_drawn', { card }),
+    logEvent("birth_chart_generated", params),
+  transitsViewed: () => logEvent("transits_viewed"),
+  horoscopeViewed: () => logEvent("horoscope_viewed"),
+  tarotDrawn: (card?: string) => logEvent("tarot_drawn", { card }),
 
   // Connections / synastry
-  connectionCreated: () => logEvent('connection_created'),
-  connectionDeleted: () => logEvent('connection_deleted'),
-  synastryViewed: () => logEvent('synastry_viewed'),
+  connectionCreated: () => logEvent("connection_created"),
+  connectionDeleted: () => logEvent("connection_deleted"),
+  synastryViewed: () => logEvent("synastry_viewed"),
 
   // Chat
-  chatMessageSent: (params?: { length?: number }) => logEvent('chat_message_sent', params),
-  chatRetry: () => logEvent('chat_retry'),
+  chatMessageSent: (params?: { length?: number }) =>
+    logEvent("chat_message_sent", params),
+  chatRetry: () => logEvent("chat_retry"),
 
   // Monetization (paywall + RevenueCat)
-  paywallViewed: (source: string) => logEvent('paywall_viewed', { source }),
-  paywallDismissed: (source: string) => logEvent('paywall_dismissed', { source }),
-  purchaseStarted: (productId: string) => logEvent('purchase_started', { product_id: productId }),
-  purchaseCompleted: (params: { product_id: string; price?: number; currency?: string }) =>
-    logEvent('purchase_completed', params),
-  purchaseFailed: (params: { product_id: string; reason?: string; user_cancelled?: boolean }) =>
-    logEvent('purchase_failed', params),
-  restorePurchases: (params: { success: boolean }) => logEvent('restore_purchases', params),
+  paywallViewed: (source: string) => logEvent("paywall_viewed", { source }),
+  paywallDismissed: (source: string) =>
+    logEvent("paywall_dismissed", { source }),
+  purchaseStarted: (productId: string) =>
+    logEvent("purchase_started", { product_id: productId }),
+  purchaseCompleted: (params: {
+    product_id: string;
+    price?: number;
+    currency?: string;
+  }) => logEvent("purchase_completed", params),
+  purchaseFailed: (params: {
+    product_id: string;
+    reason?: string;
+    user_cancelled?: boolean;
+  }) => logEvent("purchase_failed", params),
+  restorePurchases: (params: { success: boolean }) =>
+    logEvent("restore_purchases", params),
 
   // Settings
-  themeChanged: (theme: string) => logEvent('theme_changed', { theme }),
+  themeChanged: (theme: string) => logEvent("theme_changed", { theme }),
 } as const;
