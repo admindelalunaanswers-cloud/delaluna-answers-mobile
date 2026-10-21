@@ -4,6 +4,7 @@ import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -128,6 +129,10 @@ function ReportItem({
           style={styles.itemInner}
           activeOpacity={0.75}
           disabled={busy}
+          accessibilityRole="button"
+          // The heart between the names is a font glyph
+          accessibilityLabel={`${firstName} and ${secondName}${connection.relationshipType ? `, ${connection.relationshipType}` : ""}`}
+          accessibilityState={{ disabled: busy, busy }}
         >
           <View style={styles.namesBlock}>
             <Text style={styles.name} numberOfLines={1}>{firstName}</Text>
@@ -200,6 +205,8 @@ export default function PurchasedReportsScreen() {
     const sp = c.secondPerson;
     if (!fp?.birthday || !sp?.birthday) {
       logger.warn("[purchased-reports] missing birthday on connection", c.id);
+      // Returned silently before — the tap just did nothing
+      Alert.alert("Can't open report", "This connection is missing a birthday. Edit the connection to add it.");
       return;
     }
 
@@ -216,6 +223,7 @@ export default function PurchasedReportsScreen() {
       router.push(`/connection/${c.id}/synastry`);
     } catch (err) {
       logger.error("[purchased-reports] failed to open synastry", err, "purchased_reports_open_synastry");
+      Alert.alert("Can't open report", "Something went wrong opening this report. Please try again.");
     } finally {
       setOpeningId(null);
     }
@@ -232,7 +240,7 @@ export default function PurchasedReportsScreen() {
       <View style={[styles.body, { marginTop: headerHeight }]}>
         {loading ? (
           <View style={styles.centered}>
-            <ActivityIndicator size="small" color="#B8A3FF" />
+            <ActivityIndicator size="small" color="#B8A3FF" accessibilityLabel="Loading reports" />
           </View>
         ) : reports.length === 0 ? (
           <View style={styles.centered}>
@@ -289,7 +297,7 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(6),
   },
   emptySub: {
-    color: "rgba(255,255,255,0.55)",
+    color: "rgba(255,255,255,0.7)", // was 0.55
     fontSize: moderateScale(13),
     textAlign: "center",
     lineHeight: moderateScale(20),
