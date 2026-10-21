@@ -220,3 +220,4 @@ device-captures/latest.mp4
 .specify/workflows/workflow-registry.json
 .specify/workflows/speckit/workflow.yml
 device-captures/
+scripts/cleanup-orphaned-connection-data.js
