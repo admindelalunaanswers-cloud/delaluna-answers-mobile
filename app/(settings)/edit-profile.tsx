@@ -42,6 +42,7 @@ import {
   detectTimezoneOffset,
 } from '@/src/utils/location';
 import LoadingScreen from '../(util)/loading-screen';
+import { useAnnounce } from '@/src/hooks/use-announce';
 import { logger } from '@/src/utils/logger';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -158,6 +159,20 @@ export default function EditProfileScreen() {
 
   // Snapshot of original chart-affecting values (for change detection)
   const [originalValues, setOriginalValues] = useState<ChartFields | null>(null);
+
+  const firstNameRef = useRef<TextInput>(null);
+  const emailRef     = useRef<TextInput>(null);
+  const birthtimeRef = useRef<TextInput>(null);
+  const locationRef  = useRef<TextInput>(null);
+
+  // The save runs behind a full-screen loader whose stage messages are otherwise silent.
+  useAnnounce(isLoading ? loadingMessage : null);
+  // Results appear under the field with focus still in it.
+  useAnnounce(
+    locationResults.length > 0
+      ? `${locationResults.length} ${locationResults.length === 1 ? 'place' : 'places'} found`
+      : null,
+  );
 
   // ── Load user data on mount (once only) ─────────────────────────────────────
   // UserContext uses onSnapshot, so userDoc reference changes on every Firestore
@@ -355,13 +370,18 @@ export default function EditProfileScreen() {
 
   // ── Save logic ─────────────────────────────────────────────────────────────
 
+  // Each validation alert hands focus back to the field it is about, once dismissed.
+  const focusOn = (ref: React.RefObject<TextInput | null>) => [
+    { text: 'OK', onPress: () => ref.current?.focus() },
+  ];
+
   const handleSavePress = () => {
     if (!firstName.trim()) {
-      Alert.alert('Name required', 'Please enter your first name.');
+      Alert.alert('Name required', 'Please enter your first name.', focusOn(firstNameRef));
       return;
     }
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      Alert.alert('Invalid email', 'Please enter a valid email address.');
+      Alert.alert('Invalid email', 'Please enter a valid email address.', focusOn(emailRef));
       return;
     }
     if (!birthday) {
@@ -369,7 +389,7 @@ export default function EditProfileScreen() {
       return;
     }
     if (!isPlaceOfBirthUnknown && !selectedLocation) {
-      Alert.alert('Birth place required', 'Please search for and select your place of birth, or tap "I don\'t know".');
+      Alert.alert('Birth place required', 'Please search for and select your place of birth, or tap "I don\'t know".', focusOn(locationRef));
       return;
     }
 
@@ -383,7 +403,7 @@ export default function EditProfileScreen() {
         const min = parseInt(ampmMatch[2]);
         const period = ampmMatch[3].toUpperCase();
         if (h < 1 || h > 12 || min > 59) {
-          Alert.alert('Invalid time', 'Please enter a valid time (e.g. 3:45 PM or 15:45).');
+          Alert.alert('Invalid time', 'Please enter a valid time (e.g. 3:45 PM or 15:45).', focusOn(birthtimeRef));
           return;
         }
         if (period === 'PM' && h !== 12) h += 12;
@@ -393,12 +413,12 @@ export default function EditProfileScreen() {
         const h = parseInt(hhmmMatch[1]);
         const min = parseInt(hhmmMatch[2]);
         if (h > 23 || min > 59) {
-          Alert.alert('Invalid time', 'Please enter a valid time (e.g. 3:45 PM or 15:45).');
+          Alert.alert('Invalid time', 'Please enter a valid time (e.g. 3:45 PM or 15:45).', focusOn(birthtimeRef));
           return;
         }
         resolvedBirthtime = `${String(h).padStart(2, '0')}:${hhmmMatch[2]}`;
       } else {
-        Alert.alert('Invalid time', 'Please enter a valid time (e.g. 3:45 PM or 15:45).');
+        Alert.alert('Invalid time', 'Please enter a valid time (e.g. 3:45 PM or 15:45).', focusOn(birthtimeRef));
         return;
       }
     }
@@ -602,14 +622,19 @@ export default function EditProfileScreen() {
 
         {/* Header */}
         <View style={ss.header}>
-          <TouchableOpacity onPress={() => router.back()} style={ss.headerSide}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={ss.headerSide}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+          >
             <Ionicons name="chevron-back" size={scale(22)} color="#6FFFE9" />
             <Text style={ss.headerBack}>Back</Text>
           </TouchableOpacity>
 
-          <Text style={ss.headerTitle}>Edit Profile</Text>
+          <Text style={ss.headerTitle} accessibilityRole="header">Edit Profile</Text>
 
-          <TouchableOpacity onPress={handleSavePress} style={ss.headerSide}>
+          <TouchableOpacity onPress={handleSavePress} style={ss.headerSide} accessibilityRole="button">
             <Text style={ss.headerSave}>Save</Text>
           </TouchableOpacity>
         </View>
@@ -618,23 +643,26 @@ export default function EditProfileScreen() {
           style={{ flex: 1 }}
           behavior="padding"
         >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          {/* accessible={false}: otherwise the wrapper makes the whole form one
+              VoiceOver element and no field can be focused on its own */}
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
             <ScrollView
               style={ss.scroll}
               contentContainerStyle={ss.scrollContent}
               keyboardShouldPersistTaps="handled"
             >
               {/* ── Personal Info ── */}
-              <Text style={ss.sectionTitle}>Personal Info</Text>
+              <Text style={ss.sectionTitle} accessibilityRole="header">Personal Info</Text>
 
               <Text style={ss.fieldLabel}>First Name</Text>
               <TextInput
                 style={ss.input}
+                ref={firstNameRef}
                 value={firstName}
                 onChangeText={setFirstName}
                 accessibilityLabel="First name"
                 placeholder="First name"
-                placeholderTextColor="rgba(255,255,255,0.35)"
+                placeholderTextColor="rgba(255,255,255,0.6)"
                 autoCorrect={false}
               />
 
@@ -645,17 +673,20 @@ export default function EditProfileScreen() {
                 onChangeText={setLastName}
                 accessibilityLabel="Last name"
                 placeholder="Last name"
-                placeholderTextColor="rgba(255,255,255,0.35)"
+                placeholderTextColor="rgba(255,255,255,0.6)"
                 autoCorrect={false}
               />
 
               <Text style={ss.fieldLabel}>Pronouns</Text>
-              <View style={ss.choicesRow}>
+              <View style={ss.choicesRow} accessibilityRole="radiogroup" accessibilityLabel="Pronouns">
                 {PRONOUNS.map(p => (
                   <TouchableOpacity
                     key={p}
                     style={[ss.chip, pronouns === p && ss.chipActive]}
                     onPress={() => setPronouns(p)}
+                    // The selection was only a tint
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: pronouns === p }}
                   >
                     <Text style={[ss.chipText, pronouns === p && ss.chipTextActive]}>{p}</Text>
                   </TouchableOpacity>
@@ -665,29 +696,40 @@ export default function EditProfileScreen() {
               <Text style={ss.fieldLabel}>Email</Text>
               <TextInput
                 style={ss.input}
+                ref={emailRef}
                 value={email}
                 onChangeText={setEmail}
                 accessibilityLabel="Email"
                 placeholder="Email address"
-                placeholderTextColor="rgba(255,255,255,0.35)"
+                placeholderTextColor="rgba(255,255,255,0.6)"
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
               />
 
               {/* ── Birth Details ── */}
-              <Text style={[ss.sectionTitle, { marginTop: verticalScale(28) }]}>Birth Details</Text>
+              <Text style={[ss.sectionTitle, { marginTop: verticalScale(28) }]} accessibilityRole="header">
+                Birth Details
+              </Text>
               <Text style={ss.sectionNote}>
                 Changes here will recalculate your natal chart and regenerate your readings.
               </Text>
 
               {/* Birthday */}
               <Text style={ss.fieldLabel}>Birthday</Text>
-              <TouchableOpacity style={ss.inputTouchable} onPress={openDatePicker} activeOpacity={0.75}>
+              <TouchableOpacity
+                style={ss.inputTouchable}
+                onPress={openDatePicker}
+                activeOpacity={0.75}
+                // Its only text was "Select date…" or the date; the "Birthday" label sits outside it
+                accessibilityRole="button"
+                accessibilityLabel={`Birthday, ${birthday ? formatDateDisplay(birthday) : 'not set'}`}
+                accessibilityHint="Opens a date picker"
+              >
                 <Text style={birthday ? ss.inputText : ss.inputPlaceholder}>
                   {birthday ? formatDateDisplay(birthday) : 'Select date…'}
                 </Text>
-                <Ionicons name="calendar-outline" size={scale(18)} color="rgba(255,255,255,0.45)" />
+                <Ionicons name="calendar-outline" size={scale(18)} color="rgba(255,255,255,0.75)" />
               </TouchableOpacity>
 
               {/* Birth Time */}
@@ -695,28 +737,43 @@ export default function EditProfileScreen() {
               {isBirthTimeUnknown ? (
                 <View style={ss.inputRow}>
                   <Text style={ss.mutedText}>I don&apos;t know my birth time</Text>
-                  <TouchableOpacity onPress={() => setIsBirthTimeUnknown(false)}>
+                  <TouchableOpacity
+                    onPress={() => setIsBirthTimeUnknown(false)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Change birth time"
+                  >
                     <Text style={ss.linkText}>Change</Text>
                   </TouchableOpacity>
                 </View>
               ) : (
                 <View style={ss.inputRow}>
                   <TextInput
+                    ref={birthtimeRef}
                     style={[ss.inputText, { flex: 1 }]}
                     value={birthtimeText}
                     onChangeText={onTimeTextChange}
                     accessibilityLabel="Birth time"
                     accessibilityHint="Format hour, minutes, A M or P M"
                     placeholder="H:MM AM/PM"
-                    placeholderTextColor="rgba(255,255,255,0.35)"
+                    placeholderTextColor="rgba(255,255,255,0.6)"
                     keyboardType="numbers-and-punctuation"
                     autoCorrect={false}
                     autoCapitalize="none"
                   />
-                  <TouchableOpacity onPress={openTimePicker} style={{ marginRight: scale(8) }}>
-                    <Ionicons name="time-outline" size={scale(18)} color="rgba(255,255,255,0.45)" />
+                  <TouchableOpacity
+                    onPress={openTimePicker}
+                    style={{ marginRight: scale(8) }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Choose birth time"
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  >
+                    <Ionicons name="time-outline" size={scale(18)} color="rgba(255,255,255,0.75)" />
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => { setIsBirthTimeUnknown(true); setBirthtime(''); setBirthtimeText(''); }}>
+                  <TouchableOpacity
+                    onPress={() => { setIsBirthTimeUnknown(true); setBirthtime(''); setBirthtimeText(''); }}
+                    accessibilityRole="button"
+                    accessibilityLabel="I don't know my birth time"
+                  >
                     <Text style={ss.dimLinkText}>I don&apos;t know</Text>
                   </TouchableOpacity>
                 </View>
@@ -727,11 +784,15 @@ export default function EditProfileScreen() {
               {isPlaceOfBirthUnknown ? (
                 <View style={ss.inputRow}>
                   <Text style={ss.mutedText}>I don&apos;t know my birth place</Text>
-                  <TouchableOpacity onPress={() => {
-                    setIsPlaceOfBirthUnknown(false);
-                    setLocationQuery('');
-                    setSelectedLocation(null);
-                  }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setIsPlaceOfBirthUnknown(false);
+                      setLocationQuery('');
+                      setSelectedLocation(null);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Change birth place"
+                  >
                     <Text style={ss.linkText}>Change</Text>
                   </TouchableOpacity>
                 </View>
@@ -739,23 +800,33 @@ export default function EditProfileScreen() {
                 <View>
                   <View style={ss.inputRow}>
                     <TextInput
+                      ref={locationRef}
                       style={[ss.inputText, { flex: 1 }]}
                       value={locationQuery}
                       onChangeText={handleLocationSearch}
                       accessibilityLabel="Place of birth"
                       placeholder="Search city…"
-                      placeholderTextColor="rgba(255,255,255,0.35)"
+                      placeholderTextColor="rgba(255,255,255,0.6)"
                       autoCorrect={false}
                     />
                     {(locationSearching || locationTzLoading) ? (
-                      <ActivityIndicator size="small" color="#6FFFE9" style={{ marginRight: scale(8) }} />
+                      <ActivityIndicator
+                        size="small"
+                        color="#6FFFE9"
+                        style={{ marginRight: scale(8) }}
+                        accessibilityLabel="Searching"
+                      />
                     ) : null}
-                    <TouchableOpacity onPress={() => {
-                      setIsPlaceOfBirthUnknown(true);
-                      setLocationQuery('');
-                      setSelectedLocation(null);
-                      setLocationResults([]);
-                    }}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setIsPlaceOfBirthUnknown(true);
+                        setLocationQuery('');
+                        setSelectedLocation(null);
+                        setLocationResults([]);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel="I don't know my birth place"
+                    >
                       <Text style={ss.dimLinkText}>I don&apos;t know</Text>
                     </TouchableOpacity>
                   </View>
@@ -767,6 +838,7 @@ export default function EditProfileScreen() {
                           key={i}
                           style={[ss.locationItem, i > 0 && ss.locationItemBorder]}
                           onPress={() => { void selectLocation(r); }}
+                          accessibilityRole="button"
                         >
                           <Text style={ss.locationItemText}>{formatPlace(r)}</Text>
                         </TouchableOpacity>
@@ -801,15 +873,17 @@ export default function EditProfileScreen() {
           visible={pickerVisible}
           onRequestClose={() => setPickerVisible(false)}
         >
-          <TouchableWithoutFeedback onPress={() => setPickerVisible(false)}>
+          {/* Both wrappers accessible={false}, as above — otherwise each collapses the
+              sheet, Cancel / Done and the picker included, into one element */}
+          <TouchableWithoutFeedback onPress={() => setPickerVisible(false)} accessible={false}>
             <View style={ss.pickerOverlay}>
-              <TouchableWithoutFeedback>
+              <TouchableWithoutFeedback accessible={false}>
                 <View style={ss.pickerSheet}>
                   <View style={ss.pickerSheetHeader}>
-                    <TouchableOpacity onPress={() => setPickerVisible(false)}>
+                    <TouchableOpacity onPress={() => setPickerVisible(false)} accessibilityRole="button">
                       <Text style={ss.pickerCancel}>Cancel</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={confirmPickerIOS}>
+                    <TouchableOpacity onPress={confirmPickerIOS} accessibilityRole="button">
                       <Text style={ss.pickerDone}>Done</Text>
                     </TouchableOpacity>
                   </View>
@@ -839,7 +913,7 @@ export default function EditProfileScreen() {
       >
         <View style={ss.confirmOverlay}>
           <View style={ss.confirmCard}>
-            <Text style={ss.confirmTitle}>Recalculate natal chart?</Text>
+            <Text style={ss.confirmTitle} accessibilityRole="header">Recalculate natal chart?</Text>
             <Text style={ss.confirmBody}>
               You&apos;ve updated birth details that affect your natal chart. Saving will
               recalculate your chart and regenerate all your readings.{'\n\n'}
@@ -849,12 +923,14 @@ export default function EditProfileScreen() {
               <TouchableOpacity
                 onPress={() => setConfirmVisible(false)}
                 style={[ss.confirmBtn, ss.btnGhost]}
+                accessibilityRole="button"
               >
                 <Text style={ss.btnGhostText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => { void performSave(true); }}
                 style={[ss.confirmBtn, ss.btnPrimary]}
+                accessibilityRole="button"
               >
                 <Text style={ss.btnPrimaryText}>Yes, update</Text>
               </TouchableOpacity>
@@ -928,7 +1004,7 @@ const ss = StyleSheet.create({
     marginBottom: verticalScale(12),
   },
   sectionNote: {
-    color: 'rgba(255,255,255,0.5)',
+    color: 'rgba(255,255,255,0.75)', // was 0.5
     fontSize: moderateScale(12),
     lineHeight: moderateScale(17),
     marginBottom: verticalScale(14),
@@ -981,11 +1057,11 @@ const ss = StyleSheet.create({
     fontSize: moderateScale(15),
   },
   inputPlaceholder: {
-    color: 'rgba(255,255,255,0.35)',
+    color: 'rgba(255,255,255,0.6)', // was 0.35
     fontSize: moderateScale(15),
   },
   mutedText: {
-    color: 'rgba(255,255,255,0.45)',
+    color: 'rgba(255,255,255,0.7)', // was 0.45
     fontSize: moderateScale(14),
     flex: 1,
   },
@@ -995,7 +1071,7 @@ const ss = StyleSheet.create({
     fontWeight: '600',
   },
   dimLinkText: {
-    color: 'rgba(111,255,233,0.6)',
+    color: 'rgba(111,255,233,0.85)', // was 0.6 — a button label
     fontSize: moderateScale(13),
   },
 
@@ -1019,7 +1095,7 @@ const ss = StyleSheet.create({
     backgroundColor: 'rgba(111,255,233,0.15)',
   },
   chipText: {
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.75)', // was 0.6
     fontSize: moderateScale(12),
     fontWeight: '500',
   },
@@ -1071,7 +1147,7 @@ const ss = StyleSheet.create({
     borderBottomColor: 'rgba(255,255,255,0.12)',
   },
   pickerCancel: {
-    color: 'rgba(255,255,255,0.5)',
+    color: 'rgba(255,255,255,0.75)', // was 0.5 — a button label
     fontSize: moderateScale(16),
   },
   pickerDone: {
