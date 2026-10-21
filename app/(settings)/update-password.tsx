@@ -28,6 +28,7 @@ import { GlassButton } from '@/src/assets/buttons/glass-button';
 import { scale, moderateScale, verticalScale } from '@/src/utils/responsive';
 import { ThemeContext } from '@/src/context/theme-context';
 import { revokeMyRefreshTokens } from '@/src/services/user.service';
+import { useAnnounce } from '@/src/hooks/use-announce';
 import { logger } from '@/src/utils/logger';
 
 type RuleKey = 'length' | 'uppercase' | 'lowercase' | 'number' | 'noWhitespace';
@@ -53,6 +54,8 @@ export default function UpdatePasswordScreen() {
   const [showConfirm, setShowConfirm] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
+
+  const currentRef = React.useRef<TextInput>(null);
 
   const ruleStatus = useMemo(
     () => RULES.map((r) => ({ ...r, passed: r.test(newPassword) })),
@@ -113,7 +116,13 @@ export default function UpdatePasswordScreen() {
           : code === 'auth/weak-password'
           ? 'New password is too weak.'
           : 'An error occurred. Please try again.';
-      Alert.alert('Error', message);
+      // A wrong current password sends focus back to that field once dismissed.
+      const isWrongCurrent = code === 'auth/wrong-password' || code === 'auth/invalid-credential';
+      Alert.alert(
+        'Error',
+        message,
+        isWrongCurrent ? [{ text: 'OK', onPress: () => currentRef.current?.focus() }] : undefined,
+      );
     } finally {
       setSubmitting(false);
     }
@@ -127,12 +136,14 @@ export default function UpdatePasswordScreen() {
     visible: boolean,
     setVisible: (v: boolean) => void,
     autoComplete: 'password' | 'new-password',
-    testID: string
+    testID: string,
+    inputRef?: React.RefObject<TextInput | null>
   ) => (
     <View style={styles.fieldGroup}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <View style={styles.inputWrapper}>
         <TextInput
+          ref={inputRef}
           testID={testID}
           style={styles.input}
           accessibilityLabel={label}
@@ -179,14 +190,20 @@ export default function UpdatePasswordScreen() {
         showsVerticalScrollIndicator={false}
         automaticallyAdjustKeyboardInsets
       >
-        <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
+        {/* In normal flow, not absolute: overlaid, it covered scrolled content
+            and the focused field at large text sizes (WCAG 2.4.11). */}
+        <TouchableOpacity
+          style={styles.cancelButton}
+          onPress={handleCancel}
+          accessibilityRole="button"
+        >
           <Text style={styles.cancelButtonText}>Cancel</Text>
         </TouchableOpacity>
 
         <View style={styles.topSpacer} />
 
         <View style={styles.header}>
-          <Text style={styles.title}>Change Password</Text>
+          <Text style={styles.title} accessibilityRole="header">Change Password</Text>
           <Text style={styles.subtitle}>
             Re-enter your current password, then choose a new one.
           </Text>
@@ -200,7 +217,8 @@ export default function UpdatePasswordScreen() {
           showCurrent,
           setShowCurrent,
           'password',
-          'current-password'
+          'current-password',
+          currentRef
         )}
 
         {renderField(
@@ -217,7 +235,13 @@ export default function UpdatePasswordScreen() {
         <View style={styles.rulesBox}>
           <Text style={styles.rulesTitle}>Password must contain:</Text>
           {ruleStatus.map((r) => (
-            <View key={r.key} style={styles.ruleRow}>
+            // Met / not met was only an icon and a colour
+            <View
+              key={r.key}
+              style={styles.ruleRow}
+              accessible
+              accessibilityLabel={`${r.label}, ${r.passed ? 'met' : 'not met'}`}
+            >
               <Ionicons
                 name={r.passed ? 'checkmark-circle' : 'ellipse-outline'}
                 size={moderateScale(16)}
@@ -259,7 +283,7 @@ export default function UpdatePasswordScreen() {
         )}
 
         {confirmPassword.length > 0 && (
-          <View style={styles.matchRow}>
+          <View style={styles.matchRow} accessible>
             <Ionicons
               name={confirmMatches ? 'checkmark-circle' : 'close-circle'}
               size={moderateScale(16)}
@@ -278,10 +302,12 @@ export default function UpdatePasswordScreen() {
 
         <View style={styles.spacer} />
 
-        <View style={{ opacity: canSubmit ? 1 : 0.5 }} pointerEvents={canSubmit ? 'auto' : 'none'}>
+        <View style={styles.saveRow}>
           <GlassButton
             title={submitting ? 'Saving…' : 'Save Password'}
             onPress={handleChange}
+            disabled={!canSubmit}
+            busy={submitting}
           />
         </View>
 
@@ -331,7 +357,8 @@ const styles = StyleSheet.create({
   scroll: {
     flexGrow: 1,
     paddingHorizontal: scale(20),
-    paddingTop: verticalScale(Platform.OS === 'ios' ? 90 : 70),
+    // Room for the status bar, now that Cancel sits in the flow rather than over it
+    paddingTop: Platform.OS === 'ios' ? verticalScale(50) : (StatusBar.currentHeight ?? 20) + verticalScale(8),
     paddingBottom: verticalScale(40),
   },
   topSpacer: { flex: 1, minHeight: verticalScale(8) },
@@ -348,12 +375,13 @@ const styles = StyleSheet.create({
     marginLeft: scale(2),
   },
   cancelButton: {
-    position: 'absolute',
-    top: Platform.OS === 'android' ? StatusBar.currentHeight || 20 : 50,
-    left: scale(20),
-    padding: scale(10),
-    zIndex: 1,
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingVertical: scale(10),
+    paddingRight: scale(10),
   },
+  saveRow: { alignItems: 'center' },
   cancelButtonText: {
     color: '#6FFFE9',
     fontSize: moderateScale(16),
