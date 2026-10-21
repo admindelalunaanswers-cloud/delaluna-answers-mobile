@@ -68,6 +68,10 @@ export default function MessageInABottleComponent({
           onPress={handleSend}
           disabled={!message.trim()}
           style={[styles.sendButton, !message.trim() && { opacity: 0.5 }]}
+          // Icon-only — it had no name, so VoiceOver read nothing useful
+          accessibilityRole="button"
+          accessibilityLabel="Send message"
+          accessibilityState={{ disabled: !message.trim() }}
         >
           <Ionicons name="send" size={scale(18)} color="#FFF" />
         </TouchableOpacity>
@@ -80,10 +84,15 @@ export default function MessageInABottleComponent({
         statusBarTranslucent
         onRequestClose={() => setOverlayVisible(false)}
       >
+        {/* One element to a screen reader: the reply, as a button that closes it.
+            "Tap anywhere" means nothing without sight of the screen. */}
         <TouchableOpacity
           style={styles.overlay}
           activeOpacity={1}
           onPress={() => setOverlayVisible(false)}
+          accessibilityRole="button"
+          accessibilityLabel={overlayMessage ?? ""}
+          accessibilityHint="Closes the message"
         >
           <View style={styles.card}>
             <Text style={styles.messageText}>{overlayMessage}</Text>
@@ -148,7 +157,7 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
   },
   dismissHint: {
-    color: "rgba(180, 150, 220, 0.4)",
+    color: "rgba(180, 150, 220, 0.75)", // was 0.4
     fontSize: moderateScale(11),
     textAlign: "center",
     letterSpacing: 0.5,
