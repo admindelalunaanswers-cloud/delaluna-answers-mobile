@@ -1289,6 +1289,134 @@ export const deleteConnection = onCall(
   },
 );
 
+// ─── submitFeedback ───────────────────────────────────────────────────────────
+// Saves in-app feedback to `feedback/{id}` and emails it to the admin inbox.
+//
+// A callable rather than a client write, like sendChatMessage: the input is
+// validated and throttled here, the contact address is read off the Auth record
+// (only with the user's consent), and `feedback` stays server-only in the rules.
+// The email is best-effort — feedback is saved even if the mail fails, and the
+// doc records which happened (`email.status`), so nothing is lost silently.
+
+const FEEDBACK_ADMIN_EMAIL = "admin.delalunaanswers@gmail.com";
+const FEEDBACK_MIN_INTERVAL_MS = 60 * 1000;
+
+const FeedbackOption = z.string().trim().min(1).max(40);
+const SubmitFeedbackSchema = z.object({
+  rating: z.number().int().min(1).max(5),
+  loved: z.array(FeedbackOption).max(20),
+  improve: z.array(FeedbackOption).max(20),
+  comment: z.string().max(2000),
+  allowFollowUp: z.boolean(),
+  appVersion: z.string().max(40).optional(),
+  platform: z.string().max(40).optional(),
+});
+
+/** User text goes into an HTML email; never interpolate it raw. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+export const submitFeedback = onCall(
+  { secrets: [emailUser, emailPass], invoker: "public" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+    const uid = request.auth.uid;
+    const input = parseInput(SubmitFeedbackSchema, request.data);
+    const comment = input.comment.trim();
+
+    // Only with consent, and off the Auth record — the ID token can carry a
+    // stale address for up to an hour after an email change.
+    const contactEmail = input.allowFollowUp
+      ? ((await admin.auth().getUser(uid)).email ?? null)
+      : null;
+
+    const throttleRef = db.collection("feedbackThrottle").doc(uid);
+    const feedbackRef = db.collection("feedback").doc();
+
+    await db.runTransaction(async (tx) => {
+      const throttle = await tx.get(throttleRef);
+      const lastAt = throttle.exists
+        ? (throttle.data()?.lastAt as Timestamp | undefined)
+        : undefined;
+      if (lastAt && Date.now() - lastAt.toMillis() < FEEDBACK_MIN_INTERVAL_MS) {
+        throw new HttpsError(
+          "resource-exhausted",
+          "Please wait a minute before sending more feedback.",
+        );
+      }
+      tx.set(throttleRef, { lastAt: FieldValue.serverTimestamp() });
+      tx.set(feedbackRef, {
+        uid,
+        rating: input.rating,
+        loved: input.loved,
+        improve: input.improve,
+        comment,
+        allowFollowUp: input.allowFollowUp,
+        contactEmail,
+        appVersion: input.appVersion ?? null,
+        platform: input.platform ?? null,
+        createdAt: FieldValue.serverTimestamp(),
+        email: { status: "pending" },
+      });
+    });
+
+    const list = (items: string[]) =>
+      items.length ? items.map(escapeHtml).join(", ") : "<em>none</em>";
+    const row = (label: string, value: string) =>
+      `<tr><td style="padding:4px 12px 4px 0;color:#9ca3af;vertical-align:top;">${label}</td><td style="padding:4px 0;">${value}</td></tr>`;
+
+    try {
+      const transporter = buildTransporter(emailUser.value(), emailPass.value());
+      await transporter.sendMail({
+        from: `"Delaluna Answers" <${emailUser.value()}>`,
+        to: FEEDBACK_ADMIN_EMAIL,
+        // Reply straight to the user — but only if they allowed follow-up.
+        ...(contactEmail ? { replyTo: contactEmail } : {}),
+        subject: `Feedback: ${input.rating}/5${comment ? " — with comment" : ""}`,
+        html: `
+          <div style="font-family:sans-serif;color:#111;max-width:560px;">
+            <h2 style="margin:0 0 12px;">New in-app feedback</h2>
+            <table style="border-collapse:collapse;font-size:14px;">
+              ${row("Rating", `${input.rating} / 5`)}
+              ${row("Loved", list(input.loved))}
+              ${row("Improve", list(input.improve))}
+              ${row("Follow-up", contactEmail ? `Yes — ${escapeHtml(contactEmail)}` : "Not allowed")}
+              ${row("App", escapeHtml(`${input.appVersion ?? "?"} (${input.platform ?? "?"})`))}
+              ${row("User", escapeHtml(uid))}
+              ${row("Feedback ID", escapeHtml(feedbackRef.id))}
+            </table>
+            <h3 style="margin:20px 0 6px;">Comment</h3>
+            <p style="white-space:pre-wrap;margin:0;">${comment ? escapeHtml(comment) : "<em>No comment.</em>"}</p>
+          </div>
+        `,
+      });
+      await feedbackRef.update({
+        "email.status": "sent",
+        "email.sentAt": FieldValue.serverTimestamp(),
+      });
+    } catch (err) {
+      // The shape, not the contents: no comment, no address. SMTP errors can
+      // echo recipients, so only the error code is logged.
+      console.error("[submitFeedback] admin email failed", {
+        uid,
+        feedbackId: feedbackRef.id,
+        code: (err as { code?: string })?.code ?? "unknown",
+      });
+      await feedbackRef.update({ "email.status": "failed" });
+    }
+
+    return { id: feedbackRef.id };
+  },
+);
+
 // ─── createConnection ─────────────────────────────────────────────────────────
 
 export const createConnection = onCall(async (request) => {
