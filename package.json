@@ -12,6 +12,7 @@
     "eas-build-pre-install": "node ./scripts/exclude-dev-client.js",
     "migrate:users-to-dllap": "node ./scripts/migrate-users-to-dllap.js",
     "regen:user": "node ./scripts/regenerate-user.js",
+    "cleanup:orphans": "node ./scripts/cleanup-orphaned-connection-data.js",
     "env:prod": "node ./scripts/switch-env.js prod",
     "env:test": "node ./scripts/switch-env.js test",
     "admin:dev": "node ./scripts/sync-admin-env.js test && npm --prefix admin-web run dev",
