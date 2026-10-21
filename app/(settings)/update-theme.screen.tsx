@@ -7,6 +7,7 @@ import {
   Text,
   StyleSheet,
   ImageBackground,
+  Alert,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
@@ -46,6 +47,10 @@ export default function ChangeThemeScreen() {
         );
       } catch (err) {
         logger.error("[update-theme] failed to save themeKey", err, "theme_save");
+        // Used to navigate away regardless, so the theme looked applied and
+        // quietly reverted on the next launch.
+        Alert.alert("Couldn't save theme", "Please check your connection and try again.");
+        return;
       }
     }
     router.replace("/(settings)/profile");
@@ -108,6 +113,8 @@ export default function ChangeThemeScreen() {
         title="Change Color Theme"
         leftIconName="arrow-back"
         onLeftPress={handleCancel}
+        // It reverts the preview — "Back" alone hid that
+        leftAccessibilityLabel="Cancel"
         rightLabel="Apply"
         onRightPress={handleApply}
         backgroundColor={theme.colors.headerBg}
@@ -116,6 +123,8 @@ export default function ChangeThemeScreen() {
 
       {/* Scrollable Theme List */}
       <FlatList
+        accessibilityRole="radiogroup"
+        accessibilityLabel="Color theme"
         contentContainerStyle={styles.listContent}
         data={Object.values(themes)}
         keyExtractor={(t) => t.key}
@@ -126,6 +135,9 @@ export default function ChangeThemeScreen() {
             <TouchableOpacity
               style={styles.row}
               onPress={() => handleSelect(item.key)}
+              // Selection was only a border on the swatch
+              accessibilityRole="radio"
+              accessibilityState={{ checked: isSelected }}
             >
               <View
                 style={[
