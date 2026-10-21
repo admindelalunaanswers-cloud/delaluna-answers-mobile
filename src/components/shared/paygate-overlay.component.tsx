@@ -35,10 +35,23 @@ export default function PaygateOverlay({
 }: PaygateOverlayProps) {
   return (
     <View style={[styles.container, style]}>
-      {children}
+      {/* The blur only hides content from sight. Without this, VoiceOver / TalkBack
+          read the locked content in full — a free user hears the premium reading. */}
+      <View
+        style={styles.content}
+        accessibilityElementsHidden={locked}
+        importantForAccessibility={locked ? 'no-hide-descendants' : 'auto'}
+      >
+        {children}
+      </View>
 
       {locked && (
-        <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill}>
+        <BlurView
+          intensity={50}
+          tint="dark"
+          style={StyleSheet.absoluteFill}
+          accessibilityViewIsModal
+        >
           {/* Extra tint so content is clearly obscured on Android where blur may be weaker */}
           <View style={styles.tint} />
           <View style={styles.cta}>
@@ -57,6 +70,12 @@ export default function PaygateOverlay({
 const styles = StyleSheet.create({
   container: {
     position: 'relative',
+  },
+  // flexGrow, not flex: 1 — fills a container given flex: 1 (every current
+  // caller), and still sizes to content in one that isn't, where flex: 1's
+  // zero basis would collapse it.
+  content: {
+    flexGrow: 1,
   },
   tint: {
     ...StyleSheet.absoluteFill,
