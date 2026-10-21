@@ -59,23 +59,38 @@ interface Props {
    * can re-sync CustomerInfo. Pass `refresh` from `useRevenueCat()`.
    */
   onRefresh?: () => Promise<void>;
+  /**
+   * Dev builds only: when the store can't sell, grant the pack without a real
+   * purchase so the flow can be demoed. Off, the sheet says the store is
+   * unavailable instead — it used to "buy" silently, closing with nothing
+   * bought, behind placeholder prices that weren't the real ones.
+   */
+  allowMock?: boolean;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export default function ConsumablePlaceholder({ visible, onClose, onPurchased, onRefresh }: Props) {
+const STORE_UNAVAILABLE = "The store isn't available right now. Please try again later.";
+
+export default function ConsumablePlaceholder({ visible, onClose, onPurchased, onRefresh, allowMock = false }: Props) {
   const [selected, setSelected] = useState(TIER_DEFS[1].productId);
   const [storeProducts, setStoreProducts] = useState<Record<string, PurchasesStoreProduct>>({});
   const [loadingProducts, setLoadingProducts] = useState(false);
+  const [productsLoaded, setProductsLoaded] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   useAnnounce(errorMsg);
 
   // Fetch real store products when sheet opens
   useEffect(() => {
-    if (!visible || !REVENUECAT_ENABLED) return;
+    if (!visible) return;
+    if (!REVENUECAT_ENABLED) {
+      setProductsLoaded(true);
+      return;
+    }
     let cancelled = false;
     setLoadingProducts(true);
+    setProductsLoaded(false);
     setErrorMsg(null);
     (async () => {
       try {
@@ -89,7 +104,10 @@ export default function ConsumablePlaceholder({ visible, onClose, onPurchased, o
         logger.warn('[ConsumablePlaceholder] failed to fetch products:', e);
         // Non-fatal — fall back to placeholder prices
       } finally {
-        if (!cancelled) setLoadingProducts(false);
+        if (!cancelled) {
+          setLoadingProducts(false);
+          setProductsLoaded(true);
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -101,10 +119,14 @@ export default function ConsumablePlaceholder({ visible, onClose, onPurchased, o
 
     const product = storeProducts[tier.productId];
 
-    // Fall back to mock when RC is disabled or product didn't load
+    // The store can't sell this pack. Mock it only where that is allowed.
     if (!REVENUECAT_ENABLED || !product) {
-      onPurchased(tier.quantity);
-      onClose();
+      if (allowMock) {
+        onPurchased(tier.quantity);
+        onClose();
+      } else {
+        setErrorMsg(STORE_UNAVAILABLE);
+      }
       return;
     }
 
@@ -125,28 +147,42 @@ export default function ConsumablePlaceholder({ visible, onClose, onPurchased, o
     } finally {
       setPurchasing(false);
     }
-  }, [selected, storeProducts, onPurchased, onClose, onRefresh]);
+  }, [selected, storeProducts, onPurchased, onClose, onRefresh, allowMock]);
 
+  // Real store prices only, unless mocking: a placeholder "$0.99" shown to a
+  // real customer is a price the store never offered.
   const priceFor = (tier: TierDef) =>
-    storeProducts[tier.productId]?.priceString ?? tier.fallbackPrice;
+    storeProducts[tier.productId]?.priceString ?? (allowMock ? tier.fallbackPrice : '');
+  const storeUnavailable = !allowMock && productsLoaded && !storeProducts[selected];
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={s.backdrop} onPress={purchasing ? undefined : onClose}>
-        <Pressable style={s.card} onPress={(e) => e.stopPropagation()}>
+      {/* accessible={false} on both: a Pressable is an accessibility element by
+          default, so these collapsed the whole sheet — packs, Buy now, Close —
+          into one VoiceOver element and nothing in it could be reached. */}
+      <Pressable style={s.backdrop} onPress={purchasing ? undefined : onClose} accessible={false}>
+        <Pressable style={s.card} onPress={(e) => e.stopPropagation()} accessible={false}>
 
           {/* Close */}
-          <TouchableOpacity style={s.closeBtn} onPress={onClose} hitSlop={12} activeOpacity={0.7} disabled={purchasing}>
+          <TouchableOpacity
+            style={s.closeBtn}
+            onPress={onClose}
+            hitSlop={12}
+            activeOpacity={0.7}
+            disabled={purchasing}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          >
             <Ionicons name="close" size={scale(16)} color="rgba(255,255,255,0.7)" />
           </TouchableOpacity>
 
           {/* Icon */}
-          <View style={s.iconWrap}>
+          <View style={s.iconWrap} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
             <Ionicons name="chatbubble-ellipses" size={scale(26)} color="#fff" />
           </View>
 
           {/* Heading */}
-          <Text style={s.title}>Ask More Questions</Text>
+          <Text style={s.title} accessibilityRole="header">Ask More Questions</Text>
           <Text style={s.message}>
             {"You've used today's chat. Pick a pack to keep going."}
           </Text>
@@ -154,19 +190,26 @@ export default function ConsumablePlaceholder({ visible, onClose, onPurchased, o
           {/* Tiers */}
           {loadingProducts ? (
             <View style={s.loadingWrap}>
-              <ActivityIndicator color={TEAL} />
+              <ActivityIndicator color={TEAL} accessibilityLabel="Loading prices" />
             </View>
           ) : (
-            <View style={s.tiersWrap}>
+            <View style={s.tiersWrap} accessibilityRole="radiogroup" accessibilityLabel="Question packs">
               {TIER_DEFS.map((tier) => {
                 const isSelected = selected === tier.productId;
                 return (
                   <TouchableOpacity
                     key={tier.productId}
                     style={[s.tierRow, isSelected && s.tierRowSelected]}
-                    onPress={() => setSelected(tier.productId)}
+                    onPress={() => {
+                      setSelected(tier.productId);
+                      setErrorMsg(null);
+                    }}
                     activeOpacity={0.85}
                     disabled={purchasing}
+                    // Selection was only a checkmark and a border
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: isSelected, disabled: purchasing }}
+                    accessibilityLabel={priceFor(tier) ? `${tier.label}, ${priceFor(tier)}` : tier.label}
                   >
                     <View style={[s.radioOuter, isSelected && s.radioOuterSelected]}>
                       {isSelected && <Ionicons name="checkmark" size={scale(11)} color="#fff" />}
@@ -181,16 +224,27 @@ export default function ConsumablePlaceholder({ visible, onClose, onPurchased, o
             </View>
           )}
 
-          {errorMsg ? <Text style={s.errorText}>{errorMsg}</Text> : null}
+          {errorMsg ? (
+            <Text style={s.errorText}>{errorMsg}</Text>
+          ) : storeUnavailable ? (
+            <Text style={s.errorText}>{STORE_UNAVAILABLE}</Text>
+          ) : null}
 
           <Text style={s.renewNote}>One-time purchase · chat only</Text>
 
           {/* CTA */}
           <TouchableOpacity
-            style={[s.ctaButton, (purchasing || loadingProducts) && s.ctaButtonDisabled]}
+            style={[s.ctaButton, (purchasing || loadingProducts || storeUnavailable) && s.ctaButtonDisabled]}
             onPress={handleBuy}
             activeOpacity={0.85}
-            disabled={purchasing || loadingProducts}
+            disabled={purchasing || loadingProducts || storeUnavailable}
+            accessibilityRole="button"
+            // Keeps its name while the spinner replaces the text
+            accessibilityLabel="Buy now"
+            accessibilityState={{
+              disabled: purchasing || loadingProducts || storeUnavailable,
+              busy: purchasing,
+            }}
           >
             {purchasing ? (
               <ActivityIndicator color="#fff" size="small" />
@@ -199,7 +253,13 @@ export default function ConsumablePlaceholder({ visible, onClose, onPurchased, o
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={onClose} hitSlop={10} activeOpacity={0.7} disabled={purchasing}>
+          <TouchableOpacity
+            onPress={onClose}
+            hitSlop={10}
+            activeOpacity={0.7}
+            disabled={purchasing}
+            accessibilityRole="button"
+          >
             <Text style={s.cancelText}>Not now</Text>
           </TouchableOpacity>
         </Pressable>
@@ -260,7 +320,7 @@ const s = StyleSheet.create({
     textAlign: 'center',
   },
   message: {
-    color: 'rgba(255,255,255,0.55)',
+    color: 'rgba(255,255,255,0.75)', // was 0.55
     fontSize: moderateScale(13),
     textAlign: 'center',
     lineHeight: moderateScale(20),
@@ -314,7 +374,7 @@ const s = StyleSheet.create({
     fontWeight: '600',
   },
   tierPrice: {
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.75)', // was 0.6
     fontSize: moderateScale(14),
     fontWeight: '700',
   },
@@ -326,7 +386,7 @@ const s = StyleSheet.create({
     alignSelf: 'stretch',
   },
   renewNote: {
-    color: 'rgba(255,255,255,0.4)',
+    color: 'rgba(255,255,255,0.65)', // was 0.4
     fontSize: moderateScale(11),
     textAlign: 'center',
   },
@@ -345,7 +405,7 @@ const s = StyleSheet.create({
   },
   ctaText: { color: '#fff', fontSize: moderateScale(16), fontWeight: '700' },
   cancelText: {
-    color: 'rgba(255,255,255,0.45)',
+    color: 'rgba(255,255,255,0.7)', // was 0.45 — a button label
     fontSize: moderateScale(13),
   },
 });
