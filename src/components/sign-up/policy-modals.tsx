@@ -37,6 +37,9 @@ export default function PolicyModal({
       <Text
         key={node.key}
         style={styles.link}
+        // Nested pressable text isn't a link to VoiceOver / TalkBack without this,
+        // so it was missing from the rotor's Links list.
+        accessibilityRole="link"
         onPress={() => {
           const url: string = node.attributes.href ?? '';
           if (url.startsWith('#') && onLinkPress) {
@@ -49,14 +52,38 @@ export default function PolicyModal({
         {children}
       </Text>
     ),
+    // Markdown headings render as plain views; mark them so the rotor can jump
+    // between sections of a long policy.
+    heading1: (node: any, children: any, _parent: any, styles: any) => (
+      <View key={node.key} style={styles._VIEW_SAFE_heading1} accessible accessibilityRole="header">
+        {children}
+      </View>
+    ),
+    heading2: (node: any, children: any, _parent: any, styles: any) => (
+      <View key={node.key} style={styles._VIEW_SAFE_heading2} accessible accessibilityRole="header">
+        {children}
+      </View>
+    ),
+    heading3: (node: any, children: any, _parent: any, styles: any) => (
+      <View key={node.key} style={styles._VIEW_SAFE_heading3} accessible accessibilityRole="header">
+        {children}
+      </View>
+    ),
   };
 
   return (
-    <Modal visible={visible} animationType="slide">
+    // onRequestClose: without it the Android back button did nothing here, and
+    // Close was the only way out.
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalContainer}>
         <View style={styles.header}>
-          <Text style={styles.title}>{title}</Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+          <Text style={styles.title} accessibilityRole="header">{title}</Text>
+          <TouchableOpacity
+            onPress={onClose}
+            style={styles.closeButton}
+            accessibilityRole="button"
+            accessibilityLabel={`Close ${title}`}
+          >
             <Text style={styles.closeText}>Close</Text>
           </TouchableOpacity>
         </View>
