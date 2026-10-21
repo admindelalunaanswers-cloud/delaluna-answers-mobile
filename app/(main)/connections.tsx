@@ -1,7 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
 import React, { memo, useEffect, useState } from "react";
 import {
   Alert,
@@ -33,11 +32,11 @@ import { useRevenueCat } from "@/src/context/revenuecat-context";
 import { useUser } from "@/src/context/user-context";
 import { useAdmin } from "@/src/context/admin-context";
 import { ConnectionsCache } from "@/src/services/connections-cache.service";
-import { Events } from "@/src/services/analytics.service";
+import { deleteConnection } from "@/src/services/connection.service";
 import { recordError } from "@/src/services/crashlytics.service";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { getContentPadding } from "@/src/utils/layout";
-import { db, functions } from "../../firebaseConfig";
+import { db } from "../../firebaseConfig";
 import { logger } from "@/src/utils/logger";
 
 const NAV_BAR_HEIGHT = 44;
@@ -264,10 +263,9 @@ export default function ConnectionsScreen() {
             if (!uid) return;
             const previous = connections;
             setConnections((prev) => prev.filter((c) => c.id !== connectionId));
+            // Optimistic: drop it from the list and cache now, restore both on failure.
             ConnectionsCache.remove(uid, connectionId);
-            const deleteFn = httpsCallable(functions, "deleteConnection");
-            deleteFn({ userId: uid, connectionId })
-              .then(() => Events.connectionDeleted())
+            deleteConnection(uid, connectionId)
               .catch((err) => {
                 logger.error("[connections] delete failed", err, "connection_delete");
                 recordError(err, 'connection_delete');

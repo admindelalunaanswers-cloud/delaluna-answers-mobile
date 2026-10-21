@@ -5,6 +5,7 @@ import { onSnapshot } from 'firebase/firestore';
 
 import ConnectionsScreen from '@/app/(main)/connections';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
+import { deleteConnection } from '@/src/services/connection.service';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 jest.mock('@/firebaseConfig', () => ({ db: {}, functions: {} }));
@@ -23,7 +24,10 @@ jest.mock('@/src/services/connections-cache.service', () => ({
     remove: jest.fn(),
   },
 }));
-jest.mock('@/src/services/analytics.service', () => ({ Events: { connectionDeleted: jest.fn() } }));
+// Deletion goes through the shared service (Cloud Function + cache + analytics).
+jest.mock('@/src/services/connection.service', () => ({
+  deleteConnection: jest.fn(() => Promise.resolve()),
+}));
 jest.mock('@/src/services/crashlytics.service', () => ({ recordError: jest.fn() }));
 
 jest.mock('react-native-reanimated', () => require('@/test-utils/reanimated-mock'));
@@ -119,6 +123,12 @@ describe('ConnectionsScreen', () => {
       'Are you sure you want to remove this connection?',
       expect.any(Array),
     );
+
+    const buttons = alertSpy.mock.calls[0][2] as { text: string; onPress?: () => void }[];
+    await act(async () => {
+      buttons.find((b) => b.text === 'Yes, Remove')!.onPress!();
+    });
+    expect(deleteConnection).toHaveBeenCalledWith('uid-1', 'c1');
   });
 
   it('says when a connection is locked', async () => {
