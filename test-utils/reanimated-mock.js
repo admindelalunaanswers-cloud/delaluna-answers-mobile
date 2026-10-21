@@ -10,6 +10,14 @@ const { View, Text, Image, ScrollView } = require('react-native');
 const identity = (v) => v;
 const easing = new Proxy({}, { get: () => (arg) => (typeof arg === 'function' ? arg : identity) });
 
+// Layout animations (`entering={FadeIn.duration(450).delay(150)}`): any chained
+// builder call returns the same no-op builder.
+const layoutAnimation = new Proxy({}, { get: (_t, key) => (key === 'then' ? undefined : () => layoutAnimation) });
+const LAYOUT_ANIMATIONS = Object.fromEntries(
+  ['FadeIn', 'FadeOut', 'FadeInDown', 'FadeInUp', 'FadeOutDown', 'FadeOutUp', 'SlideInRight', 'SlideOutLeft', 'ZoomIn', 'ZoomOut', 'Layout', 'LinearTransition']
+    .map((name) => [name, layoutAnimation]),
+);
+
 const Animated = {
   View,
   Text,
@@ -22,6 +30,7 @@ module.exports = {
   __esModule: true,
   default: Animated,
   ...Animated,
+  ...LAYOUT_ANIMATIONS,
   Easing: easing,
   interpolate: (_value, _input, output) => output[output.length - 1],
   useSharedValue: (initial) => ({ value: initial }),
