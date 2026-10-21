@@ -182,6 +182,12 @@ export const Events = {
   chatMessageSent: (params?: { length?: number }) =>
     logEvent("chat_message_sent", params),
   chatRetry: () => logEvent("chat_retry"),
+  chatExported: (params: {
+    format: "text" | "pdf" | "image";
+    source: "chat" | "history";
+    includeQuestions: boolean;
+    includeBirthDetails: boolean;
+  }) => logEvent("chat_exported", params),
 
   // Monetization (paywall + RevenueCat)
   paywallViewed: (source: string) => logEvent("paywall_viewed", { source }),
