@@ -196,6 +196,18 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ─── In-app feedback (server-only) ──────────────────────────────────────
+    // Written only by the submitFeedback cloud function, which validates and
+    // throttles the input and emails it to the admin inbox. Clients can neither
+    // read others' feedback nor write around the throttle. Admins read it via
+    // the override at the top of this file.
+    match /feedback/{feedbackId} {
+      allow read, write: if false;
+    }
+    match /feedbackThrottle/{uid} {
+      allow read, write: if false;
+    }
+
     // ─── App config (min-version gate, etc.) ───────────────────────────────
     // Public-readable so the unauthenticated splash screen can fetch the
     // minimum supported version. Writes are admin-only (handled by the
