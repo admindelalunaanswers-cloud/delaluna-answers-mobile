@@ -30,7 +30,8 @@ export default function MoonView({
 
       <View style={styles.detailsContainer}>
         {phaseName && (
-            <Text style={styles.textPhase}>{sign} {phaseName}, {illumination}°</Text>
+            // Illumination is a percentage (astroEngine: 0–100 %); this showed "°", which VoiceOver read as degrees
+            <Text style={styles.textPhase}>{sign} {phaseName}, {illumination}%</Text>
           
         )}
 

@@ -61,9 +61,13 @@ function SkeletonLine({ width = '100%', height = 14 }: { width?: number | string
   );
 }
 
+// Skeletons are blank shapes to a screen reader, which would skip the section
+// entirely and leave the user unsure whether anything is coming.
+const LOADING_A11Y = { accessible: true, accessibilityLabel: 'Loading' } as const;
+
 function SkeletonTextBlock() {
   return (
-    <View style={{ width: '100%', gap: 10, paddingVertical: 4 }}>
+    <View style={{ width: '100%', gap: 10, paddingVertical: 4 }} {...LOADING_A11Y}>
       <SkeletonLine width="92%" height={13} />
       <SkeletonLine width="100%" height={13} />
       <SkeletonLine width="76%" height={13} />
@@ -73,7 +77,7 @@ function SkeletonTextBlock() {
 
 function SkeletonListBlock() {
   return (
-    <View style={{ width: '100%', gap: 10, paddingVertical: 4 }}>
+    <View style={{ width: '100%', gap: 10, paddingVertical: 4 }} {...LOADING_A11Y}>
       <SkeletonLine width="80%" height={13} />
       <SkeletonLine width="88%" height={13} />
       <SkeletonLine width="72%" height={13} />
@@ -83,7 +87,7 @@ function SkeletonListBlock() {
 
 function SkeletonHorizontalBlock() {
   return (
-    <View style={{ flexDirection: 'row', gap: 12, paddingVertical: 4, justifyContent: 'center', width: '100%' }}>
+    <View style={{ flexDirection: 'row', gap: 12, paddingVertical: 4, justifyContent: 'center', width: '100%' }} {...LOADING_A11Y}>
       <SkeletonLine width={72} height={28} />
       <SkeletonLine width={72} height={28} />
       <SkeletonLine width={72} height={28} />
@@ -148,6 +152,7 @@ export default function HomeTextBox({
             <TarotCardImageFrame
               cardNumber={cards.map(c => c.id)}
               reversed={cards.map(c => c.reversed)}
+              names={cards.map(c => c.name)}
               firstView={firstView}
               onReveal={onReveal}
             />
@@ -172,7 +177,16 @@ export default function HomeTextBox({
             {Array.isArray(content) ? content.map((item, index) => (
               <React.Fragment key={index}>
                 <Text style={styles.newLoveText}>{item}</Text>
-                {index < content.length - 1 && <Text style={styles.separator}>•</Text>}
+                {/* Decorative — otherwise read aloud as "bullet" between every number */}
+                {index < content.length - 1 && (
+                  <Text
+                    style={styles.separator}
+                    accessibilityElementsHidden
+                    importantForAccessibility="no"
+                  >
+                    •
+                  </Text>
+                )}
               </React.Fragment>
             )) : <Text style={styles.newLoveText}>{content}</Text>}
           </View>

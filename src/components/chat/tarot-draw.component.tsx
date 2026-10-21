@@ -20,6 +20,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  AccessibilityInfo,
   Animated,
   Easing,
   Image,
@@ -35,7 +36,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { CARD_LINKS } from "@/src/constants/links";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
-import { isOracleCard, tarotCardImageUrl } from "@/src/utils/tarot-image";
+import { isOracleCard, tarotCardImageUrl, tarotCardLabel } from "@/src/utils/tarot-image";
 
 // The home screen's slot size. The transcript column is narrower than the home
 // screen, so three of these can overflow it — the cards shrink to fit and keep
@@ -75,6 +76,8 @@ interface ChatTarotDrawProps {
   /** Card ids, exactly as the home screen takes them (`cards.map(c => c.id)`). */
   cardNumber: number[];
   reversed?: boolean[];
+  /** Card names, parallel to cardNumber — spoken by screen readers, since the faces are images. */
+  names?: string[];
   /**
    * Already drawn on a previous visit. Like the daily spread, cards that have
    * been turned over stay turned over — they come back face up, no button, no
@@ -100,9 +103,15 @@ const determineCardBack = (num: number): ImageSourcePropType =>
     ? require("@/src/assets/card_backs/ORACLE_CARD_BACK.png")
     : require("@/src/assets/card_backs/TAROT_CARD_BACK.png");
 
+// Stable defaults: runDraw's useCallback depends on both, and a fresh `[]`
+// each render would rebuild it every time.
+const NO_REVERSED: boolean[] = [];
+const NO_NAMES: string[] = [];
+
 export default function ChatTarotDraw({
   cardNumber,
-  reversed = [],
+  reversed = NO_REVERSED,
+  names = NO_NAMES,
   alreadyRevealed = false,
   onDrawComplete,
 }: ChatTarotDrawProps) {
@@ -224,6 +233,8 @@ export default function ChatTarotDraw({
   const runDraw = useCallback(async () => {
     if (drawing || revealed) return;
     setDrawing(true);
+    // The Draw button that had focus is gone, and the shuffle runs ~3s in silence.
+    AccessibilityInfo.announceForAccessibility("Shuffling");
 
     const shuffledOrder = () =>
       Array.from({ length: count }, (_, i) => i).sort(
@@ -296,8 +307,13 @@ export default function ChatTarotDraw({
 
     if (!mounted.current) return;
     setDrawing(false);
+    if (names.length > 0) {
+      AccessibilityInfo.announceForAccessibility(
+        `Your cards: ${cardNumber.map((_, i) => tarotCardLabel(names[i], !!reversed[i], true, i)).join("; ")}`,
+      );
+    }
     onDrawComplete?.();
-  }, [cards, count, drawing, gatherX, onDrawComplete, revealed]);
+  }, [cards, cardNumber, count, drawing, gatherX, names, onDrawComplete, reversed, revealed]);
 
   const handleOracleLinkPress = () => {
     Linking.openURL(CARD_LINKS.amazon.ORACLE_CARDS);
@@ -331,6 +347,9 @@ export default function ChatTarotDraw({
           return (
             <Animated.View
               key={`${num}-${idx}`}
+              accessible
+              accessibilityRole="image"
+              accessibilityLabel={tarotCardLabel(names[idx], !!reversed[idx], revealed, idx)}
               style={[
                 {
                   width: cardWidth,
@@ -385,7 +404,12 @@ export default function ChatTarotDraw({
       {drawing ? (
         <Text style={styles.shufflingText}>shuffling…</Text>
       ) : revealed ? null : (
-        <TouchableOpacity style={styles.drawButton} onPress={runDraw}>
+        <TouchableOpacity
+          style={styles.drawButton}
+          onPress={runDraw}
+          accessibilityRole="button"
+          accessibilityLabel="Draw cards"
+        >
           <Text style={styles.drawButtonText}>Draw</Text>
         </TouchableOpacity>
       )}
@@ -394,6 +418,8 @@ export default function ChatTarotDraw({
         <TouchableOpacity
           style={styles.linkContainer}
           onPress={handleOracleLinkPress}
+          accessibilityRole="link"
+          accessibilityHint="Opens Amazon in your browser"
         >
           <Ionicons name="cart-outline" size={14} color="#8eeceaff" />
           <Text style={styles.linkText}>Oracle Cards</Text>
@@ -407,6 +433,8 @@ export default function ChatTarotDraw({
         <TouchableOpacity
           style={styles.linkContainer}
           onPress={handleTarotLinkPress}
+          accessibilityRole="link"
+          accessibilityHint="Opens Amazon in your browser"
         >
           <Ionicons name="cart-outline" size={14} color="#8eeceaff" />
           <Text style={styles.linkText}>Tarot Cards</Text>

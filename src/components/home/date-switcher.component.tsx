@@ -1,7 +1,8 @@
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import {
+  AccessibilityInfo,
   Animated,
   StyleSheet,
   TouchableOpacity,
@@ -25,6 +26,16 @@ export default function DateSwitcher({
   const disableLeft = index <= 0;
   const disableRight = index >= dates.length - 1;
 
+  // The arrows keep focus, so the new date is otherwise never read out. Only on
+  // a change: the date is already on screen at mount, and announcing it then
+  // talks over the screen's own focus.
+  const announcedValue = useRef(value);
+  useEffect(() => {
+    if (announcedValue.current === value) return;
+    announcedValue.current = value;
+    AccessibilityInfo.announceForAccessibility(formatDate(value));
+  }, [value]);
+
   const goPrevious = () => {
     if (disableLeft) return;
     onChange(dates[index - 1]);
@@ -35,14 +46,14 @@ export default function DateSwitcher({
     onChange(dates[index + 1]);
   };
 
-  const formatDate = (ymd: string) => {
+  function formatDate(ymd: string) {
     const [year, month, day] = ymd.split("-").map(Number);
     return new Date(year, month - 1, day).toLocaleDateString("en-US", {
       month: "long",
       day: "numeric",
       year: "numeric",
     });
-  };
+  }
 
   return (
     <View style={styles.container}>
@@ -51,6 +62,9 @@ export default function DateSwitcher({
         disabled={disableLeft}
         style={styles.iconButton}
         activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Previous day"
+        accessibilityState={{ disabled: disableLeft }}
       >
         <Ionicons
           name="chevron-back"
@@ -68,6 +82,9 @@ export default function DateSwitcher({
         disabled={disableRight}
         style={styles.iconButton}
         activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Next day"
+        accessibilityState={{ disabled: disableRight }}
       >
         <Ionicons
           name="chevron-forward"
@@ -91,6 +108,11 @@ const styles = StyleSheet.create({
     gap: scale(3),
   },
   iconButton: {
+    // Was ~28×24pt around a 20pt chevron
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: scale(4),
     paddingVertical: verticalScale(2),
   },
