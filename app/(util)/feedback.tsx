@@ -1,4 +1,5 @@
 import HeaderNav from "@/src/components/shared/header-nav";
+import { STORE_LINKS } from "@/src/constants/links";
 import { useAnnounce } from "@/src/hooks/use-announce";
 import { submitFeedback } from "@/src/services/feedback.service";
 import { logger } from "@/src/utils/logger";
@@ -70,19 +71,10 @@ const IMPROVE_OPTIONS = [
 
 const NAV_BAR_HEIGHT = 44;
 
-// Store listings. iOS: the App Store Connect app ID. Android: `android.package`
-// in app.config.js — keep them in step if either ever changes.
-const APP_STORE_ID = "6764196892";
-const PLAY_PACKAGE = "com.mobile.delaluna.answers";
-const STORE_REVIEW_URL =
-  Platform.OS === "ios"
-    ? `itms-apps://apps.apple.com/app/id${APP_STORE_ID}?action=write-review`
-    : `market://details?id=${PLAY_PACKAGE}`;
-/** If the store app can't open (e.g. no Play Store on the device). */
-const STORE_REVIEW_WEB_URL =
-  Platform.OS === "ios"
-    ? `https://apps.apple.com/app/id${APP_STORE_ID}?action=write-review`
-    : `https://play.google.com/store/apps/details?id=${PLAY_PACKAGE}`;
+// The store's review page, then its web listing if the store app can't open.
+const STORE = Platform.OS === "ios" ? STORE_LINKS.ios : STORE_LINKS.android;
+const STORE_REVIEW_URL = STORE.review;
+const STORE_REVIEW_WEB_URL = STORE.webReview;
 
 /** Decorative glyphs (✦ ☽) — otherwise read aloud as "four pointed star", "last quarter moon". */
 const DECORATIVE = {
