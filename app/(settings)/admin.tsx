@@ -108,12 +108,29 @@ function Stepper({
         </Text>
       </View>
 
-      <View style={ss.stepperControls}>
+      {/* One adjustable control to a screen reader — swipe up / down to change.
+          Separately, − and + were unnamed icons and the value a third stop. The
+          buttons stay for touch; VoiceOver folds them into this element, and they
+          carry labels for TalkBack, which can still reach them. */}
+      <View
+        style={ss.stepperControls}
+        accessible
+        accessibilityRole="adjustable"
+        accessibilityLabel={label}
+        accessibilityValue={{ min, max, now: value }}
+        accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
+        onAccessibilityAction={(e) => {
+          if (e.nativeEvent.actionName === "increment") inc();
+          else if (e.nativeEvent.actionName === "decrement") dec();
+        }}
+      >
         <TouchableOpacity
           style={[ss.stepBtn, value <= min && ss.stepBtnDisabled]}
           onPress={dec}
           disabled={value <= min}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`Decrease ${label}`}
         >
           <Ionicons name="remove" size={scale(18)} color="#6FFFE9" />
         </TouchableOpacity>
@@ -125,6 +142,8 @@ function Stepper({
           onPress={inc}
           disabled={value >= max}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`Increase ${label}`}
         >
           <Ionicons name="add" size={scale(18)} color="#6FFFE9" />
         </TouchableOpacity>
@@ -320,7 +339,7 @@ export default function AdminScreen() {
         <View style={ss.detailsCard}>
           <Text style={ss.sectionLabel}>PLAN</Text>
 
-          <View style={ss.radioGroup}>
+          <View style={ss.radioGroup} accessibilityRole="radiogroup" accessibilityLabel="Plan">
             {PLAN_OPTIONS.map((opt) => {
               const selected = devPlan === opt.value;
               return (
@@ -329,6 +348,9 @@ export default function AdminScreen() {
                   style={ss.radioRow}
                   onPress={() => setDevPlan(opt.value)}
                   activeOpacity={0.7}
+                  // The checked dot was only drawn
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: selected }}
                 >
                   <View
                     style={[
@@ -413,6 +435,7 @@ export default function AdminScreen() {
                 style={ss.detailRow}
                 onPress={() => handleSelectUser(r)}
                 activeOpacity={0.7}
+                accessibilityRole="button"
               >
                 <View style={{ flex: 1 }}>
                   <Text style={ss.detailLabel}>
@@ -496,6 +519,10 @@ export default function AdminScreen() {
                           }
                           activeOpacity={0.8}
                           disabled={actionInFlight}
+                          // "Grant" / "Revoke" repeated for every entitlement
+                          accessibilityRole="button"
+                          accessibilityLabel={`Grant ${entId}`}
+                          accessibilityState={{ disabled: actionInFlight, expanded: durationPickerFor === entId }}
                         >
                           <Text style={ss.grantButtonText}>Grant</Text>
                         </TouchableOpacity>
@@ -504,6 +531,9 @@ export default function AdminScreen() {
                           onPress={() => handleRevoke(entId)}
                           activeOpacity={0.8}
                           disabled={actionInFlight || !ent}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Revoke ${entId}`}
+                          accessibilityState={{ disabled: actionInFlight || !ent }}
                         >
                           <Text style={ss.revokeButtonSmallText}>Revoke</Text>
                         </TouchableOpacity>
@@ -518,6 +548,8 @@ export default function AdminScreen() {
                             onPress={() => handleGrant(entId, d)}
                             activeOpacity={0.8}
                             disabled={actionInFlight}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Grant ${entId} for ${d.replace("_", " ").toLowerCase()}`}
                           >
                             <Text style={ss.durationChipText}>
                               {d.replace("_", " ")}
@@ -583,6 +615,7 @@ export default function AdminScreen() {
           style={ss.resetButton}
           onPress={handleReset}
           activeOpacity={0.8}
+          accessibilityRole="button"
         >
           <Ionicons name="refresh-outline" size={scale(15)} color="#ff9c9e" />
           <Text style={ss.resetButtonText}>Reset to defaults</Text>
