@@ -103,6 +103,8 @@ export default function SelectProfileImageScreen() {
         onLeftPress={handleBack}
         rightLabel={saving ? 'Saving…' : 'Save'}
         onRightPress={handleSave}
+        // Save is a no-op until the selection changes; say why instead of silently doing nothing
+        rightAccessibilityLabel={saving ? 'Saving' : hasChanged ? 'Save' : 'Save, no changes yet'}
       />
 
       <ScrollView
@@ -129,7 +131,7 @@ export default function SelectProfileImageScreen() {
         </View>
 
         {/* ── Grid ── */}
-        <View style={ss.grid}>
+        <View style={ss.grid} accessibilityRole="radiogroup" accessibilityLabel="Profile image">
           {PROFILE_IMAGES.map(img => {
             const isSelected = img.id === selectedId;
             return (
@@ -138,6 +140,10 @@ export default function SelectProfileImageScreen() {
                 style={ss.gridCell}
                 onPress={() => setSelectedId(img.id)}
                 activeOpacity={0.8}
+                // Selection was only a border and a check icon
+                accessibilityRole="radio"
+                accessibilityState={{ checked: isSelected }}
+                accessibilityLabel={img.label}
               >
                 <View style={[ss.gridItem, isSelected && ss.gridItemSelected]}>
                   <Image
@@ -184,7 +190,7 @@ const ss = StyleSheet.create({
   },
   avatarImage:       { width: '100%', height: '100%' },
   avatarPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.06)' },
-  previewLabel:      { color: 'rgba(255,255,255,0.4)', fontSize: moderateScale(11), marginTop: verticalScale(6) },
+  previewLabel:      { color: 'rgba(255,255,255,0.7)', fontSize: moderateScale(11), marginTop: verticalScale(6) },
 
   // Grid
   grid: {
@@ -215,7 +221,7 @@ const ss = StyleSheet.create({
   },
 
   gridLabel: {
-    color: 'rgba(255,255,255,0.4)',
+    color: 'rgba(255,255,255,0.7)', // was 0.4 at 10pt, ~3:1
     fontSize: moderateScale(10),
     textAlign: 'center',
   },
