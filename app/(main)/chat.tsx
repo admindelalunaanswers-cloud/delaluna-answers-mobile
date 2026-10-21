@@ -22,15 +22,20 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useIsFocused } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import ChatExportSheet from "@/src/components/chat/chat-export-sheet";
+import ExportTip, {
+  hasSeenExportTip,
+  markExportTipSeen,
+} from "@/src/components/chat/export-tip";
 import ChatTarotDraw from "@/src/components/chat/tarot-draw.component";
 import ConnectionPickerSheet, {
   type PickerConnection,
 } from "@/src/components/connection-picker-sheet";
 import ConsumablePlaceholder from "@/src/components/shared/consumable-placeholder.component";
-import HeaderNav from "@/src/components/shared/header-nav";
+import HeaderNav, { HEADER_ICON_GAP } from "@/src/components/shared/header-nav";
 import PaygateOverlay from "@/src/components/shared/paygate-overlay.component";
 import { ThemedView } from "@/src/components/themed-view";
 import { HOME_STRINGS } from "@/src/constants/strings";
@@ -81,6 +86,14 @@ import { purchasedChatCredits } from "@/src/services/revenuecat.service";
 import { ChatStore } from "@/src/stores/chat-store";
 import type { DrawnTarotCard } from "@/src/types/tarot-cards.type";
 import { resolveChatAllowance } from "@/src/utils/chat-allowance";
+import {
+  countChatMessages,
+  exportableFromSession,
+  exportableFromThread,
+  formatBirthDetails,
+  messageCountLabel,
+  type ExportableChat,
+} from "@/src/utils/chat-export-format";
 import {
   blockedMessage,
   isFeatureBlocked,
@@ -322,7 +335,7 @@ export default function ChatScreen() {
   } = useScreenPerfLog("/(main)/chat");
   const hasPremiumAccess = rcLoading || hasFullAccess;
   const insets = useSafeAreaInsets();
-  const { scale, width: screenWidth } = useResponsive();
+  const { scale, moderateScale, width: screenWidth } = useResponsive();
   const headerHeight = insets.top + scale(44);
 
   const [messages, setMessages] = useState<ChatMessageDoc[]>([]);
@@ -349,6 +362,17 @@ export default function ChatScreen() {
    */
   const [retryingIds, setRetryingIds] = useState<string[]>([]);
   const [modeTrackWidth, setModeTrackWidth] = useState(0);
+  /** What the export sheet is open on — the open thread or a saved chat. */
+  const [exportTarget, setExportTarget] = useState<{
+    chat: ExportableChat;
+    source: "chat" | "history";
+  } | null>(null);
+  /** Null until storage answers, so the tip can't flash on for a returning user. */
+  const [exportTipSeen, setExportTipSeen] = useState<boolean | null>(null);
+  // Chat is a tab and stays mounted. Without this the tip — and its spoken
+  // announcement — could appear while the user is on another tab, the moment
+  // the first answer landed.
+  const isFocused = useIsFocused();
   const modeAnim = useRef(new Animated.Value(0)).current;
 
   // Questions granted by the fallback sheet when RevenueCat can't sell — no
@@ -989,6 +1013,74 @@ export default function ChatScreen() {
     [authUser],
   );
 
+  // ─── Export ────────────────────────────────────────────────────────────────
+
+  // The open thread as an export, or null while nothing in it has been
+  // answered — which is also what hides the header button. Card names come
+  // off the same derived draws the screen shows, so the export names the cards
+  // the model actually read.
+  const threadExport = useMemo(() => {
+    const cards = new Map<string, string[]>();
+    tarotDraws.forEach((draw, id) =>
+      cards.set(
+        id,
+        draw.map((c) => (c.reversed ? `${c.name} (reversed)` : c.name)),
+      ),
+    );
+    return exportableFromThread(messages, cards);
+  }, [messages, tarotDraws]);
+
+  const birthDetails = useMemo(() => formatBirthDetails(userDoc), [userDoc]);
+
+  useEffect(() => {
+    let cancelled = false;
+    hasSeenExportTip().then((seen) => {
+      if (!cancelled) setExportTipSeen(seen);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const dismissExportTip = useCallback(() => {
+    setExportTipSeen(true);
+    markExportTipSeen();
+  }, []);
+
+  const openThreadExport = useCallback(() => {
+    if (!threadExport) return;
+    if (exportTipSeen === false) dismissExportTip();
+    setExportTarget({ chat: threadExport, source: "chat" });
+  }, [threadExport, exportTipSeen, dismissExportTip]);
+
+  const openSessionExport = useCallback((session: SavedChatSession) => {
+    const chat = exportableFromSession(session);
+    if (!chat) {
+      Alert.alert("Nothing to export", "This chat has no replies yet.");
+      return;
+    }
+    setExportTarget({ chat, source: "history" });
+  }, []);
+
+  // Centre of the Export icon, measured from the right of the header row:
+  // the bar's padding, then New chat, the gap, and half of Export itself.
+  const headerIconSize = moderateScale(30);
+  const exportAnchorFromRight =
+    scale(5) + headerIconSize + HEADER_ICON_GAP + headerIconSize / 2;
+
+  // One instance, mounted inside whichever modal is on top. iOS won't present
+  // a modal from a sibling of one that is already showing, so from the history
+  // list it has to live inside the history modal.
+  const exportSheet = (
+    <ChatExportSheet
+      visible={!!exportTarget}
+      chat={exportTarget?.chat ?? null}
+      birthDetails={birthDetails}
+      source={exportTarget?.source ?? "chat"}
+      onClose={() => setExportTarget(null)}
+    />
+  );
+
   useReplyAnnouncements(messages, tarotDraws, revealedDraws);
 
   // The same five rotating prompts back both the empty-state list and the
@@ -1051,6 +1143,9 @@ export default function ChatScreen() {
         leftIconName="time-outline"
         onLeftPress={() => setShowHistory(true)}
         leftAccessibilityLabel="Chat history"
+        rightSecondaryIconName={threadExport ? "share-outline" : undefined}
+        onRightSecondaryPress={openThreadExport}
+        rightSecondaryAccessibilityLabel="Export chat"
         rightIconName="add"
         onRightPress={handleNewChat}
         rightAccessibilityLabel="New chat"
@@ -1094,6 +1189,15 @@ export default function ChatScreen() {
                   >
                     {viewingSession.title}
                   </Text>
+                  <TouchableOpacity
+                    onPress={() => openSessionExport(viewingSession)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={{ marginRight: S.md }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Export chat"
+                  >
+                    <Ionicons name="share-outline" size={22} color={C.white} />
+                  </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => handleResumeSession(viewingSession)}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -1192,9 +1296,23 @@ export default function ChatScreen() {
                           </Text>
                           <Text style={styles.sessionDate}>
                             {session.savedAt.toLocaleDateString()} ·{" "}
-                            {session.messages.length} message
-                            {session.messages.length !== 1 ? "s" : ""}
+                            {messageCountLabel(
+                              countChatMessages(session.messages),
+                            )}
                           </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => openSessionExport(session)}
+                          hitSlop={{ top: 12, bottom: 12, left: 12, right: 8 }}
+                          style={styles.sessionAction}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Export ${session.title}`}
+                        >
+                          <Ionicons
+                            name="share-outline"
+                            size={20}
+                            color={C.muted}
+                          />
                         </TouchableOpacity>
                         <TouchableOpacity
                           onPress={() => confirmDeleteSession(session)}
@@ -1204,7 +1322,7 @@ export default function ChatScreen() {
                         >
                           <Ionicons
                             name="trash-outline"
-                            size={18}
+                            size={20}
                             color={C.muted}
                           />
                         </TouchableOpacity>
@@ -1215,6 +1333,7 @@ export default function ChatScreen() {
               </>
             )}
           </View>
+          {showHistory ? exportSheet : null}
         </Modal>
 
         <KeyboardAvoidingView style={styles.flex} behavior="padding">
@@ -1491,6 +1610,16 @@ export default function ChatScreen() {
         onClose={() => setPickerOpen(false)}
         onSelect={handleSelectConnection}
       />
+
+      {showHistory ? null : exportSheet}
+
+      {threadExport && exportTipSeen === false && !exportTarget && isFocused ? (
+        <ExportTip
+          top={headerHeight}
+          anchorFromRight={exportAnchorFromRight}
+          onDismiss={dismissExportTip}
+        />
+      ) : null}
     </ThemedView>
   );
 }
@@ -1890,6 +2019,9 @@ const styles = StyleSheet.create({
   sessionInfo: {
     flex: 1,
     marginRight: S.sm,
+  },
+  sessionAction: {
+    marginRight: S.md + 4,
   },
   sessionTitle: {
     color: C.white,
