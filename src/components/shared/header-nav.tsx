@@ -16,6 +16,9 @@ import { ThemedText } from "../themed-text";
 import { ThemedView } from "../themed-view";
 
 const NAV_BAR_HEIGHT = 44;
+// Header text follows the system text size up to this, then shrinks to fit the
+// fixed-height bar (see the title below). ~ the largest standard Dynamic Type step.
+const HEADER_MAX_FONT_SCALE = 1.5;
 
 // Icon-only buttons have no text for VoiceOver/TalkBack to read, so every side
 // button needs an explicit name. Back arrows are common enough to default.
@@ -130,7 +133,15 @@ export default function HeaderNav({
             ) : leftIconSource ? (
               <Image source={leftIconSource} style={[styles.icon, dynamic.icon, { tintColor: tc }]} />
             ) : leftLabel ? (
-              <ThemedText style={[styles.sideText, dynamic.sideText, { color: tc }]}>{leftLabel}</ThemedText>
+              <ThemedText
+                style={[styles.sideText, dynamic.sideText, { color: tc }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.6}
+                maxFontSizeMultiplier={HEADER_MAX_FONT_SCALE}
+              >
+                {leftLabel}
+              </ThemedText>
             ) : (
               <ThemedView style={dynamic.placeholder} />
             )}
@@ -138,9 +149,18 @@ export default function HeaderNav({
 
           {/* TITLE */}
           <ThemedView style={styles.centerContainer} pointerEvents="none">
+            {/* The bar is a fixed height on purpose — it is absolutely positioned
+                and ~13 screens pad their content by insets.top + scale(44), so a
+                bar that grew would cover their first lines. So the text fits the
+                bar instead, as a native nav bar's does: it scales with the
+                system setting up to a cap, then shrinks to fit rather than
+                truncating. Screen readers still get the full title. */}
             <ThemedText
               style={[styles.title, dynamic.title, { color: tc }]}
               numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.6}
+              maxFontSizeMultiplier={HEADER_MAX_FONT_SCALE}
               accessibilityRole="header"
             >
               {title}
@@ -164,7 +184,15 @@ export default function HeaderNav({
             ) : rightIconSource ? (
               <Image source={rightIconSource} style={[styles.icon, dynamic.icon, { tintColor: tc }]} />
             ) : rightLabel ? (
-              <ThemedText style={[styles.sideText, dynamic.sideText, { color: tc }]}>{rightLabel}</ThemedText>
+              <ThemedText
+                style={[styles.sideText, dynamic.sideText, { color: tc }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.6}
+                maxFontSizeMultiplier={HEADER_MAX_FONT_SCALE}
+              >
+                {rightLabel}
+              </ThemedText>
             ) : (
               <ThemedView style={dynamic.placeholder} />
             )}
