@@ -61,12 +61,17 @@ const AnimatedConnectionItem = memo(
       transform: [{ translateY: itemSlide.value }],
     }));
 
+    const fullName = (p: any) => [p?.firstName, p?.lastName].filter(Boolean).join(" ");
+    const pairName = `${fullName(connection.firstPerson)} and ${fullName(connection.secondPerson)}`;
+
     const renderRightActions = () => (
       <View style={styles.deleteActionContainer}>
         <TouchableOpacity
           style={styles.deleteButton}
           onPress={() => onDelete(connection.id)}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={`Delete ${pairName}`}
         >
           <Ionicons name="trash-outline" size={moderateScale(22)} color="#fff" />
           <Text style={styles.deleteText}>Delete</Text>
@@ -86,6 +91,15 @@ const AnimatedConnectionItem = memo(
               onPress={() => (isLocked ? onLockedPress(connection.id) : onOpen(connection.id))}
               style={styles.connectionItemInner}
               activeOpacity={0.75}
+              accessibilityRole="button"
+              // The heart / lock between the names is a font glyph, so locked state was never spoken
+              accessibilityLabel={isLocked ? `${pairName}, locked` : pairName}
+              // Swipe-to-delete is the only other way in, and screen readers,
+              // Switch Control and keyboards can't swipe (WCAG 2.5.1).
+              accessibilityActions={[{ name: "delete", label: "Delete connection" }]}
+              onAccessibilityAction={(e) => {
+                if (e.nativeEvent.actionName === "delete") onDelete(connection.id);
+              }}
             >
               <Text
                 style={[styles.connectionName, isLocked && styles.connectionNameLocked]}
@@ -318,6 +332,7 @@ export default function ConnectionsScreen() {
                 style={styles.placeholderItem}
                 onPress={goToNewConnectionScreen}
                 activeOpacity={0.7}
+                accessibilityRole="button"
               >
                 <Ionicons name="add-circle-outline" size={moderateScale(20)} color="rgba(255,255,255,0.3)" />
                 <Text style={styles.placeholderText}>Add Connection</Text>
@@ -336,6 +351,7 @@ export default function ConnectionsScreen() {
             <DelalunaContainer style={{ padding: scale(10), marginBottom: verticalScale(20) }}>
               <TouchableOpacity
                 onPress={goToNewConnectionScreen}
+                accessibilityRole="button"
                 accessibilityLabel="Add Connection"
                 style={styles.addButton}>
                 <Image
@@ -430,11 +446,11 @@ const styles = StyleSheet.create({
     marginTop: verticalScale(8),
   },
   placeholderText: {
-    color: "rgba(255,255,255,0.3)",
+    color: "rgba(255,255,255,0.7)", // was 0.3 (~2.4:1) — it is a button label, not decoration
     fontSize: moderateScale(14),
   },
   slotCounter: {
-    color: "rgba(255,255,255,0.35)",
+    color: "rgba(255,255,255,0.65)", // was 0.35 (~2.8:1)
     fontSize: moderateScale(12),
     textAlign: "center" as const,
     marginTop: verticalScale(12),
