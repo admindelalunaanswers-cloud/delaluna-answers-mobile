@@ -3,6 +3,7 @@ import * as admin from "firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
 import {
+  onDocumentCreated,
   onDocumentUpdated,
   onDocumentWritten,
 } from "firebase-functions/v2/firestore";
@@ -13,6 +14,11 @@ import { ZodError, ZodType, z } from "zod";
 
 import { generateWithAnchor, invalidateAnchor } from "./anchor";
 import { runChatGeneration } from "./chat-generation";
+import {
+  archiveChatTurn,
+  buildSavedSession,
+  savedChatExpireAt,
+} from "./chat-retention";
 import {
   COMPATIBILITY_SCHEMA,
   NATAL_BREAKDOWN_SCHEMA,
@@ -638,7 +644,16 @@ interface ExpoPushMessage {
  */
 /**
  * Runs every day at midnight UTC.
- * Deletes all chat messages older than 24 hours across all users.
+ *
+ * Moves every open-thread turn older than 24 hours into the user's saved chat
+ * history, then clears it from the thread. The chat screen still starts fresh
+ * each day and the replay stays short — this used to *delete* those turns
+ * outright, so anything the user hadn't parked with "+" before midnight was
+ * gone, which cannot square with a 60-day access window (chat-retention.ts).
+ *
+ * One saved session per user per night. Turns that never got an answer
+ * (pending past GENERATION_STUCK_MS, or failed) are dropped as before; they
+ * have nothing to read and the archive only holds answered turns anyway.
  */
 export const clearDailyChatHistory = onSchedule("every day 00:00", async () => {
   const cutoff = admin.firestore.Timestamp.fromMillis(
@@ -652,13 +667,99 @@ export const clearDailyChatHistory = onSchedule("every day 00:00", async () => {
 
   if (snap.empty) return;
 
-  const BATCH_SIZE = 500;
-  for (let i = 0; i < snap.docs.length; i += BATCH_SIZE) {
-    const batch = db.batch();
-    snap.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
-    await batch.commit();
+  const byUser = new Map<string, FirebaseFirestore.QueryDocumentSnapshot[]>();
+  for (const d of snap.docs) {
+    const userRef = d.ref.parent.parent;
+    if (!userRef) continue;
+    const list = byUser.get(userRef.id) ?? [];
+    list.push(d);
+    byUser.set(userRef.id, list);
   }
+
+  const BATCH_SIZE = 500;
+  let parked = 0;
+  let failed = 0;
+  for (const [uid, docs] of byUser) {
+    // One user's failure must not strand everyone after them; their turns are
+    // still in the thread and tomorrow's run picks them up again.
+    try {
+      const session = buildSavedSession(
+        docs.map((d) => ({ id: d.id, data: d.data() })),
+      );
+      // The session lands in the same batch as the first deletes, so a run
+      // that dies part way can't leave the turns both saved and still live —
+      // which tomorrow would save a second time.
+      for (let i = 0; i < docs.length; i += BATCH_SIZE - 1) {
+        const batch = db.batch();
+        if (i === 0 && session) {
+          batch.set(
+            db.collection("users").doc(uid).collection("savedChats").doc(),
+            session,
+          );
+        }
+        docs.slice(i, i + BATCH_SIZE - 1).forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+      }
+      if (session) parked++;
+    } catch (err) {
+      failed++;
+      console.error(`[clearDailyChatHistory] park failed for user ${uid}`, err);
+    }
+  }
+  console.info(
+    `[clearDailyChatHistory] parked ${parked} threads, ${failed} failed`,
+  );
 });
+
+// ─── Chat retention ──────────────────────────────────────────────────────────
+
+/**
+ * Copies every answered chat turn into the four-year legal archive
+ * (chat-retention.ts). Fires on the update that writes `response` — a resumed
+ * session's turns are *created* with their response already in place, so they
+ * never reach here and are not archived twice.
+ *
+ * `retry: true` because a missed copy is a hole in a legal record, not a
+ * cosmetic glitch; archiveChatTurn is idempotent, so a redelivery is harmless.
+ */
+export const archiveChatReply = onDocumentUpdated(
+  { document: "users/{userId}/updayedChat/{messageId}", retry: true },
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    if (!after?.response || !after.userMessage) return;
+    if (before?.response === after.response) return;
+
+    await archiveChatTurn(event.params.userId, event.params.messageId, after);
+  },
+);
+
+/**
+ * Stamps `expireAt` on a saved chat that arrived without one — every session a
+ * client saves, since only the server decides when access ends. The TTL policy
+ * on `savedChats.expireAt` (firestore.indexes.json) does the removal.
+ *
+ * Overwrites a client-supplied value too: otherwise a modified client could
+ * keep its history past the window by writing a far-future date.
+ */
+export const stampSavedChatExpiry = onDocumentCreated(
+  "users/{userId}/savedChats/{sessionId}",
+  async (event) => {
+    const snap = event.data;
+    const data = snap?.data();
+    if (!snap || !data) return;
+
+    const expireAt = savedChatExpireAt(data);
+    if (!expireAt) return;
+    if (
+      data.expireAt instanceof Timestamp &&
+      data.expireAt.toMillis() === expireAt.toMillis()
+    ) {
+      return;
+    }
+    await snap.ref.update({ expireAt });
+  },
+);
 
 // Silent midnight rollover hour in user local time. The client treats this as
 // a hint to pre-generate today's horoscope so it's ready by morning.
@@ -1283,7 +1384,13 @@ export const deleteConnection = onCall(
       throw new HttpsError("not-found", "Connection not found.");
     }
 
-    await connectionRef.delete();
+    // The document and everything under it. A plain delete() left the
+    // `report` and `synastryReading` subcollections orphaned — still holding
+    // both people's names, birth details and the readings, with no parent
+    // document left to find them by. Safe for the triggers on those paths:
+    // the generators bail when the document no longer exists, and the push
+    // triggers are onDocumentUpdated, which deletes don't fire.
+    await db.recursiveDelete(connectionRef);
 
     return { deleted: true };
   },
