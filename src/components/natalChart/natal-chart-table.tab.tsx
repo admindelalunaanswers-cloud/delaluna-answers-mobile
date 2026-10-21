@@ -15,6 +15,11 @@ interface NatalTableProps {
 
 type Entry = { name: string; symbol: string; sign: string; retrograde: boolean };
 
+/** "Mercury in Aries, house 1, retrograde" — retrograde isn't drawn, so this is the only place it shows. */
+export function placementLabel(entry: Entry, house: number): string {
+  return `${entry.name} in ${entry.sign}, house ${house}${entry.retrograde ? ', retrograde' : ''}`;
+}
+
 export default function NatalTable({ planets, asc }: NatalTableProps) {
   // Build house groups 1–12 (all 12 always rendered)
   const byHouse = new Map<number, Entry[]>();
@@ -29,8 +34,13 @@ export default function NatalTable({ planets, asc }: NatalTableProps) {
 
   return (
     <ThemedView style={et.wrap}>
-      {/* Header */}
-      <ThemedView style={et.group}>
+      {/* Header — hidden from screen readers: every row below reads in full, so
+          the column names would only be read as content */}
+      <ThemedView
+        style={et.group}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
         <ThemedView style={et.leftCols}>
           <ThemedView style={et.innerRow}>
             <ThemedView style={et.signCol}><ThemedText type="table" style={et.hdr}>SIGN</ThemedText></ThemedView>
@@ -53,9 +63,14 @@ export default function NatalTable({ planets, asc }: NatalTableProps) {
               {entries.map((entry, ri) => {
                   const showSign = ri === 0 || entries[ri - 1].sign !== entry.sign;
                   return (
+                    // One stop per placement. Cell by cell it read "Aries, ☉, SUN, 1" —
+                    // the sign only on a group's first row and the house last,
+                    // after every planet in it.
                     <ThemedView
                       key={ri}
                       style={[et.innerRow, ri < entries.length - 1 && et.innerRowDivider]}
+                      accessible
+                      accessibilityLabel={placementLabel(entry, h)}
                     >
                       <ThemedView style={et.signCol}>
                         {showSign && <ThemedText type="table" style={et.signName}>{entry.sign}</ThemedText>}
@@ -72,8 +87,13 @@ export default function NatalTable({ planets, asc }: NatalTableProps) {
             }
             </ThemedView>
 
-            {/* House number — merged cell spanning all rows in this group */}
-            <ThemedView style={et.houseCol}>
+            {/* House number — merged cell spanning all rows in this group.
+                Already in each row's label, so hidden from screen readers. */}
+            <ThemedView
+              style={et.houseCol}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            >
               <ThemedText type="table" style={et.houseNum}>{h}</ThemedText>
             </ThemedView>
           </ThemedView>
