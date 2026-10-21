@@ -145,7 +145,8 @@ export async function refreshSynastryReadingsForUser(
 
 /**
  * Deletes a connection the one supported way: through the `deleteConnection`
- * Cloud Function, then out of the local cache, then counted.
+ * Cloud Function (which removes the document and its `report` /
+ * `synastryReading` subcollections), then out of the local cache, then counted.
  *
  * The Connections list and the Edit Connection screen used to do this
  * separately, and the edit screen called `deleteDoc` directly — skipping the

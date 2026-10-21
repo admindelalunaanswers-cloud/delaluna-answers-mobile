@@ -1,29 +1,46 @@
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { STORE_LINKS } from '@/src/constants/links';
 
 type Props = {
   storeUrl: string | null;
   installedVersion: string;
 };
 
+// Named for the platform's own store — this said "App Store" on Android too.
+const STORE_NAME = Platform.OS === 'ios' ? 'the App Store' : 'Google Play';
+const STORE = Platform.OS === 'ios' ? STORE_LINKS.ios : STORE_LINKS.android;
+
 export function UpdateRequiredScreen({ storeUrl, installedVersion }: Props) {
-  const onPress = () => {
-    if (storeUrl) Linking.openURL(storeUrl).catch(() => {});
+  // The min-version config can carry a store URL; when it doesn't, this screen
+  // used to show no button at all, stranding everyone on the old build.
+  const target = storeUrl ?? STORE.listing;
+
+  const onPress = async () => {
+    try {
+      await Linking.openURL(target);
+    } catch {
+      try {
+        await Linking.openURL(STORE.web);
+      } catch {
+        // Swallowed before, so a failure looked like the button doing nothing.
+        Alert.alert('Update required', `Please update Delaluna Answers from ${STORE_NAME}.`);
+      }
+    }
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Update required</Text>
+      <Text style={styles.title} accessibilityRole="header">Update required</Text>
       <Text style={styles.body}>
         This version of Delaluna Answers is no longer supported. Please update
         to continue.
       </Text>
       <Text style={styles.version}>You have v{installedVersion}</Text>
 
-      {storeUrl ? (
-        <Pressable style={styles.button} onPress={onPress}>
-          <Text style={styles.buttonText}>Open the App Store</Text>
-        </Pressable>
-      ) : null}
+      <Pressable style={styles.button} onPress={onPress} accessibilityRole="button">
+        <Text style={styles.buttonText}>Open {STORE_NAME}</Text>
+      </Pressable>
     </View>
   );
 }
