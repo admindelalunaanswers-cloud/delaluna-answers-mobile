@@ -71,6 +71,10 @@ export const C = {
   purpleLight:'#b99ae0',
   purpleDim:  '#3a2860',
 
+  // Turquoise — interactive highlight (selected options, primary actions,
+  // one-time tips). Same value the sign-up flow uses inline.
+  turquoise:  '#6FFFE9',
+
   // Moon/planet tones
   moonSilver: '#c8d4e8',
   nebulaTeal: '#6890b0',
