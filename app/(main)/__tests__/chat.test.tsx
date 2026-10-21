@@ -1,6 +1,7 @@
 import React from 'react';
 import { AccessibilityInfo, Alert } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import ChatScreen from '@/app/(main)/chat';
 import { REPLY_ANNOUNCEMENTS } from '@/src/hooks/use-reply-announcements';
@@ -94,8 +95,14 @@ jest.mock('@/src/hooks/use-screen-perf-log', () => {
 });
 jest.mock('expo-router', () => {
   const { useEffect } = jest.requireActual('react');
-  return { useFocusEffect: (cb: () => void) => useEffect(() => cb(), [cb]) };
+  return {
+    useFocusEffect: (cb: () => void) => useEffect(() => cb(), [cb]),
+    useIsFocused: () => mockFocused.current,
+  };
 });
+
+// Whether the Chat tab is focused; a test can flip it.
+const mockFocused = { current: true };
 
 // ── Components ────────────────────────────────────────────────────────────────
 
@@ -243,6 +250,57 @@ describe('ChatScreen', () => {
     expect(screen.getByRole('button', { name: 'New chat' })).toBeTruthy();
   });
 
+  describe('export', () => {
+    // Nothing answered yet means nothing to export — a button that opened an
+    // empty sheet would be a dead end.
+    it('offers Export only once a question has been answered', async () => {
+      await renderChat();
+      await deliverThread([message('m1', { isPending: true })]);
+      expect(screen.queryByRole('button', { name: 'Export chat' })).toBeNull();
+
+      await deliverThread([message('m1', { response: 'Yes.' })]);
+      expect(screen.getByRole('button', { name: 'Export chat' })).toBeTruthy();
+    });
+
+    it('shows the tip once, and retires it when Export is used', async () => {
+      await renderChat();
+      await deliverThread([message('m1', { response: 'Yes.' })]);
+
+      expect(screen.getByText('Export this chat as text, PDF or an image')).toBeTruthy();
+
+      await act(async () => {
+        fireEvent.press(screen.getByRole('button', { name: 'Export chat' }));
+      });
+
+      expect(screen.queryByText('Export this chat as text, PDF or an image')).toBeNull();
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith('chat_export_tip_seen_v1', '1');
+      expect(screen.getByRole('header', { name: 'Export chat' })).toBeTruthy();
+    });
+
+    // Chat stays mounted as a tab; the first answer can land while the user is
+    // elsewhere, and the tip announced itself over that screen.
+    it('holds the tip back while Chat is not the focused tab', async () => {
+      mockFocused.current = false;
+      try {
+        await renderChat();
+        await deliverThread([message('m1', { response: 'Yes.' })]);
+
+        expect(screen.queryByText('Export this chat as text, PDF or an image')).toBeNull();
+        expect(announce).not.toHaveBeenCalledWith('Tip: Export this chat as text, PDF or an image');
+      } finally {
+        mockFocused.current = true;
+      }
+    });
+
+    it('stays quiet for someone who has already seen the tip', async () => {
+      (AsyncStorage.getItem as jest.Mock).mockResolvedValueOnce('1');
+      await renderChat();
+      await deliverThread([message('m1', { response: 'Yes.' })]);
+
+      expect(screen.queryByText('Export this chat as text, PDF or an image')).toBeNull();
+    });
+  });
+
   describe('chat history', () => {
     const SESSION: SavedChatSession = {
       id: 's1',
@@ -285,6 +343,37 @@ describe('ChatScreen', () => {
         buttons.find((b) => b.text === 'Delete')!.onPress!();
       });
       expect(deleteChatSession).toHaveBeenCalledWith('uid-1', 's1');
+    });
+
+    // A stored message holds a question and its reply — two messages, not one.
+    it('counts the question and the reply separately', async () => {
+      await openHistory();
+
+      expect(screen.getByText(/2 messages/)).toBeTruthy();
+    });
+
+    it('exports a saved chat without opening it', async () => {
+      await openHistory();
+
+      await act(async () => {
+        fireEvent.press(screen.getByRole('button', { name: 'Export Career questions' }));
+      });
+
+      expect(screen.getByRole('header', { name: 'Export chat' })).toBeTruthy();
+      // The sheet's summary card, not the row behind it.
+      expect(screen.getByText(/^Astrology · .+ · 2 messages$/)).toBeTruthy();
+    });
+
+    it('exports from inside an opened saved chat', async () => {
+      await openHistory();
+      fireEvent.press(screen.getByRole('button', { name: /^Career questions/ }));
+
+      await act(async () => {
+        fireEvent.press(screen.getByRole('button', { name: 'Export chat' }));
+      });
+
+      expect(screen.getByRole('header', { name: 'Export chat' })).toBeTruthy();
+      expect(screen.getByText(/^Astrology · .+ · 2 messages$/)).toBeTruthy();
     });
 
     it('labels both speakers in a saved conversation', async () => {
