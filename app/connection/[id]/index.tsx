@@ -399,25 +399,6 @@ export default function ConnectionViewScreen() {
     router.push("/(main)/chat");
   };
 
-  const handleCompareBirthCharts = async () => {
-    const fp = connection?.firstPerson;
-    const sp = connection?.secondPerson;
-    if (!fp?.birthday || !sp?.birthday) return;
-
-    setComputingSynastry(true);
-    try {
-      const chartA = await calculateNatalChart(parseBirthParams(fp));
-      const chartB = await calculateNatalChart(parseBirthParams(sp));
-
-      
-      router.push(`/connection/${connectionId}/synastry`);
-    } catch (e) {
-      logger.error("[connection] synastry calculation failed", e, "connection_synastry_calc");
-    } finally {
-      setComputingSynastry(false);
-    }
-  };
-
   const report = connection?.compatibility;
 
   const capitalize = (s?: string) => {
