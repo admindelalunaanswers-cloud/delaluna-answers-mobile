@@ -54,7 +54,14 @@ export default function SectionTitle({
   if (!title) return null;
 
   return (
-    <View style={styles.titleContainer}>
+    // A header, so the VoiceOver rotor / TalkBack headings can jump between
+    // sections instead of swiping through every line of a long reading.
+    <View
+      style={styles.titleContainer}
+      accessible
+      accessibilityRole="header"
+      accessibilityLabel={title}
+    >
       {showIcon && iconConfig && (
         <Ionicons name={iconConfig.name} size={iconSize} color={"#f9f9f9ff"} />
       )}

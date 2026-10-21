@@ -23,6 +23,18 @@ export function cleanResponse(text: string): string {
 }
 
 /**
+ * The same text with the emphasis markers removed — what renderRichText shows,
+ * as a plain string. For accessibilityLabel, which can't hold styled spans and
+ * would otherwise have VoiceOver read the asterisks.
+ */
+export function plainRichText(text: string | null | undefined): string {
+  if (!text) return '';
+  return cleanResponse(text)
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*\n]+)\*/g, '$1');
+}
+
+/**
  * Render text, turning `**word**` into bold and `*word*` into italic Text spans.
  * The result can be rendered as the children of a single <Text>, e.g.
  *   <Text style={styles.body}>{renderRichText(value)}</Text>

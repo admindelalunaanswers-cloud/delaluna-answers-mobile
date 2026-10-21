@@ -36,3 +36,18 @@ export function tarotCardImageUrl(id: number): string {
   const path = `cards/${isOracleCard(id) ? "oracle" : "tarot"}/${id}.png`;
   return `https://firebasestorage.googleapis.com/v0/b/${BUCKET}/o/${encodeURIComponent(path)}?alt=media`;
 }
+
+/**
+ * Screen-reader name for one card in a spread. The faces are images, so this is
+ * the only way a VoiceOver / TalkBack user learns what was drawn.
+ */
+export function tarotCardLabel(
+  name: string | undefined,
+  isReversed: boolean,
+  revealed: boolean,
+  index: number,
+): string {
+  if (!revealed) return `Card ${index + 1}, face down`;
+  const base = name ?? `Card ${index + 1}`;
+  return isReversed ? `${base}, reversed` : base;
+}

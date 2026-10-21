@@ -38,11 +38,16 @@ export default function PremiumUnlock({
           <Ionicons name="sparkles" size={scale(10)} color="#FFD700" />
         </View>
 
-        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.title} accessibilityRole="header">{title}</Text>
         <Text style={styles.message}>{message}</Text>
 
         {onUnlock && (
-          <TouchableOpacity style={styles.button} onPress={onUnlock} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={onUnlock}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+          >
             <Text style={styles.buttonText}>Unlock Now</Text>
           </TouchableOpacity>
         )}
