@@ -172,6 +172,45 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   clear: jest.fn(),
 }));
 
+// A native view (expo-modules-core underneath), so it can't simply be
+// transpiled. Stands in as a plain View — it is decoration only.
+jest.mock('expo-linear-gradient', () => {
+  const { View } = jest.requireActual('react-native');
+  return { LinearGradient: View };
+});
+
+// Chat export (src/services/chat-export.service.ts) — all native.
+jest.mock('expo-print', () => ({
+  printToFileAsync: jest.fn(() => Promise.resolve({ uri: 'file:///cache/print.pdf' })),
+}));
+jest.mock('expo-sharing', () => ({
+  isAvailableAsync: jest.fn(() => Promise.resolve(true)),
+  shareAsync: jest.fn(() => Promise.resolve()),
+}));
+jest.mock('expo-clipboard', () => ({
+  setStringAsync: jest.fn(() => Promise.resolve(true)),
+}));
+jest.mock('react-native-view-shot', () => ({
+  captureRef: jest.fn(() => Promise.resolve('file:///cache/card.png')),
+}));
+jest.mock('expo-asset', () => ({
+  Asset: {
+    fromModule: jest.fn(() => ({
+      localUri: 'file:///bundle/logo.png',
+      downloadAsync: jest.fn(function () {
+        return Promise.resolve(this);
+      }),
+    })),
+  },
+}));
+jest.mock('expo-file-system', () => ({
+  File: jest.fn().mockImplementation((uri) => ({
+    uri,
+    base64: jest.fn(() => Promise.resolve('TE9HTw==')),
+    rename: jest.fn(),
+  })),
+}));
+
 // Mock console methods to reduce noise in tests
 global.console = {
   ...console,
