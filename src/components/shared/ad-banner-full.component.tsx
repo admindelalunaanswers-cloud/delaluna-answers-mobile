@@ -97,7 +97,7 @@ export default function AdBannerFull({
 
               {/* CTA */}
               {ctaLabel ? (
-                <TouchableOpacity style={styles.ctaButton} onPress={onPress} activeOpacity={0.8}>
+                <TouchableOpacity style={styles.ctaButton} onPress={onPress} activeOpacity={0.8} accessibilityRole="button">
                   <LinearGradient
                     colors={[C.gold, C.goldBright]}
                     start={{ x: 0, y: 0 }}
@@ -111,7 +111,13 @@ export default function AdBannerFull({
 
               {/* Dismiss */}
               {onDismiss ? (
-                <TouchableOpacity style={styles.dismissButton} onPress={onDismiss} hitSlop={8}>
+                <TouchableOpacity
+                  style={styles.dismissButton}
+                  onPress={onDismiss}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Dismiss"
+                >
                   <Ionicons name="close" size={scale(14)} color={C.muted} />
                 </TouchableOpacity>
               ) : null}
@@ -139,7 +145,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(13, 8, 42, 0.94)',
-    height: BANNER_HEIGHT,
+    // min, not fixed: the title + subtitle clipped at large text sizes
+    minHeight: BANNER_HEIGHT,
+    paddingVertical: S.xs,
     paddingHorizontal: S.md,
     gap: S.sm,
   },
