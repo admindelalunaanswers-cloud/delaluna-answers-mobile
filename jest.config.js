@@ -6,7 +6,11 @@ module.exports = {
     '^.+\\.tsx?$': ['ts-jest', {
       tsconfig: {
         rootDir: __dirname,
-        jsx: 'react',
+        // Match the app (expo/tsconfig.base: react-jsx). The classic 'react'
+        // runtime made every component that uses JSX without importing React —
+        // ThemedText, ThemedView, birth-chart-view — throw "React is not defined"
+        // under Jest, though they build fine in the app.
+        jsx: 'react-jsx',
         esModuleInterop: true,
       },
     }],
