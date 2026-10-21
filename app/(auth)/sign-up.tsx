@@ -22,6 +22,7 @@ import { db } from '@/firebaseConfig';
 import ChatFlow, { StepConfig } from '@/src/components/sign-up/chat-flow';
 import { ThemedView } from '@/src/components/themed-view';
 import { themes } from '@/src/context/theme-context';
+import { useAnnounce } from '@/src/hooks/use-announce';
 import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
 import { Events } from '@/src/services/analytics.service';
 import { BirthData, calculateNatalChart, calculateTransits } from '@/src/services/astroEngine';
@@ -40,6 +41,11 @@ import { logger } from '@/src/utils/logger';
 
 const FALLBACK_LAT = 0;
 const FALLBACK_LON = 0;
+
+// ─── Accessibility ────────────────────────────────────────────────────────────
+
+const MIN_TARGET = 44;
+const HEADER_HIT_SLOP = { top: 10, bottom: 10, left: 10, right: 10 } as const;
 
 // ─── Firebase auth error → user-friendly message ──────────────────────────────
 
@@ -105,6 +111,9 @@ export default function SignUpChatScreen() {
     }, 30000);
     return () => clearTimeout(timeout);
   }, [isSigningUp]);
+
+  // Stage changes in the loading overlay are silent to screen readers otherwise.
+  useAnnounce(isLoading ? loadingMessage : null);
 
   const normalizeBirthday = (value: any): string => {
     const raw = String(value ?? '').trim();
@@ -264,38 +273,54 @@ export default function SignUpChatScreen() {
 
   return (
     <ImageBackground source={theme.backgroundImage} style={styles.background} resizeMode="cover">
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      {/* accessible={false}: otherwise the wrapper collapses the whole screen into one VoiceOver element */}
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
         <ThemedView style={{ flex: 1 }}>
           <StatusBar style="light" />
 
-          <BlurView intensity={10} tint="dark" style={[styles.overlay, Platform.OS === 'android' && { paddingTop: insets.top + verticalScale(12) }]}>
+          <BlurView
+            intensity={10}
+            tint="dark"
+            style={[styles.overlay, Platform.OS === 'android' && { paddingTop: insets.top + verticalScale(12) }]}
+            // Hide the form from assistive tech while the loading overlay covers it
+            accessibilityElementsHidden={isLoading}
+            importantForAccessibility={isLoading ? 'no-hide-descendants' : 'auto'}
+          >
             <ThemedView
               style={styles.header}
               onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
             >
+              <ThemedView style={styles.headerSide}>
+                {step > 0 && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setStep(step - 1);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Go back"
+                    accessibilityHint="Returns to the previous question"
+                    hitSlop={HEADER_HIT_SLOP}
+                    style={styles.headerButton}
+                  >
+                    <Ionicons name="arrow-back" size={moderateScale(20)} color="#6FFFE9" />
+                    <Text style={styles.goBackText}> Go Back</Text>
+                  </TouchableOpacity>
+                )}
+              </ThemedView>
 
-               <ThemedView style={{ flexDirection: 'row', alignItems: 'center' }}>
-                { step > 0 && (<TouchableOpacity onPress={() => {
-                Keyboard.dismiss();
-                if (step === 0) router.replace('/(startup)/welcome');
-                else setStep(step - 1);
-              }}>
-
-                <ThemedView style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Ionicons name="arrow-back" size={moderateScale(20)} color="#6FFFE9" />
-                <Text style={styles.goBackText}> Go Back</Text>
-                </ThemedView>
-                
-              </TouchableOpacity>)}
-               </ThemedView>
-
-                <ThemedView style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <TouchableOpacity onPress={onCancelPress}>
-                <Text style={styles.cancelText}>Cancel</Text>
-              </TouchableOpacity>
-                </ThemedView>
-      
-              
+              <ThemedView style={styles.headerSide}>
+                <TouchableOpacity
+                  onPress={onCancelPress}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel sign-up"
+                  accessibilityHint={step > 0 ? 'Asks before discarding your answers' : undefined}
+                  hitSlop={HEADER_HIT_SLOP}
+                  style={styles.headerButton}
+                >
+                  <Text style={styles.cancelText}>Cancel</Text>
+                </TouchableOpacity>
+              </ThemedView>
             </ThemedView>
 
             <ThemedView style={styles.chatFlowWrapper}>
@@ -311,7 +336,11 @@ export default function SignUpChatScreen() {
 
           {/* Loading overlay — keeps ChatFlow mounted so answers are preserved */}
           {isLoading && (
-            <ThemedView style={StyleSheet.absoluteFill}>
+            <ThemedView
+              style={StyleSheet.absoluteFill}
+              accessibilityViewIsModal
+              accessibilityState={{ busy: true }}
+            >
               <LoadingScreen message={loadingMessage || undefined} />
             </ThemedView>
           )}
@@ -323,13 +352,22 @@ export default function SignUpChatScreen() {
       <Modal visible={confirmVisible} transparent animationType="fade" onRequestClose={() => setConfirmVisible(false)}>
         <ThemedView style={styles.modalOverlay}>
           <ThemedView style={[styles.modalCard, { width: modalCardWidth }]}>
-            <Text style={styles.modalTitle}>Discard signup?</Text>
+            <Text style={styles.modalTitle} accessibilityRole="header">Discard signup?</Text>
             <Text style={styles.modalBody}>Your answers will be lost. You can start again anytime.</Text>
             <ThemedView style={styles.modalActions}>
-              <TouchableOpacity onPress={() => setConfirmVisible(false)} style={[styles.modalBtn, styles.btnGhost]}>
+              <TouchableOpacity
+                onPress={() => setConfirmVisible(false)}
+                accessibilityRole="button"
+                style={[styles.modalBtn, styles.btnGhost]}
+              >
                 <Text style={styles.btnGhostText}>Keep editing</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={confirmCancel} style={[styles.modalBtn, styles.btnDanger]}>
+              <TouchableOpacity
+                onPress={confirmCancel}
+                accessibilityRole="button"
+                accessibilityLabel="Discard answers and exit"
+                style={[styles.modalBtn, styles.btnDanger]}
+              >
                 <Text style={styles.btnDangerText}>Discard & Exit</Text>
               </TouchableOpacity>
             </ThemedView>
@@ -355,7 +393,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(16),
     marginBottom: verticalScale(8),
   },
-  goBackText: { 
+  headerSide: { flexDirection: 'row', alignItems: 'center' },
+  headerButton: { flexDirection: 'row', alignItems: 'center', minHeight: MIN_TARGET },
+  goBackText: {
     color: '#6FFFE9', fontSize: moderateScale(20), fontWeight: '500', textAlign: 'center', },
   cancelText: { color: '#6FFFE9', fontSize: moderateScale(18), fontWeight: '500' },
   chatFlowWrapper: { flex: 1, width: '100%' },
@@ -375,10 +415,19 @@ const styles = StyleSheet.create({
   },
   modalTitle: { color: '#fff', fontSize: moderateScale(18), fontWeight: '700', marginBottom: verticalScale(6), textAlign: 'center' },
   modalBody: { color: '#cfd3dc', fontSize: moderateScale(14), textAlign: 'center', marginBottom: verticalScale(16) },
-  modalActions: { flexDirection: 'row', gap: scale(12), justifyContent: 'center' },
-  modalBtn: { paddingVertical: verticalScale(10), paddingHorizontal: scale(14), borderRadius: scale(10), minWidth: scale(140), alignItems: 'center' },
+  modalActions: { flexDirection: 'row', flexWrap: 'wrap', gap: scale(12), justifyContent: 'center' },
+  modalBtn: {
+    minHeight: MIN_TARGET,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexGrow: 1,
+    minWidth: scale(120),
+    paddingVertical: verticalScale(10),
+    paddingHorizontal: scale(14),
+    borderRadius: scale(10),
+  },
   btnGhost: { backgroundColor: 'rgba(255,255,255,0.08)' },
   btnGhostText: { color: '#e6e9f0', fontWeight: '600' },
-  btnDanger: { backgroundColor: '#ff4d4f' },
+  btnDanger: { backgroundColor: '#D32F2F' }, // white text ≈ 4.98:1 (was #ff4d4f at 3.27:1)
   btnDangerText: { color: '#fff', fontWeight: '700' },
 });

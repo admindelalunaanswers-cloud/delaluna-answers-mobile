@@ -3,6 +3,7 @@ import {
   ImageBackground,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   TextInput,
   TouchableOpacity,
@@ -34,6 +35,7 @@ const sendVerificationCode = httpsCallable(functions, "sendVerificationCode");
 const verifyCodeFn = httpsCallable(functions, "verifyCode");
 
 const CODE_LENGTH = 6;
+const MIN_TARGET = 44;
 
 export default function VerifyEmail() {
   const { authUser, reloadAuthUser, refresh } = useUser();
@@ -55,6 +57,11 @@ export default function VerifyEmail() {
   const [resendCooldown, setResendCooldown] = useState(0);
   useAnnounce(sendError ? `Could not send code. ${sendError}` : null);
   useAnnounce(verifyError);
+  // Passes through null while sending, so each resend announces again.
+  useAnnounce(!sending && codeSent ? "Verification code sent to your email." : null);
+  useAnnounce(verified ? "Email verified. Preparing your reading." : null);
+  // Auto-submit leaves focus on a code box, so the button's "Verifying…" is never read.
+  useAnnounce(verifying ? "Verifying code" : null);
 
   // Don't gate on transitReadingGenerating — transit reading populates the
   // transits screen separately and can lag well behind today's horoscope.
@@ -68,11 +75,6 @@ export default function VerifyEmail() {
   useEffect(() => {
     markReady();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Auto-send code on mount
-  useEffect(() => {
-    handleSendCode();
-  }, []);
 
   // Cooldown countdown — setTimeout so each tick schedules exactly one next tick
   useEffect(() => {
@@ -105,6 +107,16 @@ export default function VerifyEmail() {
       setSending(false);
     }
   };
+
+  // Auto-send code on mount. Declared after handleSendCode so the effect never
+  // references it before initialisation (react-hooks/immutability).
+  // Mount only: a dependency on handleSendCode (new every render) would re-send
+  // on each render. The setState inside is the request's own state, not derived
+  // state, so set-state-in-effect does not apply.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- kicks off a network request
+    handleSendCode();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSignOut = async () => {
     try {
@@ -172,8 +184,7 @@ export default function VerifyEmail() {
       const msg = e?.message ?? "Something went wrong.";
       setVerifyError(msg);
       setDigits(Array(CODE_LENGTH).fill(""));
-      inputRefs.current[0]?.focus();
-      setVerifying(false);
+      setVerifying(false); // focus is restored by the effect below, once the boxes are editable again
       return;
     }
 
@@ -190,6 +201,15 @@ export default function VerifyEmail() {
     setVerifying(false);
   };
 
+  // Return focus to the first empty box after an error. Done in an effect, not
+  // in handleVerify's catch, because the boxes are non-editable until the render
+  // that clears `verifying` — focusing them before that is a no-op.
+  useEffect(() => {
+    if (!verifyError || verifying) return;
+    const firstEmpty = digits.findIndex((d) => !d);
+    inputRefs.current[firstEmpty === -1 ? 0 : firstEmpty]?.focus();
+  }, [verifyError, verifying]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Navigate once verified AND AI content is ready
   useEffect(() => {
     if (verified && horoscopeReady) router.replace("/(main)");
@@ -204,7 +224,8 @@ export default function VerifyEmail() {
     return () => clearTimeout(timeout);
   }, [verified]);
 
-  if (verifying) return <LoadingScreen message="Verifying..." />;
+  // No full-screen loader while verifying: the form stays mounted so focus can
+  // return to it on failure, and the Verify button shows "Verifying…" instead.
 
   // Still waiting for AI generation after verification
   if (verified) {
@@ -240,14 +261,22 @@ export default function VerifyEmail() {
                 <TouchableOpacity
                   onPress={handleSignOut}
                   style={styles.backButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back"
+                  accessibilityHint="Signs you out and returns to sign in"
                 >
                   <ThemedText style={styles.backText}>← Back</ThemedText>
                 </TouchableOpacity>
               </SafeAreaView>
 
-              <ThemedView style={styles.body}>
+              <ScrollView
+                contentContainerStyle={styles.body}
+                keyboardShouldPersistTaps="handled"
+              >
                 {/* Header */}
-                <ThemedText style={styles.title}>Verify your email</ThemedText>
+                <ThemedText style={styles.title} accessibilityRole="header">
+                  Verify your email
+                </ThemedText>
 
                 {sendError ? (
                   <ThemedView style={styles.errorBox}>
@@ -259,7 +288,12 @@ export default function VerifyEmail() {
                     </ThemedText>
                   </ThemedView>
                 ) : (
-                  <ThemedView style={styles.emailRow}>
+                  <ThemedView
+                    style={styles.emailRow}
+                    // One stop for "Code sent to" + the address, not two
+                    accessible
+                    accessibilityLabel={codeSent ? `Code sent to ${email}` : undefined}
+                  >
                     <ThemedText style={styles.subtitle}>
                       {codeSent
                         ? "Code sent to"
@@ -298,7 +332,12 @@ export default function VerifyEmail() {
                       }
                       autoCapitalize="characters"
                       autoCorrect={false}
-                      autoComplete="off"
+                      // First box only: iOS / Android fill the whole code into
+                      // it and the paste branch of handleDigitChange spreads it.
+                      autoComplete={i === 0 ? "one-time-code" : "off"}
+                      textContentType={i === 0 ? "oneTimeCode" : "none"}
+                      maxFontSizeMultiplier={1.4}
+                      editable={!verifying}
                       spellCheck={false}
                       maxLength={6}
                       selectTextOnFocus
@@ -323,6 +362,11 @@ export default function VerifyEmail() {
                   ]}
                   onPress={() => handleVerify()}
                   disabled={verifying || sending}
+                  accessibilityRole="button"
+                  accessibilityState={{
+                    disabled: verifying || sending,
+                    busy: verifying,
+                  }}
                 >
                   <ThemedText style={styles.verifyButtonText}>
                     {verifying ? "Verifying…" : "Verify"}
@@ -334,6 +378,10 @@ export default function VerifyEmail() {
                   onPress={handleSendCode}
                   disabled={sending || resendCooldown > 0}
                   style={styles.resendButton}
+                  accessibilityRole="button"
+                  accessibilityState={{
+                    disabled: sending || resendCooldown > 0,
+                  }}
                 >
                   <ThemedText
                     style={[
@@ -353,12 +401,14 @@ export default function VerifyEmail() {
                 <TouchableOpacity
                   onPress={handleSignOut}
                   style={styles.signOutButton}
+                  accessibilityRole="button"
+                  accessibilityHint="Signs you out"
                 >
                   <ThemedText style={styles.signOutText}>
                     Use a different account
                   </ThemedText>
                 </TouchableOpacity>
-              </ThemedView>
+              </ScrollView>
             </LinearGradient>
           </BlurView>
         </ThemedView>
@@ -381,7 +431,8 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === "android" ? verticalScale(16) : 0,
   },
   backButton: {
-    paddingVertical: verticalScale(8),
+    minHeight: MIN_TARGET,
+    justifyContent: "center",
     alignSelf: "flex-start",
   },
   backText: {
@@ -390,7 +441,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   body: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: scale(24),
@@ -413,8 +464,8 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(14),
   },
   errorDetail: {
-    color: "rgba(255,255,255,0.55)",
-    fontSize: moderateScale(12),
+    color: "rgba(255,255,255,0.75)", // was 0.55 at 12pt — the dimmest text on screen, carrying the error
+    fontSize: moderateScale(13),
     textAlign: "center",
   },
   title: {
@@ -463,7 +514,8 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   resendButton: {
-    paddingVertical: verticalScale(8),
+    minHeight: MIN_TARGET,
+    justifyContent: "center",
   },
   resendText: {
     color: "rgba(255,255,255,0.6)",
@@ -471,10 +523,12 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline",
   },
   signOutButton: {
-    marginTop: verticalScale(8),
+    minHeight: MIN_TARGET,
+    justifyContent: "center",
+    marginTop: verticalScale(4),
   },
   signOutText: {
-    color: "rgba(255,255,255,0.35)",
+    color: "rgba(255,255,255,0.6)", // was 0.35, ~3:1 on the dark card
     fontSize: moderateScale(13),
   },
   verifyError: {
