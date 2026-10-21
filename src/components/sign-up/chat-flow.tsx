@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  AccessibilityInfo,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -147,6 +148,12 @@ export default function ChatFlow({
   useAnnounce(dateError);
   useAnnounce(emailError);
   useAnnounce(passwordError);
+  // Results appear under the field with focus still in it.
+  useAnnounce(
+    locationResults.length > 0
+      ? `${locationResults.length} ${locationResults.length === 1 ? "place" : "places"} found`
+      : null,
+  );
   const [isPolicyModalVisible, setIsPolicyModalVisible] = useState(false);
   const [policyModalContent, setPolicyModalContent] = useState<
     "Privacy Policy" | "Terms & Conditions"
@@ -243,6 +250,10 @@ export default function ChatFlow({
       const t = setTimeout(() => inputRef.current?.focus(), 30);
       return () => clearTimeout(t);
     }
+    // No field to focus (choices, the final step): the Next button that had
+    // focus is gone, so say the new question rather than leave it unspoken.
+    const prompt = QUESTIONS[s.key]?.(answers);
+    if (prompt) AccessibilityInfo.announceForAccessibility(prompt);
   }, [step]);
 
   const currentStep = steps[step];
@@ -599,13 +610,23 @@ export default function ChatFlow({
             const answerDisplay = formatAnswer(s, answers);
             return (
               <View key={i} style={styles.chatPair}>
-                <View style={styles.questionBubble}>
+                {/* Speaker prefixes: bubble side and colour say who is talking,
+                    which a screen reader can't see. */}
+                <View
+                  style={styles.questionBubble}
+                  accessible
+                  accessibilityLabel={`Delaluna: ${QUESTIONS[s.key]?.(answers) ?? ""}`}
+                >
                   <Text style={styles.questionText}>
                     {QUESTIONS[s.key]?.(answers) ?? ""}
                   </Text>
                 </View>
                 {!!answerDisplay && (
-                  <View style={styles.answerBubble}>
+                  <View
+                    style={styles.answerBubble}
+                    accessible
+                    accessibilityLabel={`You: ${answerDisplay}`}
+                  >
                     <Text style={styles.answerText}>{answerDisplay}</Text>
                   </View>
                 )}
@@ -614,7 +635,7 @@ export default function ChatFlow({
           })}
 
           {/* Current question */}
-          <View style={styles.questionBubble}>
+          <View style={styles.questionBubble} accessible accessibilityLabel={`Delaluna: ${question}`}>
             <Text style={styles.questionText}>{question}</Text>
           </View>
         </ScrollView>
@@ -628,7 +649,7 @@ export default function ChatFlow({
         >
           {/* Choices */}
           {inputType === "choices" && choices && (
-            <View style={styles.choicesContainer}>
+            <View style={styles.choicesContainer} accessibilityRole="radiogroup" accessibilityLabel={question}>
               {choices.map((c) => (
                 <TouchableOpacity
                   key={c}
@@ -637,6 +658,9 @@ export default function ChatFlow({
                     answers[currentStep.key] === c && styles.choiceSelected,
                   ]}
                   onPress={() => handleChoice(c)}
+                  // The selection was only a fill
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: answers[currentStep.key] === c }}
                 >
                   <Text style={styles.choiceText}>{c}</Text>
                 </TouchableOpacity>
@@ -919,6 +943,8 @@ export default function ChatFlow({
               <TouchableOpacity
                 style={[styles.choiceButton, { alignSelf: "center" }]}
                 onPress={handleSkipTime}
+                accessibilityRole="button"
+                accessibilityLabel="I don't know my birth time"
               >
                 <Text style={styles.choiceText}>I don&apos;t know</Text>
               </TouchableOpacity>
@@ -1095,6 +1121,7 @@ export default function ChatFlow({
                       key={r.place_id}
                       style={styles.locationRow}
                       onPress={() => selectLocation(r)}
+                      accessibilityRole="button"
                     >
                       <Text style={styles.locationRowText} numberOfLines={2}>
                         {formatPlace(r)}
@@ -1106,6 +1133,8 @@ export default function ChatFlow({
               <TouchableOpacity
                 style={[styles.choiceButton, { alignSelf: "center" }]}
                 onPress={skipLocation}
+                accessibilityRole="button"
+                accessibilityLabel="I don't know my birth place"
               >
                 <Text style={styles.choiceText}>I don&apos;t know</Text>
               </TouchableOpacity>
@@ -1195,6 +1224,13 @@ export default function ChatFlow({
                 ]}
                 onPress={handleNext}
                 disabled={!checkedPolicy || !checkedTerms}
+                accessibilityRole="button"
+                // Says why it's disabled, not just that it is
+                accessibilityHint={
+                  !checkedPolicy || !checkedTerms
+                    ? "Agree to the Terms and the Privacy Policy first"
+                    : undefined
+                }
               >
                 <Text style={styles.nextButtonText}>Get Started</Text>
               </TouchableOpacity>
