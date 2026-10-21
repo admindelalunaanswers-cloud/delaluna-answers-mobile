@@ -1,8 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { doc, onSnapshot } from "firebase/firestore";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  AccessibilityInfo,
+  Alert,
   Dimensions,
   ScrollView,
   StyleSheet,
@@ -215,6 +217,25 @@ export default function ConnectionViewScreen() {
 
   const synastryUnlocked = connection?.synastryUnlocked === true;
 
+  // The report can take a while, and arrives by snapshot with nothing focused on
+  // it. Announce it only if this screen saw it missing — not on a later visit.
+  const sawReportMissing = useRef(false);
+  const hasReport = !!connection?.compatibility;
+  const reportFailed = connection?.status?.state === "error" && !hasReport;
+  useEffect(() => {
+    if (!connection) return;
+    if (!hasReport && !reportFailed) {
+      sawReportMissing.current = true;
+    } else if (sawReportMissing.current) {
+      sawReportMissing.current = false;
+      AccessibilityInfo.announceForAccessibility(
+        reportFailed
+          ? "Something went wrong generating the report."
+          : "Compatibility reading ready.",
+      );
+    }
+  }, [connection, hasReport, reportFailed]);
+
   // Rotate loading messages while waiting for report
   useEffect(() => {
     if (connection?.compatibility) return;
@@ -336,6 +357,8 @@ export default function ConnectionViewScreen() {
 
     if (!fp?.birthday || !sp?.birthday) {
       logger.warn("[connection] missing birthday info for one or both persons");
+      // Returned silently before — the button just did nothing
+      Alert.alert("Can't open synastry", "This connection is missing a birthday. Edit the connection to add it.");
       return;
     }
 
@@ -353,6 +376,9 @@ export default function ConnectionViewScreen() {
 
       router.push(`/connection/${connectionId}/synastry`);
     } catch (e) {
+      // Swallowed before, so a failure looked like nothing happening
+      logger.error("[connection] synastry compare failed", e, "connection_synastry_compare");
+      Alert.alert("Can't open synastry", "Something went wrong calculating the charts. Please try again.");
       setComputingSynastry(false);
     }
   };
@@ -449,7 +475,7 @@ export default function ConnectionViewScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Names + relationship type */}
-          <Text style={styles.namesText}>{firstName} & {secondName}</Text>
+          <Text style={styles.namesText} accessibilityRole="header">{firstName} & {secondName}</Text>
           {connection?.relationshipType && (
             <Text style={styles.relationshipBadge}> STATUS: {connection.relationshipType.toUpperCase()}
             </Text>
@@ -460,11 +486,12 @@ export default function ConnectionViewScreen() {
             <Text style={styles.errorText}>Something went wrong generating the report.</Text>
           ) : !report ? (
             <>
-              <View style={styles.loadingCard}>
+              {/* Skeletons are blank to a screen reader; say what's coming */}
+              <View style={styles.loadingCard} accessible accessibilityLabel="Weekly advice, loading">
                 <Text style={styles.loadingCardLabel}>WEEKLY ADVICE</Text>
                 <SkeletonLines lines={4} />
               </View>
-              <View style={styles.loadingCard}>
+              <View style={styles.loadingCard} accessible accessibilityLabel="Weekly forecast, loading">
                 <Text style={styles.loadingCardLabel}>WEEKLY FORECAST</Text>
                 <SkeletonLines lines={6} lineHeight={moderateScale(8)} />
               </View>
@@ -478,6 +505,9 @@ export default function ConnectionViewScreen() {
                 onPress={handleCompareBirthChart}
                 activeOpacity={0.75}
                 disabled={computingSynastry}
+                accessibilityRole="button"
+                // It disables itself while the charts compute, which wasn't said
+                accessibilityState={{ disabled: computingSynastry, busy: computingSynastry }}
               >
                 <Text style={styles.compareBirthChartsBtnText}>
                   { "View Synastry Analysis"}
@@ -488,6 +518,7 @@ export default function ConnectionViewScreen() {
                 style={styles.talkToDelalunaBtn}
                 onPress={handleTalkToDelaluna}
                 activeOpacity={0.85}
+                accessibilityRole="button"
               >
                 <Ionicons
                   name="chatbubble-ellipses-outline"
@@ -498,10 +529,10 @@ export default function ConnectionViewScreen() {
                 <Text style={styles.talkToDelalunaBtnText}>Talk to Delaluna About It</Text>
               </TouchableOpacity>
 
-              <Text style={styles.sectionLabel}>Weekly Advice</Text>
+              <Text style={styles.sectionLabel} accessibilityRole="header">Weekly Advice</Text>
               <Text style={styles.reportSummary}>{renderRichText(report.advice)}</Text>
 
-              <Text style={styles.sectionLabel}>Weekly Forecast</Text>
+              <Text style={styles.sectionLabel} accessibilityRole="header">Weekly Forecast</Text>
               <ThemedText style={styles.reportSummary}>
                 Metrics are based on birth chart placements, aspects and planetary transits. Statistics are updated weekly.
               </ThemedText>
@@ -520,6 +551,13 @@ export default function ConnectionViewScreen() {
                       <TouchableOpacity
                         onPress={() => definition && handleToggleKeyword(keyword)}
                         activeOpacity={definition ? 0.7 : 1}
+                        // One stop for name and score; the ⓘ icon and expand/collapse
+                        // were only visual
+                        accessible
+                        accessibilityRole={definition ? "button" : "text"}
+                        accessibilityLabel={`${label}, ${Math.round(numericValue)} percent`}
+                        accessibilityState={definition ? { expanded: expandedKeyword === keyword } : undefined}
+                        accessibilityHint={definition ? "Shows what this means" : undefined}
                       >
                         <View style={styles.row}>
                           <View style={styles.keywordLabelRow}>
@@ -591,7 +629,7 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(4),
   },
   relationshipBadge: {
-    color: "rgba(255,255,255,0.45)",
+    color: "rgba(255,255,255,0.7)", // was 0.45
     fontSize: moderateScale(10),
     letterSpacing: 1.5,
     textAlign: "center",
