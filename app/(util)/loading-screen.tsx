@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useRef, useState } from 'react';
-import { Animated, ImageBackground, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, Animated, ImageBackground, StyleSheet, View } from 'react-native';
 import LottieView from 'lottie-react-native';
 
 import { ThemeContext } from '@/src/context/theme-context';
@@ -31,9 +31,23 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ progress, message }) => {
   const { theme } = useContext(ThemeContext);
   const [msgIndex, setMsgIndex] = useState(0);
   const fadeAnim = useRef(new Animated.Value(1)).current;
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  // Honour the system Reduce Motion setting: still animation, no cycling text.
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((on) => { if (mounted) setReduceMotion(on); })
+      .catch(() => {});
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => {
+      mounted = false;
+      sub?.remove();
+    };
+  }, []);
 
   useEffect(() => {
-    if (message) return; // static message — no cycling needed
+    if (message || reduceMotion) return; // static message — no cycling needed
 
     const interval = setInterval(() => {
       Animated.timing(fadeAnim, {
@@ -51,17 +65,31 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ progress, message }) => {
     }, MESSAGE_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [message, fadeAnim]);
+  }, [message, fadeAnim, reduceMotion]);
 
   const displayMessage = message ?? CYCLING_MESSAGES[msgIndex];
 
   return (
     <ImageBackground source={theme.backgroundImage} style={styles.background}>
-      <View style={styles.centerContent}>
+      {/* One element to a screen reader. The caller's message when it has one
+          (sign-up, Edit Profile, connections announce their own stage changes);
+          otherwise a steady "Loading" — reading every 3s rotation would be noise. */}
+      <View
+        style={styles.centerContent}
+        accessible
+        accessibilityRole={progress !== undefined ? 'progressbar' : undefined}
+        accessibilityLabel={message ?? 'Loading'}
+        accessibilityValue={
+          progress !== undefined
+            ? { min: 0, max: 100, now: Math.round(Math.min(progress, 1) * 100) }
+            : undefined
+        }
+        accessibilityState={{ busy: true }}
+      >
         <LottieView
           source={require('@/src/assets/animations/splash-loop.json')}
-          autoPlay
-          loop
+          autoPlay={!reduceMotion}
+          loop={!reduceMotion}
           style={styles.animation}
         />
         <Animated.View style={{ opacity: message ? 1 : fadeAnim }}>
