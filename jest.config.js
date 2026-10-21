@@ -16,6 +16,12 @@ module.exports = {
     }],
     '^.+\\.jsx?$': 'babel-jest',
   },
+  // The preset's pattern plus react-native-markdown-display, which ships
+  // untranspiled ESM (used by PolicyModal). Add a package here only when a test
+  // fails to parse it — every entry is transformed on each run.
+  transformIgnorePatterns: [
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|react-native-markdown-display)/)',
+  ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   testMatch: [
     '**/__tests__/**/*.[jt]s?(x)',
