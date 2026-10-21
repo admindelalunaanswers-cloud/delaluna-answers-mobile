@@ -42,9 +42,19 @@ type HeaderNavProps = {
   /** Screen-reader name for an icon-only side button. Back icons and the avatar get a default. */
   leftAccessibilityLabel?: string;
   rightAccessibilityLabel?: string;
+  /**
+   * A second icon button on the right, drawn before the main one (e.g. chat's
+   * Export beside New chat). Icon-only, so the label is required.
+   */
+  rightSecondaryIconName?: React.ComponentProps<typeof Ionicons>["name"];
+  onRightSecondaryPress?: () => void;
+  rightSecondaryAccessibilityLabel?: string;
   backgroundColor?: string;
   textColor?: string;
 };
+
+/** Space between the two right-hand icons when a secondary one is shown. */
+export const HEADER_ICON_GAP = 14;
 
 export default function HeaderNav({
   title,
@@ -59,6 +69,9 @@ export default function HeaderNav({
   onRightPress,
   leftAccessibilityLabel,
   rightAccessibilityLabel,
+  rightSecondaryIconName,
+  onRightSecondaryPress,
+  rightSecondaryAccessibilityLabel,
   backgroundColor,
   textColor,
 }: HeaderNavProps) {
@@ -168,35 +181,52 @@ export default function HeaderNav({
           </ThemedView>
 
           {/* RIGHT */}
-          <TouchableOpacity
-            onPress={onRightPress}
-            style={[styles.sideContainer, styles.rightContainer, dynamic.sideContainer]}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            accessible={rightHasContent}
-            accessibilityRole="button"
-            accessibilityLabel={rightA11yLabel}
-            importantForAccessibility={rightHasContent ? "yes" : "no-hide-descendants"}
-          >
-            {rightAvatarSource ? (
-              <Image source={rightAvatarSource} style={[styles.avatar, dynamic.avatarIcon]} />
-            ) : rightIconName ? (
-              <Ionicons name={rightIconName} size={moderateScale(30)} color={tc} />
-            ) : rightIconSource ? (
-              <Image source={rightIconSource} style={[styles.icon, dynamic.icon, { tintColor: tc }]} />
-            ) : rightLabel ? (
-              <ThemedText
-                style={[styles.sideText, dynamic.sideText, { color: tc }]}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.6}
-                maxFontSizeMultiplier={HEADER_MAX_FONT_SCALE}
+          <ThemedView style={[styles.sideContainer, styles.rightGroup, dynamic.sideContainer]}>
+            {rightSecondaryIconName ? (
+              <TouchableOpacity
+                onPress={onRightSecondaryPress}
+                style={{ marginRight: HEADER_ICON_GAP }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 6 }}
+                accessibilityRole="button"
+                accessibilityLabel={rightSecondaryAccessibilityLabel}
               >
-                {rightLabel}
-              </ThemedText>
-            ) : (
-              <ThemedView style={dynamic.placeholder} />
-            )}
-          </TouchableOpacity>
+                <Ionicons name={rightSecondaryIconName} size={moderateScale(30)} color={tc} />
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity
+              onPress={onRightPress}
+              style={[
+                styles.sideContainer,
+                styles.rightContainer,
+                rightSecondaryIconName ? { height: dynamic.sideContainer.height } : dynamic.sideContainer,
+              ]}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessible={rightHasContent}
+              accessibilityRole="button"
+              accessibilityLabel={rightA11yLabel}
+              importantForAccessibility={rightHasContent ? "yes" : "no-hide-descendants"}
+            >
+              {rightAvatarSource ? (
+                <Image source={rightAvatarSource} style={[styles.avatar, dynamic.avatarIcon]} />
+              ) : rightIconName ? (
+                <Ionicons name={rightIconName} size={moderateScale(30)} color={tc} />
+              ) : rightIconSource ? (
+                <Image source={rightIconSource} style={[styles.icon, dynamic.icon, { tintColor: tc }]} />
+              ) : rightLabel ? (
+                <ThemedText
+                  style={[styles.sideText, dynamic.sideText, { color: tc }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.6}
+                  maxFontSizeMultiplier={HEADER_MAX_FONT_SCALE}
+                >
+                  {rightLabel}
+                </ThemedText>
+              ) : (
+                <ThemedView style={dynamic.placeholder} />
+              )}
+            </TouchableOpacity>
+          </ThemedView>
         </ThemedView>
       </ThemedView>
     </>
@@ -226,6 +256,10 @@ const styles = StyleSheet.create({
   sideContainer: {
     alignItems: "center",
     justifyContent: "center",
+  },
+  rightGroup: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
   },
   rightContainer: {
     alignItems: "flex-end",
