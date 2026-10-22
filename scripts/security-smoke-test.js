@@ -10,6 +10,11 @@
  *   2. Unmetered generations — runAnchoredGeneration's daily limit, the
  *      connections moderation block, the admin exemption, and the rules'
  *      32,000-character prompt cap.
+ *   5. Performance-log writes — the field allowlist, size caps and slug check.
+ *   6. Time-zone offsets — an invented offset bills against the UTC day.
+ *   7. Verification codes — parallel guesses cannot exceed the five-attempt cap.
+ *
+ * (Numbers follow the review's findings; 3 is the --production mode below.)
  *
  * Run it through emulators:exec so the emulators start clean and stop after:
  *
@@ -281,6 +286,73 @@ async function productionPurchases() {
     (await sendAs(await meteredUser('paid-pro', 2, premiumBackedBy(PAID)))) === 'ok');
 }
 
+async function perfLogLimits() {
+  console.log('\n— Fix 5: performance-log writes');
+  const { uid, db } = await client('perf');
+  const event = {
+    screen: 'Chat', screenPath: '/(main)/chat', metricType: 'screen_load', durationMs: 120,
+    userId: uid, isPro: false, sessionId: 's1', appVersion: '1.1.0', environment: 'development',
+    os: 'ios', timestamp: serverTimestamp(),
+  };
+  const events = (slug) => collection(db, 'performanceLogs', slug, 'events');
+
+  check('a well-formed event is accepted', (await outcome(addDoc(events('chat'), event))) === 'ok');
+  check('an event with an extra field is refused',
+    (await outcome(addDoc(events('chat'), { ...event, payload: 'x' }))) === 'permission-denied');
+  check('an oversized error message is refused',
+    (await outcome(addDoc(events('chat'), {
+      ...event, metricType: 'error', errorMessage: 'x'.repeat(2001),
+    }))) === 'permission-denied');
+  check('an unknown metric type is refused',
+    (await outcome(addDoc(events('chat'), { ...event, metricType: 'anything' }))) === 'permission-denied');
+  check('a screen id the app never produces is refused',
+    (await outcome(addDoc(events('Not_A_Slug'), event))) === 'permission-denied');
+}
+
+async function timezoneOffsets() {
+  console.log('\n— Fix 6: invented time-zone offsets');
+  const { uid, db, fns } = await client('timezone');
+
+  check('rules refuse an offset outside −12:00…+14:00',
+    (await outcome(setDoc(doc(db, 'users', uid), { timezoneOffsetMinutes: 1_000_000 }, { merge: true })))
+      === 'permission-denied');
+  check('rules accept a real offset',
+    (await outcome(setDoc(doc(db, 'users', uid), { timezoneOffsetMinutes: 330 }, { merge: true }))) === 'ok');
+
+  // Past the rules: today's allowance spent (5 = the premium limit), and an
+  // offset that would name a day no ledger has touched.
+  await adb.doc(`users/${uid}`).set({ timezoneOffsetMinutes: 1_000_000 }, { merge: true });
+  await adb.doc(`users/${uid}/chatUsage/${UTC_DAY}`).set({ count: 5 });
+  const code = await outcome(httpsCallable(fns, 'sendChatMessage')({ userMessage: 'hi', prompt: 'hi' }));
+  check('an invented offset bills against the UTC day, not a fresh one',
+    code === 'functions/resource-exhausted', code);
+}
+
+async function otpAttempts() {
+  console.log('\n— Fix 7: verification-code attempts');
+  const { uid, fns } = await client('otp', { verified: false });
+  const email = (await admin.auth().getUser(uid)).email.toLowerCase();
+  const seed = () => adb.doc(`emailVerification/${uid}`).set({
+    code: 'ABC234', email, attempts: 0,
+    expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
+  });
+  const verify = httpsCallable(fns, 'verifyCode');
+
+  await seed();
+  const results = await Promise.all(
+    Array.from({ length: 20 }, () => outcome(verify({ code: 'ZZZ999' }))),
+  );
+  const judged = results.filter((r) => r === 'functions/invalid-argument').length;
+  check('20 parallel wrong guesses get at most 5 judged', judged <= 5, `${judged} judged`);
+  check('the right code no longer works after them',
+    (await outcome(verify({ code: 'ABC234' }))) !== 'ok');
+
+  await seed();
+  check('the right code works on a fresh code', (await outcome(verify({ code: 'abc234' }))) === 'ok');
+  check('and verifies the account', (await admin.auth().getUser(uid)).emailVerified === true);
+  check('and is spent', !(await adb.doc(`emailVerification/${uid}`).get()).exists);
+}
+
 async function testProjectHonoursSandbox() {
   console.log('\n— Fix 3: the test project still counts sandbox purchases');
   const { uid, fns } = await client('qa-pack');
@@ -301,6 +373,9 @@ async function testProjectHonoursSandbox() {
     await moderation();
     await adminExempt();
     await testProjectHonoursSandbox();
+    await perfLogLimits();
+    await timezoneOffsets();
+    await otpAttempts();
   }
   console.log(failures ? `\n${failures} check(s) failed.` : '\nAll checks passed.');
   process.exit(failures ? 1 : 0);

@@ -451,18 +451,6 @@ export const verifyCode = onCall({ invoker: "public" }, async (request) => {
   const { code } = parseInput(VerifyCodeSchema, request.data);
 
   const otpRef = getOtpDocRef(uid);
-  const snap = await otpRef.get();
-
-  if (!snap.exists) {
-    throw new HttpsError(
-      "not-found",
-      "No verification code found. Please request a new one.",
-    );
-  }
-
-  const data = snap.data()!;
-  const expiresAt: Timestamp = data.expiresAt;
-  const attempts: number = data.attempts ?? 0;
 
   // Bind the code to the mailbox it was actually delivered to. Without this a
   // user could request a code at an address they own, change the account email
@@ -475,44 +463,92 @@ export const verifyCode = onCall({ invoker: "public" }, async (request) => {
   // the ID token is cached for up to an hour, so a token minted before the
   // email change would still carry the old address.
   const authUser = await admin.auth().getUser(uid);
-  const issuedTo = String(data.email ?? "").toLowerCase();
   const currentEmail = (authUser.email ?? "").toLowerCase();
 
-  if (!issuedTo || !currentEmail || issuedTo !== currentEmail) {
-    // The code is dead — it belongs to an address no longer on this account.
-    await otpRef.delete();
-    throw new HttpsError(
-      "failed-precondition",
-      "Your email address changed after this code was sent. Please request a new one.",
-    );
-  }
+  // The check and the attempt it spends happen in one transaction. Read, compare
+  // and increment as separate steps let parallel guesses all read the same
+  // `attempts` and each pass the limit, so the five-guess cap held only for a
+  // caller who waited for each answer. Contended transactions retry, so every
+  // guess now sees the count the previous one left.
+  //
+  // Errors are returned rather than thrown: a throw inside the callback aborts
+  // the transaction, and with it the delete or increment that has to land.
+  type Outcome =
+    | { ok: true }
+    | { ok: false; error: HttpsError };
+  const outcome = await db.runTransaction(async (tx): Promise<Outcome> => {
+    const snap = await tx.get(otpRef);
 
-  if (attempts >= 5) {
-    await otpRef.delete();
-    throw new HttpsError(
-      "resource-exhausted",
-      "Too many attempts. Please request a new code.",
-    );
-  }
+    if (!snap.exists) {
+      return {
+        ok: false,
+        error: new HttpsError(
+          "not-found",
+          "No verification code found. Please request a new one.",
+        ),
+      };
+    }
 
-  if (expiresAt.toMillis() < Date.now()) {
-    await otpRef.delete();
-    throw new HttpsError(
-      "deadline-exceeded",
-      "Code has expired. Please request a new one.",
-    );
-  }
+    const data = snap.data()!;
+    const expiresAt: Timestamp = data.expiresAt;
+    const attempts: number = data.attempts ?? 0;
+    const issuedTo = String(data.email ?? "").toLowerCase();
 
-  if (data.code !== code.toUpperCase()) {
-    await otpRef.update({ attempts: FieldValue.increment(1) });
-    const remaining = 4 - attempts;
-    throw new HttpsError(
-      "invalid-argument",
-      remaining > 0
-        ? `Incorrect code. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.`
-        : "Incorrect code.",
-    );
-  }
+    if (!issuedTo || !currentEmail || issuedTo !== currentEmail) {
+      // The code is dead — it belongs to an address no longer on this account.
+      tx.delete(otpRef);
+      return {
+        ok: false,
+        error: new HttpsError(
+          "failed-precondition",
+          "Your email address changed after this code was sent. Please request a new one.",
+        ),
+      };
+    }
+
+    if (attempts >= 5) {
+      tx.delete(otpRef);
+      return {
+        ok: false,
+        error: new HttpsError(
+          "resource-exhausted",
+          "Too many attempts. Please request a new code.",
+        ),
+      };
+    }
+
+    if (expiresAt.toMillis() < Date.now()) {
+      tx.delete(otpRef);
+      return {
+        ok: false,
+        error: new HttpsError(
+          "deadline-exceeded",
+          "Code has expired. Please request a new one.",
+        ),
+      };
+    }
+
+    if (data.code !== code.toUpperCase()) {
+      tx.update(otpRef, { attempts: attempts + 1 });
+      const remaining = 4 - attempts;
+      return {
+        ok: false,
+        error: new HttpsError(
+          "invalid-argument",
+          remaining > 0
+            ? `Incorrect code. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.`
+            : "Incorrect code.",
+        ),
+      };
+    }
+
+    // Spent here, inside the transaction, so a correct code cannot be redeemed
+    // twice by two parallel calls.
+    tx.delete(otpRef);
+    return { ok: true };
+  });
+
+  if (!outcome.ok) throw outcome.error;
 
   // Code is correct — mark email as verified. `set` with merge (not `update`)
   // so this doesn't throw NOT_FOUND if the users/{uid} doc is ever missing
@@ -523,7 +559,6 @@ export const verifyCode = onCall({ invoker: "public" }, async (request) => {
     .collection("users")
     .doc(uid)
     .set({ isEmailVerified: true }, { merge: true });
-  await otpRef.delete();
 
   return { verified: true };
 });
@@ -785,6 +820,30 @@ const CHAT_FOREGROUND_GRACE_MS = 30_000;
 // AI can take 60-180s. Use a 3-minute window so a user watching the loading
 // screen isn't notified, but one who backgrounded the app is.
 const GENERATION_FOREGROUND_GRACE_MS = 3 * 60 * 1000;
+
+/** Real UTC offsets run from −12:00 (Baker Island) to +14:00 (Kiribati). */
+const MIN_UTC_OFFSET_MINUTES = -12 * 60;
+const MAX_UTC_OFFSET_MINUTES = 14 * 60;
+
+/**
+ * The UTC offset, in minutes, that chat billing uses to name the user's day:
+ * the stored `timezoneOffsetMinutes` when it is a real offset, else 0 (UTC).
+ *
+ * The user writes that field, and every distinct day id is a fresh daily
+ * allowance, so an unchecked value let any user mint new days — and new
+ * questions — at will by writing a new offset. Within the real range the most a
+ * change can do is reach the neighbouring day. Mirrored by `billingOffsetMinutes`
+ * in src/services/chat.service.ts; keep the two in step, or the client watches a
+ * different ledger document than the one being charged.
+ */
+function billingOffsetMinutes(offsetMinutes: unknown): number {
+  return typeof offsetMinutes === "number" &&
+    Number.isInteger(offsetMinutes) &&
+    offsetMinutes >= MIN_UTC_OFFSET_MINUTES &&
+    offsetMinutes <= MAX_UTC_OFFSET_MINUTES
+    ? offsetMinutes
+    : 0;
+}
 
 /**
  * Returns the user's current local hour (0-23) given a UTC offset in minutes.
@@ -1996,11 +2055,8 @@ export const sendChatMessage = onCall(
 
       // Bill against the user's local day so the quota resets at their midnight,
       // matching what the in-app counter shows.
-      const offset = userSnap.data()?.timezoneOffsetMinutes;
-      const nowLocal =
-        typeof offset === "number" && Number.isFinite(offset)
-          ? new Date(Date.now() + offset * 60 * 1000)
-          : new Date();
+      const offset = billingOffsetMinutes(userSnap.data()?.timezoneOffsetMinutes);
+      const nowLocal = new Date(Date.now() + offset * 60 * 1000);
       const dayId = formatDateId(nowLocal);
 
       const dailyLimit = premium

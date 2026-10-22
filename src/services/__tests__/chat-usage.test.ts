@@ -77,6 +77,30 @@ describe('chat usage ledger', () => {
       at('2026-01-05T12:00:00Z');
       expect(chatUsageDayId(0)).toBe('2026-01-05');
     });
+
+    /**
+     * The user writes their own offset, and every distinct day id is a fresh
+     * allowance — so an offset outside the real range would name a day the
+     * server refuses to bill against. It treats those as UTC, and so must this.
+     */
+    it('treats an offset outside −12:00…+14:00 as UTC, as the server does', () => {
+      at('2026-03-01T12:00:00Z');
+      expect(chatUsageDayId(14 * 60 + 1)).toBe('2026-03-01');
+      expect(chatUsageDayId(-12 * 60 - 1)).toBe('2026-03-01');
+      expect(chatUsageDayId(1_000_000)).toBe('2026-03-01');
+    });
+
+    it('keeps the extremes of the real range', () => {
+      // 12:00 UTC is 02:00 the next day at +14:00 and 00:00 the same day at −12:00.
+      at('2026-03-01T12:00:00Z');
+      expect(chatUsageDayId(14 * 60)).toBe('2026-03-02');
+      expect(chatUsageDayId(-12 * 60)).toBe('2026-03-01');
+    });
+
+    it('treats a fractional offset as UTC rather than a real zone', () => {
+      at('2026-03-01T23:00:00Z');
+      expect(chatUsageDayId(330.5)).toBe('2026-03-01');
+    });
   });
 
   describe('msUntilNextChatUsageDay', () => {
@@ -92,6 +116,12 @@ describe('chat usage ledger', () => {
       expect(msUntilNextChatUsageDay(0)).toBe(2 * hours);
       // 22:00 UTC is 14:00 in UTC-8, so ten hours of local day are left.
       expect(msUntilNextChatUsageDay(-480)).toBe(10 * hours);
+    });
+
+    it('measures to UTC midnight for an out-of-range offset', () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-03-01T22:00:00Z'));
+      expect(msUntilNextChatUsageDay(1_000_000)).toBe(2 * 60 * 60 * 1000);
     });
 
     it('is always positive, so a timer scheduled on it fires in the future', () => {

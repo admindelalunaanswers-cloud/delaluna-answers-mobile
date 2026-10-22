@@ -48,6 +48,17 @@ service cloud.firestore {
             && request.resource.data.prompt.size() <= 32000);
     }
 
+    // `timezoneOffsetMinutes` names the user's chat billing day, so an invented
+    // value would name a fresh day with a fresh allowance. Only real offsets
+    // (−12:00 to +14:00, whole minutes) are accepted. sendChatMessage applies the
+    // same range regardless (billingOffsetMinutes) — this keeps junk out of the doc.
+    function timezoneOffsetValid() {
+      return !('timezoneOffsetMinutes' in request.resource.data)
+        || (request.resource.data.timezoneOffsetMinutes is int
+            && request.resource.data.timezoneOffsetMinutes >= -720
+            && request.resource.data.timezoneOffsetMinutes <= 840);
+    }
+
     function noProtectedFieldsChanged() {
       return !request.resource.data.diff(resource.data).affectedKeys()
         .hasAny(['createdAt', 'isPremiumMember', 'isAdmin', 'isEmailVerified']);
@@ -106,12 +117,14 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && (!('isPremiumMember' in request.resource.data) || request.resource.data.isPremiumMember == false)
         && (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false)
-        && (!('isEmailVerified' in request.resource.data) || request.resource.data.isEmailVerified == false);
+        && (!('isEmailVerified' in request.resource.data) || request.resource.data.isEmailVerified == false)
+        && timezoneOffsetValid();
 
       // Updates: owner can edit profile fields but cannot change protected
       // fields, AND must be email-verified. The extra checks let admins
       // (handled above) bypass.
-      allow update: if isVerifiedOwner(uid) && noProtectedFieldsChanged();
+      allow update: if isVerifiedOwner(uid) && noProtectedFieldsChanged()
+        && timezoneOffsetValid();
 
       allow delete: if isOwner(uid);
 
@@ -272,12 +285,29 @@ service cloud.firestore {
     // performanceLogs/{screenSlug}        ← screen metadata (lastEventAt)
     // performanceLogs/{screenSlug}/events ← raw client events (write-only for client)
     // performanceLogs/{screenSlug}/daily  ← CF aggregations (admin-read only)
+    //
+    // Every client write here is shaped by src/services/perf-log.service.ts.
+    // Without field and size limits any signed-in user could store documents of
+    // any size and shape, and create screen docs under any id, each of which
+    // aggregatePerfLogs then walks nightly. A rejected write is dropped silently
+    // by the client (safeWrite), so a limit that is too tight loses metrics, not
+    // app behaviour — widen it here when the service starts sending more.
+    function shortString(field, max) {
+      return !(field in request.resource.data)
+        || (request.resource.data[field] is string
+            && request.resource.data[field].size() <= max);
+    }
+
     match /performanceLogs/{screenSlug} {
       // Any signed-in user may merge screen metadata onto the parent doc — and
       // nothing else. An unrestricted write here let any user delete another
       // screen's doc or graft arbitrary fields onto the admin analytics view.
+      // The slug is what screenSlugForPath produces: lowercase words and dashes.
       allow create, update: if isSignedIn()
-        && request.resource.data.keys().hasOnly(['screen', 'screenPath', 'lastEventAt']);
+        && screenSlug.matches('^[a-z0-9-]{1,60}$')
+        && request.resource.data.keys().hasOnly(['screen', 'screenPath', 'lastEventAt'])
+        && shortString('screen', 100)
+        && shortString('screenPath', 200);
       allow delete: if false;
       allow read:  if isAdmin();
 
@@ -286,8 +316,25 @@ service cloud.firestore {
         // userId may be null when auth context hasn't resolved at log time;
         // the non-null check prevents spoofing another user's UID.
         allow create: if isSignedIn()
+          && screenSlug.matches('^[a-z0-9-]{1,60}$')
           && (request.resource.data.userId == request.auth.uid
-              || request.resource.data.userId == null);
+              || request.resource.data.userId == null)
+          && request.resource.data.keys().hasOnly([
+            'screen', 'screenPath', 'metricType', 'durationMs', 'operationName',
+            'errorMessage', 'userId', 'isPro', 'sessionId', 'appVersion',
+            'environment', 'os', 'timestamp'
+          ])
+          && request.resource.data.metricType in ['screen_load', 'ai_call', 'error']
+          && (!('durationMs' in request.resource.data)
+              || request.resource.data.durationMs is number)
+          && shortString('screen', 100)
+          && shortString('screenPath', 200)
+          && shortString('operationName', 100)
+          && shortString('errorMessage', 2000)
+          && shortString('sessionId', 100)
+          && shortString('appVersion', 40)
+          && shortString('environment', 40)
+          && shortString('os', 20);
         allow read:   if isAdmin();
         allow update, delete: if false;
       }
