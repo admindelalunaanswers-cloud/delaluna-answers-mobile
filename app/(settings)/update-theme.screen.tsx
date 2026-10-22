@@ -22,14 +22,16 @@ import { logger } from "@/src/utils/logger";
 
 
 export default function ChangeThemeScreen() {
-  const { theme, setThemeKey, themes } = useContext(ThemeContext);
+  // `themeKey` is the user's choice; `theme` is what's drawn, which stays the
+  // default while Accessibility → "Ignore custom theme" is on.
+  const { theme, themeKey, customThemeIgnored, setThemeKey, themes } = useContext(ThemeContext);
   const router = useRouter();
   const originalKey = useRef<string | null>(null);
 
   /** 🧠 Save original theme only once on mount */
   useEffect(() => {
     if (originalKey.current === null) {
-      originalKey.current = theme.key;
+      originalKey.current = themeKey;
     }
   }, []);
 
@@ -42,7 +44,7 @@ export default function ChangeThemeScreen() {
       try {
         await setDoc(
           doc(db, "users", currentUser.uid),
-          { themeKey: theme.key },
+          { themeKey },
           { merge: true }
         );
       } catch (err) {
@@ -123,6 +125,17 @@ export default function ChangeThemeScreen() {
 
       {/* Scrollable Theme List */}
       <FlatList
+        ListHeaderComponent={
+          customThemeIgnored ? (
+            // Otherwise picking a theme here looks like it does nothing.
+            <View style={styles.notice}>
+              <Text style={styles.noticeText}>
+                Custom themes are turned off in Accessibility, so your choice is
+                saved but the standard theme is shown.
+              </Text>
+            </View>
+          ) : null
+        }
         accessibilityRole="radiogroup"
         accessibilityLabel="Color theme"
         contentContainerStyle={styles.listContent}
@@ -130,7 +143,7 @@ export default function ChangeThemeScreen() {
         keyExtractor={(t) => t.key}
         ItemSeparatorComponent={() => <View style={styles.divider} />}
         renderItem={({ item }) => {
-          const isSelected = item.key === theme.key;
+          const isSelected = item.key === themeKey;
           return (
             <TouchableOpacity
               style={styles.row}
@@ -167,6 +180,20 @@ const styles = StyleSheet.create({
   listContent: {
     paddingTop: verticalScale(90), // space below the header
     paddingBottom: verticalScale(50),
+  },
+  notice: {
+    marginHorizontal: scale(16),
+    marginBottom: verticalScale(8),
+    padding: scale(12),
+    borderRadius: moderateScale(10),
+    borderWidth: 1,
+    borderColor: "rgba(111,255,233,0.4)",
+    backgroundColor: "rgba(0,0,0,0.35)",
+  },
+  noticeText: {
+    color: "#ffffff",
+    fontSize: moderateScale(14),
+    lineHeight: moderateScale(20),
   },
   row: {
     flexDirection: "row",
