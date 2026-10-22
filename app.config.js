@@ -198,7 +198,11 @@ module.exports = {
       EMULATOR_HOST_IOS: process.env.EMULATOR_HOST_IOS,
       REVENUECAT_AAS_API_KEY: process.env.REVENUECAT_AAS_API_KEY,
       REVENUECAT_GPS_API_KEY: process.env.REVENUECAT_GPS_API_KEY,
-      REVENUECAT_TST_API_KEY: process.env.REVENUECAT_TST_API_KEY,
+      // Test Store purchases are free, and everything in `extra` is readable from
+      // an installed build, so a production build must not carry this key.
+      REVENUECAT_TST_API_KEY: USES_TEST_BACKEND
+        ? process.env.REVENUECAT_TST_API_KEY
+        : undefined,
       // No RevenueCat secret (sk_) keys here. Everything under `extra` is
       // serialized into the app manifest and readable from any installed build
       // via `Constants.expoConfig.extra`, so an sk_ key placed here is public.

@@ -1,7 +1,7 @@
 import { createHash, randomInt } from "crypto";
 import * as admin from "firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { defineSecret } from "firebase-functions/params";
+import { defineSecret, projectID } from "firebase-functions/params";
 import {
   onDocumentCreated,
   onDocumentUpdated,
@@ -832,10 +832,51 @@ function jitterHour(uid: string, salt: string): number {
 }
 
 /**
+ * The Firebase project that must only honour purchases somebody paid for.
+ *
+ * One RevenueCat project (proj4ac9ef9a) serves both Firebase projects, and it
+ * includes a Test Store app, whose purchases are free by design. Its public key
+ * shipped readable in every build until it was gated on the test backend, so
+ * anyone could configure the SDK with it, log in as their own uid and "buy" a
+ * chat pack or a subscription. The same is true of App Store and Play sandbox
+ * purchases, which any TestFlight tester can make against production.
+ *
+ * The test project keeps honouring them: that is how QA buys things.
+ */
+const PRODUCTION_PROJECT_ID = "delaluna-answers";
+
+function honoursUnpaidPurchases(): boolean {
+  return projectID.value() !== PRODUCTION_PROJECT_ID;
+}
+
+/**
+ * True for a v1 subscriber purchase record (a `non_subscriptions` entry or a
+ * `subscriptions` value) that RevenueCat marks as sandbox or Test Store.
+ *
+ * It denies only what is positively marked unpaid. The mirror's shape has never
+ * been checked against a real record (see CLAUDE.md), so requiring the flags to
+ * be present would zero every paying user's credits if they turned out to be
+ * missing. The flags are written by RevenueCat, not the client, so an attacker
+ * cannot strip them.
+ */
+function isUnpaidPurchase(record: unknown): boolean {
+  if (!record || typeof record !== "object") return false;
+  const { is_sandbox: isSandbox, store } = record as {
+    is_sandbox?: unknown;
+    store?: unknown;
+  };
+  return isSandbox === true || store === "test_store";
+}
+
+/**
  * Server-side premium check. Reads the RevenueCat extension's purchaser-info
  * mirror and returns true if the user has the active "Delaluna Answers Pro"
  * entitlement. Returns false on any error so we never push premium content
  * to non-premium users by mistake.
+ *
+ * In production an entitlement backed only by a sandbox or Test Store purchase
+ * does not count. The v1 entitlement carries no sandbox flag of its own, so it
+ * is read off the purchase its `product_identifier` names.
  */
 async function isUserPremium(uid: string): Promise<boolean> {
   try {
@@ -847,6 +888,22 @@ async function isUserPremium(uid: string): Promise<boolean> {
       data?.subscriber?.entitlements?.[PREMIUM_ENTITLEMENT_ID] ??
       data?.entitlements?.[PREMIUM_ENTITLEMENT_ID];
     if (!ent) return false;
+
+    if (!honoursUnpaidPurchases()) {
+      const subscriber = data?.subscriber ?? data;
+      const productId = ent.product_identifier ?? ent.productIdentifier;
+      const subscription = subscriber?.subscriptions?.[productId];
+      const oneTime = subscriber?.non_subscriptions?.[productId];
+      if (isUnpaidPurchase(subscription)) return false;
+      if (
+        Array.isArray(oneTime) &&
+        oneTime.length > 0 &&
+        oneTime.every(isUnpaidPurchase)
+      ) {
+        return false;
+      }
+    }
+
     const expires = ent.expires_date ?? ent.expiresDate;
     if (!expires) return true; // lifetime / non-subscription purchase
     return new Date(expires).getTime() > Date.now();
@@ -1699,11 +1756,21 @@ async function purchasedChatCredits(uid: string): Promise<number> {
       data?.subscriber?.non_subscriptions ?? data?.non_subscriptions;
     if (!nonSubs || typeof nonSubs !== "object") return 0;
 
+    // Sandbox and Test Store packs cost nothing; production doesn't count them.
+    // See PRODUCTION_PROJECT_ID.
+    const countUnpaid = honoursUnpaidPurchases();
+
     let total = 0;
     for (const [productId, purchases] of Object.entries(nonSubs)) {
       const perPurchase = CHAT_PACK_QUANTITIES[productId];
       if (!perPurchase) continue; // not a chat pack
-      total += perPurchase * (Array.isArray(purchases) ? purchases.length : 1);
+      const records: unknown[] = Array.isArray(purchases)
+        ? purchases
+        : [purchases];
+      const counted = countUnpaid
+        ? records
+        : records.filter((p) => !isUnpaidPurchase(p));
+      total += perPurchase * counted.length;
     }
     return total;
   } catch (err) {
@@ -1738,6 +1805,15 @@ async function refundChatQuestion(
       if (!snap.exists) return;
 
       const data = snap.data()!;
+      // Only sendChatMessage can write a non-empty prompt (the rules allow a
+      // client create only with `prompt == ''`) and nothing ever clears one, so
+      // this is what proves the receipt below was stamped by the server. A
+      // client may create a prompt-less message carrying any fields it likes —
+      // without this check a forged `billedDay` / `billedCredit` plus a retry
+      // refunded a question that was never charged, and repeating it gave
+      // unlimited chat and refilled spent credits.
+      if (typeof data.prompt !== "string" || !data.prompt) return;
+
       const dayId = data.billedDay;
       // Nothing was charged: an admin send, or a message written before
       // billing receipts existed.
@@ -1869,6 +1945,18 @@ export const sendChatMessage = onCall(
       }
 
       const prevData = prev.data()!;
+
+      // Only a message this function submitted can be retried. Anything with an
+      // empty prompt was written by the client — a restored turn, or a forgery
+      // whose `status` and `createTime` say whatever it wants — and the retry
+      // below would delete it and refund against it. See refundChatQuestion.
+      if (typeof prevData.prompt !== "string" || !prevData.prompt) {
+        throw new HttpsError(
+          "failed-precondition",
+          "That message can't be retried.",
+        );
+      }
+
       const state = String(prevData.status?.state ?? "").toUpperCase();
       const createdMs =
         (prevData.createTime as Timestamp | undefined)?.toMillis() ?? 0;
@@ -2421,6 +2509,46 @@ export const parseConnectionCompatibility = onDocumentUpdated(
 // ─── AI generation (replaces the GenAI extension instances) ─────────────────
 
 /**
+ * Generations a user may start per UTC day, per feature, keyed by the `label`
+ * runAnchoredGeneration is called with.
+ *
+ * Unlike chat, these features take their prompt straight from a client write —
+ * the rules have to let the owner write `prompt`, because the client builds it —
+ * so without a server-side count any account could run unlimited, unfiltered
+ * Gemini generations by writing documents under fresh ids. The numbers are
+ * generous on purpose: sign-up requests three horoscopes at once and every
+ * birth-data edit regenerates them, and a legitimate user should never meet
+ * these. They bound abuse; they are not a product quota.
+ */
+const GENERATION_DAILY_LIMITS: Record<string, number> = {
+  generateHoroscope: 20,
+  generateNatalBreakdown: 10,
+  generateTransitReading: 10,
+  generateConnectionReport: 30,
+  generateSynastryReading: 30,
+};
+
+/**
+ * Generations a moderation block covers. createConnection checks the
+ * "connections" block, but the report and synastry documents can be written
+ * directly, so the generation itself has to check too.
+ */
+const GENERATION_MODERATED_FEATURE: Record<string, string> = {
+  generateConnectionReport: "connections",
+  generateSynastryReading: "connections",
+};
+
+/** Admins are exempt from generation limits, as they are from chat metering. */
+async function isAdminUid(uid: string): Promise<boolean> {
+  try {
+    const user = await admin.auth().getUser(uid);
+    return (user.customClaims ?? {}).admin === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Generates into a document that also *triggers* this function, which is the
  * one hazard the extension handled internally and we now own.
  *
@@ -2464,7 +2592,18 @@ async function runAnchoredGeneration(opts: {
    */
   anchored?: boolean;
 }): Promise<void> {
+  const usageRef = db
+    .collection("users")
+    .doc(opts.uid)
+    .collection("generationUsage")
+    .doc(new Date().toISOString().slice(0, 10));
+  const limit = GENERATION_DAILY_LIMITS[opts.label] ?? 0;
+  const moderatedAs = GENERATION_MODERATED_FEATURE[opts.label];
+  // Set inside the transaction callback, which narrowing cannot see into.
+  let refused = null as string | null;
+
   const prompt = await db.runTransaction(async (tx) => {
+    refused = null;
     const snap = await tx.get(opts.ref);
     if (!snap.exists) return null;
 
@@ -2481,6 +2620,48 @@ async function runAnchoredGeneration(opts: {
 
     if (data.requestHash === requestHash) return null;
 
+    // Limits are checked only for a new request, after the hash guard, so the
+    // write-backs that re-fire this trigger never count against them. Every
+    // read comes before any write — a transaction rejects the other order.
+    const usageSnap = await tx.get(usageRef);
+    const used = Number(usageSnap.data()?.[opts.label] ?? 0);
+    let blocked = false;
+    if (moderatedAs) {
+      const modSnap = await tx.get(db.collection("moderation").doc(opts.uid));
+      const features = (modSnap.data()?.blockedFeatures ?? []) as string[];
+      blocked = features.includes(moderatedAs);
+    }
+
+    // The admin lookup is an Auth call, so it is made only once a request
+    // would otherwise be refused rather than on every generation.
+    if ((blocked || used >= limit) && !(await isAdminUid(opts.uid))) {
+      refused = blocked ? "blocked" : "daily limit";
+      // Stamping the hash marks this request as answered, so the ERROR write
+      // re-fires the trigger, matches, and stops like any other write-back.
+      tx.update(opts.ref, {
+        requestHash,
+        status: {
+          state: "ERROR",
+          error: blocked
+            ? "This feature is not available on your account."
+            : "Daily limit reached for this feature. Try again tomorrow.",
+        },
+      });
+      return null;
+    }
+
+    // Counted when the request is claimed, not when it succeeds: a failed
+    // generation still spent a Gemini call, and the limits are loose enough
+    // that a legitimate retry will not run into them.
+    tx.set(
+      usageRef,
+      {
+        [opts.label]: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
     tx.update(opts.ref, {
       requestHash,
       status: { state: "PROCESSING" },
@@ -2491,6 +2672,9 @@ async function runAnchoredGeneration(opts: {
     return current;
   });
 
+  if (refused) {
+    console.warn(`[${opts.label}] Refused for ${opts.uid} — ${refused}`);
+  }
   if (!prompt) return;
 
   try {

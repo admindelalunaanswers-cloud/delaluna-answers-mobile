@@ -76,6 +76,7 @@ app.apk
 !/scripts/sync-admin-env.js
 !/scripts/regenerate-user.js
 !/scripts/cleanup-orphaned-connection-data.js
+!/scripts/security-smoke-test.js
 
 # credentials
 /credentials.json
