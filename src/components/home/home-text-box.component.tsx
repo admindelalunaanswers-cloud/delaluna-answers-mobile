@@ -3,6 +3,7 @@ import React, { useEffect, useRef } from "react";
 import { Animated, View, Text, StyleSheet, ViewStyle } from "react-native";
 
 
+import { useReducedMotion } from "@/src/context/accessibility-context";
 import { DrawnTarotCard } from "@/src/types/tarot-cards.type";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { renderRichText } from "@/src/utils/rich-text";
@@ -33,8 +34,13 @@ export type SectionName =
 
 function SkeletonLine({ width = '100%', height = 14 }: { width?: number | string; height?: number }) {
   const opacity = useRef(new Animated.Value(0.25)).current;
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
+    if (reduceMotion) {
+      opacity.setValue(0.4); // a steady placeholder, midway through the pulse
+      return;
+    }
     const anim = Animated.loop(
       Animated.sequence([
         Animated.timing(opacity, { toValue: 0.55, duration: 850, useNativeDriver: true }),
@@ -43,7 +49,7 @@ function SkeletonLine({ width = '100%', height = 14 }: { width?: number | string
     );
     anim.start();
     return () => anim.stop();
-  }, [opacity]);
+  }, [opacity, reduceMotion]);
 
   // Wrap in a plain View so width (string | number) doesn't conflict with
   // Animated.View's narrower DimensionValue requirement.
