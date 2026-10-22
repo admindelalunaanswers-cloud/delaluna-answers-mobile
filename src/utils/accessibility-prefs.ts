@@ -12,8 +12,20 @@
  */
 
 export type MotionPref = 'system' | 'reduced';
+export type TextSizePref = 'default' | 'large' | 'xl';
+
+/**
+ * In-app text size, multiplied on top of the device's own. Roughly one and two
+ * steps of the iOS Dynamic Type scale (~12–15% each).
+ */
+export const TEXT_SIZE_SCALE: Record<TextSizePref, number> = Object.freeze({
+  default: 1,
+  large: 1.15,
+  xl: 1.3,
+});
 
 export interface AccessibilityPrefs {
+  textSize: TextSizePref;
   /** 'system' follows the device's Reduce Motion; 'reduced' forces it on. */
   motion: MotionPref;
   /** Show the default theme without forgetting the one the user picked. */
@@ -27,6 +39,8 @@ export interface SystemAccessibility {
 
 /** The settings as the rest of the app should act on them. */
 export interface ResolvedAccessibility {
+  /** Multiplier for every font size in the app; the device's applies on top. */
+  fontScale: number;
   reduceMotion: boolean;
   ignoreCustomTheme: boolean;
 }
@@ -34,6 +48,7 @@ export interface ResolvedAccessibility {
 export const ACCESSIBILITY_PREFS_KEY = 'a11yPrefs:v1';
 
 export const DEFAULT_ACCESSIBILITY_PREFS: AccessibilityPrefs = Object.freeze({
+  textSize: 'default',
   motion: 'system',
   ignoreCustomTheme: false,
 });
@@ -54,6 +69,10 @@ export function parsePrefs(raw: string | null | undefined): AccessibilityPrefs {
   if (!data || typeof data !== 'object') return { ...DEFAULT_ACCESSIBILITY_PREFS };
   const d = data as Record<string, unknown>;
   return {
+    textSize:
+      d.textSize === 'default' || d.textSize === 'large' || d.textSize === 'xl'
+        ? d.textSize
+        : DEFAULT_ACCESSIBILITY_PREFS.textSize,
     motion: d.motion === 'reduced' || d.motion === 'system' ? d.motion : DEFAULT_ACCESSIBILITY_PREFS.motion,
     ignoreCustomTheme:
       typeof d.ignoreCustomTheme === 'boolean' ? d.ignoreCustomTheme : DEFAULT_ACCESSIBILITY_PREFS.ignoreCustomTheme,
@@ -65,6 +84,7 @@ export function resolvePrefs(
   system: SystemAccessibility,
 ): ResolvedAccessibility {
   return {
+    fontScale: TEXT_SIZE_SCALE[prefs.textSize],
     reduceMotion: prefs.motion === 'reduced' || system.reduceMotion,
     ignoreCustomTheme: prefs.ignoreCustomTheme,
   };
@@ -72,6 +92,7 @@ export function resolvePrefs(
 
 export function isDefaultPrefs(prefs: AccessibilityPrefs): boolean {
   return (
+    prefs.textSize === DEFAULT_ACCESSIBILITY_PREFS.textSize &&
     prefs.motion === DEFAULT_ACCESSIBILITY_PREFS.motion &&
     prefs.ignoreCustomTheme === DEFAULT_ACCESSIBILITY_PREFS.ignoreCustomTheme
   );
