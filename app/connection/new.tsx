@@ -29,6 +29,7 @@ import HomeSignsDisplay from "@/src/components/shared/signs-display.component";
 import { ThemedView } from "@/src/components/themed-view";
 import { useHoroscope } from "@/src/context/horoscope-context";
 import { ThemeContext } from "@/src/context/theme-context";
+import { useReducedMotion } from "@/src/context/accessibility-context";
 import { useUser } from "@/src/context/user-context";
 import { calculateNatalChart, NatalChart } from "@/src/services/astroEngine";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
@@ -59,6 +60,7 @@ const NAV_BAR_HEIGHT = 44;
 
 export default function SingleConnectionCreateScreen() {
   const { theme } = useContext(ThemeContext);
+  const reduceMotion = useReducedMotion();
   const { authUser, userDoc } = useUser();
   const { chartDetails } = useHoroscope();
   const insets = useSafeAreaInsets();
@@ -394,8 +396,8 @@ export default function SingleConnectionCreateScreen() {
         <View style={styles.pendingWrapper}>
           <LottieView
             source={require("@/src/assets/animations/splash-loop.json")}
-            autoPlay
-            loop
+            autoPlay={!reduceMotion}
+            loop={!reduceMotion}
             style={styles.pendingAnimation}
           />
           <Text style={styles.pendingText}>{loadingMessage}</Text>
