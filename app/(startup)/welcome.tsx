@@ -9,6 +9,7 @@ import {
 } from "react-native";
 
 import PrimaryButton from "@/src/assets/buttons/primary-button-component";
+import { useReducedMotion } from "@/src/context/accessibility-context";
 import SecondaryButton from "@/src/assets/buttons/secondary-button-component";
 import { ButtonText } from "@/src/components/typography/button-text";
 import { scale, verticalScale } from "@/src/utils/responsive";
@@ -17,6 +18,7 @@ export default function Welcome() {
   const { width } = useWindowDimensions();
   const logoW = Math.min(width * 0.72, scale(360));
   const galaxyRef = useRef<LottieView>(null);
+  const reduceMotion = useReducedMotion();
 
   const handleGetStarted = () => {
     galaxyRef.current?.pause();
@@ -33,14 +35,16 @@ export default function Welcome() {
         <LottieView
           ref={galaxyRef}
           source={require("@/src/assets/animations/galaxy.json")}
-          autoPlay
-          loop
+          autoPlay={!reduceMotion}
+          loop={!reduceMotion}
           style={styles.topAnimation}
         />
         <View pointerEvents="none" style={styles.logoWrap}>
           <LottieView
             source={require("@/src/assets/animations/logo.json")}
-            autoPlay
+            // Still: the finished logo, not the empty first frame of its reveal.
+            autoPlay={!reduceMotion}
+            progress={reduceMotion ? 1 : undefined}
             loop={false}
             style={{ width: "100%", height: "100%" }}
           />
