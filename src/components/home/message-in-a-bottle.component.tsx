@@ -1,13 +1,12 @@
 import React, { useState } from "react";
 import {
   View,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
-  Text,
   Alert,
   Modal,
 } from "react-native";
+import { Text, TextInput } from "@/src/components/app-text";
 import { Ionicons } from "@expo/vector-icons";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { MESSAGE_IN_A_BOTTLE_RESPONSES } from "@/src/constants/strings";
@@ -110,7 +109,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     width: "100%",
-    height: verticalScale(40),
+    minHeight: verticalScale(40), // grows with the text size
     backgroundColor: "#F8F9FE",
     borderRadius: scale(71),
     paddingLeft: scale(16),

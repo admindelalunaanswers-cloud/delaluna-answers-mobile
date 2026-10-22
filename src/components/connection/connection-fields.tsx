@@ -18,9 +18,9 @@ import {
   Platform,
   StyleSheet,
   Switch,
-  TextInput,
   TouchableOpacity,
 } from "react-native";
+import { TextInput } from "@/src/components/app-text";
 
 import { ThemedText } from "@/src/components/themed-text";
 import { ThemedView } from "@/src/components/themed-view";

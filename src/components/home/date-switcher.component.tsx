@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useScaledTextStyle } from "@/src/components/app-text";
 
 interface DateSwitcherProps {
   value: string;        // YYYY-MM-DD
@@ -21,6 +22,8 @@ export default function DateSwitcher({
   onChange,
 }: DateSwitcherProps) {
   const fadeAnim = useRef(new Animated.Value(1)).current;
+  // Animated.Text is react-native's, so it needs Text size applied by hand.
+  const dateTextStyle = useScaledTextStyle(styles.dateText);
 
   const index = dates.indexOf(value);
   const disableLeft = index <= 0;
@@ -73,7 +76,7 @@ export default function DateSwitcher({
         />
       </TouchableOpacity>
 
-      <Animated.Text style={[styles.dateText, { opacity: fadeAnim }]}>
+      <Animated.Text style={[dateTextStyle, { opacity: fadeAnim }]}>
         {formatDate(value)}
       </Animated.Text>
 

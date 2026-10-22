@@ -15,10 +15,10 @@ import {
   Modal,
   Pressable,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Text } from '@/src/components/app-text';
 
 import { Ionicons } from '@expo/vector-icons';
 import type { PurchasesStoreProduct } from 'react-native-purchases';

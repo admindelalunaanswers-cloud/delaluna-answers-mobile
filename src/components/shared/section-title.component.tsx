@@ -1,7 +1,8 @@
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { Text } from "@/src/components/app-text";
 
 type SectionName =
   | "quote"

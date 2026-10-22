@@ -2,18 +2,20 @@
 import { verticalScale, moderateScale, scale } from '@/src/utils/responsive';
 import Markdown from 'react-native-markdown-display';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Linking,
   Modal,
   Platform,
   ScrollView,
   StyleSheet,
-  Text,
   TextStyle,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Text } from '@/src/components/app-text';
+import { useFontScale } from '@/src/context/accessibility-context';
+import { scaleStyleMap } from '@/src/utils/text-scale';
 
 
 interface PolicyModalProps {
@@ -32,6 +34,9 @@ export default function PolicyModal({
   title,
   onLinkPress,
 }: PolicyModalProps) {
+  // Markdown draws its own text from these, so Text size is applied here.
+  const fontScale = useFontScale();
+  const scaledMarkdownStyles = useMemo(() => scaleStyleMap(markdownStyles, fontScale), [fontScale]);
   const rules = {
     link: (node: any, children: any, _parent: any, styles: any) => (
       <Text
@@ -90,7 +95,7 @@ export default function PolicyModal({
 
         {visible && textContent && (
           <ScrollView contentContainerStyle={styles.textContainer}>
-            <Markdown style={markdownStyles} rules={rules}>
+            <Markdown style={scaledMarkdownStyles} rules={rules}>
               {textContent}
             </Markdown>
           </ScrollView>
@@ -135,7 +140,7 @@ const styles = StyleSheet.create({
   },
 });
 
-const markdownStyles: { [key: string]: TextStyle } = {
+const markdownStyles: Record<string, TextStyle> = {
   body: { color: '#333', fontSize: moderateScale(15), lineHeight: moderateScale(22) },
   heading1: { fontSize: moderateScale(22), fontWeight: 'bold', marginBottom: verticalScale(10), alignSelf: 'center' },
   heading2: { fontSize: moderateScale(20), fontWeight: 'bold', marginTop: verticalScale(16), alignSelf: 'center' },

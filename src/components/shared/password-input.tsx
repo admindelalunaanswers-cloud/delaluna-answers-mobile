@@ -1,13 +1,13 @@
 import React, { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import {
   View,
-  TextInput,
   TouchableOpacity,
   Image,
   StyleSheet,
   type TextInputProps,
   type ViewStyle,
 } from 'react-native';
+import { TextInput } from '@/src/components/app-text';
 
 import { scale, moderateScale, verticalScale } from '@/src/utils/responsive';
 

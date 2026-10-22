@@ -4,17 +4,16 @@ import { StatusBar } from 'expo-status-bar';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import React, { useRef, useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    useWindowDimensions,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
 } from 'react-native';
+import { Text, TextInput } from '@/src/components/app-text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { auth } from '@/firebaseConfig';

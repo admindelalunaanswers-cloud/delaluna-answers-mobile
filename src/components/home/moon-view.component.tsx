@@ -1,6 +1,7 @@
 import React from "react";
 
-import { View, Text, StyleSheet } from "react-native";
+import { View, StyleSheet } from "react-native";
+import { Text } from "@/src/components/app-text";
 
 import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
 import { renderRichText } from "@/src/utils/rich-text";

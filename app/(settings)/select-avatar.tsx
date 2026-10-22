@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   Image,
   ImageSourcePropType,
   TouchableOpacity,
@@ -9,6 +8,7 @@ import {
   StyleSheet,
   Alert,
 } from 'react-native';
+import { Text } from '@/src/components/app-text';
 
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

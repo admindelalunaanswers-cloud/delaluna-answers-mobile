@@ -5,10 +5,10 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { TextInput } from "@/src/components/app-text";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BlurView } from "expo-blur";

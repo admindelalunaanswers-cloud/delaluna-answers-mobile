@@ -2,7 +2,6 @@
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
   StyleSheet,
   LayoutChangeEvent,
@@ -11,6 +10,7 @@ import {
   TextStyle,
   Platform,
 } from 'react-native';
+import { Text } from '@/src/components/app-text';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const PRONOUNS = Platform.select({

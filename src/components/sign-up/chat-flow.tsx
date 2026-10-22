@@ -8,11 +8,10 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Text, TextInput } from "@/src/components/app-text";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {

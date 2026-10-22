@@ -131,3 +131,8 @@ export function useAccessibilityPrefs(): AccessibilityContextType {
 export function useReducedMotion(): boolean {
   return useContext(AccessibilityContext).resolved.reduceMotion;
 }
+
+/** Accessibility → Text size as a multiplier (1 = Default). See app-text.tsx. */
+export function useFontScale(): number {
+  return useContext(AccessibilityContext).resolved.fontScale;
+}

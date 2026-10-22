@@ -7,11 +7,11 @@ import {
   Image,
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   useWindowDimensions,
-  View
+  View,
 } from "react-native";
+import { Text } from "@/src/components/app-text";
 import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
 import Animated, {
   Easing,

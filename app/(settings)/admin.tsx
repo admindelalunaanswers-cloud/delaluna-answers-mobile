@@ -11,11 +11,10 @@ import {
   Alert,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Text, TextInput } from "@/src/components/app-text";
 
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -763,7 +762,7 @@ const ss = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    height: verticalScale(38),
+    minHeight: verticalScale(38),
     borderRadius: scale(10),
     paddingHorizontal: scale(12),
     backgroundColor: "rgba(255,255,255,0.04)",

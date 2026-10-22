@@ -4,11 +4,11 @@ import {
   View,
   FlatList,
   TouchableOpacity,
-  Text,
   StyleSheet,
   ImageBackground,
   Alert,
 } from "react-native";
+import { Text } from "@/src/components/app-text";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";

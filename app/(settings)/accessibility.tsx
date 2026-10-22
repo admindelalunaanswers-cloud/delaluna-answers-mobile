@@ -3,9 +3,9 @@
 // In-app accessibility settings. Saved on the device only, through
 // AccessibilityPrefsProvider (src/context/accessibility-context.tsx).
 //
-// Only settings that actually work are shown. Text size, underline links and
-// contrast are designed for this screen too, but have no hook into the app's
-// styles yet — a control that changes nothing is worse than no control.
+// Only settings that actually work are shown. Underline links and contrast are
+// designed for this screen too, but have no hook into the app's styles yet — a
+// control that changes nothing is worse than no control.
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React from "react";
@@ -15,9 +15,13 @@ import {
   ScrollView,
   StyleSheet,
   Switch,
-  Text,
   View,
+  // The "Aa" samples show each option's own size, so they must not also take
+  // the size currently chosen — they skip the in-app scaling on purpose.
+  // eslint-disable-next-line no-restricted-imports
+  Text as FixedText,
 } from "react-native";
+import { Text } from "@/src/components/app-text";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import HeaderNav from "@/src/components/shared/header-nav";
@@ -27,12 +31,21 @@ import { useAccessibilityPrefs } from "@/src/context/accessibility-context";
 import {
   isDefaultPrefs,
   motionSystemCaption,
+  TEXT_SIZE_SCALE,
   type MotionPref,
+  type TextSizePref,
 } from "@/src/utils/accessibility-prefs";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 
 const NAV_BAR_HEIGHT = 44;
 const MIN_TARGET = 44;
+
+const TEXT_SIZE_OPTIONS: { value: TextSizePref; label: string }[] = [
+  { value: "default", label: "Default" },
+  { value: "large", label: "Large" },
+  { value: "xl", label: "Extra large" },
+];
+const SAMPLE_FONT_SIZE = moderateScale(16);
 
 const MOTION_OPTIONS: { value: MotionPref; label: string }[] = [
   { value: "system", label: "System" },
@@ -84,6 +97,62 @@ export default function AccessibilityScreen() {
           <Text style={styles.note}>
             Changes apply automatically and are saved on this device.
           </Text>
+        </View>
+
+        {/* ── Text & readability ── */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle} accessibilityRole="header">
+            TEXT & READABILITY
+          </Text>
+          <Text style={styles.settingTitle}>Text size</Text>
+          <Text style={styles.settingBody}>
+            Adjust text size throughout the application.
+          </Text>
+
+          <View
+            style={styles.segmentRow}
+            accessibilityRole="radiogroup"
+            accessibilityLabel="Text size"
+          >
+            {TEXT_SIZE_OPTIONS.map(({ value, label }) => {
+              const selected = prefs.textSize === value;
+              return (
+                <Pressable
+                  key={value}
+                  style={[styles.segment, styles.sizeSegment, selected && styles.segmentSelected]}
+                  onPress={() => updatePrefs({ textSize: value })}
+                  accessibilityRole="radio"
+                  accessibilityLabel={label}
+                  accessibilityState={{ checked: selected }}
+                >
+                  <FixedText
+                    style={[
+                      styles.sizeSample,
+                      selected && styles.segmentLabelSelected,
+                      { fontSize: SAMPLE_FONT_SIZE * TEXT_SIZE_SCALE[value] },
+                    ]}
+                    accessibilityElementsHidden
+                    importantForAccessibility="no"
+                  >
+                    Aa
+                  </FixedText>
+                  <View style={styles.sizeLabelRow}>
+                    {selected ? (
+                      <Ionicons
+                        name="checkmark"
+                        size={moderateScale(14)}
+                        color={C.turquoise}
+                        style={styles.segmentTick}
+                      />
+                    ) : null}
+                    <Text style={[styles.sizeLabel, selected && styles.segmentLabelSelected]}>
+                      {label}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
 
         {/* ── Display ── */}
@@ -189,6 +258,35 @@ export default function AccessibilityScreen() {
           ) : null}
         </View>
 
+        {/* ── Preview ── */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle} accessibilityRole="header">
+            PREVIEW YOUR SETTINGS
+          </Text>
+          {/* One element, read as a sample. Its buttons are pictures of
+              buttons: real ones that did nothing would be traps for a
+              screen-reader user. */}
+          <View
+            style={styles.previewCard}
+            accessible
+            accessibilityLabel="Preview: Your daily reading. Give yourself room to slow down and reflect today, before you plan your week."
+          >
+            <Text style={styles.previewTitle}>Your daily reading</Text>
+            <Text style={styles.previewBody}>
+              Give yourself room to slow down and reflect today, before you plan
+              your week.
+            </Text>
+            <View style={styles.previewButtons}>
+              <View style={[styles.previewButton, styles.previewButtonPrimary]}>
+                <Text style={styles.previewButtonPrimaryLabel}>Save reading</Text>
+              </View>
+              <View style={[styles.previewButton, styles.previewButtonSecondary]}>
+                <Text style={styles.previewButtonSecondaryLabel}>Not now</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
         {/* ── Reset ── */}
         <Pressable
           style={[styles.resetButton, atDefaults && styles.resetButtonDisabled]}
@@ -208,8 +306,9 @@ export default function AccessibilityScreen() {
           <Text style={styles.resetLabel}>Reset to defaults</Text>
         </Pressable>
         <Text style={styles.resetNote}>
-          Shows your chosen theme again and returns motion to System. Your
-          profile and other app data aren’t affected.
+          Restores the default text size, shows your chosen theme again and
+          returns motion to System. Your profile and other app data aren’t
+          affected.
         </Text>
       </ScrollView>
     </ThemedView>
@@ -314,6 +413,72 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(111,255,233,0.12)",
   },
   segmentTick: { marginRight: scale(6) },
+  sizeSegment: {
+    flexDirection: "column",
+    minWidth: scale(90),
+    paddingVertical: verticalScale(8),
+  },
+  sizeSample: {
+    color: MUTED,
+    fontWeight: "600",
+  },
+  sizeLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: verticalScale(2),
+  },
+  sizeLabel: {
+    color: MUTED,
+    fontSize: moderateScale(14),
+    textAlign: "center",
+  },
+  previewCard: {
+    padding: scale(16),
+    borderRadius: moderateScale(14),
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  previewTitle: {
+    color: "#ffffff",
+    fontSize: moderateScale(20),
+    fontWeight: "600",
+  },
+  previewBody: {
+    color: MUTED,
+    fontSize: moderateScale(16),
+    lineHeight: moderateScale(24),
+    marginTop: verticalScale(8),
+  },
+  previewButtons: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: scale(10),
+    marginTop: verticalScale(14),
+  },
+  previewButton: {
+    minHeight: MIN_TARGET,
+    justifyContent: "center",
+    paddingHorizontal: scale(20),
+    paddingVertical: verticalScale(8),
+    borderRadius: 999,
+  },
+  // Darker than C.purple, which carries white text at only ~4.2:1.
+  previewButtonPrimary: { backgroundColor: "#5A3D9A" },
+  previewButtonSecondary: {
+    borderWidth: 1,
+    borderColor: "rgba(111,255,233,0.45)",
+  },
+  previewButtonPrimaryLabel: {
+    color: "#ffffff",
+    fontSize: moderateScale(16),
+    fontWeight: "600",
+  },
+  previewButtonSecondaryLabel: {
+    color: C.turquoise,
+    fontSize: moderateScale(16),
+    fontWeight: "600",
+  },
   segmentLabel: {
     color: MUTED,
     fontSize: moderateScale(16),

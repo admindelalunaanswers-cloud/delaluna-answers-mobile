@@ -8,6 +8,9 @@
  */
 
 import React, { forwardRef } from 'react';
+// react-native's Text on purpose: this card is captured as a fixed-size image,
+// so neither the device's nor the in-app text size may change it.
+// eslint-disable-next-line no-restricted-imports
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 

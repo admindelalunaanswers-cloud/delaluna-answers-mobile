@@ -3,17 +3,17 @@ import { router, useLocalSearchParams } from "expo-router";
 import { deleteField, doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import React, { useContext, useEffect, useRef, useState } from "react";
 import {
-    Alert,
-    Animated,
-    Easing,
-    FlatList,
-    Image,
-    Keyboard,
-    KeyboardAvoidingView,
-    StyleSheet,
-    TextInput,
-    TouchableOpacity,
+  Alert,
+  Animated,
+  Easing,
+  FlatList,
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  StyleSheet,
+  TouchableOpacity,
 } from "react-native";
+import { TextInput } from "@/src/components/app-text";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { db } from "@/firebaseConfig";

@@ -2,7 +2,6 @@ import React, { useRef, useState, useCallback } from 'react';
 import {
   View,
   Image,
-  Text,
   TouchableOpacity,
   StyleSheet,
   Animated,
@@ -11,6 +10,7 @@ import {
   StyleProp,
   ViewStyle,
 } from 'react-native';
+import { Text } from '@/src/components/app-text';
 
 type CardFront = ImageSourcePropType | null;
 

@@ -1,6 +1,7 @@
 // components/natal-chart/natal-table.tab.tsx
 
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '@/src/components/app-text';
 
 import { C, S } from '@/src/constants/theme';
 import type { SerializedPlanet } from '@/src/types/user.type';

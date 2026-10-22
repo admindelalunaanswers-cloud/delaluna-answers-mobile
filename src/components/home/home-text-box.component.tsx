@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 
-import { Animated, View, Text, StyleSheet, ViewStyle } from "react-native";
+import { Animated, View, StyleSheet, ViewStyle } from "react-native";
+import { Text } from "@/src/components/app-text";
 
 
 import { useReducedMotion } from "@/src/context/accessibility-context";

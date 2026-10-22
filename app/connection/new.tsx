@@ -10,11 +10,10 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Text, TextInput } from "@/src/components/app-text";
 
 import { router } from "expo-router";
 

@@ -11,7 +11,8 @@
  */
 
 import React from 'react';
-import { StyleSheet, Text, type TextStyle } from 'react-native';
+import { StyleSheet, type TextStyle } from 'react-native';
+import { Text } from '@/src/components/app-text';
 
 /** Strip markdown bold titles like `**Reality Check:**` while preserving inline `**word**`. */
 export function cleanResponse(text: string): string {

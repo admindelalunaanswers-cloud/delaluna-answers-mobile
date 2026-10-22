@@ -1,12 +1,12 @@
 import React, { useRef, useEffect } from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
   StyleSheet,
   Animated,
   Easing,
 } from 'react-native';
+import { Text } from '@/src/components/app-text';
 
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';

@@ -11,11 +11,11 @@ import {
   Modal,
   Platform,
   StyleSheet,
-  Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
-  useWindowDimensions
+  useWindowDimensions,
 } from 'react-native';
+import { Text } from '@/src/components/app-text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { db } from '@/firebaseConfig';

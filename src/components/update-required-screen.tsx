@@ -1,4 +1,5 @@
-import { Alert, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/src/components/app-text';
 
 import { STORE_LINKS } from '@/src/constants/links';
 

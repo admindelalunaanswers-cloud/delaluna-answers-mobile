@@ -7,10 +7,10 @@ import {
   Alert,
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Text } from "@/src/components/app-text";
 import Animated, {
   Easing,
   useAnimatedStyle,

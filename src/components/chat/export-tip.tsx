@@ -8,10 +8,10 @@ import React, { useEffect, useRef } from 'react';
 import {
   AccessibilityInfo,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Text } from '@/src/components/app-text';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 

@@ -1,5 +1,6 @@
 import React from "react";
-import { Pressable, Text, StyleSheet, ViewStyle, TextStyle } from "react-native";
+import { Pressable, StyleSheet, ViewStyle, TextStyle } from "react-native";
+import { Text } from "@/src/components/app-text";
 import { LinearGradient } from "expo-linear-gradient";
 import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
 

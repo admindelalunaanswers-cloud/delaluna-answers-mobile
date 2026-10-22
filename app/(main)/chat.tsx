@@ -17,11 +17,10 @@ import {
   Modal,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Text, TextInput } from "@/src/components/app-text";
 import { useFocusEffect, useIsFocused } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -1838,7 +1837,7 @@ const styles = StyleSheet.create({
   modeTrack: {
     flexDirection: "row",
     alignItems: "stretch",
-    height: 52,
+    minHeight: 52, // grows with the text size; the thumb stretches with it
     padding: MODE_TRACK_PADDING,
     borderRadius: R.lg,
     backgroundColor: C.white + "0A",
