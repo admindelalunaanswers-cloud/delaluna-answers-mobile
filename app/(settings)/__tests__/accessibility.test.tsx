@@ -1,5 +1,5 @@
 import React from 'react';
-import { AccessibilityInfo } from 'react-native';
+import { AccessibilityInfo, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
@@ -51,8 +51,58 @@ describe('AccessibilityScreen', () => {
 
   it('names its sections as headers', async () => {
     await renderScreen();
+    expect(screen.getByRole('header', { name: 'TEXT & READABILITY' })).toBeTruthy();
     expect(screen.getByRole('header', { name: 'DISPLAY' })).toBeTruthy();
     expect(screen.getByRole('header', { name: 'MOTION' })).toBeTruthy();
+  });
+
+  describe('Text size', () => {
+    it('offers three sizes as radios, Default checked', async () => {
+      await renderScreen();
+      expect(checked(screen.getByRole('radio', { name: 'Default' }))).toBe(true);
+      expect(checked(screen.getByRole('radio', { name: 'Large' }))).toBe(false);
+      expect(checked(screen.getByRole('radio', { name: 'Extra large' }))).toBe(false);
+    });
+
+    // The "Aa" is a picture of the size; the radio's name already says it.
+    it('keeps the "Aa" samples out of the reading order', async () => {
+      await renderScreen();
+      expect(screen.queryByText('Aa')).toBeNull();
+      expect(screen.getAllByText('Aa', { includeHiddenElements: true })).toHaveLength(3);
+    });
+
+    it('applies the choice to the screen itself and saves it', async () => {
+      await renderScreen();
+      const sizeOf = () => StyleSheet.flatten(screen.getByText('Your daily reading', { includeHiddenElements: true }).props.style).fontSize;
+      const before = sizeOf();
+
+      await press(screen.getByRole('radio', { name: 'Extra large' }));
+
+      expect(checked(screen.getByRole('radio', { name: 'Extra large' }))).toBe(true);
+      expect(sizeOf()).toBeCloseTo(before * 1.3);
+      expect(lastSaved()).toEqual({ textSize: 'xl', motion: 'system', ignoreCustomTheme: false });
+    });
+
+    // Each sample shows its own option's size, whatever is currently chosen.
+    it('does not scale the samples by the current choice', async () => {
+      await renderScreen({ textSize: 'xl', motion: 'system', ignoreCustomTheme: false });
+      const sizes = screen
+        .getAllByText('Aa', { includeHiddenElements: true })
+        .map((el) => StyleSheet.flatten(el.props.style).fontSize as number);
+      expect(sizes[1] / sizes[0]).toBeCloseTo(1.15);
+      expect(sizes[2] / sizes[0]).toBeCloseTo(1.3);
+    });
+  });
+
+  describe('Preview', () => {
+    // Its buttons are pictures; real ones that did nothing would trap a
+    // screen-reader user.
+    it('reads as one sample, with no buttons to reach', async () => {
+      await renderScreen();
+      expect(screen.getByLabelText(/^Preview: Your daily reading/)).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Save reading' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Not now' })).toBeNull();
+    });
   });
 
   describe('Ignore custom theme', () => {
@@ -73,7 +123,7 @@ describe('AccessibilityScreen', () => {
 
       expect(checked(screen.getByRole('switch', { name: 'Ignore custom theme' }))).toBe(true);
       expect(setItem).toHaveBeenCalledWith('a11yPrefs:v1', expect.any(String));
-      expect(lastSaved()).toEqual({ motion: 'system', ignoreCustomTheme: true });
+      expect(lastSaved()).toEqual({ textSize: 'default', motion: 'system', ignoreCustomTheme: true });
     });
 
     it('starts from the stored value', async () => {
@@ -100,7 +150,7 @@ describe('AccessibilityScreen', () => {
 
       expect(checked(screen.getByRole('radio', { name: 'Reduced' }))).toBe(true);
       expect(checked(screen.getByRole('radio', { name: 'System' }))).toBe(false);
-      expect(lastSaved()).toEqual({ motion: 'reduced', ignoreCustomTheme: false });
+      expect(lastSaved()).toEqual({ textSize: 'default', motion: 'reduced', ignoreCustomTheme: false });
       expect(screen.queryByText(/Following your device/)).toBeNull();
     });
 
@@ -120,12 +170,13 @@ describe('AccessibilityScreen', () => {
 
     // Several controls change at once and focus doesn't move, so it's spoken.
     it('restores the defaults, saves them and announces it', async () => {
-      await renderScreen({ motion: 'reduced', ignoreCustomTheme: true });
+      await renderScreen({ textSize: 'large', motion: 'reduced', ignoreCustomTheme: true });
       await press(screen.getByRole('button', { name: 'Reset to defaults' }));
 
+      expect(checked(screen.getByRole('radio', { name: 'Default' }))).toBe(true);
       expect(checked(screen.getByRole('radio', { name: 'System' }))).toBe(true);
       expect(checked(screen.getByRole('switch', { name: 'Ignore custom theme' }))).toBe(false);
-      expect(lastSaved()).toEqual({ motion: 'system', ignoreCustomTheme: false });
+      expect(lastSaved()).toEqual({ textSize: 'default', motion: 'system', ignoreCustomTheme: false });
       expect(AccessibilityInfo.announceForAccessibility).toHaveBeenCalledWith(
         'Accessibility settings reset to defaults.',
       );

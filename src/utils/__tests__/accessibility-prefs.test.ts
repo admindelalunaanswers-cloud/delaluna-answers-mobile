@@ -21,7 +21,8 @@ describe('parsePrefs', () => {
   });
 
   it('reads back a stored value', () => {
-    expect(parsePrefs(JSON.stringify({ motion: 'reduced', ignoreCustomTheme: true }))).toEqual({
+    expect(parsePrefs(JSON.stringify({ textSize: 'xl', motion: 'reduced', ignoreCustomTheme: true }))).toEqual({
+      textSize: 'xl',
       motion: 'reduced',
       ignoreCustomTheme: true,
     });
@@ -29,11 +30,14 @@ describe('parsePrefs', () => {
 
   // Field by field, so one bad value doesn't discard the others.
   it('defaults only the fields that are missing or invalid', () => {
-    expect(parsePrefs(JSON.stringify({ motion: 'sometimes', ignoreCustomTheme: true }))).toEqual({
+    expect(parsePrefs(JSON.stringify({ textSize: 'huge', motion: 'sometimes', ignoreCustomTheme: true }))).toEqual({
+      textSize: 'default',
       motion: 'system',
       ignoreCustomTheme: true,
     });
+    // A value saved before Text size existed.
     expect(parsePrefs(JSON.stringify({ motion: 'reduced' }))).toEqual({
+      textSize: 'default',
       motion: 'reduced',
       ignoreCustomTheme: false,
     });
@@ -51,13 +55,21 @@ describe('resolvePrefs', () => {
   });
 
   it('reduces motion when chosen in the app, whatever the device says', () => {
-    expect(resolvePrefs({ motion: 'reduced', ignoreCustomTheme: false }, { reduceMotion: false }).reduceMotion).toBe(
+    expect(resolvePrefs({ ...DEFAULT_ACCESSIBILITY_PREFS, motion: 'reduced' }, { reduceMotion: false }).reduceMotion).toBe(
       true,
     );
   });
 
+  it('turns the text size into a multiplier', () => {
+    const at = (textSize: 'default' | 'large' | 'xl') =>
+      resolvePrefs({ ...DEFAULT_ACCESSIBILITY_PREFS, textSize }, { reduceMotion: false }).fontScale;
+    expect(at('default')).toBe(1);
+    expect(at('large')).toBe(1.15);
+    expect(at('xl')).toBe(1.3);
+  });
+
   it('passes the theme choice through', () => {
-    expect(resolvePrefs({ motion: 'system', ignoreCustomTheme: true }, { reduceMotion: false }).ignoreCustomTheme).toBe(
+    expect(resolvePrefs({ ...DEFAULT_ACCESSIBILITY_PREFS, ignoreCustomTheme: true }, { reduceMotion: false }).ignoreCustomTheme).toBe(
       true,
     );
   });
@@ -66,8 +78,9 @@ describe('resolvePrefs', () => {
 describe('isDefaultPrefs', () => {
   it('is true only when every setting is at its default', () => {
     expect(isDefaultPrefs({ ...DEFAULT_ACCESSIBILITY_PREFS })).toBe(true);
-    expect(isDefaultPrefs({ motion: 'reduced', ignoreCustomTheme: false })).toBe(false);
-    expect(isDefaultPrefs({ motion: 'system', ignoreCustomTheme: true })).toBe(false);
+    expect(isDefaultPrefs({ ...DEFAULT_ACCESSIBILITY_PREFS, motion: 'reduced' })).toBe(false);
+    expect(isDefaultPrefs({ ...DEFAULT_ACCESSIBILITY_PREFS, ignoreCustomTheme: true })).toBe(false);
+    expect(isDefaultPrefs({ ...DEFAULT_ACCESSIBILITY_PREFS, textSize: 'large' })).toBe(false);
   });
 });
 
