@@ -43,4 +43,7 @@ module.exports = {
   withRepeat: identity,
   runOnJS: (fn) => fn,
   cancelAnimation: () => {},
+  ReduceMotion: { System: 'system', Always: 'always', Never: 'never' },
+  ReducedMotionConfig: () => null,
+  useReducedMotion: () => false,
 };
