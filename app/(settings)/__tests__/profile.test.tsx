@@ -123,6 +123,7 @@ describe('ProfileScreen', () => {
       'Edit Profile',
       'Change Theme',
       'Reset Password',
+      'Accessibility',
       'Support',
       'Feedback',
       'Log out',

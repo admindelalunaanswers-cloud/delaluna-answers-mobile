@@ -525,6 +525,27 @@ export default function ProfileScreen() {
           <TouchableOpacity
             style={ss.settingsRow}
             accessibilityRole="button"
+            onPress={() => router.push("/(settings)/accessibility")}
+            activeOpacity={0.75}
+          >
+            <Ionicons
+              name="accessibility-outline"
+              size={scale(18)}
+              color="#ffffff"
+              style={{ marginRight: scale(4) }}
+            />
+            <Text style={ss.rowText}>Accessibility</Text>
+            <Image
+              source={require("@/src/assets/actions/arrow-right-icon.png")}
+              style={ss.rowArrow}
+            />
+          </TouchableOpacity>
+
+          <View style={ss.rowDivider} />
+
+          <TouchableOpacity
+            style={ss.settingsRow}
+            accessibilityRole="button"
             onPress={() => router.push("/(util)/support")}
             activeOpacity={0.75}
           >
