@@ -109,6 +109,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "/(settings)/profile": "Profile",
   "/(settings)/edit-profile": "Edit Profile",
   "/(settings)/paywall": "Paywall",
+  "/(settings)/accessibility": "Accessibility",
   "/(util)/loading-screen": "Loading",
 };
 
