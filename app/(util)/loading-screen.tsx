@@ -1,8 +1,9 @@
 import React, { useContext, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, ImageBackground, StyleSheet, View } from 'react-native';
+import { Animated, ImageBackground, StyleSheet, View } from 'react-native';
 import LottieView from 'lottie-react-native';
 
 import { ThemeContext } from '@/src/context/theme-context';
+import { useReducedMotion } from '@/src/context/accessibility-context';
 import { ThemedText } from '@/src/components/themed-text';
 import { moderateScale, verticalScale } from '@/src/utils/responsive';
 
@@ -31,20 +32,8 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ progress, message }) => {
   const { theme } = useContext(ThemeContext);
   const [msgIndex, setMsgIndex] = useState(0);
   const fadeAnim = useRef(new Animated.Value(1)).current;
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  // Honour the system Reduce Motion setting: still animation, no cycling text.
-  useEffect(() => {
-    let mounted = true;
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((on) => { if (mounted) setReduceMotion(on); })
-      .catch(() => {});
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
-    return () => {
-      mounted = false;
-      sub?.remove();
-    };
-  }, []);
+  // Device Reduce Motion or the in-app setting: still animation, no cycling text.
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     if (message || reduceMotion) return; // static message — no cycling needed

@@ -3,6 +3,7 @@ import { AccessibilityInfo } from 'react-native';
 import { act, render, screen } from '@testing-library/react-native';
 
 import LoadingScreen from '@/app/(util)/loading-screen';
+import { AccessibilityPrefsProvider } from '@/src/context/accessibility-context';
 
 jest.mock('@/src/context/theme-context', () => {
   const { createContext } = jest.requireActual('react');
@@ -14,6 +15,10 @@ jest.mock('lottie-react-native', () => (props: unknown) => {
   return null;
 });
 
+// The real provider, so Reduce Motion is read from the device as in the app.
+const renderInApp = (ui: React.ReactElement) =>
+  render(<AccessibilityPrefsProvider>{ui}</AccessibilityPrefsProvider>);
+
 describe('LoadingScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -21,7 +26,7 @@ describe('LoadingScreen', () => {
   });
 
   it("reads as one element with the caller's message", async () => {
-    render(<LoadingScreen message="Creating your account..." />);
+    renderInApp(<LoadingScreen message="Creating your account..." />);
     await act(async () => {});
 
     expect(screen.getByLabelText('Creating your account...').props.accessibilityState?.busy).toBe(true);
@@ -29,7 +34,7 @@ describe('LoadingScreen', () => {
 
   // The rotating sayings change every 3s; reading each would be noise.
   it('falls back to a steady "Loading" when cycling', async () => {
-    render(<LoadingScreen />);
+    renderInApp(<LoadingScreen />);
     await act(async () => {});
 
     expect(screen.getByLabelText('Loading')).toBeTruthy();
@@ -37,7 +42,7 @@ describe('LoadingScreen', () => {
 
   // The bar was plain Views with no role or value.
   it('exposes progress as a progress bar', async () => {
-    render(<LoadingScreen progress={0.6} />);
+    renderInApp(<LoadingScreen progress={0.6} />);
     await act(async () => {});
 
     const bar = screen.getByRole('progressbar', { name: 'Loading' });
@@ -46,7 +51,16 @@ describe('LoadingScreen', () => {
 
   it('stills the animation when Reduce Motion is on', async () => {
     (AccessibilityInfo.isReduceMotionEnabled as jest.Mock).mockResolvedValue(true);
-    render(<LoadingScreen />);
+    renderInApp(<LoadingScreen />);
+    await act(async () => {});
+
+    expect(mockLottie.mock.calls.at(-1)[0]).toEqual(expect.objectContaining({ autoPlay: false, loop: false }));
+  });
+
+  it('stills the animation when Motion is set to Reduced in the app', async () => {
+    const AsyncStorage = jest.requireMock('@react-native-async-storage/async-storage');
+    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify({ motion: 'reduced' }));
+    renderInApp(<LoadingScreen />);
     await act(async () => {});
 
     expect(mockLottie.mock.calls.at(-1)[0]).toEqual(expect.objectContaining({ autoPlay: false, loop: false }));
