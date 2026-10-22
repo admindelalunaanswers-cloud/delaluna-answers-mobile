@@ -7,6 +7,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider, Slot, usePathname, useRouter, useSegments } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { ReduceMotion, ReducedMotionConfig } from 'react-native-reanimated';
 
 import { StatusBar } from 'expo-status-bar';
 
@@ -14,6 +15,7 @@ import { StatusBar } from 'expo-status-bar';
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 import ThemeProvider from '@/src/context/theme-context';
+import { AccessibilityPrefsProvider, useAccessibilityPrefs } from '@/src/context/accessibility-context';
 import { HoroscopeProvider, useHoroscope } from '@/src/context/horoscope-context';
 import { UserProvider, useUser } from '@/src/context/user-context';
 import { RevenueCatProvider } from '@/src/context/revenuecat-context';
@@ -257,6 +259,15 @@ function ThemedRoot({ children }: { children: ReactNode }) {
   );
 }
 
+// Every Reanimated animation in the app, layout animations included. 'System'
+// lets Reanimated read the device's Reduce Motion itself.
+function ReanimatedMotionConfig() {
+  const { prefs } = useAccessibilityPrefs();
+  return (
+    <ReducedMotionConfig mode={prefs.motion === 'reduced' ? ReduceMotion.Always : ReduceMotion.System} />
+  );
+}
+
 function VersionGate({ children }: { children: ReactNode }) {
   const { status, storeUrl, installedVersion } = useMinVersion();
   if (status === 'update-required') {
@@ -288,19 +299,23 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <VersionGate>
-          <UserProvider>
-            <RevenueCatProvider>
-              <AdminProvider>
-                <ThemeProvider>
-                  <HoroscopeProvider>
-                    <AuthGate />
-                  </HoroscopeProvider>
-                </ThemeProvider>
-              </AdminProvider>
-            </RevenueCatProvider>
-          </UserProvider>
-        </VersionGate>
+        {/* Above ThemeProvider, which reads "Ignore custom theme" from it. */}
+        <AccessibilityPrefsProvider>
+          <ReanimatedMotionConfig />
+          <VersionGate>
+            <UserProvider>
+              <RevenueCatProvider>
+                <AdminProvider>
+                  <ThemeProvider>
+                    <HoroscopeProvider>
+                      <AuthGate />
+                    </HoroscopeProvider>
+                  </ThemeProvider>
+                </AdminProvider>
+              </RevenueCatProvider>
+            </UserProvider>
+          </VersionGate>
+        </AccessibilityPrefsProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
