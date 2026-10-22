@@ -1,9 +1,10 @@
-import React, { createContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import type { ColorValue, ImageSourcePropType } from 'react-native';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebaseConfig';
 import { Events } from '@/src/services/analytics.service';
+import { AccessibilityContext } from '@/src/context/accessibility-context';
 
 // Safe AsyncStorage wrapper — silently no-ops if native module isn't in the build yet
 let AsyncStorage: { getItem(k: string): Promise<string | null>; setItem(k: string, v: string): Promise<void> };
@@ -160,8 +161,12 @@ const GLOBAL_KEY = 'themeKey';
 
 // ===== Context =====
 export interface ThemeContextType {
+  /** The theme to draw with — the default one while the custom theme is ignored. */
   theme: Theme;
+  /** The theme the user chose. Kept while it is ignored, so it comes back. */
   themeKey: string;
+  /** Accessibility → "Ignore custom theme" is on. */
+  customThemeIgnored: boolean;
   setThemeKey: (key: string) => Promise<void>;
   themes: Record<string, Theme>;
 }
@@ -169,6 +174,7 @@ export interface ThemeContextType {
 export const ThemeContext = createContext<ThemeContextType>({
   theme: allThemes.default,
   themeKey: 'default',
+  customThemeIgnored: false,
   setThemeKey: async () => {},
   themes: allThemes,
 });
@@ -177,6 +183,7 @@ export const ThemeContext = createContext<ThemeContextType>({
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
   const [themeKey, _setThemeKey] = useState<string>('default');
+  const customThemeIgnored = useContext(AccessibilityContext).resolved.ignoreCustomTheme;
 
   const setThemeKey = useCallback(async (key: string) => {
     if (!allThemes[key]) return;
@@ -222,10 +229,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   if (!hydrated) return null;
 
+  const shownKey = customThemeIgnored ? 'default' : themeKey;
   const currentTheme: Theme = {
-    ...allThemes[themeKey],
+    ...allThemes[shownKey],
     isDark: (() => {
-      const t = allThemes[themeKey];
+      const t = allThemes[shownKey];
       const bg = t.colors.background.toString().toLowerCase();
       const header = t.colors.headerBg.toString().toLowerCase();
       const darkColors = ['#000', '#1c2541', '#240046', '#013220', '#000080'];
@@ -234,7 +242,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <ThemeContext.Provider value={{ theme: currentTheme, themeKey, setThemeKey, themes: allThemes }}>
+    <ThemeContext.Provider value={{ theme: currentTheme, themeKey, customThemeIgnored, setThemeKey, themes: allThemes }}>
       {children}
     </ThemeContext.Provider>
   );
