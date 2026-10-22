@@ -41,6 +41,7 @@ import { ThemedView } from "@/src/components/themed-view";
 import { HOME_STRINGS } from "@/src/constants/strings";
 import { C, R, S } from "@/src/constants/theme";
 import { useAdmin } from "@/src/context/admin-context";
+import { useReducedMotion } from "@/src/context/accessibility-context";
 import { useHoroscope } from "@/src/context/horoscope-context";
 import { useRevenueCat } from "@/src/context/revenuecat-context";
 import { useUser } from "@/src/context/user-context";
@@ -156,8 +157,10 @@ function TypingDots() {
     useRef(new Animated.Value(0)).current,
     useRef(new Animated.Value(0)).current,
   ];
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
+    if (reduceMotion) return; // the three dots still read as "typing" standing still
     const anims = dots.map((dot, i) =>
       Animated.loop(
         Animated.sequence([
@@ -177,9 +180,12 @@ function TypingDots() {
       ),
     );
     anims.forEach((a) => a.start());
-    return () => anims.forEach((a) => a.stop());
+    return () => {
+      anims.forEach((a) => a.stop());
+      dots.forEach((dot) => dot.setValue(0));
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [reduceMotion]);
 
   return (
     <View style={styles.typingRow}>
