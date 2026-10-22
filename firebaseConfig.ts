@@ -40,6 +40,9 @@ import { Platform } from "react-native";
 // Firebase Core
 import { FirebaseOptions, getApp, getApps, initializeApp } from "firebase/app";
 
+// App Check
+import { startAppCheck } from "@/src/services/app-check.service";
+
 // Auth
 import { SecureAuthStorage } from "@/src/services/secure-auth-storage";
 import {
@@ -155,6 +158,11 @@ if (USE_EMULATOR) {
   connectFunctionsEmulator(functions, host, 5001);
   connectStorageEmulator(storage, host, 9199);
   logger.debug("[firebase] emulators attached at", host);
+} else {
+  // App Check tokens on every JS SDK request — see src/services/app-check.service.ts.
+  // Skipped against the emulators, which ignore them. This file runs to the end
+  // before anything can make a request, so the tokens are in place for the first.
+  startAppCheck(app, { debugToken: extra?.APP_CHECK_DEBUG_TOKEN || undefined });
 }
 
 export { app };
