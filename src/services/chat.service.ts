@@ -222,19 +222,33 @@ export interface ChatUsage {
 }
 
 /**
+ * The UTC offset, in minutes, that names the user's billing day: the stored
+ * offset when it is a real one (−12:00 to +14:00, whole minutes), else 0.
+ *
+ * Mirrors `billingOffsetMinutes` in functions/src/index.ts — keep them in step.
+ * The server rejects anything else because every distinct day id is a fresh
+ * allowance, and the user writes the offset.
+ */
+export function billingOffsetMinutes(offsetMinutes?: number): number {
+  return typeof offsetMinutes === 'number' &&
+    Number.isInteger(offsetMinutes) &&
+    offsetMinutes >= -12 * 60 &&
+    offsetMinutes <= 14 * 60
+    ? offsetMinutes
+    : 0;
+}
+
+/**
  * Builds the `chatUsage` document id for the user's current local day.
  *
  * `sendChatMessage` bills against the day derived from the
  * `timezoneOffsetMinutes` stored on the user doc, not the device clock — so
  * the counter has to name the day the same way or it would read a different
  * ledger document than the one the server writes. Falls back to the UTC date
- * when the offset is missing, exactly as the server does.
+ * when the offset is missing or not a real offset, exactly as the server does.
  */
 export function chatUsageDayId(offsetMinutes?: number): string {
-  const d =
-    typeof offsetMinutes === 'number' && Number.isFinite(offsetMinutes)
-      ? new Date(Date.now() + offsetMinutes * 60 * 1000)
-      : new Date();
+  const d = new Date(Date.now() + billingOffsetMinutes(offsetMinutes) * 60 * 1000);
   return [
     d.getUTCFullYear(),
     String(d.getUTCMonth() + 1).padStart(2, '0'),
@@ -249,10 +263,7 @@ export function chatUsageDayId(offsetMinutes?: number): string {
  * usage to someone who left the app open overnight.
  */
 export function msUntilNextChatUsageDay(offsetMinutes?: number): number {
-  const now =
-    typeof offsetMinutes === 'number' && Number.isFinite(offsetMinutes)
-      ? new Date(Date.now() + offsetMinutes * 60 * 1000)
-      : new Date();
+  const now = new Date(Date.now() + billingOffsetMinutes(offsetMinutes) * 60 * 1000);
   const nextDay = Date.UTC(
     now.getUTCFullYear(),
     now.getUTCMonth(),

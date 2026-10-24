@@ -113,6 +113,9 @@ module.exports = {
       "./plugins/with-adi-registration",
       "./plugins/with-fmt-consteval-fix",
       "expo-router",
+      // Before "@react-native-firebase/app", and instead of the app-check package's
+      // own plugin — see the header of the file for both.
+      "./plugins/with-app-check-ios",
       "@react-native-firebase/app",
       "@react-native-firebase/perf",
       "@react-native-firebase/crashlytics",
@@ -198,7 +201,17 @@ module.exports = {
       EMULATOR_HOST_IOS: process.env.EMULATOR_HOST_IOS,
       REVENUECAT_AAS_API_KEY: process.env.REVENUECAT_AAS_API_KEY,
       REVENUECAT_GPS_API_KEY: process.env.REVENUECAT_GPS_API_KEY,
-      REVENUECAT_TST_API_KEY: process.env.REVENUECAT_TST_API_KEY,
+      // Test Store purchases are free, and everything in `extra` is readable from
+      // an installed build, so a production build must not carry this key.
+      REVENUECAT_TST_API_KEY: USES_TEST_BACKEND
+        ? process.env.REVENUECAT_TST_API_KEY
+        : undefined,
+      // App Check debug token for dev builds (src/services/app-check.service.ts).
+      // A registered debug token passes App Check from any device, so a
+      // production build must never carry one.
+      APP_CHECK_DEBUG_TOKEN: USES_TEST_BACKEND
+        ? process.env.APP_CHECK_DEBUG_TOKEN
+        : undefined,
       // No RevenueCat secret (sk_) keys here. Everything under `extra` is
       // serialized into the app manifest and readable from any installed build
       // via `Constants.expoConfig.extra`, so an sk_ key placed here is public.

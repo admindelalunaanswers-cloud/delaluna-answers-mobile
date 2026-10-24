@@ -160,7 +160,9 @@ export function logError(
         screen:        label,
         screenPath,
         metricType:    'error',
-        errorMessage,
+        // firestore.rules caps it at 2,000 characters and rejects the whole event
+        // past that, which safeWrite would drop silently.
+        errorMessage:  errorMessage.slice(0, 2000),
         userId:        opts?.userId ?? null,
         isPro:         opts?.isPro ?? false,
         ...getSessionData(),

@@ -40,9 +40,10 @@
     "@react-native-community/datetimepicker": "9.1.0",
     "@react-native-firebase/analytics": "^24.0.0",
     "@react-native-firebase/app": "^24.0.0",
+    "@react-native-firebase/app-check": "^24.1.1",
     "@react-native-firebase/crashlytics": "^24.0.0",
     "@react-native-firebase/perf": "^24.0.0",
-    "@react-native-google-signin/google-signin": "^16.1.2",
+    "@react-native-google-signin/google-signin": "^16.1.4",
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
@@ -96,7 +97,7 @@
     "react-native-swisseph": "^0.2.1",
     "react-native-view-shot": "5.1.0",
     "react-native-worklets": "0.10.1",
-    "zod": "^4.3.6"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
@@ -127,6 +128,11 @@
     "@firebase/util@1.15.1": true,
     "protobufjs@7.6.5": true,
     "unrs-resolver@1.12.2": true
+  },
+  "overrides": {
+    "react-native-markdown-display": {
+      "markdown-it": "^14.3.3"
+    }
   },
   "volta": {
     "node": "20.19.5"
