@@ -221,3 +221,4 @@ device-captures/latest.mp4
 .specify/workflows/speckit/workflow.yml
 device-captures/
 scripts/cleanup-orphaned-connection-data.js
+firebase-debug 2.log
