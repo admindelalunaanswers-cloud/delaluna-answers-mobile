@@ -5,8 +5,9 @@
  * (`src/components/home/tarot-card-image-view.component.tsx`) — same slot size,
  * same card art, same shop links — with two differences the chat flow calls
  * for: the button reads **Draw** rather than "Tap to Reveal Cards", and the
- * reveal is the shuffle choreography from `src/assets/animations/TarotShuffle`
- * (gather → mix → spread → flip) instead of a straight flip.
+ * reveal is a shuffle choreography (gather → mix → spread → flip) instead of a
+ * straight flip. It was ported from a standalone `TarotShuffle` component that
+ * nothing else used and has since been removed; see `d0115a3` for the original.
  *
  * The choreography is written against RN's `Animated` rather than Reanimated
  * because it is a promise-sequenced storyboard; the home screen's single flip
