@@ -130,6 +130,8 @@ function Stepper({
           activeOpacity={0.7}
           accessibilityRole="button"
           accessibilityLabel={`Decrease ${label}`}
+          // Grows the ~30pt button to a 44pt touch target without moving the layout.
+          hitSlop={{ top: 7, bottom: 7, left: 7, right: 7 }}
         >
           <Ionicons name="remove" size={scale(18)} color="#6FFFE9" />
         </TouchableOpacity>
@@ -143,6 +145,8 @@ function Stepper({
           activeOpacity={0.7}
           accessibilityRole="button"
           accessibilityLabel={`Increase ${label}`}
+          // Grows the ~30pt button to a 44pt touch target without moving the layout.
+          hitSlop={{ top: 7, bottom: 7, left: 7, right: 7 }}
         >
           <Ionicons name="add" size={scale(18)} color="#6FFFE9" />
         </TouchableOpacity>

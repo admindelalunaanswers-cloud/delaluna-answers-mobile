@@ -16,6 +16,15 @@ describe('MessageInABottleComponent', () => {
     expect(screen.getByRole('button', { name: 'Send message' })).toBeEnabled();
   });
 
+  // The circle is ~32pt; the hit slop is what makes it a 44pt target.
+  it('gives Send a touch target larger than the circle', () => {
+    render(<MessageInABottleComponent placeholder="Message to the universe" />);
+
+    expect(screen.getByRole('button', { name: 'Send message' }).props.hitSlop).toEqual({
+      top: 6, bottom: 6, left: 6, right: 6,
+    });
+  });
+
   // "Tap anywhere to close" meant nothing without sight of the screen.
   it('reads the reply as one button that closes it', () => {
     render(<MessageInABottleComponent placeholder="Message to the universe" />);

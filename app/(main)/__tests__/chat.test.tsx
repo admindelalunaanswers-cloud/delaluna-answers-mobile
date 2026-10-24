@@ -199,6 +199,15 @@ describe('ChatScreen', () => {
     expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled();
   });
 
+  // The circle is 40pt; the hit slop is what makes it a 44pt-plus target.
+  it('gives Send a touch target larger than the circle', async () => {
+    await renderChat();
+
+    expect(screen.getByRole('button', { name: 'Send' }).props.hitSlop).toEqual({
+      top: 4, bottom: 4, left: 4, right: 4,
+    });
+  });
+
   it('sends the typed question', async () => {
     await renderChat();
     fireEvent.changeText(screen.getByLabelText('Message Delaluna'), 'Is today lucky?');

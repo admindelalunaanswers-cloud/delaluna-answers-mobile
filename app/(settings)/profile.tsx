@@ -277,6 +277,8 @@ export default function ProfileScreen() {
             // Icon-only
             accessibilityRole="button"
             accessibilityLabel="Change profile image"
+            // Grows the ~30pt badge to a 44pt touch target without moving the layout.
+            hitSlop={{ top: 7, bottom: 7, left: 7, right: 7 }}
           >
             <Ionicons name="pencil" size={scale(22)} color="#6FFFE9" />
           </TouchableOpacity>

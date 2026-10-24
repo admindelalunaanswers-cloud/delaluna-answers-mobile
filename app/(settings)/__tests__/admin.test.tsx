@@ -85,6 +85,15 @@ describe('AdminScreen', () => {
     expect(screen.getByLabelText('Decrease Free daily chat questions')).toBeTruthy();
   });
 
+  // The stepper buttons are ~30pt; the hit slop is what makes them 44pt targets.
+  it('gives the stepper buttons touch targets larger than the buttons', () => {
+    render(<AdminScreen />);
+
+    const slop = { top: 7, bottom: 7, left: 7, right: 7 };
+    expect(screen.getByLabelText('Increase Free daily chat questions').props.hitSlop).toEqual(slop);
+    expect(screen.getByLabelText('Decrease Free daily chat questions').props.hitSlop).toEqual(slop);
+  });
+
   // The checked dot was only drawn.
   it('exposes the plan options as radios', () => {
     render(<AdminScreen />);

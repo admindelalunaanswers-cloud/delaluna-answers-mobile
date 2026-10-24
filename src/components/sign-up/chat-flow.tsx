@@ -1353,6 +1353,10 @@ const styles = StyleSheet.create({
   sendButton: {
     width: scale(44),
     height: scale(44),
+    // scale() shrinks below 44pt on screens narrower than 375pt (42pt at 360).
+    // A floor rather than a hitSlop: the neighbouring buttons already have one.
+    minWidth: 44,
+    minHeight: 44,
     borderRadius: scale(22),
     backgroundColor: "rgba(111,255,233,0.15)",
     borderWidth: 1,

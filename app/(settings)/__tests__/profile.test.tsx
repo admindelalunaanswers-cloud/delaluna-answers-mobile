@@ -88,6 +88,15 @@ describe('ProfileScreen', () => {
     expect(router.push).toHaveBeenCalledWith('/(settings)/select-avatar');
   });
 
+  // The badge is ~30pt; the hit slop is what makes it a 44pt target.
+  it('gives the avatar edit button a touch target larger than the badge', () => {
+    render(<ProfileScreen />);
+
+    expect(screen.getByRole('button', { name: 'Change profile image' }).props.hitSlop).toEqual({
+      top: 7, bottom: 7, left: 7, right: 7,
+    });
+  });
+
   it('marks the section labels as headings', () => {
     render(<ProfileScreen />);
 

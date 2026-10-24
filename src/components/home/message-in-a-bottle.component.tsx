@@ -71,6 +71,8 @@ export default function MessageInABottleComponent({
           accessibilityRole="button"
           accessibilityLabel="Send message"
           accessibilityState={{ disabled: !message.trim() }}
+          // Grows the ~32pt circle to a 44pt touch target without moving the layout.
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
         >
           <Ionicons name="send" size={scale(18)} color="#FFF" />
         </TouchableOpacity>
