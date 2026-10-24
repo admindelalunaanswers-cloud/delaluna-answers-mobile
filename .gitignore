@@ -77,6 +77,7 @@ app.apk
 !/scripts/regenerate-user.js
 !/scripts/cleanup-orphaned-connection-data.js
 !/scripts/security-smoke-test.js
+!/scripts/security-pentest.js
 
 # credentials
 /credentials.json

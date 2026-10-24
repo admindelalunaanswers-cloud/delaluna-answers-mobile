@@ -1384,6 +1384,9 @@ async function assertTargetIsNotAdmin(targetUid: string): Promise<void> {
 export const setUserDisabled = onCall(
   { invoker: "public" },
   async (request) => {
+    // Before parsing, so a caller who isn't an admin learns nothing about the
+    // input format from validation errors.
+    requireAdminCaller(request);
     const input = parseInput(SetUserDisabledSchema, request.data);
     const adminUid = requireAdminActingOnOther(request, input.targetUid);
     await assertTargetIsNotAdmin(input.targetUid);
@@ -1440,6 +1443,8 @@ export const setUserDisabled = onCall(
 export const setUserFeatureBlocks = onCall(
   { invoker: "public" },
   async (request) => {
+    // Before parsing — see setUserDisabled.
+    requireAdminCaller(request);
     const input = parseInput(SetUserFeatureBlocksSchema, request.data);
     const adminUid = requireAdminActingOnOther(request, input.targetUid);
     await assertTargetIsNotAdmin(input.targetUid);
@@ -2473,7 +2478,14 @@ export const parseConnectionCompatibility = onDocumentUpdated(
       await invalidateAnchor(userId);
       parseOk = true;
     } catch (err) {
-      console.error("[parseConnectionCompatibility] Parse error:", err);
+      // The shape, not the contents: a JSON.parse error quotes the text it
+      // failed on, and this text is a reading of two named people with their
+      // birth details. Cloud Logging would keep it.
+      const reason = err instanceof Error ? err.name : "unknown";
+      const length = typeof after.response === "string" ? after.response.length : 0;
+      console.error(
+        `[parseConnectionCompatibility] Parse error — ${reason}, response ${length} chars`,
+      );
       await connectionRef.update({
         "status.state": "error",
       });
