@@ -1535,6 +1535,8 @@ export default function ChatScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={isSending ? "Sending" : "Send"}
                 accessibilityState={{ disabled: sendDisabled, busy: isSending }}
+                // Grows the 40pt circle to a 48pt touch target without moving the layout.
+                hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
               >
                 {isSending ? (
                   <ActivityIndicator size="small" color={C.white} />
