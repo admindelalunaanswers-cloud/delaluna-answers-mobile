@@ -94,6 +94,11 @@ module.exports = {
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         UIBackgroundModes: ["remote-notification"],
+        // iOS 27 made the UIApplication status bar API a no-op, so the style has
+        // to come from the root view controller (src/components/app-status-bar.tsx).
+        // Expo's template sets this to NO; with YES, React Native's StatusBar
+        // errors on every call, so nothing may render expo-status-bar on iOS.
+        UIViewControllerBasedStatusBarAppearance: true,
       },
     },
     android: {

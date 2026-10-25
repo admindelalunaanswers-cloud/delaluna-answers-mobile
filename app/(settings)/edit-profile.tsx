@@ -17,7 +17,7 @@ import { Text, TextInput } from '@/src/components/app-text';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
-import { StatusBar } from 'expo-status-bar';
+import { AppStatusBar } from '@/src/components/app-status-bar';
 import { updateEmail } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
@@ -616,7 +616,7 @@ export default function EditProfileScreen() {
 
   return (
     <ImageBackground source={theme.backgroundImage} style={ss.bg} resizeMode="cover">
-      <StatusBar style="light" />
+      <AppStatusBar style="light" />
       <BlurView intensity={15} tint="dark" style={ss.overlay}>
 
         {/* Header */}

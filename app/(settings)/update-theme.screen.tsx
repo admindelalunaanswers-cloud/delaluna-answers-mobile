@@ -9,7 +9,7 @@ import {
   Alert,
 } from "react-native";
 import { Text } from "@/src/components/app-text";
-import { StatusBar } from "expo-status-bar";
+import { AppStatusBar } from "@/src/components/app-status-bar";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { doc, setDoc } from "firebase/firestore";
@@ -107,7 +107,7 @@ export default function ChangeThemeScreen() {
   return renderBackground(
     <View style={[styles.container, { backgroundColor: "transparent" }]}>
       {/* Dynamic StatusBar based on theme */}
-      <StatusBar style={theme.isDark ? "light" : "dark"} />
+      <AppStatusBar style={theme.isDark ? "light" : "dark"} />
 
 
       {/* Absolute Header */}

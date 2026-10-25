@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
+import { AppStatusBar } from '@/src/components/app-status-bar';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import React, { useRef, useState } from 'react';
 import {
@@ -78,7 +78,7 @@ export default function ForgotPasswordScreen() {
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
             style={styles.background}>
-            <StatusBar style="light" />
+            <AppStatusBar style="light" />
             <KeyboardAvoidingView
                 style={styles.background}
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

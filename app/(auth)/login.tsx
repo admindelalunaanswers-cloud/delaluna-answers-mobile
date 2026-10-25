@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import { StatusBar } from "expo-status-bar";
+import { AppStatusBar } from "@/src/components/app-status-bar";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc, serverTimestamp } from "firebase/firestore";
 
@@ -157,7 +157,7 @@ export default function Login() {
 
   return (
     <>
-      <StatusBar style="light" />
+      <AppStatusBar style="light" />
 
       <ImageBackground
         source={require("@/src/assets/start-up/welcome-background.jpg")}

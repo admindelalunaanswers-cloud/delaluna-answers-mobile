@@ -9,7 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ReduceMotion, ReducedMotionConfig } from 'react-native-reanimated';
 
-import { StatusBar } from 'expo-status-bar';
+import { AppStatusBar } from '@/src/components/app-status-bar';
 
 // Keep the native splash visible until AuthGate decides what to render.
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -252,8 +252,15 @@ function ThemedRoot({ children }: { children: ReactNode }) {
       resizeMode="cover"
     >
       <NavThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        {/* The app-wide default. Light, not "auto": every screen that relies on it
+            has a dark background, and "auto" meant dark text on them whenever the
+            phone was in light mode. Screens on a light theme set their own
+            (HeaderNav).
+            Before {children}, not after: effects run in tree order, so this joins
+            the status bar stack first and a screen's own one stacks above it. After
+            them, it mounted last and overrode the first screen on a cold start. */}
+        <AppStatusBar style="light" />
         {children}
-        <StatusBar style="auto" />
       </NavThemeProvider>
     </ImageBackground>
   );
