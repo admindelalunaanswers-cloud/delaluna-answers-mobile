@@ -73,7 +73,6 @@ app.apk
 # so the negation below only works if the directory itself stays untracked-eligible)
 /scripts/*
 !/scripts/exclude-dev-client.js
-!/scripts/sync-admin-env.js
 !/scripts/regenerate-user.js
 !/scripts/cleanup-orphaned-connection-data.js
 !/scripts/security-smoke-test.js
