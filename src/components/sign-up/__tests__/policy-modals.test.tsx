@@ -1,8 +1,38 @@
 import React from 'react';
-import { Modal } from 'react-native';
+import { ImageBackground, Modal } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import PolicyModal from '@/src/components/sign-up/policy-modals';
+
+const THEME_IMAGE = { uri: 'theme-background' };
+
+// HeaderNav and the modal both read the theme; the real context imports
+// firebaseConfig, which throws under Jest.
+jest.mock('@/src/context/theme-context', () => {
+  const { createContext } = jest.requireActual('react');
+  return {
+    ThemeContext: createContext({
+      theme: {
+        isDark: true,
+        backgroundImage: { uri: 'theme-background' },
+        colors: { headerBg: '#000', headerText: '#fff' },
+      },
+    }),
+  };
+});
+jest.mock('@/src/components/themed-text', () => {
+  const { Text } = jest.requireActual('react-native');
+  return { ThemedText: Text };
+});
+jest.mock('@/src/components/themed-view', () => {
+  const { View } = jest.requireActual('react-native');
+  return { ThemedView: View };
+});
+jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
+jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
 
 const POLICY = `# Privacy Policy
 
@@ -31,6 +61,14 @@ describe('PolicyModal', () => {
 
     screen.UNSAFE_getByType(Modal).props.onRequestClose();
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  // A Modal is its own window, so the app's background never reached it and
+  // the policy showed on plain white.
+  it('draws the theme background behind the policy', () => {
+    renderModal();
+
+    expect(screen.UNSAFE_getByType(ImageBackground).props.source).toEqual(THEME_IMAGE);
   });
 
   it('names Close by what it closes', () => {
