@@ -98,7 +98,7 @@ module.exports = {
         // to come from the root view controller (src/components/app-status-bar.tsx).
         // Expo's template sets this to NO; with YES, React Native's StatusBar
         // errors on every call, so nothing may render expo-status-bar on iOS.
-        UIViewControllerBasedStatusBarAppearance: true,
+        UIViewControllerBasedStatusBarAppearance: false,
       },
     },
     android: {
