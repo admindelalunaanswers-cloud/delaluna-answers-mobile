@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
   },
   backdropTouch: { flex: 1 },
   sheet: {
-    backgroundColor: '#15152a',
+    backgroundColor: C.deepSpace,
     borderTopLeftRadius: R.xl,
     borderTopRightRadius: R.xl,
     paddingHorizontal: S.md,

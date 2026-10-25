@@ -1,4 +1,6 @@
+import { GlassButton } from "@/src/assets/buttons/glass-button";
 import HeaderNav from "@/src/components/shared/header-nav";
+import { C } from "@/src/constants/theme";
 import { STORE_LINKS } from "@/src/constants/links";
 import { useAnnounce } from "@/src/hooks/use-announce";
 import { submitFeedback } from "@/src/services/feedback.service";
@@ -9,7 +11,6 @@ import { router } from "expo-router";
 import * as StoreReview from "expo-store-review";
 import React, { useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Linking,
@@ -26,14 +27,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 const COLORS = {
   card: "rgba(255,255,255,0.06)", // translucent so the theme background shows through, as on Profile
   border: "rgba(255,255,255,0.1)",
-  primary: "#7c6fd4",
-  light: "#c8bfff",
-  muted: "#6b5fa8", // icons and dividers only — too low-contrast for text
+  primary: C.turquoise,
+  light: C.purpleLight,
+  muted: C.purple, // icons and dividers only — too low-contrast for text
   mutedText: "rgba(255,255,255,0.7)", // matches Profile; sits on the theme image, not a flat fill
-  star: "#f0c040",
-  text: "#ffffff",
+  star: C.gold,
+  text: C.white,
   subText: "rgba(255,255,255,0.7)",
-  placeholder: "rgba(200,191,255,0.35)",
+  placeholder: "rgba(255,255,255,0.45)",
 };
 
 const FONT = Platform.select({
@@ -256,15 +257,9 @@ export default function FeedbackScreen() {
           <Text style={s.stateBody}>
             Leave a Review — your words help other seekers find Delaluna.
           </Text>
-          <TouchableOpacity
-            style={s.primaryBtn}
-            onPress={handleLeaveReview}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Leave review"
-          >
-            <Text style={s.primaryBtnText}>Leave Review ✦</Text>
-          </TouchableOpacity>
+          <View style={s.primaryBtnWrap}>
+            <GlassButton title="Leave Review ✦" accessibilityLabel="Leave review" onPress={handleLeaveReview} />
+          </View>
           <TouchableOpacity onPress={() => router.back()} style={s.linkBtn} accessibilityRole="button">
             <Text style={s.linkText}>Not now</Text>
           </TouchableOpacity>
@@ -290,14 +285,9 @@ export default function FeedbackScreen() {
             Thank you for the honest reflection. Want to tell us more so we can
             make it right?
           </Text>
-          <TouchableOpacity
-            style={s.primaryBtn}
-            onPress={handleContactSupport}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-          >
-            <Text style={s.primaryBtnText}>Contact Support</Text>
-          </TouchableOpacity>
+          <View style={s.primaryBtnWrap}>
+            <GlassButton title="Contact Support" onPress={handleContactSupport} />
+          </View>
           <TouchableOpacity onPress={() => router.back()} style={s.linkBtn} accessibilityRole="button">
             <Text style={s.linkText}>No thanks, go home</Text>
           </TouchableOpacity>
@@ -367,9 +357,9 @@ export default function FeedbackScreen() {
               onValueChange={setAllowFollowUp}
               trackColor={{
                 false: "rgba(255,255,255,0.12)",
-                true: "rgba(124,111,212,0.6)",
+                true: C.turquoise,
               }}
-              thumbColor={allowFollowUp ? COLORS.primary : "#f4f3f4"}
+              thumbColor="#f4f3f4"
               ios_backgroundColor="rgba(255,255,255,0.12)"
               // The text beside a Switch isn't its name; it carries both here
               // (the visible copy is hidden from screen readers to avoid reading it twice)
@@ -378,23 +368,17 @@ export default function FeedbackScreen() {
             />
           </View>
 
-          <TouchableOpacity
-            onPress={handleSubmit}
-            disabled={!canSubmit}
-            style={[s.primaryBtn, !canSubmit && s.btnDisabled]}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            // Stays named while the spinner replaces the text, and says why it's disabled
-            accessibilityLabel="Send feedback"
-            accessibilityHint={rating === 0 ? "Choose a rating first" : undefined}
-            accessibilityState={{ disabled: !canSubmit, busy: submitState === "submitting" }}
-          >
-            {submitState === "submitting" ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={s.primaryBtnText}>Send Feedback ✦</Text>
-            )}
-          </TouchableOpacity>
+          <View style={s.primaryBtnWrap}>
+            <GlassButton
+              title={submitState === "submitting" ? "Sending…" : "Send Feedback ✦"}
+              onPress={handleSubmit}
+              disabled={!canSubmit}
+              busy={submitState === "submitting"}
+              // Stays named while sending, and says why it's disabled
+              accessibilityLabel="Send feedback"
+              accessibilityHint={rating === 0 ? "Choose a rating first" : undefined}
+            />
+          </View>
 
           <View style={{ height: verticalScale(48) }} />
         </ScrollView>
@@ -475,7 +459,7 @@ const s = StyleSheet.create({
   },
   chipOn: {
     borderColor: COLORS.primary,
-    backgroundColor: "rgba(124,111,212,0.18)",
+    backgroundColor: "rgba(111,255,233,0.12)",
   },
   chipText: {
     color: COLORS.subText,
@@ -522,22 +506,7 @@ const s = StyleSheet.create({
     marginTop: 2,
   },
 
-  primaryBtn: {
-    marginTop: verticalScale(24),
-    backgroundColor: COLORS.primary,
-    borderRadius: 999,
-    paddingVertical: verticalScale(14),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  primaryBtnText: {
-    color: "#fff",
-    fontFamily: FONT,
-    fontSize: moderateScale(15),
-    fontWeight: "700",
-    letterSpacing: 0.3,
-  },
-  btnDisabled: { opacity: 0.45 },
+  primaryBtnWrap: { marginTop: verticalScale(24), alignItems: "center" },
 
   // Confirmation states
   statePanel: {

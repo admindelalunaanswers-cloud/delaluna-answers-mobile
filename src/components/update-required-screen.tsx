@@ -2,6 +2,7 @@ import { Alert, Linking, Platform, Pressable, StyleSheet, View } from 'react-nat
 import { Text } from '@/src/components/app-text';
 
 import { STORE_LINKS } from '@/src/constants/links';
+import { C } from '@/src/constants/theme';
 
 type Props = {
   storeUrl: string | null;
@@ -49,38 +50,38 @@ export function UpdateRequiredScreen({ storeUrl, installedVersion }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0d0d1a',
+    backgroundColor: C.nebula, // above ThemeProvider, so no theme image here,
     paddingHorizontal: 32,
     justifyContent: 'center',
     alignItems: 'center',
   },
   title: {
-    color: '#a78bfa',
+    color: C.purpleLight,
     fontSize: 28,
     fontWeight: '700',
     marginBottom: 16,
     textAlign: 'center',
   },
   body: {
-    color: '#e6e9f0',
+    color: C.white,
     fontSize: 16,
     lineHeight: 22,
     textAlign: 'center',
     marginBottom: 12,
   },
   version: {
-    color: '#9ca3af',
+    color: C.muted,
     fontSize: 14,
     marginBottom: 32,
   },
   button: {
-    backgroundColor: '#a78bfa',
+    backgroundColor: C.turquoise,
     paddingHorizontal: 28,
     paddingVertical: 14,
     borderRadius: 999,
   },
   buttonText: {
-    color: '#0d0d1a',
+    color: C.cosmos,
     fontSize: 16,
     fontWeight: '600',
   },

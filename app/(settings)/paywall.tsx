@@ -43,7 +43,6 @@ export default function PaywallScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1A0B3B',
     justifyContent: 'center',
     alignItems: 'center',
   },

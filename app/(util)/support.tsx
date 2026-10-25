@@ -15,17 +15,17 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import HeaderNav from '@/src/components/shared/header-nav';
+import { C } from '@/src/constants/theme';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
 
 const COLORS = {
   card: 'rgba(255,255,255,0.06)', // translucent so the theme background shows through, as on Profile
   border: 'rgba(255,255,255,0.1)',
-  primary: '#7c6fd4',
-  light: '#c8bfff',
-  muted: '#6b5fa8', // icons and dividers only — too low-contrast for text
+  light: C.purpleLight,
+  muted: C.purple, // icons and dividers only — too low-contrast for text
   mutedText: 'rgba(255,255,255,0.7)', // matches Profile; sits on the theme image, not a flat fill
-  text: '#ffffff',
+  text: C.white,
   subText: 'rgba(255,255,255,0.7)',
   available: '#4ade80',
 };
@@ -283,7 +283,7 @@ const s = StyleSheet.create({
     width: scale(36),
     height: scale(36),
     borderRadius: scale(18),
-    backgroundColor: 'rgba(124,111,212,0.18)',
+    backgroundColor: 'rgba(139,111,200,0.18)', // C.purple,
     alignItems: 'center',
     justifyContent: 'center',
   },

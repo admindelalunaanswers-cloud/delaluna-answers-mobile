@@ -1067,7 +1067,7 @@ const ss = StyleSheet.create({
     paddingHorizontal: scale(24),
   },
   reauthCard: {
-    backgroundColor: "#1a1a2e",
+    backgroundColor: C.deepSpace,
     borderRadius: scale(20),
     padding: scale(24),
     borderWidth: 1,

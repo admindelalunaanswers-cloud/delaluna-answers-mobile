@@ -33,6 +33,7 @@ import { requestTransitReading, getThisWeekDateId } from '@/src/services/transit
 import { updateUserChartInConnections, refreshSynastryReadingsForUser } from '@/src/services/connection.service';
 import type { NatalChartDetailsDoc } from '@/src/types/user.type';
 import { auth, db } from '@/firebaseConfig';
+import { C } from '@/src/constants/theme';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
 import {
   NominatimResult,
@@ -1132,7 +1133,7 @@ const ss = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
   },
   pickerSheet: {
-    backgroundColor: '#1c1c2e',
+    backgroundColor: C.deepSpace,
     borderTopLeftRadius: moderateScale(16),
     borderTopRightRadius: moderateScale(16),
     paddingBottom: verticalScale(24),
