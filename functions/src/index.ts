@@ -23,6 +23,7 @@ import {
   COMPATIBILITY_SCHEMA,
   NATAL_BREAKDOWN_SCHEMA,
   TRANSITS_SCHEMA,
+  IncompleteGenerationError,
   describeGenerationError,
   geminiApiKey,
   generateJson,
@@ -2659,6 +2660,16 @@ async function runAnchoredGeneration(opts: {
    * and generates from its own prompt alone.
    */
   anchored?: boolean;
+  /** Overrides the default MAX_OUTPUT_TOKENS circuit breaker for this feature. */
+  maxOutputTokens?: number;
+  /**
+   * Make one more attempt when the model stops before finishing (a repetition
+   * loop running into the token cap). Opt-in, because a looping attempt runs
+   * until the cap: it is only safe where two capped attempts fit inside the
+   * function's `timeoutSeconds`. A function killed mid-retry never writes its
+   * ERROR, and the document sits on PROCESSING with nothing coming to clear it.
+   */
+  retryIncomplete?: boolean;
 }): Promise<void> {
   const usageRef = db
     .collection("users")
@@ -2750,11 +2761,21 @@ async function runAnchoredGeneration(opts: {
       prompt: opts.augmentPrompt ? await opts.augmentPrompt(prompt) : prompt,
       schema: opts.schema,
       label: opts.label,
+      maxOutputTokens: opts.maxOutputTokens,
     };
-    const { text, interactionId, model } =
+    const generate = () =>
       opts.anchored === false
-        ? await generateJson(request)
-        : await generateWithAnchor(opts.uid, request);
+        ? generateJson(request)
+        : generateWithAnchor(opts.uid, request);
+    // The retry is not counted against the daily limit: the request was
+    // claimed once, and a loop is the model's failure, not the user's.
+    const { text, interactionId, model } = await generate().catch((err) => {
+      if (!opts.retryIncomplete || !(err instanceof IncompleteGenerationError)) {
+        throw err;
+      }
+      console.warn(`[${opts.label}] Incomplete generation, retrying once`);
+      return generate();
+    });
     await opts.ref.update({
       response: text,
       status: { state: "COMPLETED" },
@@ -2872,6 +2893,14 @@ export const generateNatalBreakdown = onDocumentWritten(
       ref: after.ref,
       schema: NATAL_BREAKDOWN_SCHEMA,
       label: "generateNatalBreakdown",
+      // This prompt is the one that loops — 2026-09-08, and twice on test on
+      // 2026-10-25, each time writing until the 32k default cap stopped it,
+      // 3–4 minutes later. Measured 2026-10-25, an honest breakdown is 5–6k
+      // output plus 2–3k thought tokens (~8.5k against the cap, 71–78s), so 16k
+      // keeps ~2× headroom and halves the time a loop costs. A capped loop plus
+      // a retry stays well inside the 540s timeout.
+      maxOutputTokens: 16384,
+      retryIncomplete: true,
     });
   },
 );

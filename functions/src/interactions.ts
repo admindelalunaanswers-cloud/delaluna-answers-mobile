@@ -181,6 +181,22 @@ export interface GenerateJsonOptions {
   previousInteractionId?: string;
 }
 
+/**
+ * The model stopped before finishing — in practice, a repetition loop that ran
+ * into `max_output_tokens`. Its own class so a caller can retry this failure
+ * and nothing else: a loop is a sampling accident and usually does not recur
+ * on a second attempt, whereas an API error or an empty reply will.
+ */
+export class IncompleteGenerationError extends Error {
+  constructor(status: string, chars: number) {
+    super(
+      `Generation did not complete (status: ${status}, ${chars} chars) — ` +
+        "output was truncated or the model stopped early",
+    );
+    this.name = "IncompleteGenerationError";
+  }
+}
+
 /** What a generation produced, plus the id that makes it chainable. */
 export interface GeneratedJson {
   text: string;
@@ -285,10 +301,7 @@ export async function generateJson(
   // 193,633 characters, the word "Amen" 741 times, cut off at the cap. Without
   // this check that would have been written to Firestore as a valid response.
   if (status !== "completed") {
-    throw new Error(
-      `Generation did not complete (status: ${status}, ${text.length} chars) — ` +
-        "output was truncated or the model stopped early",
-    );
+    throw new IncompleteGenerationError(status, text.length);
   }
 
   return { text, interactionId: interaction.id, model };
