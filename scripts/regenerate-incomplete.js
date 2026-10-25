@@ -59,8 +59,9 @@
  *   - `--project` is required and has no default.
  *   - The credential's `project_id` is checked against `--project` (same rules
  *     as regenerate-user.js; `credentials.json` at the repo root is PRODUCTION).
- *   - The scan reads only `status`. Prompts carry birth data and are never
- *     read in bulk, never printed.
+ *   - The scan reads only `status` (plus `response` for natal breakdowns
+ *     under --missing-insights, checked for key names only). Prompts carry
+ *     birth data and are never read in bulk; nothing's content is printed.
  *   - Before writing, the fields it changes (`requestedAt`, `status`) are
  *     backed up per document and the backup is read back.
  *
@@ -73,6 +74,11 @@
  *       Re-requests them, then polls until each one completes or fails.
  *
  *   --only natal,horoscope,transits,report,synastry   subset (default: all)
+ *   --missing-insights                                also natal breakdowns that
+ *                                                     COMPLETED without their
+ *                                                     Insights fields (see
+ *                                                     INSIGHT_FIELDS); reads
+ *                                                     `response`, backs it up
  *   --uid <uid>                                       one user only
  *   --limit <n>                                       re-request at most n
  *   --wait-timeout <seconds>                          default 600
@@ -95,6 +101,23 @@ const PROJECTS = {
 
 /** The phrase both wordings of the incomplete-generation error contain. */
 const INCOMPLETE = /did not complete/;
+
+/**
+ * Fields `renderInsights` in app/(home)/birth-chart-view.tsx draws from (the
+ * free tier's three are a subset). NATAL_BREAKDOWN_SCHEMA required only
+ * `houses` until 2026-10-25, and breakdowns generated before that routinely
+ * came back without these — a COMPLETED document with an empty Insights tab.
+ */
+const INSIGHT_FIELDS = [
+  "personalitySnapshot",
+  "loveRead",
+  "careerRead",
+  "growthRead",
+  "advice",
+  "warning",
+  "affirmation",
+  "release",
+];
 
 /**
  * Collection-group name → the path shape it must have. The group alone is not
@@ -200,20 +223,53 @@ function shortPath(p) {
   return p.replace(/^users\/([^/]{6})[^/]*/, "users/$1…");
 }
 
+function isIncomplete(status) {
+  return status?.state === "ERROR" && INCOMPLETE.test(String(status.error ?? ""));
+}
+
 /**
- * Every document in the group whose error is the incomplete one. Reads only
- * `status` — an unfiltered collection-group read needs no index, and a
- * projection keeps prompts and responses off the wire.
+ * A breakdown that completed without the fields the Insights tab draws from.
+ * Only key names are checked; the content is never printed.
  */
-async function scanTarget(db, name, uidFilter) {
+function lacksInsights(data) {
+  if (data?.status?.state !== "COMPLETED" || typeof data.response !== "string") return false;
+  try {
+    const parsed = JSON.parse(
+      data.response
+        .replace(/^```(?:json)?\s*/i, "")
+        .replace(/```\s*$/, "")
+        .trim()
+        .replace(/,(\s*[}\]])/g, "$1"),
+    );
+    return INSIGHT_FIELDS.some((k) => typeof parsed[k] !== "string" || !parsed[k]);
+  } catch {
+    // Unparseable is broken too, and the client shows nothing for it either.
+    return true;
+  }
+}
+
+/**
+ * Every document in the group whose error is the incomplete one — and, with
+ * `missingInsights`, every natal breakdown that completed without its Insights
+ * fields. The error scan reads only `status`: an unfiltered collection-group
+ * read needs no index, and the projection keeps prompts and responses off the
+ * wire. The Insights check has to read `response`, so it runs on natal only.
+ */
+async function scanTarget(db, name, uidFilter, missingInsights) {
   const { group, shape } = TARGETS[name];
-  const snap = await db.collectionGroup(group).select("status").get();
-  return snap.docs.filter((d) => {
-    if (!shape.test(d.ref.path)) return false;
-    if (uidFilter && d.ref.path.split("/")[1] !== uidFilter) return false;
-    const status = d.get("status");
-    return status?.state === "ERROR" && INCOMPLETE.test(String(status.error ?? ""));
-  });
+  const withResponse = missingInsights && name === "natal";
+  const query = db.collectionGroup(group);
+  const snap = await (withResponse ? query.select("status", "response") : query.select("status")).get();
+  const found = [];
+  for (const d of snap.docs) {
+    if (!shape.test(d.ref.path)) continue;
+    if (uidFilter && d.ref.path.split("/")[1] !== uidFilter) continue;
+    if (isIncomplete(d.get("status"))) found.push({ name, ref: d.ref, reason: "incomplete" });
+    else if (withResponse && lacksInsights(d.data())) {
+      found.push({ name, ref: d.ref, reason: "missing insights" });
+    }
+  }
+  return found;
 }
 
 // ─── Backup ──────────────────────────────────────────────────────────────────
@@ -281,6 +337,7 @@ async function main() {
   if (unknown.length) fail(`Unknown --only target(s): ${unknown.join(", ")}`);
 
   const uidFilter = typeof args.uid === "string" ? args.uid : null;
+  const missingInsights = args["missing-insights"] === true;
   const limit = Number(args.limit) > 0 ? Math.floor(Number(args.limit)) : Infinity;
   const commit = args.commit === true;
   const waitTimeout = Number(args["wait-timeout"]) > 0 ? Number(args["wait-timeout"]) : 600;
@@ -295,6 +352,7 @@ async function main() {
   console.log(`  targets    : ${targets.join(", ")}`);
   if (uidFilter) console.log(`  uid        : ${uidFilter}`);
   if (limit !== Infinity) console.log(`  limit      : ${limit}`);
+  if (missingInsights) console.log("  also       : natal breakdowns missing their Insights fields");
 
   admin.initializeApp({ credential: resolveCredential(args, projectId), projectId });
   const db = getFirestore();
@@ -303,9 +361,13 @@ async function main() {
   console.log("\n  ── Scanning ──");
   let found = [];
   for (const name of targets) {
-    const docs = await scanTarget(db, name, uidFilter);
-    console.log(`  ${name.padEnd(10)} : ${docs.length} incomplete`);
-    found.push(...docs.map((d) => ({ name, ref: d.ref })));
+    const docs = await scanTarget(db, name, uidFilter, missingInsights);
+    const insights = docs.filter((d) => d.reason === "missing insights").length;
+    console.log(
+      `  ${name.padEnd(10)} : ${docs.length - insights} incomplete` +
+        (missingInsights && name === "natal" ? `, ${insights} missing insights` : ""),
+    );
+    found.push(...docs);
   }
 
   if (found.length === 0) {
@@ -315,7 +377,9 @@ async function main() {
 
   const users = new Set(found.map((f) => f.ref.path.split("/")[1]));
   console.log(`\n  ${found.length} document(s) across ${users.size} user(s):`);
-  for (const f of found) console.log(`    ${f.name.padEnd(10)} ${shortPath(f.ref.path)}`);
+  for (const f of found) {
+    console.log(`    ${f.name.padEnd(10)} ${shortPath(f.ref.path).padEnd(36)} ${f.reason}`);
+  }
 
   if (found.length > limit) {
     console.log(`\n  --limit ${limit}: taking the first ${limit}, leaving ${found.length - limit}.`);
@@ -344,15 +408,23 @@ async function main() {
     const snap = await f.ref.get();
     const data = snap.data() ?? {};
     // Re-check: it may have been regenerated or rewritten since the scan.
-    if (data.status?.state !== "ERROR" || !INCOMPLETE.test(String(data.status?.error ?? ""))) {
-      console.log(`  skipped ${shortPath(f.ref.path)} — no longer in the incomplete state`);
+    const still = f.reason === "incomplete" ? isIncomplete(data.status) : lacksInsights(data);
+    if (!still) {
+      console.log(`  skipped ${shortPath(f.ref.path)} — no longer ${f.reason}`);
       continue;
     }
     if (typeof data.prompt !== "string" || !data.prompt) {
       console.log(`  skipped ${shortPath(f.ref.path)} — no stored prompt to regenerate from`);
       continue;
     }
-    documents[f.ref.path] = encode({ requestedAt: data.requestedAt ?? null, status: data.status });
+    // The generation deletes `response` when it claims the request, so a
+    // completed reading being replaced is backed up whole; a failed one has none.
+    documents[f.ref.path] = encode({
+      reason: f.reason,
+      requestedAt: data.requestedAt ?? null,
+      status: data.status,
+      ...(data.response !== undefined ? { response: data.response, model: data.model ?? null } : {}),
+    });
     ready.push(f);
   }
 

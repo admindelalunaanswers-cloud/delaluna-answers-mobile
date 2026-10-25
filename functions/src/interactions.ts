@@ -570,7 +570,24 @@ export const NATAL_BREAKDOWN_SCHEMA: Record<string, unknown> = {
       },
     },
   },
-  required: ["houses"],
+  // Everything the birth chart screen reads. With only `houses` required the
+  // model was free to drop the rest and did: from the 2026-09-09 migration
+  // until 2026-10-25, breakdowns came back as houses, planets, quote and one
+  // ~3,000-char `warning`, so the Insights tab rendered nothing at all.
+  required: [
+    "quote",
+    "personalitySnapshot",
+    "loveRead",
+    "careerRead",
+    "growthRead",
+    "advice",
+    "warning",
+    "affirmation",
+    "release",
+    "houses",
+    "planets",
+    "aspects",
+  ],
 };
 
 /**
