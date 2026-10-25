@@ -27,6 +27,7 @@ import Purchases from 'react-native-purchases';
 import { PRODUCT_IDS, REVENUECAT_ENABLED, purchaseProduct } from '@/src/services/revenuecat.service';
 import { Events } from '@/src/services/analytics.service';
 import { recordError } from '@/src/services/crashlytics.service';
+import { C } from '@/src/constants/theme';
 import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
 import { logger } from '@/src/utils/logger';
 import { useAnnounce } from '@/src/hooks/use-announce';
@@ -178,7 +179,7 @@ export default function ConsumablePlaceholder({ visible, onClose, onPurchased, o
 
           {/* Icon */}
           <View style={s.iconWrap} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-            <Ionicons name="chatbubble-ellipses" size={scale(26)} color="#fff" />
+            <Ionicons name="chatbubble-ellipses" size={scale(26)} color={C.cosmos} />
           </View>
 
           {/* Heading */}
@@ -212,7 +213,7 @@ export default function ConsumablePlaceholder({ visible, onClose, onPurchased, o
                     accessibilityLabel={priceFor(tier) ? `${tier.label}, ${priceFor(tier)}` : tier.label}
                   >
                     <View style={[s.radioOuter, isSelected && s.radioOuterSelected]}>
-                      {isSelected && <Ionicons name="checkmark" size={scale(11)} color="#fff" />}
+                      {isSelected && <Ionicons name="checkmark" size={scale(11)} color={C.cosmos} />}
                     </View>
                     <Text style={s.tierLabel}>{tier.label}</Text>
                     <Text style={[s.tierPrice, isSelected && s.tierPriceSelected]}>
@@ -247,7 +248,7 @@ export default function ConsumablePlaceholder({ visible, onClose, onPurchased, o
             }}
           >
             {purchasing ? (
-              <ActivityIndicator color="#fff" size="small" />
+              <ActivityIndicator color={C.cosmos} size="small" />
             ) : (
               <Text style={s.ctaText}>Buy now</Text>
             )}
@@ -270,9 +271,9 @@ export default function ConsumablePlaceholder({ visible, onClose, onPurchased, o
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
-const BG      = '#1A0B3B';
-const TEAL    = '#3EC9C5';
-const PLAN_BG = '#261550';
+const BG      = C.deepSpace;
+const TEAL    = C.turquoise;
+const PLAN_BG = C.starfield;
 
 const s = StyleSheet.create({
   backdrop: {
@@ -352,7 +353,7 @@ const s = StyleSheet.create({
   },
   tierRowSelected: {
     borderColor: TEAL,
-    backgroundColor: 'rgba(62,201,197,0.08)',
+    backgroundColor: 'rgba(111,255,233,0.08)',
   },
   radioOuter: {
     width: scale(22),
@@ -392,18 +393,15 @@ const s = StyleSheet.create({
   },
   ctaButton: {
     width: '100%',
-    backgroundColor: '#6B3FA0',
+    backgroundColor: C.turquoise,
     borderRadius: scale(28),
     paddingVertical: verticalScale(15),
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: verticalScale(4),
   },
-  ctaButtonDisabled: {
-    backgroundColor: '#3d2460',
-    opacity: 0.7,
-  },
-  ctaText: { color: '#fff', fontSize: moderateScale(16), fontWeight: '700' },
+  ctaButtonDisabled: { opacity: 0.45 },
+  ctaText: { color: C.cosmos, fontSize: moderateScale(16), fontWeight: '700' },
   cancelText: {
     color: 'rgba(255,255,255,0.7)', // was 0.45 — a button label
     fontSize: moderateScale(13),

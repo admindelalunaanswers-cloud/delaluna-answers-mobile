@@ -17,7 +17,7 @@ import { Text, TextInput } from '@/src/components/app-text';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
-import { StatusBar } from 'expo-status-bar';
+import { AppStatusBar } from '@/src/components/app-status-bar';
 import { updateEmail } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,6 +33,7 @@ import { requestTransitReading, getThisWeekDateId } from '@/src/services/transit
 import { updateUserChartInConnections, refreshSynastryReadingsForUser } from '@/src/services/connection.service';
 import type { NatalChartDetailsDoc } from '@/src/types/user.type';
 import { auth, db } from '@/firebaseConfig';
+import { C } from '@/src/constants/theme';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
 import {
   NominatimResult,
@@ -616,7 +617,7 @@ export default function EditProfileScreen() {
 
   return (
     <ImageBackground source={theme.backgroundImage} style={ss.bg} resizeMode="cover">
-      <StatusBar style="light" />
+      <AppStatusBar style="light" />
       <BlurView intensity={15} tint="dark" style={ss.overlay}>
 
         {/* Header */}
@@ -1132,7 +1133,7 @@ const ss = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
   },
   pickerSheet: {
-    backgroundColor: '#1c1c2e',
+    backgroundColor: C.deepSpace,
     borderTopLeftRadius: moderateScale(16),
     borderTopRightRadius: moderateScale(16),
     paddingBottom: verticalScale(24),

@@ -15,14 +15,19 @@ interface GlassButtonProps {
   disabled?: boolean;
   /** An action is in flight. */
   busy?: boolean;
+  /** Spoken name, when the visible title alone is not it. */
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 }
 
-export const GlassButton: React.FC<GlassButtonProps> = ({ title, onPress, disabled = false, busy = false }) => (
+export const GlassButton: React.FC<GlassButtonProps> = ({ title, onPress, disabled = false, busy = false, accessibilityLabel, accessibilityHint }) => (
   <Pressable
     onPress={onPress}
     disabled={disabled}
     style={[styles.pressable, disabled && styles.disabled]}
     accessibilityRole="button"
+    accessibilityLabel={accessibilityLabel}
+    accessibilityHint={accessibilityHint}
     accessibilityState={{ disabled, busy }}
   >
     <LinearGradient

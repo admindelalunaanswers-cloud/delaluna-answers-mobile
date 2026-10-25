@@ -1,6 +1,6 @@
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
+import { AppStatusBar } from '@/src/components/app-status-bar';
 import { updateProfile } from 'firebase/auth';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
@@ -276,7 +276,7 @@ export default function SignUpChatScreen() {
       {/* accessible={false}: otherwise the wrapper collapses the whole screen into one VoiceOver element */}
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
         <ThemedView style={{ flex: 1 }}>
-          <StatusBar style="light" />
+          <AppStatusBar style="light" />
 
           <BlurView
             intensity={10}

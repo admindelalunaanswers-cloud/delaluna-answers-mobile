@@ -4,6 +4,7 @@ import { Text } from '@/src/components/app-text';
 
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { C } from '@/src/constants/theme';
 
 import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
 
@@ -23,14 +24,14 @@ export default function PremiumUnlock({
 }: PremiumUnlockProps) {
   return (
     <LinearGradient
-      colors={['#8E44AD', '#5BC0BE']}
+      colors={[C.purple, C.turquoise]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.gradientBorder}
     >
       <View style={styles.card}>
         <View style={styles.iconWrap}>
-          <Ionicons name="lock-closed" size={scale(26)} color="#BCA8F4" />
+          <Ionicons name="lock-closed" size={scale(26)} color={C.purpleLight} />
         </View>
 
         <View style={styles.badge}>
@@ -65,7 +66,7 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: scale(15),
-    backgroundColor: 'rgba(13, 8, 42, 0.92)',
+    backgroundColor: 'rgba(16, 16, 48, 0.92)', // C.deepSpace
     paddingVertical: verticalScale(24),
     paddingHorizontal: scale(20),
     alignItems: 'center',
@@ -75,7 +76,7 @@ const styles = StyleSheet.create({
     width: scale(52),
     height: scale(52),
     borderRadius: scale(26),
-    backgroundColor: 'rgba(142, 68, 173, 0.2)',
+    backgroundColor: 'rgba(139, 111, 200, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: verticalScale(4),
@@ -112,13 +113,13 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: verticalScale(8),
-    backgroundColor: '#8E44AD',
+    backgroundColor: C.turquoise,
     borderRadius: scale(24),
     paddingVertical: verticalScale(10),
     paddingHorizontal: scale(28),
   },
   buttonText: {
-    color: '#FFFFFF',
+    color: C.cosmos,
     fontSize: moderateScale(14),
     fontWeight: '700',
     letterSpacing: 0.5,

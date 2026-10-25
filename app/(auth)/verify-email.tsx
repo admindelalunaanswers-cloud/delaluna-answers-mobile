@@ -14,7 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { StatusBar } from "expo-status-bar";
+import { AppStatusBar } from "@/src/components/app-status-bar";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
 import { app, auth } from "@/firebaseConfig";
@@ -236,7 +236,7 @@ export default function VerifyEmail() {
 
   return (
     <>
-      <StatusBar style="light" />
+      <AppStatusBar style="light" />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ImageBackground
