@@ -19,16 +19,14 @@ import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
 
 const COLORS = {
-  bg: '#0e0b1a',
-  header: '#110d22',
-  card: '#1a1535',
-  border: '#2a2050',
+  card: 'rgba(255,255,255,0.06)', // translucent so the theme background shows through, as on Profile
+  border: 'rgba(255,255,255,0.1)',
   primary: '#7c6fd4',
   light: '#c8bfff',
-  muted: '#6b5fa8', // icons and dividers only — ~3.5:1 on bg, too low for text
-  mutedText: '#9d92d6', // ~7:1 on bg
+  muted: '#6b5fa8', // icons and dividers only — too low-contrast for text
+  mutedText: 'rgba(255,255,255,0.7)', // matches Profile; sits on the theme image, not a flat fill
   text: '#ffffff',
-  subText: 'rgba(200,191,255,0.65)',
+  subText: 'rgba(255,255,255,0.7)',
   available: '#4ade80',
 };
 
@@ -164,8 +162,6 @@ export default function SupportScreen() {
         title="Support"
         leftIconName="chevron-back-outline"
         onLeftPress={() => router.back()}
-        backgroundColor={COLORS.header}
-        textColor={COLORS.light}
       />
       <ScrollView
         style={[s.scroll, { marginTop: insets.top + scale(NAV_BAR_HEIGHT) }]}
@@ -254,7 +250,7 @@ export default function SupportScreen() {
 
 const s = StyleSheet.create({
   flex: { flex: 1 },
-  root: { flex: 1, backgroundColor: COLORS.bg },
+  root: { flex: 1 },
   scroll: { flex: 1 },
   content: { paddingHorizontal: scale(20), paddingTop: verticalScale(20) },
 

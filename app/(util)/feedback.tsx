@@ -24,17 +24,15 @@ import { Text, TextInput } from "@/src/components/app-text";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const COLORS = {
-  bg: "#0e0b1a",
-  header: "#110d22",
-  card: "#1a1535",
-  border: "#2a2050",
+  card: "rgba(255,255,255,0.06)", // translucent so the theme background shows through, as on Profile
+  border: "rgba(255,255,255,0.1)",
   primary: "#7c6fd4",
   light: "#c8bfff",
-  muted: "#6b5fa8", // icons and dividers only — ~3.5:1 on bg, too low for text
-  mutedText: "#9d92d6", // ~7:1 on bg, ~6.3:1 on card
+  muted: "#6b5fa8", // icons and dividers only — too low-contrast for text
+  mutedText: "rgba(255,255,255,0.7)", // matches Profile; sits on the theme image, not a flat fill
   star: "#f0c040",
   text: "#ffffff",
-  subText: "rgba(200,191,255,0.65)",
+  subText: "rgba(255,255,255,0.7)",
   placeholder: "rgba(200,191,255,0.35)",
 };
 
@@ -251,8 +249,6 @@ export default function FeedbackScreen() {
           title="Feedback"
           leftIconName="chevron-back-outline"
           onLeftPress={() => router.back()}
-          backgroundColor={COLORS.header}
-          textColor={COLORS.light}
         />
         <View style={s.statePanel}>
           <Text style={s.starsBig} {...DECORATIVE}>✦</Text>
@@ -286,8 +282,6 @@ export default function FeedbackScreen() {
           title="Feedback"
           leftIconName="chevron-back-outline"
           onLeftPress={() => router.back()}
-          backgroundColor={COLORS.header}
-          textColor={COLORS.light}
         />
         <View style={s.statePanel}>
           <Text style={s.starsBig} {...DECORATIVE}>☽</Text>
@@ -318,8 +312,6 @@ export default function FeedbackScreen() {
         title="Feedback"
         leftIconName="chevron-back-outline"
         onLeftPress={() => router.back()}
-        backgroundColor={COLORS.header}
-        textColor={COLORS.light}
       />
       <KeyboardAvoidingView
         behavior="padding"
@@ -413,7 +405,7 @@ export default function FeedbackScreen() {
 
 const s = StyleSheet.create({
   flex: { flex: 1 },
-  root: { flex: 1, backgroundColor: COLORS.bg },
+  root: { flex: 1 },
   scroll: { flex: 1 },
   content: {
     paddingHorizontal: scale(20),
