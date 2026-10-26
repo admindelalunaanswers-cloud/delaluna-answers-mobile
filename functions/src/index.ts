@@ -3,6 +3,11 @@ import * as admin from "firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { defineSecret, projectID } from "firebase-functions/params";
 import {
+  type Issue as CrashlyticsIssue,
+  onNewFatalIssuePublished,
+  onRegressionAlertPublished,
+} from "firebase-functions/v2/alerts/crashlytics";
+import {
   onDocumentCreated,
   onDocumentUpdated,
   onDocumentWritten,
@@ -1642,6 +1647,96 @@ export const submitFeedback = onCall(
     }
 
     return { id: feedbackRef.id };
+  },
+);
+
+// ─── Crashlytics: Android launch-crash alert ──────────────────────────────────
+//
+// Build 2.0.0 (17) logged 74 fatal `SoLoaderDSONotFoundError: libc++_shared.so`
+// crashes in MainApplication.onCreate (Oct 19–26, 2026), every one from an
+// x86_64 emulator spoofing an ARM phone model and handed the arm64 split. The
+// AAB carries libc++_shared.so for all four ABIs and Play vitals showed zero
+// user-perceived crashes, so it was scanner traffic, not users. These two
+// triggers mail the admin inbox if that signature comes back — reopened, or
+// regrouped under a new issue id — so it can be re-checked against vitals
+// rather than either ignored or chased as a real outage.
+//
+// They match on the issue, not the app id, because each Firebase project has
+// its own Android app id and these functions deploy to both. The alert payload
+// carries only the issue (no device, installation or user), and the crash
+// precedes sign-in anyway, so there is no identifier to include.
+
+const LAUNCH_CRASH_ISSUE_ID = "c4ef97336206a612b985fadc2ad0968b";
+const LAUNCH_CRASH_SIGNATURE = "SoLoaderDSONotFoundError";
+
+function isLaunchCrash(issue: CrashlyticsIssue): boolean {
+  return (
+    issue.id === LAUNCH_CRASH_ISSUE_ID ||
+    issue.subtitle.includes(LAUNCH_CRASH_SIGNATURE)
+  );
+}
+
+async function sendLaunchCrashAlert(
+  kind: "regressed" | "new issue",
+  appId: string,
+  issue: CrashlyticsIssue,
+): Promise<void> {
+  const project = projectID.value();
+  const consoleUrl =
+    `https://console.firebase.google.com/project/${project}` +
+    `/crashlytics/app/${appId}/issues/${issue.id}`;
+  const row = (label: string, value: string) =>
+    `<tr><td style="padding:4px 12px 4px 0;color:#9ca3af;vertical-align:top;">${label}</td><td style="padding:4px 0;">${value}</td></tr>`;
+
+  const transporter = buildTransporter(emailUser.value(), emailPass.value());
+  await transporter.sendMail({
+    from: `"Delaluna Answers" <${emailUser.value()}>`,
+    to: FEEDBACK_ADMIN_EMAIL,
+    subject: `Crashlytics: Android launch crash ${kind} (${issue.appVersion})`,
+    html: `
+      <div style="font-family:sans-serif;color:#111;max-width:560px;">
+        <h2 style="margin:0 0 12px;">Android launch crash ${escapeHtml(kind)}</h2>
+        <table style="border-collapse:collapse;font-size:14px;">
+          ${row("Project", escapeHtml(project))}
+          ${row("Version", escapeHtml(issue.appVersion))}
+          ${row("Issue", escapeHtml(issue.id))}
+          ${row("Title", escapeHtml(issue.title))}
+          ${row("Subtitle", escapeHtml(issue.subtitle))}
+        </table>
+        <p><a href="${escapeHtml(consoleUrl)}">Open in Crashlytics</a></p>
+        <h3 style="margin:20px 0 6px;">Last time this was emulator traffic</h3>
+        <p style="margin:0 0 8px;">In October 2026 every event came from an x86_64
+        emulator spoofing an ARM phone model. Before treating it as an outage, check:</p>
+        <ol style="margin:0;padding-left:20px;">
+          <li>Play Console → Android vitals → Crashes and ANRs for this version.
+          Vitals counts real installs only; nothing there points to scanners again.</li>
+          <li>The issue's devices in Crashlytics. An x86_64 architecture on a model
+          that ships ARM is a spoof.</li>
+          <li>If real ARM devices appear, check that the release AAB has
+          <code>base/lib/&lt;abi&gt;/libc++_shared.so</code> for every ABI.</li>
+        </ol>
+      </div>
+    `,
+  });
+}
+
+export const alertLaunchCrashRegressed = onRegressionAlertPublished(
+  { secrets: [emailUser, emailPass] },
+  async (event) => {
+    const { issue } = event.data.payload;
+    if (!isLaunchCrash(issue)) return;
+    await sendLaunchCrashAlert("regressed", event.appId, issue);
+    console.info("[alertLaunchCrash] sent", { kind: "regressed", issueId: issue.id });
+  },
+);
+
+export const alertLaunchCrashNewIssue = onNewFatalIssuePublished(
+  { secrets: [emailUser, emailPass] },
+  async (event) => {
+    const { issue } = event.data.payload;
+    if (!isLaunchCrash(issue)) return;
+    await sendLaunchCrashAlert("new issue", event.appId, issue);
+    console.info("[alertLaunchCrash] sent", { kind: "new issue", issueId: issue.id });
   },
 );
 
