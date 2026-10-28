@@ -1,7 +1,7 @@
 import { createHash, randomInt } from "crypto";
 import * as admin from "firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { defineSecret, defineString, projectID } from "firebase-functions/params";
+import { defineSecret, projectID } from "firebase-functions/params";
 import {
   onDocumentCreated,
   onDocumentUpdated,
@@ -908,15 +908,16 @@ const PRODUCTION_PROJECT_ID = "delaluna-answers";
 // review login. Apple reviews against the production backend with sandbox
 // purchases, so without this a reviewer's chat pack shows in the app and is then
 // refused by the server, which reads as a broken purchase. Uids, not emails,
-// because both callers already have the uid. Set per project in
-// functions/.env.<project id>; empty unless set, so nothing changes by default.
-// A plain comma-separated string rather than defineList, whose runtime value is
-// JSON-parsed: a malformed entry would throw instead of matching nobody.
-const reviewAccountUids = defineString("REVIEW_ACCOUNT_UIDS", { default: "" });
+// because both callers already have the uid. Comma-separated, held in Secret
+// Manager like ADMIN_EMAILS so the account stays out of the repo:
+//   firebase functions:secrets:set REVIEW_ACCOUNT_UIDS
+// Every function that reaches isUserPremium or purchasedChatCredits must list
+// it in `secrets`. It is read only in production; the test project needs the
+// secret to exist for the deploy, but its value is never consulted there.
+const reviewAccountUids = defineSecret("REVIEW_ACCOUNT_UIDS");
 
 function isReviewAccount(uid: string): boolean {
-  return reviewAccountUids
-    .value()
+  return (reviewAccountUids.value() ?? "")
     .split(",")
     .some((entry) => entry.trim() === uid);
 }
@@ -1096,7 +1097,8 @@ async function drainScheduledPushes(now: Date): Promise<number> {
  * to randomize delivery into the afternoon).
  */
 export const dailyHoroscopeNotifications = onSchedule(
-  "every 1 hours",
+  // The secret: this reaches isUserPremium (see REVIEW_ACCOUNT_UIDS).
+  { schedule: "every 1 hours", secrets: [reviewAccountUids] },
   async () => {
     const now = new Date();
     const messages: ExpoPushMessage[] = [];
@@ -1961,7 +1963,8 @@ async function refundChatQuestion(
  * and so does the retry that supersedes it.
  */
 export const sendChatMessage = onCall(
-  { invoker: "public" },
+  // The secret: this reaches isUserPremium and purchasedChatCredits.
+  { invoker: "public", secrets: [reviewAccountUids] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Must be signed in.");
