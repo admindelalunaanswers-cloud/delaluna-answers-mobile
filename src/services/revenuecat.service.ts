@@ -14,6 +14,8 @@ import Purchases, {
   type PurchasesStoreProduct,
 } from "react-native-purchases";
 
+import { logger } from "@/src/utils/logger";
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 /** RevenueCat public SDK key — test key for dev, platform-specific production key from EAS env */
@@ -56,6 +58,23 @@ export const CHAT_PACK_QUANTITIES: Record<string, number> = {
   [PRODUCT_IDS.chatPack10]: 10,
 };
 
+/**
+ * Counts the chat-pack questions this customer has ever bought.
+ *
+ * Mirrors `purchasedChatCredits()` in functions/src/index.ts, which reads the
+ * same purchases from the RevenueCat extension's Firestore mirror
+ * (`subscriber.non_subscriptions`). The server is the authority on what may be
+ * spent; this exists so the in-app counter can show the same balance without
+ * waiting for the webhook that populates the mirror. Both count one entry per
+ * purchase, so a product bought twice grants twice.
+ */
+export function purchasedChatCredits(customerInfo: CustomerInfo): number {
+  return customerInfo.nonSubscriptionTransactions.reduce(
+    (total, tx) => total + (CHAT_PACK_QUANTITIES[tx.productIdentifier] ?? 0),
+    0,
+  );
+}
+
 // ─── Initialization ──────────────────────────────────────────────────────────
 
 let _configured = false;
@@ -74,13 +93,13 @@ export function configureRevenueCat(): boolean {
 
   if (!REVENUECAT_ENABLED) {
     _configured = true;
-    console.log("[RevenueCat] disabled — skipping SDK configuration");
+    logger.warn("[RevenueCat] disabled — skipping SDK configuration");
     return false;
   }
 
   if (!API_KEY) {
     _configured = true; // prevent repeated warn-and-bail on every re-render
-    console.warn("[RevenueCat] no API key found — skipping configuration");
+    logger.warn("[RevenueCat] no API key found — skipping configuration");
     return false;
   }
 
@@ -90,7 +109,7 @@ export function configureRevenueCat(): boolean {
 
   Purchases.configure({ apiKey: API_KEY });
   _configured = true;
-  console.log("[RevenueCat] SDK configured");
+  logger.debug("[RevenueCat] SDK configured");
   return true;
 }
 
@@ -104,7 +123,8 @@ export async function loginUser(
   firebaseUid: string,
 ): Promise<{ customerInfo: CustomerInfo; created: boolean }> {
   const { customerInfo, created } = await Purchases.logIn(firebaseUid);
-  console.log("[RevenueCat] logIn:", firebaseUid, "created:", created);
+  // The Firebase UID identifies the user — log only the outcome.
+  logger.debug("[RevenueCat] logIn complete, created:", created);
   return { customerInfo, created };
 }
 
@@ -114,11 +134,11 @@ export async function loginUser(
 export async function logoutUser(): Promise<CustomerInfo> {
   const isAnonymous = await Purchases.isAnonymous();
   if (isAnonymous) {
-    console.log("[RevenueCat] logOut skipped — already anonymous");
+    logger.debug("[RevenueCat] logOut skipped — already anonymous");
     return Purchases.getCustomerInfo();
   }
   const customerInfo = await Purchases.logOut();
-  console.log("[RevenueCat] logOut — reset to anonymous");
+  logger.debug("[RevenueCat] logOut — reset to anonymous");
   return customerInfo;
 }
 
@@ -223,7 +243,7 @@ export async function purchaseProduct(
   product: PurchasesStoreProduct,
 ): Promise<CustomerInfo> {
   const { customerInfo } = await Purchases.purchaseStoreProduct(product);
-  console.log("[RevenueCat] purchaseProduct complete:", product.identifier);
+  logger.debug("[RevenueCat] purchaseProduct complete:", product.identifier);
   return customerInfo;
 }
 
@@ -234,7 +254,7 @@ export async function purchaseProduct(
  */
 export async function restorePurchases(): Promise<CustomerInfo> {
   const customerInfo = await Purchases.restorePurchases();
-  console.log("[RevenueCat] restorePurchases complete");
+  logger.debug("[RevenueCat] restorePurchases complete");
   return customerInfo;
 }
 

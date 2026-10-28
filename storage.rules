@@ -31,9 +31,22 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
     }
 
-    // ─── Tarot card art (public read, admin-only write) ────────────────────
+    // ─── Card art (public read, admin-only write) ──────────────────────────
     // The home screen prefetches these via public download URLs, so they must
     // be readable without auth.
+    //
+    // `cards/` is where the art lives now — `cards/oracle/{id}.png` and
+    // `cards/tarot/{id}.png`, resolved by `src/utils/tarot-image.ts`. Without a
+    // match here it falls through to the admin-only default below and every
+    // card front returns 403 rather than 404, which reads as "missing file"
+    // and sends you looking in the wrong place.
+    match /cards/{file=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // The flat layout the art was served from before the move. Builds already
+    // on the stores still request these, so the match stays until they age out.
     match /tarot-card-front/{file=**} {
       allow read: if true;
       allow write: if isAdmin();

@@ -10,6 +10,7 @@ import { auth, db, functions } from '@/firebaseConfig';
 import { FinalSignupPayload } from '@/src/types/signup.types';
 import type { HoroscopeResult } from '@/src/types/horoscope.types';
 import type { UserDoc } from '@/src/types/user.type';
+import { logger } from '@/src/utils/logger';
 
 /**
  * Revoke all refresh tokens for the current user. Best-effort — failures are
@@ -20,7 +21,7 @@ export async function revokeMyRefreshTokens(): Promise<void> {
   try {
     await httpsCallable(functions, 'revokeMyRefreshTokens')({});
   } catch (err) {
-    console.warn('[user.service] revokeMyRefreshTokens failed:', err);
+    logger.warn('[user.service] revokeMyRefreshTokens failed:', err);
   }
 }
 
@@ -31,7 +32,7 @@ export async function signUp(email: string, password: string) {
   try {
     return await createUserWithEmailAndPassword(auth, email, password);
   } catch (error: any) {
-    console.error('❌ Error in signUp:', error);
+    logger.error('[user.service] signUp failed', error, 'user_sign_up');
     throw error; // preserve original Firebase error so callers can read error.code
   }
 }
@@ -54,7 +55,7 @@ function sanitizeFirestoreData(obj: any, path: string = ''): any {
   // Numbers
   if (typeof obj === 'number') {
     if (!Number.isFinite(obj)) {
-      console.warn(`⚠️ Invalid numeric value at '${path}' → replaced with null`);
+      logger.warn(`⚠️ Invalid numeric value at '${path}' → replaced with null`);
       return null;
     }
     return obj;
@@ -80,7 +81,7 @@ function sanitizeFirestoreData(obj: any, path: string = ''): any {
     const fieldPath = path ? `${path}.${key}` : key;
 
     if (value === undefined) {
-      console.warn(`⚠️ Undefined value at '${fieldPath}' → removed`);
+      logger.warn(`⚠️ Undefined value at '${fieldPath}' → removed`);
       continue;
     }
 
@@ -108,7 +109,7 @@ export async function createNewUserDoc(userId: string): Promise<void> {
       });
     }
   } catch (error) {
-    console.error('❌ Error creating new user document:', error);
+    logger.error('[user.service] create new user document failed', error, 'user_doc_create_new');
     throw new Error('Error creating new user document');
   }
 }
@@ -133,7 +134,7 @@ export async function createUserDoc(userId: string, userData: FinalSignupPayload
       lastUpdatedAt: serverTimestamp(),
     }, { merge: true });
   } catch (error) {
-    console.error('❌ Error creating user document:', error);
+    logger.error('[user.service] create user document failed', error, 'user_doc_create');
     throw new Error('Error creating user document');
   }
 }
@@ -145,7 +146,7 @@ export async function signIn(email: string, password: string) {
   try {
     return await signInWithEmailAndPassword(auth, email, password);
   } catch (error: any) {
-    console.error('❌ Error in signIn:', error);
+    logger.error('[user.service] signIn failed', error, 'user_sign_in');
     throw new Error(error.message || 'Auth error');
   }
 }
@@ -206,12 +207,21 @@ export async function updateUserDoc(userId: string, userData: Partial<UserDoc>):
       ...(normalizedEmail ? { email: normalizedEmail } : {}),
     });
 
+    // A merge write onto a document that does not exist yet counts as a
+    // *create* to the security rules, which require `createdAt == request.time`
+    // — so without this the first write for a user is denied, and confusingly
+    // not for the reason it looks like (missing createdAt, not verification).
+    // On an existing doc createdAt must be left alone: noProtectedFieldsChanged()
+    // rejects any update that touches it.
+    const docSnap = await getDoc(userDocRef);
+
     await setDoc(userDocRef, {
       ...sanitizedData,
+      ...(docSnap.exists() ? {} : { createdAt: serverTimestamp() }),
       lastUpdatedAt: serverTimestamp(),
     }, { merge: true });
   } catch (error) {
-    console.error('❌ Error updating user document:', error);
+    logger.error('[user.service] update user document failed', error, 'user_doc_update');
     throw new Error('Error updating user document');
   }
 }

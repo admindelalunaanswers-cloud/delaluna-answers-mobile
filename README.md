@@ -37,32 +37,69 @@ Delaluna Answers is a personalized astrology companion for iOS and Android that 
 ### Core Framework
 - **React Native 0.81.5** + **React 19.1** on **Expo SDK 54** with the New Architecture enabled
 - **TypeScript 5.9**, ESLint via `eslint-config-expo`
-- **Expo Router 6** -- file-based routing using route groups (`(main)`, `(auth)`, `(settings)`, `(testing)`, etc.)
+- **Expo Router 6** -- file-based routing using route groups: `(startup)`, `(auth)`, `(main)`, `(home)`, `(settings)`, `(util)`, plus the dynamic `connection/` routes
 - Requires a **custom dev client** (not plain Expo Go) -- multiple native modules are in play
 
 ### Astrology Engine
 - **`react-native-swisseph`** -- Swiss Ephemeris binding (Moshier, ~1 arc-second accuracy)
 - Wrapped in `src/services/astroEngine.ts`: `calculateNatalChart`, `calculateTransits`, `calculateSynastry`, `calculateAspects`
-- Custom SVG chart wheel in `src/components/natalChart/BirthChartWheel.tsx` built on `react-native-svg`
-- `BirthData.timezone` is a numeric UTC offset -- sidesteps `sweUtcTimeZone` day-rollback bugs
+- Custom SVG chart wheels in `src/components/natalChart/natal-chart-wheel.draw.tsx` and `src/components/synastry/synastry-wheel.draw.tsx`, built on `react-native-svg`
+- `BirthData.timezone` is a numeric UTC offset, and the engine does its own Julian Day arithmetic -- sidesteps `sweUtcTimeZone` day-rollback bugs
 
 ### Backend -- Firebase
-- **Firebase JS SDK 12** (client) + **firebase-admin / firebase-functions 7** (server)
-- **Cloud Functions** (`functions/src/index.ts`):
-  - `sendVerificationCode` / `verifyCode` -- OTP email verification via nodemailer
-  - `clearDailyChatHistory` -- scheduled cleanup of chat messages older than 24h
-  - `sendMorningReminder` -- scheduled daily push notifications
-- **Firebase Extensions** for AI generation -- watches Firestore docs and writes AI responses back (natal chart breakdown, transit reading, chat)
+- **Firebase JS SDK 12** (client) + **firebase-admin 13 / firebase-functions 7** (server, Node 22)
+- **Cloud Functions** -- 14 functions, all in `functions/src/index.ts`:
+  - *Callable*: `sendVerificationCode`, `verifyCode`, `syncAdminClaim`, `revokeMyRefreshTokens`, `createConnection`, `deleteConnection`, `sendChatMessage`, `setEntitlementOverride`
+  - *Firestore triggers*: `notifyBreakdownReady`, `notifyChatReply`, `notifySynastryReady`, `notifyTransitsReady`, `parseConnectionCompatibility`
+  - *Scheduled*: `dailyHoroscopeNotifications` (hourly), `clearDailyChatHistory` (00:00), `weeklyCleanup` (Sun 06:00), `aggregatePerfLogs` (02:00)
+- **Firebase Extensions** for AI generation -- see [AI Generation Pipeline](#ai-generation-pipeline) below
 - **Firebase Emulators** (auth, functions, firestore, storage, eventarc, extensions) with seed import/export via `npm run dev`
 
 ### State & Data Flow
-- **React Context** for cross-cutting state:
-  - `UserContext` -- Firebase Auth + Firestore user doc
-  - `RevenueCatContext` -- subscription state
-  - `HoroscopeContext` -- horoscope, transits, tarot
-  - `ThemeContext` -- 7 named themes + AsyncStorage persistence
-- **`TestingStore`** (`src/stores/testing-store.ts`) -- in-memory pass-through for complex objects (NatalChart, BirthData) between routes, since Expo Router URL params can't serialize them
+- **React Context** for cross-cutting state, nested in this order in `app/_layout.tsx`:
+  - `UserProvider` -- Firebase Auth + live Firestore user doc + purchases
+  - `RevenueCatProvider` -- subscription state, `isPro`, paywall presentation
+  - `AdminProvider` -- dev/admin runtime limit overrides (display only; see below)
+  - `ThemeProvider` -- 7 named themes + AsyncStorage persistence
+  - `HoroscopeProvider` -- chart, horoscope, transits, breakdown; orchestrates generation order
+- **In-memory stores** (`src/stores/`) -- `ChatStore` and `NavigationStore` pass state between routes that Expo Router URL params can't serialize
 - **Zod 4** for schema validation
+
+### AI Generation Pipeline
+
+The app never calls an LLM directly. Client writes a prompt to Firestore, a **Firebase GenAI
+Extension** watching that path calls Gemini and writes `response` back to the same document,
+and the client's `onSnapshot` renders it. Seven extension instances, each with its own persona:
+
+| Firestore path | Extension | Feature |
+|---|---|---|
+| `users/{uid}/horoscope/{YYYY-MM-DD}` | `horoscope-chatbot-b6wc` | Daily horoscope |
+| `users/{uid}/natalChart/details` | `firestore-natal-chart-chatbot-6ppy`, `firestore-multimodal-genai` | Chart breakdown |
+| `users/{uid}/transits/{YYYY-MM-DD}` | `firestore-transits-chatbot-cgl7` | Weekly transits |
+| `users/{uid}/updayedChat/{id}` | `firestore-genai-chatbot-update-5i5h` | AI chat |
+| `users/{uid}/connections/{id}/report/details` | `firestore-genai-chatbot` | Compatibility report |
+| `users/{uid}/connections/{id}/synastryReading/details` | `firestore-genai-chatbot-1rrn` | Synastry reading |
+
+Config lives in `extensions/*.env`; instances are registered in `firebase.json`. Most run
+`gemini-2.5-flash`; the chart breakdown runs `gemini-3-pro-image-preview` with its full
+tier-aware prompt template stored in the extension config rather than in `src/prompts/`.
+
+Two behaviours this imposes on the services layer:
+- Extensions trigger on document **create**, so the request services `deleteDoc` before
+  `setDoc` to force a re-fire.
+- Model JSON is unreliable, so every `parseResult` strips code fences and trailing commas
+  before parsing.
+
+#### Horoscope quote variety
+
+Each day's horoscope is generated independently, so the `quote` field used to repeat. The
+`generateHoroscope` Cloud Function now appends two things to the prompt at generation time
+(`functions/src/quote-history.ts`); neither is stored and no extra data is kept per user:
+
+- **A daily topic and style** — rotated per user (11 topics × 4 styles, e.g. "moving on" as
+  "a clapback"), so consecutive days always differ and a combination recurs every 44 days.
+- **A do-not-repeat list** — the quotes from the surrounding days' horoscopes already in
+  Firestore.
 
 ### Subscriptions -- RevenueCat
 - `react-native-purchases` + `react-native-purchases-ui` v9.x (native)
@@ -84,24 +121,38 @@ Delaluna Answers is a personalized astrology companion for iOS and Android that 
 - `@react-native-async-storage/async-storage` (theme persistence, safe-wrapped)
 
 ### Build & Release -- EAS
-- Four build profiles in `eas.json`: `development-device`, `preview-device`, `preview`, `production`
+- Five build profiles in `eas.json`: `development-simulator`, `development-device`, `preview-device`, `preview`, `production`
 - Each profile binds to an EAS environment vault (`development` / `preview` / `production`) -- Firebase credentials are injected at build time, not committed
-- `runtimeVersion: appVersion` policy -- OTA updates (`npm run update:preview`) only apply to builds whose app version matches
+- `runtimeVersion` is pinned to the app version -- OTA updates (`npm run update:preview`) only apply to builds whose runtime version matches
 - Full rebuild needed any time native code or `eas.json` changes (`npm run build:preview`)
+- `scripts/exclude-dev-client.js` runs as `eas-build-pre-install` to strip `expo-dev-client` from store builds
+- Custom config plugins: `withAndroidLargeScreenSupport` (inline in `app.config.js`) and `plugins/with-adi-registration`
 
 ### Auth Flow
-Sign-up -> `(auth)/verify-email.tsx` (OTP) -> `sendVerificationCode` Cloud Function -> user enters 6-digit code -> `verifyCode` marks `emailVerified` in Auth + Firestore -> redirect to `(main)`.
+Sign-up -> `(auth)/verify-email.tsx` (OTP) -> `sendVerificationCode` Cloud Function -> user enters a 6-character code -> `verifyCode` marks `emailVerified` on the Auth record and mirrors it to Firestore -> redirect to `(main)`.
+
+The OTP uses an ambiguity-free alphabet (no `0/O/1/I/L`), `crypto.randomInt` for uniform
+randomness, a 60-second resend rate limit, 5 attempts, and a 15-minute expiry. Codes are
+bound to the mailbox they were sent to, so changing the account email invalidates them.
+
+### Security Model
+- **Chat generation is metered server-side.** `sendChatMessage` is the only path that may submit a prompt; Firestore rules allow `create` on `updayedChat` only when `prompt` is empty, since a non-empty prompt is what makes the extension run. Usage is tracked in the server-write-only `users/{uid}/chatUsage/{YYYY-MM-DD}` rather than by counting chat docs, because the client can delete its own history.
+- **Admin limit sliders are display only.** `src/context/admin-context.tsx` persists to AsyncStorage and never reaches the server. Real limits are in `functions/src/index.ts`.
+- **Admin privilege is the `admin: true` custom auth claim**, set by `syncAdminClaim` from the secret-backed `ADMIN_EMAILS` allowlist. `users/{uid}.isAdmin` is a UI mirror -- security rules gate on the claim only.
+- **Email verification reads `authUser.emailVerified`**; `users/{uid}.isEmailVerified` is a display mirror that goes stale after an email change.
+- **No RevenueCat `sk_` keys in `app.config.js`** -- everything under `extra` is readable from any installed build. Secret-key calls live in Cloud Functions via Secret Manager (`REVENUECAT_KEY_V2`).
 
 ### Notable Architectural Choices
 1. **New Architecture on** -- constrains package choices to those that support Fabric/TurboModules
 2. **Two parallel theme systems** -- the named `ThemeContext` (for general screens) and the Dark Cosmic `C/S/R` tokens (for chart/settings screens)
-3. **AI results arrive asynchronously via Firestore** -- the UI subscribes to `status.state` transitions and handles a stuck-extension retry path in `chat.service.ts`
+3. **AI results arrive asynchronously via Firestore** -- the UI subscribes to the document and handles a stuck-extension retry path, with an AppState-resume re-fetch in `horoscope-context.tsx` to recover listeners dropped while suspended
+4. **Push timing is hash-jittered** -- `dailyHoroscopeNotifications` runs hourly and uses an FNV-1a hash of the UID to give each user a stable local send hour in the 8-10 AM window, spreading load instead of stampeding at 8:00
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20 (Volta pins `20.19.5`; Cloud Functions run on Node 22)
 - [EAS CLI](https://docs.expo.dev/eas/) (`npm install -g eas-cli`)
 - Firebase project with Auth, Firestore, and Functions enabled
 - RevenueCat account with products and entitlements configured
@@ -200,7 +251,14 @@ npm run test:coverage     # run with coverage report (80% threshold on all metri
 npm run test:debug        # debug with Node inspector (then open chrome://inspect)
 ```
 
-Tests live in `__tests__` directories alongside source files. See [docs/TESTING.md](docs/TESTING.md) for the full testing guide.
+Tests live in `__tests__` directories alongside source files. The suite is currently
+155 tests across 8 files, covering pure logic only (synastry, location, responsive,
+date handling, perf logging, tarot cache, user service) -- there are no component or
+Cloud Function tests. See [docs/TESTING.md](docs/TESTING.md) for the full testing guide.
+
+> `npx tsc --noEmit` is not currently clean -- see the Known Issues section in
+> [CLAUDE.md](CLAUDE.md). Jest passes regardless because `ts-jest` runs with
+> `isolatedModules`, which skips cross-file type checking.
 
 ### Debugging
 
@@ -224,33 +282,40 @@ lsof -ti:4000,5001,8080,9099,9199 | xargs kill -9
 
 ```
 app/                    # Expo Router screens (file-based routing)
-  (main)/               # Tab navigator: home, connections, transits, chat
-  (auth)/               # Login, sign-up, forgot password, email verification (OTP)
-  (settings)/           # Profile, edit profile, paywall, theme picker, purchased reports
-  (home)/               # Birth chart viewer
+  _layout.tsx           # Provider stack + AuthGate (routing, push handlers, splash)
   (startup)/            # Splash and welcome screens
+  (auth)/               # Login, sign-up, forgot password, email verification (OTP)
+  (main)/               # Tab navigator: home, connections, transits, chat
+  (home)/               # Birth chart viewer
+  (settings)/           # Profile, edit profile, paywall, theme, avatar, admin, receipts
   (util)/               # Feedback, support, loading screens
-  connection/           # Connection detail, edit, and synastry screens
+  connection/           # new.tsx plus [id]/ detail, edit, and synastry screens
 
 src/
-  assets/               # Images, icons, Lottie animations, theme backgrounds
-  components/           # Reusable UI components (natal chart wheel, chat, tarot, etc.)
-  constants/            # Design tokens (C/S/R), string constants
-  context/              # React contexts (User, RevenueCat, Horoscope, Theme, Admin)
-  hooks/                # Custom hooks (responsive, theme, pull-to-refresh)
+  assets/               # Images, icons, Lottie animations, theme backgrounds, buttons
+  components/           # UI by feature: home, natalChart, synastry, sign-up, shared, ui
+  constants/            # Design tokens (C/S/R), strings, tarot card registry
+  context/              # React contexts (User, RevenueCat, Admin, Theme, Horoscope)
+  hooks/                # Custom hooks (responsive, theme, portrait lock, min-version)
   models/               # Data model helpers
-  prompts/              # AI prompt templates
+  prompts/              # AI prompt templates (chat, horoscope, transits, synastry, ...)
   schemas/              # Zod validation schemas
-  services/             # Business logic (astro engine, Firebase, RevenueCat, chat, etc.)
+  services/             # Business logic (astro engine, Firebase, RevenueCat, chat, ...)
   stores/               # In-memory stores for cross-screen data passing
   types/                # TypeScript type definitions
-  utils/                # Pure utility functions (location, synastry, responsive, dates)
+  utils/                # Pure utilities (location, synastry, responsive, harm filter)
 
-functions/              # Firebase Cloud Functions (OTP, chat cleanup, push notifications)
-extensions/             # Firebase Extension configs (AI generation, RevenueCat sync)
+functions/src/index.ts  # All 14 Cloud Functions
+extensions/*.env        # Firebase Extension configs (GenAI x6, RevenueCat, user deletion)
 plugins/                # Custom Expo config plugins
+scripts/                # Build and migration scripts
+seed/                   # Firebase emulator seed data (auto import/export)
 docs/                   # Additional developer docs (CHEATSHEET.md, TESTING.md)
+firestore.rules         # Security rules -- the enforcement layer, read before editing
 ```
+
+`@/` maps to the **project root**, not `src/` -- so imports read `@/src/services/...`
+and `@/firebaseConfig`. Configured in `tsconfig.json` and `jest.config.js`.
 
 ## Environment Variables
 

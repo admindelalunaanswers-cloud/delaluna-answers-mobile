@@ -22,6 +22,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { CARD_LINKS } from "@/src/constants/links";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
+import { isOracleCard, tarotCardImageUrl } from "@/src/utils/tarot-image";
 
 const FLIP_DURATION = 650;
 const STAGGER_MS = 140;
@@ -111,9 +112,6 @@ export default function TarotCardImageFrame({
     setAnimate(false);
   }, [firstView]);
 
-  const getTarotCardImageUrl = (num: number) =>
-    `https://firebasestorage.googleapis.com/v0/b/delaluna-answers.firebasestorage.app/o/tarot-card-front%2F${num}.png?alt=media`;
-
   const handleOracleLinkPress = () => {
     Linking.openURL(CARD_LINKS.amazon.ORACLE_CARDS);
   };
@@ -128,12 +126,10 @@ export default function TarotCardImageFrame({
     onReveal?.();
   };
 
-  const determineCardBack = (num: number): ImageSourcePropType => {
-    if (num <= 53) {
-      return require("@/src/assets/card_backs/ORACLE_CARD_BACK.png");
-    }
-    return require("@/src/assets/card_backs/TAROT_CARD_BACK.png");
-  };
+  const determineCardBack = (num: number): ImageSourcePropType =>
+    isOracleCard(num)
+      ? require("@/src/assets/card_backs/ORACLE_CARD_BACK.png")
+      : require("@/src/assets/card_backs/TAROT_CARD_BACK.png");
 
   return (
     <View style={styles.container}>
@@ -142,7 +138,7 @@ export default function TarotCardImageFrame({
           <FlipCard
             key={`${num}-${idx}`}
             backSource={determineCardBack(num)}
-            frontUri={getTarotCardImageUrl(num)}
+            frontUri={tarotCardImageUrl(num)}
             reversed={!!reversed[idx]}
             shouldReveal={revealed}
             animate={animate}

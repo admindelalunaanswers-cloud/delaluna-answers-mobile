@@ -1,4 +1,3 @@
-
 export const COMPATIBILITY_PROMPT_TEMPLATE = `Generate a compatibility report between the user and their partner.
 
 
@@ -31,11 +30,51 @@ Relationship Type: {{relationshipType}}
 RELATIONSHIP TYPE — TONE ADJUSTMENT
 ====================================================
 - If "consistent": Use a supportive, empowering, and balanced tone.
-  Highlight trust, mutual respect, and growth.
+  Highlight trust, mutual respect, and growth. Limit 3 areas of improvement/
+  low scores. Offer practical advice for strengthening the bond.
 - If "complicated": Use an honest but understanding tone. Acknowledge
   tension and chemistry. Offer practical insight without judgment.
 - If "toxic": Use a bold, unapologetic, no-nonsense tone. Deliver truth
   with wit and confidence. Warn about red flags while empowering detachment.
+- If "i dunno": Use a wry, "I'm-not-your-therapist-but" tone. Name the
+  uncertainty directly instead of dancing around it — this is a status
+  that doesn't have a clean label yet, and the report should reflect that
+  ambiguity rather than forcing false clarity.
+
+====================================================
+SCORE DISTRIBUTION BY RELATIONSHIP TYPE
+====================================================
+Score bands: RED = 0–40 | YELLOW = 41–70 | GREEN = 71–100
+
+Apply these distribution targets across the 16 "scores" fields. Still
+derive every individual number from the actual chart interaction —
+these are calibration targets, not a script to force values that
+contradict the synastry.
+
+- "consistent": Mostly GREEN, some YELLOW. Target roughly 1-2 fields
+  landing in RED — even strong pairings have a few real friction
+  points, and naming them (not burying them) is what keeps this
+  category from reading as generic hype.
+- "complicated": Skew toward YELLOW/RED, with a 1-2 of GREEN
+  mixed in. The greens should land on the specific fields where the
+  chemistry is undeniable (e.g. attraction, desire, resonation) even
+  as the rest of the picture is shakier — that contrast IS the
+  "complicated" story.
+- "toxic": Mostly RED/YELLOW. GREEN reserved for 1–2 fields max,
+  usually attraction/desire — enough to explain why it's hard to
+  walk away, not enough to soften the warning.
+- "i dunno": Widest spread of any category — push toward the extremes
+  (deep RED and deep GREEN) and 1-2 the middle-of-the-road
+  YELLOW scores. The unresolved status should show up as genuine
+  volatility field-to-field (e.g. sky-high attraction next to
+  bottomed-out accountability), not as a cluster of safe 50s.
+
+====================================================
+PREDICTION WEIGHTING
+====================================================
+When a chart interaction could reasonably score in more than one band, lean toward the harder, less flattering number rather than the generous one — that's the brand's "brutally honest" promise, and a sugar-coated maybe isn't useful. Don't manufacture friction a chart doesn't support, but stop defaulting to the flattering read when the placements are genuinely mixed. This applies within each relationship type's distribution targets above — it shifts where a borderline field lands inside its target band, it doesn't override the bands themselves (a "consistent" pairing still isn't reported as mostly RED; its 3 red fields should land on the harder end of red instead of the soft edge of yellow).
+
+The "advice" field still ends with something the user can act on — the harder scores are the gut-check, the advice is where they get their footing back, same as the power-flip in the chat product.
 
 ====================================================
 STYLE REQUIREMENTS
@@ -67,7 +106,7 @@ Avoid:
 - do not overcomplicate with discussing natal charts in the synastry. The focus should be on the interaction between the two people, not on explaining their chart in isolation.
 - do not use pet names or overly affectionate language, as it can come across as insincere or coddling. The tone should be more like a wise friend giving tough love advice, rather than a romantic partner.
 - do not use technical astrology jargon or discuss aspects in terms of degrees and orbs. The language should be accessible and focused on the lived experience of the placements, not on the mechanics of astrology.
-- do not use technical astrology, make understandable for someone with no astrology knowledge. 
+- do not use technical astrology, make understandable for someone with no astrology knowledge.
 - For example, instead of "your Venus square their Mars at 3° orb creates tension in how you express love", say "when it comes to love, you have very different styles that can clash. One of you is more direct and assertive, while the other is more reserved and indirect. This can lead to misunderstandings and frustration if you're not aware of it."
 
 
@@ -94,6 +133,8 @@ SCORES:
     - "responsibility"
     - "accountability"
     - "hostility"
+  - Follow the SCORE DISTRIBUTION BY RELATIONSHIP TYPE targets above
+    when assigning values.
 
 ADVICE:
 - "advice": MUST BE 3-5 sentences. Personalized to the
@@ -102,7 +143,7 @@ ADVICE:
 ====================================================
 OUTPUT RULES
 ====================================================
-- Return JSON ONLY. No markdown. No commentary. No code blocks. No markdown formatting. 
+- Return JSON ONLY. No markdown. No commentary. No code blocks. No markdown formatting.
 - No hedging. No filler. No fluff. No generic advice that could apply to any couple. Make it specific to this pairing.
 - All values must be strings, numbers, objects, or null as specified.
 - Every field must be personalized.
@@ -135,11 +176,19 @@ OUTPUT FORMAT
 }
 `;
 
-export function buildCompatibilityPrompt(userNatalChart: string, partnerNatalChart: string, userPronouns: string, partnerPronouns: string, relationshipType: string) {
-  return COMPATIBILITY_PROMPT_TEMPLATE
-    .replace("{{userNatalChart}}", userNatalChart)
+export function buildCompatibilityPrompt(
+  userNatalChart: string,
+  partnerNatalChart: string,
+  userPronouns: string,
+  partnerPronouns: string,
+  relationshipType: string,
+) {
+  return COMPATIBILITY_PROMPT_TEMPLATE.replace(
+    "{{userNatalChart}}",
+    userNatalChart,
+  )
     .replace("{{partnerNatalChart}}", partnerNatalChart)
     .replace("{{userPronouns}}", userPronouns)
     .replace("{{partnerPronouns}}", partnerPronouns)
-    .replace("{{relationshipType}}", relationshipType)
+    .replace("{{relationshipType}}", relationshipType);
 }

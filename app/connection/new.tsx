@@ -50,6 +50,7 @@ import { buildCompatibilityPrompt } from "@/src/prompts/compatibility-prompt";
 import { Events } from "@/src/services/analytics.service";
 import { measure } from "@/src/services/performance.service";
 import { recordError } from "@/src/services/crashlytics.service";
+import { logger } from "@/src/utils/logger";
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -892,7 +893,7 @@ export default function SingleConnectionCreateScreen() {
       });
       return;
     } catch (err) {
-      console.error("Error saving connection:", err);
+      logger.error("[connection-new] save failed", err, "connection_create");
       recordError(err, 'connection_create');
       dismissAllSuggestions();
       Keyboard.dismiss();

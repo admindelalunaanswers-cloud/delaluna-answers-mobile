@@ -48,6 +48,24 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // ─── Moderation ─────────────────────────────────────────────────────────
+    // Per-account bans and feature blocks, written ONLY by the setUserDisabled
+    // and setUserFeatureBlocks cloud functions (the Admin SDK bypasses rules).
+    //
+    // This deliberately does NOT live on users/{uid}. That document is
+    // delete-able by its owner — `allow delete: if isOwner(uid)` below, which
+    // account deletion depends on — so a blocked user could delete their
+    // profile and re-create it without the block, and every server check that
+    // read the field would see an unmoderated account. Keeping the state in a
+    // collection the subject cannot write or delete closes that off.
+    //
+    // The owner may READ it so the app can explain why a feature is missing,
+    // rather than failing with an opaque permission error.
+    match /moderation/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+    }
+
     // ─── Users ──────────────────────────────────────────────────────────────
     match /users/{uid} {
       allow read: if isOwner(uid);
@@ -55,10 +73,14 @@ service cloud.firestore {
       // First-time create: only the owner; createdAt must be a server timestamp.
       // Clients can never self-create with isPremiumMember/isAdmin set — both
       // are written server-side (RevenueCat extension and syncAdminClaim).
+      // `isEmailVerified` is listed here as well as in noProtectedFieldsChanged:
+      // it is read server-side, so a client that seeded it true at create time
+      // would be asserting an email ownership it never proved.
       allow create: if isOwner(uid)
         && request.resource.data.createdAt == request.time
         && (!('isPremiumMember' in request.resource.data) || request.resource.data.isPremiumMember == false)
-        && (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false);
+        && (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false)
+        && (!('isEmailVerified' in request.resource.data) || request.resource.data.isEmailVerified == false);
 
       // Updates: owner can edit profile fields but cannot change protected
       // fields, AND must be email-verified. The extra checks let admins
@@ -88,7 +110,17 @@ service cloud.firestore {
       match /updayedChat/{messageId} {
         // The active rolling chat (Firestore Extension reads/writes this; the
         // extension uses admin SDK so it bypasses these rules).
-        allow read, write: if isVerifiedOwner(uid);
+        //
+        // A non-empty `prompt` is what makes the Gemini extension run a
+        // generation, so clients must not be able to write one — the daily
+        // question allowance and chat-pack balance are enforced in the
+        // `sendChatMessage` Cloud Function, and a direct Firestore write would
+        // sidestep both. Prompt-less creates stay allowed so restoring a saved
+        // session (resumeChatSession) can write back completed turns.
+        allow read, delete: if isVerifiedOwner(uid);
+        allow create: if isVerifiedOwner(uid)
+          && request.resource.data.get('prompt', '') == '';
+        allow update: if false;
       }
 
       match /savedChats/{sessionId} {
@@ -114,10 +146,40 @@ service cloud.firestore {
         allow read: if isOwner(uid);
         allow write: if false;
       }
+
+      // Chat question ledger — written only by the sendChatMessage Cloud
+      // Function. Deliberately NOT derived from the chat documents themselves:
+      // the client can delete its own chat history, which would otherwise
+      // reset the daily allowance on demand.
+      match /chatUsage/{docId} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
     }
 
     // ─── RevenueCat extension destination ──────────────────────────────────
-    match /subscriptions/{uid} {
+    // The extension writes both of these with the admin SDK, so it bypasses
+    // these rules; the client is read-only and sees only its own document.
+    //
+    // The uid is the FOURTH path segment, not the second — the destinations are
+    // configured in extensions/firestore-revenuecat-purchases.env as
+    //   REVENUECAT_CUSTOMERS_COLLECTION = subscriptions/purchaser-info/customers
+    //   REVENUECAT_EVENTS_COLLECTION    = subscriptions/purchases/users
+    // A `match /subscriptions/{uid}` binds {uid} to the literal segment
+    // "purchaser-info" / "purchases", so isOwner(uid) is false for every
+    // caller and no user can read their own mirror. That is what this block
+    // used to say; it only ever appeared to work because the admin catch-all
+    // at the top of this file covers the one screen that reads it.
+
+    // Purchaser-info mirror: the document purchasedChatCredits() and the
+    // server-side premium check both read.
+    match /subscriptions/purchaser-info/customers/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+    }
+
+    // Webhook event log, one document per user with the events nested beneath.
+    match /subscriptions/purchases/users/{uid} {
       allow read: if isOwner(uid);
       allow write: if false;
 
@@ -148,8 +210,12 @@ service cloud.firestore {
     // performanceLogs/{screenSlug}/events ← raw client events (write-only for client)
     // performanceLogs/{screenSlug}/daily  ← CF aggregations (admin-read only)
     match /performanceLogs/{screenSlug} {
-      // Any signed-in user may merge lastEventAt onto the parent doc.
-      allow write: if isSignedIn();
+      // Any signed-in user may merge screen metadata onto the parent doc — and
+      // nothing else. An unrestricted write here let any user delete another
+      // screen's doc or graft arbitrary fields onto the admin analytics view.
+      allow create, update: if isSignedIn()
+        && request.resource.data.keys().hasOnly(['screen', 'screenPath', 'lastEventAt']);
+      allow delete: if false;
       allow read:  if isAdmin();
 
       match /events/{eventId} {

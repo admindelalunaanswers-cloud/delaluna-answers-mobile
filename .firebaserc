@@ -1,6 +1,7 @@
 {
   "projects": {
-    "default": "delaluna-answers"
+    "default": "delaluna-answers",
+    "testing": "delaluna-answers-test"
   },
   "targets": {},
   "etags": {
@@ -14,6 +15,18 @@
         "firestore-revenuecat-purchases": "621d257d0f63d9fd3d57945dc5cbd561a1175629f2b4d76f348b0fb39831952b",
         "firestore-transits-chatbot-cgl7": "76100ccb8d4a97e2fcc42d65e3a547a2e8ef16d44cae379159f93b2a38203d46",
         "horoscope-chatbot-b6wc": "f152dd32beea1fbcfb508c4b436ec6064d9529c44d0e10289bb300cfbce5e92f"
+      }
+    },
+    "delaluna-answers-test": {
+      "extensionInstances": {
+        "delete-user-data": "fcbc0853e9d8d6c8e22b0813c8c902abc7a65089b39068206827dfc9f3d3ecbb",
+        "firestore-genai-chatbot": "dd9366ca862bc6c0bbdba9d15eb7e121de445e206a604be40b4716563d1f7af8",
+        "firestore-genai-chatbot-update-5i5h": "97c104c86d948c2b90b07ef9cc6d09ea2694eee11924d0515723268ed7e03ffc",
+        "firestore-natal-chart-chatbot-6ppy": "f78ed17907b5c00cf3405b47424eb9f5895c7e83521960ed636695f591ee5d35",
+        "firestore-revenuecat-purchases": "bb4beb0a00af8d02891de266f8a99d2d3891c707163136f3b250bf96667db454",
+        "firestore-tarot-chatbot": "5600e3e434d46152939d544988b7e649da575a21a95ad2b99095149d9349c118",
+        "firestore-transits-chatbot-cgl7": "c03fef7fb939bfd858bf686cc3f38bef6f9c2df321a9517be7268678fbb84075",
+        "horoscope-chatbot-b6wc": "ac7d0a96096fa4926e4f8de11bf6638a7acc199088f2cd0bc21277441fee06a1"
       }
     }
   }

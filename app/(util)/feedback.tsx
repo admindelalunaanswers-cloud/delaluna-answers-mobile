@@ -1,112 +1,118 @@
-import React, { useState } from 'react';
+import HeaderNav from "@/src/components/shared/header-nav";
+import { logger } from "@/src/utils/logger";
+import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import React, { useState } from "react";
 import {
-  View,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Linking,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Switch,
-  Linking,
-  Platform,
-  KeyboardAvoidingView,
-  ActivityIndicator,
-} from 'react-native';
-import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import HeaderNav from '@/src/components/shared/header-nav';
-import { useUser } from '@/src/context/user-context';
-import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const COLORS = {
-  bg: '#0e0b1a',
-  header: '#110d22',
-  card: '#1a1535',
-  border: '#2a2050',
-  primary: '#7c6fd4',
-  light: '#c8bfff',
-  muted: '#6b5fa8',
-  star: '#f0c040',
-  text: '#ffffff',
-  subText: 'rgba(200,191,255,0.65)',
-  placeholder: 'rgba(200,191,255,0.35)',
+  bg: "#0e0b1a",
+  header: "#110d22",
+  card: "#1a1535",
+  border: "#2a2050",
+  primary: "#7c6fd4",
+  light: "#c8bfff",
+  muted: "#6b5fa8",
+  star: "#f0c040",
+  text: "#ffffff",
+  subText: "rgba(200,191,255,0.65)",
+  placeholder: "rgba(200,191,255,0.35)",
 };
 
-const FONT = Platform.select({ ios: 'DMSans-Regular', android: 'DMSans-Regular', default: undefined });
+const FONT = Platform.select({
+  ios: "DMSans-Regular",
+  android: "DMSans-Regular",
+  default: undefined,
+});
 
 const LOVE_OPTIONS = [
-  'Daily horoscope',
-  'Birth chart',
-  'Chat',
-  'Synastry',
-  'Transits',
-  'Tarot',
-  'Themes',
-  'Connections',
-  'Accuracy',
-  
+  "Daily horoscope",
+  "Birth chart",
+  "Chat",
+  "Synastry",
+  "Transits",
+  "Tarot",
+  "Themes",
+  "Connections",
+  "Accuracy",
 ];
 
 const IMPROVE_OPTIONS = [
-  'More readings',
-  'Better UI',
-  'Faster chat',
-  'Notifications',
-  'Accuracy',
-  'More personalization',
-  'Connection Accuracy',
-  'Tone of responses',
-  'Other'
+  "More readings",
+  "Better UI",
+  "Faster chat",
+  "Notifications",
+  "Accuracy",
+  "More personalization",
+  "Connection Accuracy",
+  "Tone of responses",
+  "Other",
 ];
 
 const NAV_BAR_HEIGHT = 44;
 
-type SubmitState = 'idle' | 'submitting' | 'positive' | 'negative';
+type SubmitState = "idle" | "submitting" | "positive" | "negative";
 
 export default function FeedbackScreen() {
   const insets = useSafeAreaInsets();
-  const { authUser } = useUser();
 
   const [rating, setRating] = useState(0);
   const [loved, setLoved] = useState<string[]>([]);
   const [improve, setImprove] = useState<string[]>([]);
-  const [comment, setComment] = useState('');
+  const [comment, setComment] = useState("");
   const [allowFollowUp, setAllowFollowUp] = useState(true);
-  const [submitState, setSubmitState] = useState<SubmitState>('idle');
+  const [submitState, setSubmitState] = useState<SubmitState>("idle");
 
-  const toggle = (arr: string[], setArr: (v: string[]) => void, val: string) => {
+  const toggle = (
+    arr: string[],
+    setArr: (v: string[]) => void,
+    val: string,
+  ) => {
     setArr(arr.includes(val) ? arr.filter((v) => v !== val) : [...arr, val]);
   };
 
-  const canSubmit = rating > 0 && submitState !== 'submitting';
+  const canSubmit = rating > 0 && submitState !== "submitting";
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
-    setSubmitState('submitting');
+    setSubmitState("submitting");
 
     try {
       // TODO: persist feedback to Firestore once schema is defined.
-      // For now, log so dev can see payload.
-      console.log('[feedback]', {
-        uid: authUser?.uid ?? null,
+      // Until then this only confirms the handler ran — the comment is
+      // free-text the user wrote and the uid identifies them, so neither
+      // belongs in a log line.
+      logger.debug("[feedback] submitted", {
         rating,
-        loved,
-        improve,
-        comment,
+        lovedCount: loved.length,
+        improveCount: improve.length,
+        hasComment: comment.length > 0,
         allowFollowUp,
-        createdAt: new Date().toISOString(),
       });
     } catch (err) {
-      console.error('[feedback] submit error', err);
+      logger.error("[feedback] submit failed", err, "feedback_submit");
     }
 
-    setSubmitState(rating >= 4 ? 'positive' : 'negative');
+    setSubmitState(rating >= 4 ? "positive" : "negative");
   };
 
   const handleLeaveReview = async () => {
     try {
-      const StoreReview = require('expo-store-review');
+      const StoreReview = require("expo-store-review");
       const isAvailable = await StoreReview.isAvailableAsync();
       if (isAvailable) {
         await StoreReview.requestReview();
@@ -117,15 +123,15 @@ export default function FeedbackScreen() {
       // expo-store-review not installed — fall back to deep link
     }
     const url = Platform.select({
-      ios: 'itms-apps://itunes.apple.com/app/idYOUR_APP_ID?action=write-review',
-      android: 'market://details?id=YOUR_PACKAGE_NAME',
+      ios: "itms-apps://itunes.apple.com/app/idYOUR_APP_ID?action=write-review",
+      android: "market://details?id=YOUR_PACKAGE_NAME",
     });
     if (url) Linking.openURL(url).catch(() => {});
     router.back();
   };
 
   const handleContactSupport = () => {
-    router.replace('/(settings)/support');
+    router.replace("/(util)/support");
   };
 
   const renderStars = () => (
@@ -138,7 +144,7 @@ export default function FeedbackScreen() {
           activeOpacity={0.7}
         >
           <Ionicons
-            name={n <= rating ? 'star' : 'star-outline'}
+            name={n <= rating ? "star" : "star-outline"}
             size={moderateScale(36)}
             color={n <= rating ? COLORS.star : COLORS.muted}
             style={{ marginHorizontal: scale(4) }}
@@ -152,7 +158,7 @@ export default function FeedbackScreen() {
   const renderChips = (
     options: string[],
     selected: string[],
-    setSelected: (v: string[]) => void
+    setSelected: (v: string[]) => void,
   ) => (
     <View style={s.chipsWrap}>
       {options.map((opt) => {
@@ -179,9 +185,11 @@ export default function FeedbackScreen() {
     </View>
   );
 
-  if (submitState === 'positive') {
+  if (submitState === "positive") {
     return (
-      <View style={[s.root, { paddingTop: insets.top + scale(NAV_BAR_HEIGHT) }]}>
+      <View
+        style={[s.root, { paddingTop: insets.top + scale(NAV_BAR_HEIGHT) }]}
+      >
         <HeaderNav
           title="Feedback"
           leftIconName="chevron-back-outline"
@@ -195,7 +203,11 @@ export default function FeedbackScreen() {
           <Text style={s.stateBody}>
             Leave a Review — your words help other seekers find Delaluna.
           </Text>
-          <TouchableOpacity style={s.primaryBtn} onPress={handleLeaveReview} activeOpacity={0.85}>
+          <TouchableOpacity
+            style={s.primaryBtn}
+            onPress={handleLeaveReview}
+            activeOpacity={0.85}
+          >
             <Text style={s.primaryBtnText}>Leave Review ✦</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => router.back()} style={s.linkBtn}>
@@ -206,9 +218,11 @@ export default function FeedbackScreen() {
     );
   }
 
-  if (submitState === 'negative') {
+  if (submitState === "negative") {
     return (
-      <View style={[s.root, { paddingTop: insets.top + scale(NAV_BAR_HEIGHT) }]}>
+      <View
+        style={[s.root, { paddingTop: insets.top + scale(NAV_BAR_HEIGHT) }]}
+      >
         <HeaderNav
           title="Feedback"
           leftIconName="chevron-back-outline"
@@ -220,9 +234,14 @@ export default function FeedbackScreen() {
           <Text style={s.starsBig}>☽</Text>
           <Text style={s.stateTitle}>We hear you</Text>
           <Text style={s.stateBody}>
-            Thank you for the honest reflection. Want to tell us more so we can make it right?
+            Thank you for the honest reflection. Want to tell us more so we can
+            make it right?
           </Text>
-          <TouchableOpacity style={s.primaryBtn} onPress={handleContactSupport} activeOpacity={0.85}>
+          <TouchableOpacity
+            style={s.primaryBtn}
+            onPress={handleContactSupport}
+            activeOpacity={0.85}
+          >
             <Text style={s.primaryBtnText}>Contact Support</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => router.back()} style={s.linkBtn}>
@@ -254,7 +273,9 @@ export default function FeedbackScreen() {
           showsVerticalScrollIndicator={false}
         >
           <Text style={s.intro}>How was your experience?</Text>
-          <Text style={s.introSub}>Tap a star, and tell us what felt right (or wrong).</Text>
+          <Text style={s.introSub}>
+            Tap a star, and tell us what felt right (or wrong).
+          </Text>
 
           {renderStars()}
 
@@ -284,13 +305,18 @@ export default function FeedbackScreen() {
           <View style={s.toggleRow}>
             <View style={s.flex}>
               <Text style={s.toggleTitle}>Allow follow-up by email</Text>
-              <Text style={s.toggleSub}>We may reach out if we need to clarify something.</Text>
+              <Text style={s.toggleSub}>
+                We may reach out if we need to clarify something.
+              </Text>
             </View>
             <Switch
               value={allowFollowUp}
               onValueChange={setAllowFollowUp}
-              trackColor={{ false: 'rgba(255,255,255,0.12)', true: 'rgba(124,111,212,0.6)' }}
-              thumbColor={allowFollowUp ? COLORS.primary : '#f4f3f4'}
+              trackColor={{
+                false: "rgba(255,255,255,0.12)",
+                true: "rgba(124,111,212,0.6)",
+              }}
+              thumbColor={allowFollowUp ? COLORS.primary : "#f4f3f4"}
               ios_backgroundColor="rgba(255,255,255,0.12)"
             />
           </View>
@@ -301,7 +327,7 @@ export default function FeedbackScreen() {
             style={[s.primaryBtn, !canSubmit && s.btnDisabled]}
             activeOpacity={0.85}
           >
-            {submitState === 'submitting' ? (
+            {submitState === "submitting" ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={s.primaryBtnText}>Send Feedback ✦</Text>
@@ -328,35 +354,35 @@ const s = StyleSheet.create({
     color: COLORS.text,
     fontFamily: FONT,
     fontSize: moderateScale(22),
-    fontWeight: '700',
-    textAlign: 'center',
+    fontWeight: "700",
+    textAlign: "center",
   },
   introSub: {
     color: COLORS.subText,
     fontFamily: FONT,
     fontSize: moderateScale(13),
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: verticalScale(6),
     marginBottom: verticalScale(20),
   },
 
   starsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: scale(2),
   },
   ratingLabel: {
     color: COLORS.light,
     fontFamily: FONT,
     fontSize: moderateScale(14),
-    fontWeight: '600',
+    fontWeight: "600",
     marginLeft: scale(10),
   },
 
   dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginVertical: verticalScale(22),
   },
   dividerLine: { flex: 1, height: 1, backgroundColor: COLORS.border },
@@ -370,13 +396,13 @@ const s = StyleSheet.create({
     color: COLORS.muted,
     fontFamily: FONT,
     fontSize: moderateScale(10),
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: 1.4,
     marginBottom: verticalScale(10),
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
 
-  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: scale(8) },
+  chipsWrap: { flexDirection: "row", flexWrap: "wrap", gap: scale(8) },
   chip: {
     paddingHorizontal: scale(14),
     paddingVertical: verticalScale(8),
@@ -387,13 +413,13 @@ const s = StyleSheet.create({
   },
   chipOn: {
     borderColor: COLORS.primary,
-    backgroundColor: 'rgba(124,111,212,0.18)',
+    backgroundColor: "rgba(124,111,212,0.18)",
   },
   chipText: {
     color: COLORS.subText,
     fontFamily: FONT,
     fontSize: moderateScale(13),
-    fontWeight: '500',
+    fontWeight: "500",
   },
   chipTextOn: { color: COLORS.light },
 
@@ -410,8 +436,8 @@ const s = StyleSheet.create({
   },
 
   toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: scale(12),
     backgroundColor: COLORS.card,
     borderColor: COLORS.border,
@@ -425,7 +451,7 @@ const s = StyleSheet.create({
     color: COLORS.text,
     fontFamily: FONT,
     fontSize: moderateScale(14),
-    fontWeight: '600',
+    fontWeight: "600",
   },
   toggleSub: {
     color: COLORS.subText,
@@ -439,14 +465,14 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.primary,
     borderRadius: 999,
     paddingVertical: verticalScale(14),
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   primaryBtnText: {
-    color: '#fff',
+    color: "#fff",
     fontFamily: FONT,
     fontSize: moderateScale(15),
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: 0.3,
   },
   btnDisabled: { opacity: 0.45 },
@@ -455,8 +481,8 @@ const s = StyleSheet.create({
   statePanel: {
     flex: 1,
     paddingHorizontal: scale(28),
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   starsBig: {
     fontSize: moderateScale(48),
@@ -467,14 +493,14 @@ const s = StyleSheet.create({
     color: COLORS.text,
     fontFamily: FONT,
     fontSize: moderateScale(22),
-    fontWeight: '700',
-    textAlign: 'center',
+    fontWeight: "700",
+    textAlign: "center",
   },
   stateBody: {
     color: COLORS.subText,
     fontFamily: FONT,
     fontSize: moderateScale(14),
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: verticalScale(10),
     marginBottom: verticalScale(28),
     lineHeight: moderateScale(20),
@@ -484,6 +510,6 @@ const s = StyleSheet.create({
     color: COLORS.muted,
     fontFamily: FONT,
     fontSize: moderateScale(13),
-    textDecorationLine: 'underline',
+    textDecorationLine: "underline",
   },
 });

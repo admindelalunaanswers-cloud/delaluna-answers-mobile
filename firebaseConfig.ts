@@ -30,7 +30,6 @@
 // }
 
 import Constants from "expo-constants";
-import * as Device from "expo-device";
 import { Platform } from "react-native";
 // import {
 //   getAI,
@@ -42,16 +41,22 @@ import { Platform } from "react-native";
 import { FirebaseOptions, getApp, getApps, initializeApp } from "firebase/app";
 
 // Auth
-import { Auth, connectAuthEmulator, getAuth, initializeAuth } from "firebase/auth";
 import { SecureAuthStorage } from "@/src/services/secure-auth-storage";
+import {
+  Auth,
+  connectAuthEmulator,
+  getAuth,
+  initializeAuth,
+} from "firebase/auth";
 // getReactNativePersistence is exported by the Metro/RN bundle of firebase/auth
 // but absent from the browser TypeScript definitions — require() bypasses that.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { getReactNativePersistence } = require("firebase/auth");
 
 // Firestore
+import { FIRESTORE_DATABASE_ID, isDevelopment } from "@/src/constants/env";
+import { logger } from "@/src/utils/logger";
 import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
-import { FIRESTORE_DATABASE_ID } from "@/src/constants/env";
 
 // Functions
 import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
@@ -60,7 +65,8 @@ import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
 import { connectStorageEmulator, getStorage, ref } from "firebase/storage";
 
 // Load Expo config
-const extra = (Constants.expoConfig as any)?.extra ?? (Constants.manifest as any)?.extra;
+const extra =
+  (Constants.expoConfig as any)?.extra ?? (Constants.manifest as any)?.extra;
 
 if (!extra) {
   throw new Error("❌ Missing Firebase config in Expo extra");
@@ -78,15 +84,31 @@ const firebaseConfig: FirebaseOptions = {
 // Initialize Firebase
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
+// Which project this build is actually talking to. Fast Refresh preserves the
+// already-initialized app above, so after changing .env this can lag the served
+// manifest until a full reload — log the live value, not the intended one.
+//
+// This line is dev-only. The release-visible version of the same question —
+// including the native SDK's project and the OTA channel — is the `[runtime]`
+// banner in src/utils/runtime-info.ts, printed from app/_layout.tsx.
+logger.debug(
+  "[firebase] project:",
+  app.options.projectId,
+  "db:",
+  FIRESTORE_DATABASE_ID,
+);
+
 // Auth — persist tokens in SecureStore (Keychain on iOS, EncryptedSharedPreferences
 // on Android) instead of plaintext AsyncStorage. Existing users on prior builds
 // will be signed out once on first launch of this build.
 // Falls back to getAuth on hot reload when auth is already initialized.
 let auth: Auth;
 try {
-  auth = initializeAuth(app, { persistence: getReactNativePersistence(SecureAuthStorage) });
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(SecureAuthStorage),
+  });
 } catch (e: any) {
-  if (e.code === 'auth/already-initialized') {
+  if (e.code === "auth/already-initialized") {
     auth = getAuth(app);
   } else {
     throw e;
@@ -94,57 +116,45 @@ try {
 }
 export { auth };
 
-// Firestore — routed per environment (development → dllad, preview → dllat,
-// production → (default)). See src/constants/env.ts for the mapping.
-console.log(`[firebaseConfig] Using Firestore database: ${FIRESTORE_DATABASE_ID}`);
+// Firestore — every environment uses the `(default)` database of the single
+// `delaluna-answers` project. See src/constants/env.ts for FIRESTORE_DATABASE_ID.
 export const db = getFirestore(app, FIRESTORE_DATABASE_ID);
 
 // Storage
 export const storage = getStorage(app);
 
 // Helper for Natal Chart Storage Path
-export const getChartFolderRef = (uid: string) => 
+export const getChartFolderRef = (uid: string) =>
   ref(storage, `user-birth-charts/${uid}-natal-chart.svg`);
 
 // Functions
 export const functions = getFunctions(app, "us-central1");
 
 // Firebase AI Logic
-// const ai = getAI(app, { backend: new GoogleAIBackend() });
 
-/**
- * Raw Model for text/image generation (birth charts, interpretations)
- * Uses Google AI Backend (not Vertex)
- */
-// export const rawGeminiModel = getGenerativeModel(ai, {
-//   model: "gemini-3-pro-image-preview"
-// });
-
-/**
- * Grounded Model with Google Search
- * Uses real-time web data for current astrological events
- */
-// export const groundedGeminiModel = getGenerativeModel(ai, {
-//   model: "gemini-2.5-flash",
-//   tools: [{ googleSearch: {} }],
-// });
-
-// Emulator Support (DEV only)
+// Emulator Support (development env only)
+//
+// Three conditions must all hold: a debug build (`__DEV__`), the development
+// APP_ENV, and USE_EMULATOR opted in. The APP_ENV check is what keeps a preview
+// or production build from attaching to emulators even if it were somehow built
+// with USE_EMULATOR=true.
 //
 // Android and iOS reach the dev machine differently on this team's setup, so
 // each platform gets its own override: EMULATOR_HOST_ANDROID / EMULATOR_HOST_IOS
 // in .env. Both default to "localhost"; set EMULATOR_HOST_IOS to the dev
 // machine's LAN IP for physical iOS device testing.
-export const USE_EMULATOR = __DEV__ && extra?.USE_EMULATOR === true;
+export const USE_EMULATOR =
+  __DEV__ && isDevelopment && extra?.USE_EMULATOR === true;
 if (USE_EMULATOR) {
-  const host: string = Platform.OS === "android"
-    ? (extra?.EMULATOR_HOST_ANDROID || "localhost")
-    : (extra?.EMULATOR_HOST_IOS || "localhost");
+  const host: string =
+    Platform.OS === "android"
+      ? extra?.EMULATOR_HOST_ANDROID || "localhost"
+      : extra?.EMULATOR_HOST_IOS || "localhost";
   connectAuthEmulator(auth, `http://${host}:9099`);
   connectFirestoreEmulator(db, host, 8080);
   connectFunctionsEmulator(functions, host, 5001);
   connectStorageEmulator(storage, host, 9199);
-  console.log("USING EMULATOR: ", host);
+  logger.debug("[firebase] emulators attached at", host);
 }
 
 export { app };

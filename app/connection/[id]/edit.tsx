@@ -39,6 +39,7 @@ import {
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 
 import LoadingScreen from "../../(util)/loading-screen";
+import { logger } from "@/src/utils/logger";
 
 const NAV_BAR_HEIGHT = 44;
 const MAX_BIRTH_DETAIL_CHANGES = 3;
@@ -842,7 +843,7 @@ export default function EditConnectionScreen() {
       await updateDoc(ref, updatedData);
       router.back();
     } catch (err) {
-      console.error("Error saving pronouns:", err);
+      logger.error("[connection-edit] save pronouns failed", err, "connection_save_pronouns");
       Alert.alert("Error", "Failed to save changes.");
       setSaving(false);
     }
@@ -872,7 +873,7 @@ export default function EditConnectionScreen() {
       try {
         await handleSavePronouns();
       } catch (err) {
-        console.error("Error saving pronouns:", err);
+        logger.error("[connection-edit] save pronouns failed", err, "connection_save_pronouns");
         Alert.alert("Error", "Failed to save changes.");
         setSaving(false);
       }
@@ -1000,7 +1001,7 @@ export default function EditConnectionScreen() {
 
       router.back();
     } catch (err) {
-      console.error("Error saving connection:", err);
+      logger.error("[connection-edit] save failed", err, "connection_save");
       Alert.alert("Error", "Something went wrong saving this connection.");
       setSaving(false);
     }
@@ -1021,7 +1022,7 @@ export default function EditConnectionScreen() {
               await deleteDoc(ref);
               router.replace("/(main)/connections");
             } catch (err) {
-              console.error("Error deleting connection:", err);
+              logger.error("[connection-edit] delete failed", err, "connection_delete");
               Alert.alert("Error", "Failed to delete connection.");
             }
           },

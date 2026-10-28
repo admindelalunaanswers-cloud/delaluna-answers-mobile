@@ -44,6 +44,7 @@ import {
   type UserSearchResult,
 } from "@/src/services/admin-entitlements.service";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
+import { logger } from "@/src/utils/logger";
 
 const NAV_BAR_HEIGHT = 44;
 const SHOW_ENTITLEMENT_OVERRIDES = false;
@@ -136,7 +137,8 @@ function Stepper({
 
 export default function AdminScreen() {
   const insets = useSafeAreaInsets();
-  const { devPlan, setDevPlan, isPro } = useRevenueCat();
+  const { devPlan, setDevPlan, isPro, isAdmin, hasFullAccess } =
+    useRevenueCat();
   const {
     dailyChatLimit,
     premiumDailyChatLimit,
@@ -186,7 +188,7 @@ export default function AdminScreen() {
       try {
         setResults(await searchUsersByUidPrefix(prefix));
       } catch (err) {
-        console.error("[Admin] searchUsersByUidPrefix error:", err);
+        logger.error("[Admin] searchUsersByUidPrefix failed", err, "admin_user_search");
       } finally {
         setSearching(false);
       }
@@ -206,7 +208,7 @@ export default function AdminScreen() {
     try {
       setEntitlements(await getEntitlementMirror(uid));
     } catch (err) {
-      console.error("[Admin] getEntitlementMirror error:", err);
+      logger.error("[Admin] getEntitlementMirror failed", err, "admin_entitlement_mirror");
       setEntitlements(null);
     } finally {
       setLoadingEntitlements(false);
@@ -360,6 +362,21 @@ export default function AdminScreen() {
           <View style={ss.detailRow}>
             <Text style={ss.detailLabel}>isPro</Text>
             <Text style={ss.detailValue}>{isPro ? "true" : "false"}</Text>
+          </View>
+          <View style={ss.separator} />
+          <View style={ss.detailRow}>
+            <Text style={ss.detailLabel}>isAdmin</Text>
+            <Text style={ss.detailValue}>{isAdmin ? "true" : "false"}</Text>
+          </View>
+          <View style={ss.separator} />
+          {/* What the UI actually gates on. Split out from isPro so it is
+              obvious whether an unlock came from paying or from being an
+              admin — the two used to be indistinguishable from this screen. */}
+          <View style={ss.detailRow}>
+            <Text style={ss.detailLabel}>hasFullAccess</Text>
+            <Text style={ss.detailValue}>
+              {hasFullAccess ? "true" : "false"}
+            </Text>
           </View>
         </View>
 

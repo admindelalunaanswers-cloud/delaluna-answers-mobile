@@ -28,6 +28,7 @@ import { GlassButton } from '@/src/assets/buttons/glass-button';
 import { scale, moderateScale, verticalScale } from '@/src/utils/responsive';
 import { ThemeContext } from '@/src/context/theme-context';
 import { revokeMyRefreshTokens } from '@/src/services/user.service';
+import { logger } from '@/src/utils/logger';
 
 type RuleKey = 'length' | 'uppercase' | 'lowercase' | 'number' | 'noWhitespace';
 
@@ -100,7 +101,7 @@ export default function UpdatePasswordScreen() {
         },
       ]);
     } catch (error: any) {
-      console.error(error);
+      logger.error('[update-password] change failed', error, 'update_password');
       const code = error?.code ?? '';
       const message =
         code === 'auth/wrong-password' || code === 'auth/invalid-credential'

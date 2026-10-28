@@ -46,20 +46,12 @@
       "host": "0.0.0.0"
     },
     "singleProjectMode": true,
-    "extensions": {},
-    "dataconnect": {
-      "dataDir": "dataconnect/.dataconnect/pgliteData"
-    }
+    "extensions": {}
   },
   "extensions": {
-    "delete-user-data": "firebase/delete-user-data@0.1.28",
-    "firestore-genai-chatbot": "googlecloud/firestore-genai-chatbot@0.0.19",
-    "firestore-genai-chatbot-1rrn": "googlecloud/firestore-genai-chatbot@0.0.19",
-    "firestore-genai-chatbot-update-5i5h": "googlecloud/firestore-genai-chatbot@0.0.19",
-    "firestore-natal-chart-chatbot-6ppy": "googlecloud/firestore-genai-chatbot@0.0.19",
+    "delete-user-data": "firebase/delete-user-data@0.1.30",
     "firestore-revenuecat-purchases": "revenuecat/firestore-revenuecat-purchases@0.1.18",
-    "firestore-transits-chatbot-cgl7": "googlecloud/firestore-genai-chatbot@0.0.19",
-    "horoscope-chatbot-b6wc": "googlecloud/firestore-genai-chatbot@0.0.19"
+    "firestore-tarot-chatbot": "googlecloud/firestore-genai-chatbot@0.0.19"
   },
   "firestore": {
     "database": "(default)",
@@ -70,7 +62,41 @@
   "storage": {
     "rules": "storage.rules"
   },
-  "dataconnect": {
-    "source": "dataconnect"
+  "hosting": {
+    "public": "admin-web/dist",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "DENY"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "no-referrer"
+          }
+        ]
+      }
+    ]
   }
 }

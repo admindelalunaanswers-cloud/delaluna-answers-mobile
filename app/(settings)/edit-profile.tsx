@@ -42,6 +42,7 @@ import {
   detectTimezoneOffset,
 } from '@/src/utils/location';
 import LoadingScreen from '../(util)/loading-screen';
+import { logger } from '@/src/utils/logger';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -565,9 +566,9 @@ export default function EditProfileScreen() {
           birthTimezone:        effectiveTz,
           isBirthTimeUnknown,
           isPlaceOfBirthUnknown,
-        }, chartDetailsDoc).catch(console.error);
+        }, chartDetailsDoc).catch(logger.catchAsync('edit_profile_regenerate'));
 
-        refreshSynastryReadingsForUser(uid, natalChart, firstName.trim()).catch(console.error);
+        refreshSynastryReadingsForUser(uid, natalChart, firstName.trim()).catch(logger.catchAsync('edit_profile_refresh_synastry'));
       }
 
       await refresh();
@@ -582,7 +583,7 @@ export default function EditProfileScreen() {
         [{ text: 'OK', onPress: () => router.back() }]
       );
     } catch (err: any) {
-      console.error('EditProfile save error:', err);
+      logger.error('[edit-profile] save failed', err, 'edit_profile_save');
       setIsLoading(false);
       Alert.alert('Error', err?.message ?? 'Failed to save changes. Please try again.');
     }

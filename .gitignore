@@ -65,11 +65,23 @@ coverage/
 /ios
 /android
 app.apk
-/scripts
+
+# local-only scripts, except the ones package.json references by path — those
+# have to survive a fresh clone or the npm script fails with a missing module
+# (note: /scripts/* not /scripts — git won't descend into an excluded directory,
+# so the negation below only works if the directory itself stays untracked-eligible)
+/scripts/*
+!/scripts/exclude-dev-client.js
+!/scripts/sync-admin-env.js
+!/scripts/regenerate-user.js
 
 # credentials
 /credentials.json
 credentials/
+
+# Backups taken by scripts/regenerate-user.js before it deletes anything.
+# These hold whole prompt bodies, which carry birth data — never commit them.
+/.regen-backups/
 
 # local Claude Code config
 .claude/
@@ -173,3 +185,12 @@ skills-lock.json
 .agents/skills/firebase-security-rules-auditor/SKILL.md
 .agents/skills/xcode-project-setup/SKILL.md
 .claude/settings.json
+docs/marketing/social-week-1.md
+firebase-export-1787752942958xZrT0x/auth_export/accounts.json
+firebase-export-1787752942958xZrT0x/auth_export/config.json
+
+# local snapshots taken by scripts/reconcile-test-extensions.sh
+.ext-backups/
+.agents/skills/gemini-api-dev/SKILL.md
+.agents/skills/gemini-api-dev/references/migration.md
+scripts/regenerate-user.js

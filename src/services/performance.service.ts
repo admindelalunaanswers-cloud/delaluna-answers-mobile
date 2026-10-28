@@ -19,6 +19,7 @@
 import { getPerformance, trace } from '@react-native-firebase/perf';
 
 import { APP_ENV } from '@/src/constants/env';
+import { logger } from '@/src/utils/logger';
 
 type Attributes = Record<string, string>;
 
@@ -31,7 +32,7 @@ const ENV_ATTRIBUTE = { environment: APP_ENV };
 
 function safe<T>(fn: () => Promise<T>, label: string): Promise<T | void> {
   return fn().catch((err) => {
-    if (__DEV__) console.warn(`[perf] ${label} failed:`, err);
+    logger.warn(`[perf] ${label} failed:`, err);
   });
 }
 
@@ -58,7 +59,7 @@ export async function measure<T>(
       t.putAttribute(k, v);
     }
   } catch (err) {
-    if (__DEV__) console.warn(`[perf] start ${name} failed:`, err);
+    logger.warn(`[perf] start ${name} failed:`, err);
     t = null;
   }
 
@@ -75,7 +76,7 @@ export async function measure<T>(
       try {
         await t.stop();
       } catch (err) {
-        if (__DEV__) console.warn(`[perf] stop ${name} failed:`, err);
+        logger.warn(`[perf] stop ${name} failed:`, err);
       }
     }
   }
@@ -99,7 +100,7 @@ export async function startTrace(name: string) {
     }
     return t;
   } catch (err) {
-    if (__DEV__) console.warn(`[perf] startTrace ${name} failed:`, err);
+    logger.warn(`[perf] startTrace ${name} failed:`, err);
     return null;
   }
 }
@@ -122,7 +123,7 @@ export async function stopTrace(
     }
     await t.stop();
   } catch (err) {
-    if (__DEV__) console.warn('[perf] stopTrace failed:', err);
+    logger.warn('[perf] stopTrace failed:', err);
   }
 }
 

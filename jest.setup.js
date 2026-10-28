@@ -106,14 +106,36 @@ jest.mock('react-native-purchases-ui', () => ({
   },
 }));
 
+// src/utils/logger.ts forwards errors to Crashlytics, so anything that logs an
+// error pulls this native module in. Stub it so tests don't need a native host.
+jest.mock('@react-native-firebase/crashlytics', () => ({
+  getCrashlytics: jest.fn(() => ({})),
+  crash: jest.fn(),
+  log: jest.fn(),
+  recordError: jest.fn(),
+  setAttribute: jest.fn(),
+  setAttributes: jest.fn(),
+  setCrashlyticsCollectionEnabled: jest.fn(() => Promise.resolve()),
+  setUserId: jest.fn(),
+}));
+
 jest.mock('expo-device', () => ({
   isDevice: true,
 }));
 
+// Accessibility constants mirror SecureStoreAccessible.swift raw values. They
+// come from the native module at runtime, so they have to be stated here.
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(),
   setItemAsync: jest.fn(),
   deleteItemAsync: jest.fn(),
+  AFTER_FIRST_UNLOCK: 0,
+  AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 1,
+  ALWAYS: 2,
+  WHEN_PASSCODE_SET_THIS_DEVICE_ONLY: 3,
+  ALWAYS_THIS_DEVICE_ONLY: 4,
+  WHEN_UNLOCKED: 5,
+  WHEN_UNLOCKED_THIS_DEVICE_ONLY: 6,
 }));
 
 // Mock Expo modules

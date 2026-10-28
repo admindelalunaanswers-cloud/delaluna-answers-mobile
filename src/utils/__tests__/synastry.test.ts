@@ -7,6 +7,17 @@ import {
     summarizeSynastry
 } from '@/src/utils/synastry';
 
+// The functions under test read only planet1/planet2/type/orb/nature. The
+// remaining `Aspect` fields are presentational (wheel rendering) and never
+// consulted here, so fixtures spread these fillers in rather than restating
+// four meaningless values at every call site.
+const PRESENTATION: Pick<Aspect, 'symbol1' | 'symbol2' | 'aspectSymbol' | 'angle'> = {
+  symbol1: '',
+  symbol2: '',
+  aspectSymbol: '',
+  angle: 0,
+};
+
 describe('synastry.ts utilities', () => {
   describe('KEY_SYNASTRY_PAIRS', () => {
     it('should be a readonly set', () => {
@@ -34,6 +45,7 @@ describe('synastry.ts utilities', () => {
   describe('isKeySynastryPair', () => {
     it('should return true for key pair', () => {
       const aspect: Aspect = {
+        ...PRESENTATION,
         planet1: 'Sun',
         planet2: 'Moon',
         type: 'Conjunction',
@@ -45,6 +57,7 @@ describe('synastry.ts utilities', () => {
 
     it('should return false for non-key pair', () => {
       const aspect: Aspect = {
+        ...PRESENTATION,
         planet1: 'Saturn',
         planet2: 'Uranus',
         type: 'Square',
@@ -56,6 +69,7 @@ describe('synastry.ts utilities', () => {
 
     it('should be order-sensitive', () => {
       const aspect1: Aspect = {
+        ...PRESENTATION,
         planet1: 'Sun',
         planet2: 'Moon',
         type: 'Conjunction',
@@ -65,6 +79,7 @@ describe('synastry.ts utilities', () => {
       expect(isKeySynastryPair(aspect1)).toBe(true);
 
       const aspect2: Aspect = {
+        ...PRESENTATION,
         planet1: 'Moon',
         planet2: 'Sun',
         type: 'Conjunction',
@@ -76,6 +91,7 @@ describe('synastry.ts utilities', () => {
 
     it('should return false for aspects not in key pairs', () => {
       const aspect: Aspect = {
+        ...PRESENTATION,
         planet1: 'Sun',
         planet2: 'Saturn',
         type: 'Square',
@@ -90,6 +106,7 @@ describe('synastry.ts utilities', () => {
     it('should categorize aspects correctly', () => {
       const aspects: Aspect[] = [
         {
+          ...PRESENTATION,
           planet1: 'Sun',
           planet2: 'Moon',
           type: 'Conjunction',
@@ -97,6 +114,7 @@ describe('synastry.ts utilities', () => {
           nature: 'harmonious',
         },
         {
+          ...PRESENTATION,
           planet1: 'Venus',
           planet2: 'Mars',
           type: 'Square',
@@ -104,6 +122,7 @@ describe('synastry.ts utilities', () => {
           nature: 'challenging',
         },
         {
+          ...PRESENTATION,
           planet1: 'Mercury',
           planet2: 'Jupiter',
           type: 'Sextile',
@@ -111,6 +130,7 @@ describe('synastry.ts utilities', () => {
           nature: 'harmonious',
         },
         {
+          ...PRESENTATION,
           planet1: 'Saturn',
           planet2: 'Uranus',
           type: 'Opposition',
@@ -141,6 +161,7 @@ describe('synastry.ts utilities', () => {
     it('should handle all key pairs correctly', () => {
       const keyPairAspects: Aspect[] = [
         {
+          ...PRESENTATION,
           planet1: 'Sun',
           planet2: 'Moon',
           type: 'Conjunction',
@@ -148,6 +169,7 @@ describe('synastry.ts utilities', () => {
           nature: 'harmonious',
         },
         {
+          ...PRESENTATION,
           planet1: 'Moon',
           planet2: 'Sun',
           type: 'Conjunction',
@@ -155,6 +177,7 @@ describe('synastry.ts utilities', () => {
           nature: 'harmonious',
         },
         {
+          ...PRESENTATION,
           planet1: 'Venus',
           planet2: 'Mars',
           type: 'Trine',
@@ -171,6 +194,7 @@ describe('synastry.ts utilities', () => {
     it('should categorize nature correctly', () => {
       const aspects: Aspect[] = [
         {
+          ...PRESENTATION,
           planet1: 'Sun',
           planet2: 'Venus',
           type: 'Conjunction',
@@ -178,6 +202,7 @@ describe('synastry.ts utilities', () => {
           nature: 'harmonious',
         },
         {
+          ...PRESENTATION,
           planet1: 'Moon',
           planet2: 'Mercury',
           type: 'Opposition',
@@ -185,6 +210,7 @@ describe('synastry.ts utilities', () => {
           nature: 'neutral',
         },
         {
+          ...PRESENTATION,
           planet1: 'Mars',
           planet2: 'Saturn',
           type: 'Square',
@@ -203,6 +229,7 @@ describe('synastry.ts utilities', () => {
   describe('scoreAspect', () => {
     it('should return null for aspect with orb exceeding max', () => {
       const aspect: Aspect = {
+        ...PRESENTATION,
         planet1: 'Sun',
         planet2: 'Moon',
         type: 'Conjunction',
@@ -214,6 +241,7 @@ describe('synastry.ts utilities', () => {
 
     it('should return null for unknown aspect type', () => {
       const aspect: Aspect = {
+        ...PRESENTATION,
         planet1: 'Sun',
         planet2: 'Moon',
         type: 'UnknownAspect',
@@ -225,6 +253,7 @@ describe('synastry.ts utilities', () => {
 
     it('should score Conjunction between Sun and Moon highly', () => {
       const aspect: Aspect = {
+        ...PRESENTATION,
         planet1: 'Sun',
         planet2: 'Moon',
         type: 'Conjunction',
@@ -238,6 +267,7 @@ describe('synastry.ts utilities', () => {
 
     it('should give lower score for larger orb', () => {
       const tightAspect: Aspect = {
+        ...PRESENTATION,
         planet1: 'Sun',
         planet2: 'Moon',
         type: 'Conjunction',
@@ -246,6 +276,7 @@ describe('synastry.ts utilities', () => {
       };
 
       const wideAspect: Aspect = {
+        ...PRESENTATION,
         planet1: 'Sun',
         planet2: 'Moon',
         type: 'Conjunction',
@@ -263,6 +294,7 @@ describe('synastry.ts utilities', () => {
 
     it('should score heavy planets higher', () => {
       const sunMoonAspect: Aspect = {
+        ...PRESENTATION,
         planet1: 'Sun',
         planet2: 'Moon',
         type: 'Conjunction',
@@ -271,6 +303,7 @@ describe('synastry.ts utilities', () => {
       };
 
       const chironNeptuneAspect: Aspect = {
+        ...PRESENTATION,
         planet1: 'Chiron',
         planet2: 'Neptune',
         type: 'Conjunction',
@@ -288,6 +321,7 @@ describe('synastry.ts utilities', () => {
 
     it('should return 0 for unknown planets', () => {
       const aspect: Aspect = {
+        ...PRESENTATION,
         planet1: 'UnknownPlanet1',
         planet2: 'UnknownPlanet2',
         type: 'Conjunction',
@@ -302,6 +336,7 @@ describe('synastry.ts utilities', () => {
 
     it('should score Conjunction higher than Sextile', () => {
       const conjunctionAspect: Aspect = {
+        ...PRESENTATION,
         planet1: 'Sun',
         planet2: 'Moon',
         type: 'Conjunction',
@@ -310,6 +345,7 @@ describe('synastry.ts utilities', () => {
       };
 
       const sextileAspect: Aspect = {
+        ...PRESENTATION,
         planet1: 'Sun',
         planet2: 'Moon',
         type: 'Sextile',
@@ -330,6 +366,7 @@ describe('synastry.ts utilities', () => {
     it('should return high-scoring aspects above floor', () => {
       const aspects: Aspect[] = [
         {
+          ...PRESENTATION,
           planet1: 'Sun',
           planet2: 'Moon',
           type: 'Conjunction',
@@ -337,6 +374,7 @@ describe('synastry.ts utilities', () => {
           nature: 'harmonious',
         },
         {
+          ...PRESENTATION,
           planet1: 'Venus',
           planet2: 'Mars',
           type: 'Trine',
@@ -344,6 +382,7 @@ describe('synastry.ts utilities', () => {
           nature: 'harmonious',
         },
         {
+          ...PRESENTATION,
           planet1: 'Mercury',
           planet2: 'Mercury',
           type: 'Conjunction',
@@ -360,6 +399,7 @@ describe('synastry.ts utilities', () => {
     it('should return at least MIN_ASPECTS if they exist', () => {
       const aspects: Aspect[] = [
         {
+          ...PRESENTATION,
           planet1: 'Sun',
           planet2: 'Moon',
           type: 'Conjunction',
@@ -367,6 +407,7 @@ describe('synastry.ts utilities', () => {
           nature: 'harmonious',
         },
         {
+          ...PRESENTATION,
           planet1: 'Venus',
           planet2: 'Mars',
           type: 'Trine',
@@ -374,6 +415,7 @@ describe('synastry.ts utilities', () => {
           nature: 'harmonious',
         },
         {
+          ...PRESENTATION,
           planet1: 'Mercury',
           planet2: 'Jupiter',
           type: 'Sextile',
@@ -381,6 +423,7 @@ describe('synastry.ts utilities', () => {
           nature: 'harmonious',
         },
         {
+          ...PRESENTATION,
           planet1: 'Moon',
           planet2: 'Venus',
           type: 'Conjunction',
@@ -395,6 +438,7 @@ describe('synastry.ts utilities', () => {
 
     it('should limit results to MAX_ASPECTS', () => {
       const aspects: Aspect[] = Array.from({ length: 20 }, (_, i) => ({
+        ...PRESENTATION,
         planet1: 'Sun',
         planet2: i % 2 === 0 ? 'Moon' : 'Venus',
         type: 'Conjunction',
@@ -409,6 +453,7 @@ describe('synastry.ts utilities', () => {
     it('should sort by score descending', () => {
       const aspects: Aspect[] = [
         {
+          ...PRESENTATION,
           planet1: 'Chiron',
           planet2: 'Neptune',
           type: 'Quincunx',
@@ -416,6 +461,7 @@ describe('synastry.ts utilities', () => {
           nature: 'neutral',
         },
         {
+          ...PRESENTATION,
           planet1: 'Sun',
           planet2: 'Moon',
           type: 'Conjunction',
@@ -423,6 +469,7 @@ describe('synastry.ts utilities', () => {
           nature: 'harmonious',
         },
         {
+          ...PRESENTATION,
           planet1: 'Mercury',
           planet2: 'Mercury',
           type: 'Conjunction',
@@ -440,6 +487,7 @@ describe('synastry.ts utilities', () => {
     it('should assign unique ids', () => {
       const aspects: Aspect[] = [
         {
+          ...PRESENTATION,
           planet1: 'Sun',
           planet2: 'Moon',
           type: 'Conjunction',
@@ -447,6 +495,7 @@ describe('synastry.ts utilities', () => {
           nature: 'harmonious',
         },
         {
+          ...PRESENTATION,
           planet1: 'Venus',
           planet2: 'Mars',
           type: 'Trine',
@@ -468,6 +517,7 @@ describe('synastry.ts utilities', () => {
     it('should filter out aspects with invalid orb', () => {
       const aspects: Aspect[] = [
         {
+          ...PRESENTATION,
           planet1: 'Sun',
           planet2: 'Moon',
           type: 'Conjunction',
@@ -475,6 +525,7 @@ describe('synastry.ts utilities', () => {
           nature: 'harmonious',
         },
         {
+          ...PRESENTATION,
           planet1: 'Venus',
           planet2: 'Mars',
           type: 'Trine',

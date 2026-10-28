@@ -136,9 +136,9 @@ export default function TransitsScreen() {
     loading,
   } = useHoroscope();
 
-  const { isPro, loading: rcLoading } = useRevenueCat();
+  const { hasFullAccess, loading: rcLoading } = useRevenueCat();
   const { markReady } = useScreenPerfLog('/(main)/transits');
-  const isPremium = rcLoading || isPro;
+  const isPremium = rcLoading || hasFullAccess;
 
   useEffect(() => {
     if (!rcLoading && !loading) markReady();

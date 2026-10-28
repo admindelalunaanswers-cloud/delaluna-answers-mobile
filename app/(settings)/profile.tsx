@@ -43,6 +43,7 @@ import {
 } from "@/src/services/notifications.service";
 import { signOut } from "@/src/services/user.service";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
+import { logger } from "@/src/utils/logger";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -99,7 +100,8 @@ const NAV_BAR_HEIGHT = 44;
 export default function ProfileScreen() {
   const { authUser, userDoc, loading: userLoading } = useUser();
   const {} = useHoroscope();
-  const { isPro, presentCustomerCenter, restorePurchases } = useRevenueCat();
+  const { hasFullAccess, presentCustomerCenter, restorePurchases } =
+    useRevenueCat();
   const insets = useSafeAreaInsets();
   const ud = userDoc as any;
 
@@ -115,7 +117,7 @@ export default function ProfileScreen() {
   >("Privacy Policy");
   const [uidCopied, setUidCopied] = useState(false);
 
-  const isPremium = isPro;
+  const isPremium = hasFullAccess;
   const profileImageSource =
     getProfileImageSource(ud?.profileImageId) ??
     getProfileImageSource("profile8")!;
@@ -185,7 +187,7 @@ export default function ProfileScreen() {
             await signOut();
             router.replace("/(startup)/welcome");
           } catch (err) {
-            console.error("[profile] logout failed:", err);
+            logger.error("[profile] logout failed", err, "profile_logout");
             Alert.alert("Error", "Could not log out. Please try again.");
           }
         },
@@ -209,7 +211,7 @@ export default function ProfileScreen() {
       setShowReauthModal(false);
       router.replace("/(startup)/welcome");
     } catch (err: any) {
-      console.error("[profile] reauth-delete failed:", err);
+      logger.error("[profile] reauth-delete failed", err, "profile_delete_account");
       const code = err?.code ?? "";
       const message =
         code === "auth/wrong-password" || code === "auth/invalid-credential"

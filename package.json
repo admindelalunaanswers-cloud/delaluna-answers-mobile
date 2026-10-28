@@ -4,11 +4,19 @@
   "version": "1.1.0",
   "scripts": {
     "start": "expo start -c",
+    "Firebase Reauth": "firebase login --reauth",
     "emulators": "firebase emulators:start --only auth,functions,firestore,storage,eventarc,extensions --import=./seed --export-on-exit=./seed",
     "dev": "concurrently -k -n EMU,EXPO -c cyan,magenta \"firebase emulators:start --only auth,functions,firestore,storage,eventarc,extensions --import=./seed --export-on-exit=./seed\" \"expo start\"",
     "seed:export": "firebase emulators:export ./seed",
     "reset-project": "node ./scripts/reset-project.js",
+    "eas-build-pre-install": "node ./scripts/exclude-dev-client.js",
     "migrate:users-to-dllap": "node ./scripts/migrate-users-to-dllap.js",
+    "regen:user": "node ./scripts/regenerate-user.js",
+    "admin:dev": "node ./scripts/sync-admin-env.js test && npm --prefix admin-web run dev",
+    "admin:build:test": "node ./scripts/sync-admin-env.js test && npm --prefix admin-web run build",
+    "admin:build:prod": "node ./scripts/sync-admin-env.js prod && npm --prefix admin-web run build",
+    "admin:deploy:test": "npm run admin:build:test && firebase deploy --only hosting --project delaluna-answers-test",
+    "admin:deploy:prod": "npm run admin:build:prod && firebase deploy --only hosting --project delaluna-answers",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "lint": "expo lint",
@@ -53,6 +61,7 @@
     "expo-linking": "~8.0.11",
     "expo-notifications": "~0.32.16",
     "expo-router": "~6.0.23",
+    "expo-screen-orientation": "~9.0.9",
     "expo-secure-store": "~15.0.8",
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
@@ -108,5 +117,17 @@
     "@firebase/util@1.15.1": true,
     "protobufjs@7.6.5": true,
     "unrs-resolver@1.12.2": true
+  },
+  "volta": {
+    "node": "20.19.5"
+  },
+  "expo": {
+    "autolinking": {
+      "exclude": [
+        "expo-dev-client",
+        "expo-dev-launcher",
+        "expo-dev-menu"
+      ]
+    }
   }
 }

@@ -21,6 +21,7 @@ import { RevenueCatProvider } from '@/src/context/revenuecat-context';
 import { AdminProvider } from '@/src/context/admin-context';
 import { useColorScheme } from '@/src/hooks/use-color-scheme';
 import { useMinVersion } from '@/src/hooks/use-min-version';
+import { usePortraitLock } from '@/src/hooks/use-portrait-lock';
 import { useTheme } from '@/src/hooks/use-theme';
 import { UpdateRequiredScreen } from '@/src/components/update-required-screen';
 import { logScreenView, screenLabelForPath, setUserId } from '@/src/services/analytics.service';
@@ -29,6 +30,13 @@ import {
   logBreadcrumb,
   setUserId as setCrashlyticsUserId,
 } from '@/src/services/crashlytics.service';
+import { logger } from '@/src/utils/logger';
+import { logRuntimeBanner } from '@/src/utils/runtime-info';
+
+// Which project, which database, which update channel — printed once at module
+// load, in every build including release, before any screen mounts or any read
+// hits Firestore. `adb logcat | grep '\[runtime\]'`, or Console.app on iOS.
+logRuntimeBanner();
 
 function AuthGate() {
   const { authUser, userDoc, loading: userLoading } = useUser();
@@ -68,12 +76,15 @@ function AuthGate() {
   // verification screen.
   useEffect(() => {
     if (!authUser) return;
-    const isVerified = authUser.emailVerified || userDoc?.isEmailVerified === true;
-    if (!isVerified) return;
+    // `authUser.emailVerified` (the Auth record / token claim) is the only
+    // source of truth. `users/{uid}.isEmailVerified` is a display mirror that
+    // goes stale after an email change, and Firestore rules gate on the claim
+    // — trusting the mirror here would land unverified users in the app.
+    if (!authUser.emailVerified) return;
     import('@/src/services/notifications.service')
       .then(({ registerForPushNotifications }) => registerForPushNotifications(authUser.uid))
-      .catch(console.error);
-  }, [authUser?.uid, authUser?.emailVerified, userDoc?.isEmailVerified]);
+      .catch(logger.catchAsync('push_register'));
+  }, [authUser?.uid, authUser?.emailVerified]);
 
   // Navigate to the correct screen when a notification is tapped.
   // Server pushes that target a dynamic route (e.g. `/connection/[id]`) include
@@ -110,7 +121,7 @@ function AuthGate() {
         const pronouns = userSnap.data()?.pronouns ?? 'they/them';
         await rolloverHoroscope(authUser.uid, chartSnap.data() as any, pronouns);
       } catch (err) {
-        console.error('[push] rollover-horoscope handler failed:', err);
+        logger.error('[push] rollover-horoscope handler failed', err, 'push_rollover_handler');
       }
     });
     return () => sub.remove();
@@ -147,11 +158,13 @@ function AuthGate() {
   useEffect(() => {
     if (userLoading) return;
 
+    // Verification state comes from `authUser.emailVerified` only — see the
+    // push-registration effect above for why the Firestore mirror isn't trusted.
     if (!authUser && !inAuth && !inStartup) {
       router.replace('/(startup)/welcome');
-    } else if (authUser && !authUser.emailVerified && userDoc && !userDoc.isEmailVerified && !inAuth) {
+    } else if (authUser && !authUser.emailVerified && userDoc && !inAuth) {
       router.replace('/(auth)/verify-email');
-    } else if (authUser && (inAuth || inStartup) && horoscopeReady && (userDoc?.isEmailVerified === true || authUser.emailVerified)) {
+    } else if (authUser && (inAuth || inStartup) && horoscopeReady && authUser.emailVerified) {
       router.replace('/(main)');
     }
   }, [authUser, userDoc, userLoading, inAuth, inStartup, horoscopeReady]);
@@ -253,11 +266,13 @@ function VersionGate({ children }: { children: ReactNode }) {
 installGlobalErrorHandler();
 
 export default function RootLayout() {
+  usePortraitLock();
+
   useEffect(() => {
     let cleanup = () => {};
     import('@/src/services/notifications.service')
       .then(({ setupNotificationHandlers }) => { cleanup = setupNotificationHandlers(); })
-      .catch(console.error);
+      .catch(logger.catchAsync('push_setup_handlers'));
     return () => cleanup();
   }, []);
 

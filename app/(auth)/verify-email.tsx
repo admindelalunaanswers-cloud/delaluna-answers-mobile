@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useRef, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from "react";
 import {
   ImageBackground,
   KeyboardAvoidingView,
@@ -7,40 +7,44 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { getFunctions, httpsCallable } from "firebase/functions";
 
-import { app, auth } from '@/firebaseConfig';
-import { ThemedText } from '@/src/components/themed-text';
-import { ThemedView } from '@/src/components/themed-view';
-import { useHoroscope } from '@/src/context/horoscope-context';
-import { ThemeContext } from '@/src/context/theme-context';
-import { useUser } from '@/src/context/user-context';
-import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
-import { Events } from '@/src/services/analytics.service';
-import { signOut } from '@/src/services/user.service';
-import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
-import LoadingScreen from '../(util)/loading-screen';
+import { app, auth } from "@/firebaseConfig";
+import { ThemedText } from "@/src/components/themed-text";
+import { ThemedView } from "@/src/components/themed-view";
+import { useHoroscope } from "@/src/context/horoscope-context";
+import { ThemeContext } from "@/src/context/theme-context";
+import { useUser } from "@/src/context/user-context";
+import { useScreenPerfLog } from "@/src/hooks/use-screen-perf-log";
+import { Events } from "@/src/services/analytics.service";
+import { signOut } from "@/src/services/user.service";
+import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
+import LoadingScreen from "../(util)/loading-screen";
 
-const functions = getFunctions(app, 'us-central1');
-const sendVerificationCode = httpsCallable(functions, 'sendVerificationCode');
-const verifyCodeFn = httpsCallable(functions, 'verifyCode');
+const functions = getFunctions(app, "us-central1");
+const sendVerificationCode = httpsCallable(functions, "sendVerificationCode");
+const verifyCodeFn = httpsCallable(functions, "verifyCode");
 
 const CODE_LENGTH = 6;
 
 export default function VerifyEmail() {
   const { authUser, reloadAuthUser, refresh } = useUser();
-  const { horoscope, loading: dataLoading, horoscopeGenerating } = useHoroscope();
+  const {
+    horoscope,
+    loading: dataLoading,
+    horoscopeGenerating,
+  } = useHoroscope();
   const { theme } = useContext(ThemeContext);
   const router = useRouter();
 
-  const [digits, setDigits] = useState<string[]>(Array(CODE_LENGTH).fill(''));
+  const [digits, setDigits] = useState<string[]>(Array(CODE_LENGTH).fill(""));
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [verified, setVerified] = useState(false);
@@ -49,13 +53,11 @@ export default function VerifyEmail() {
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
 
-
   // Don't gate on transitReadingGenerating — transit reading populates the
   // transits screen separately and can lag well behind today's horoscope.
-  const horoscopeReady =
-    !!horoscope || (!dataLoading && !horoscopeGenerating);
+  const horoscopeReady = !!horoscope || (!dataLoading && !horoscopeGenerating);
 
-  const { markReady } = useScreenPerfLog('/(auth)/verify-email');
+  const { markReady } = useScreenPerfLog("/(auth)/verify-email");
 
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
@@ -72,14 +74,17 @@ export default function VerifyEmail() {
   // Cooldown countdown — setTimeout so each tick schedules exactly one next tick
   useEffect(() => {
     if (resendCooldown <= 0) return;
-    const t = setTimeout(() => setResendCooldown(c => Math.max(0, c - 1)), 1000);
+    const t = setTimeout(
+      () => setResendCooldown((c) => Math.max(0, c - 1)),
+      1000,
+    );
     return () => clearTimeout(t);
   }, [resendCooldown]);
 
   const handleSendCode = async () => {
     if (sending || resendCooldown > 0) return;
     if (!auth.currentUser) {
-      setSendError('Not signed in. Please sign up or log in first.');
+      setSendError("Not signed in. Please sign up or log in first.");
       return;
     }
     setSending(true);
@@ -91,7 +96,7 @@ export default function VerifyEmail() {
       setCodeSent(true);
       setResendCooldown(60);
     } catch (e: any) {
-      const msg: string = e?.message ?? 'Failed to send code.';
+      const msg: string = e?.message ?? "Failed to send code.";
       setSendError(msg);
     } finally {
       setSending(false);
@@ -99,15 +104,19 @@ export default function VerifyEmail() {
   };
 
   const handleSignOut = async () => {
-    try { await signOut(); } catch { /* ignore */ }
-    router.replace('/(auth)/login');
+    try {
+      await signOut();
+    } catch {
+      /* ignore */
+    }
+    router.replace("/(auth)/login");
   };
 
   const handleDigitChange = (text: string, index: number) => {
     if (verifyError) setVerifyError(null);
     // Strip anything that isn't a letter or digit, uppercase, take the last
     // character. Lets users paste the whole code (handled below via length>1).
-    const cleaned = text.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    const cleaned = text.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
 
     // Paste of full code: distribute across boxes starting at this index.
     if (cleaned.length > 1) {
@@ -118,7 +127,7 @@ export default function VerifyEmail() {
       setDigits(next);
       const lastFilled = Math.min(index + cleaned.length, CODE_LENGTH) - 1;
       inputRefs.current[Math.min(lastFilled + 1, CODE_LENGTH - 1)]?.focus();
-      if (next.every(d => d !== '')) handleVerify(next.join(''));
+      if (next.every((d) => d !== "")) handleVerify(next.join(""));
       return;
     }
 
@@ -130,13 +139,13 @@ export default function VerifyEmail() {
     if (char && index < CODE_LENGTH - 1) {
       inputRefs.current[index + 1]?.focus();
     }
-    if (char && next.every(d => d !== '')) {
-      handleVerify(next.join(''));
+    if (char && next.every((d) => d !== "")) {
+      handleVerify(next.join(""));
     }
   };
 
   const handleKeyPress = (key: string, index: number) => {
-    if (key === 'Backspace' && !digits[index] && index > 0) {
+    if (key === "Backspace" && !digits[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
   };
@@ -144,10 +153,10 @@ export default function VerifyEmail() {
   const handleVerify = async (code?: string) => {
     if (verifying) return;
 
-    const enteredCode = code ?? digits.join('');
+    const enteredCode = code ?? digits.join("");
 
     if (!enteredCode || enteredCode.length !== CODE_LENGTH) {
-      setVerifyError('Please enter all 6 characters of the code.');
+      setVerifyError("Please enter all 6 characters of the code.");
       return;
     }
 
@@ -157,9 +166,9 @@ export default function VerifyEmail() {
       await verifyCodeFn({ code: enteredCode });
       Events.emailVerified();
     } catch (e: any) {
-      const msg = e?.message ?? 'Something went wrong.';
+      const msg = e?.message ?? "Something went wrong.";
       setVerifyError(msg);
-      setDigits(Array(CODE_LENGTH).fill(''));
+      setDigits(Array(CODE_LENGTH).fill(""));
       inputRefs.current[0]?.focus();
       setVerifying(false);
       return;
@@ -180,7 +189,7 @@ export default function VerifyEmail() {
 
   // Navigate once verified AND AI content is ready
   useEffect(() => {
-    if (verified && horoscopeReady) router.replace('/(main)');
+    if (verified && horoscopeReady) router.replace("/(main)");
   }, [verified, horoscopeReady]);
 
   // Safety net: if the horoscope is still generating 30s after verification,
@@ -188,7 +197,7 @@ export default function VerifyEmail() {
   // subscriptions will fill in the rest as docs arrive.
   useEffect(() => {
     if (!verified) return;
-    const timeout = setTimeout(() => router.replace('/(main)'), 30000);
+    const timeout = setTimeout(() => router.replace("/(main)"), 30000);
     return () => clearTimeout(timeout);
   }, [verified]);
 
@@ -199,16 +208,13 @@ export default function VerifyEmail() {
     return <LoadingScreen progress={horoscope ? 0.6 : 0.1} />;
   }
 
-  const email = authUser?.email ?? '';
+  const email = authUser?.email ?? "";
 
   return (
     <>
       <StatusBar style="light" translucent />
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior="padding"
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ImageBackground
           source={theme.backgroundImage}
           style={StyleSheet.absoluteFill}
@@ -218,13 +224,20 @@ export default function VerifyEmail() {
         <ThemedView style={{ flex: 1 }}>
           <BlurView intensity={90} tint="dark" style={styles.card}>
             <LinearGradient
-              colors={['rgba(255,255,255,0.05)', 'rgba(128,128,128,0.05)', 'rgba(0,0,0,0.05)']}
+              colors={[
+                "rgba(255,255,255,0.05)",
+                "rgba(128,128,128,0.05)",
+                "rgba(0,0,0,0.05)",
+              ]}
               locations={[0, 0.49, 1]}
               style={StyleSheet.absoluteFillObject}
             >
               {/* Back button */}
               <SafeAreaView style={styles.topBar}>
-                <TouchableOpacity onPress={handleSignOut} style={styles.backButton}>
+                <TouchableOpacity
+                  onPress={handleSignOut}
+                  style={styles.backButton}
+                >
                   <ThemedText style={styles.backText}>← Back</ThemedText>
                 </TouchableOpacity>
               </SafeAreaView>
@@ -235,20 +248,26 @@ export default function VerifyEmail() {
 
                 {sendError ? (
                   <ThemedView style={styles.errorBox}>
-                    <ThemedText style={styles.errorText}>Could not send code</ThemedText>
-                    <ThemedText style={styles.errorDetail}>{sendError}</ThemedText>
+                    <ThemedText style={styles.errorText}>
+                      Could not send code
+                    </ThemedText>
+                    <ThemedText style={styles.errorDetail}>
+                      {sendError}
+                    </ThemedText>
                   </ThemedView>
                 ) : (
                   <ThemedView style={styles.emailRow}>
                     <ThemedText style={styles.subtitle}>
                       {codeSent
-                        ? 'Code sent to'
+                        ? "Code sent to"
                         : sending
-                        ? 'Sending code…'
-                        : 'Preparing your code…'}
+                          ? "Sending code…"
+                          : "Preparing your code…"}
                     </ThemedText>
                     {codeSent && (
-                      <ThemedText style={styles.emailDisplay}>{email}</ThemedText>
+                      <ThemedText style={styles.emailDisplay}>
+                        {email}
+                      </ThemedText>
                     )}
                   </ThemedView>
                 )}
@@ -258,12 +277,21 @@ export default function VerifyEmail() {
                   {digits.map((d, i) => (
                     <TextInput
                       key={i}
-                      ref={el => { inputRefs.current[i] = el; }}
-                      style={[styles.digitBox, d ? styles.digitBoxFilled : null]}
+                      ref={(el) => {
+                        inputRefs.current[i] = el;
+                      }}
+                      style={[
+                        styles.digitBox,
+                        d ? styles.digitBoxFilled : null,
+                      ]}
                       value={d}
-                      onChangeText={text => handleDigitChange(text, i)}
-                      onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, i)}
-                      keyboardType={Platform.OS === 'ios' ? 'ascii-capable' : 'default'}
+                      onChangeText={(text) => handleDigitChange(text, i)}
+                      onKeyPress={({ nativeEvent }) =>
+                        handleKeyPress(nativeEvent.key, i)
+                      }
+                      keyboardType={
+                        Platform.OS === "ios" ? "ascii-capable" : "default"
+                      }
                       autoCapitalize="characters"
                       autoCorrect={false}
                       autoComplete="off"
@@ -278,17 +306,22 @@ export default function VerifyEmail() {
 
                 {/* Inline verification error */}
                 {verifyError && (
-                  <ThemedText style={styles.verifyError}>{verifyError}</ThemedText>
+                  <ThemedText style={styles.verifyError}>
+                    {verifyError}
+                  </ThemedText>
                 )}
 
                 {/* Verify button */}
                 <TouchableOpacity
-                  style={[styles.verifyButton, (verifying || sending) && { opacity: 0.6 }]}
+                  style={[
+                    styles.verifyButton,
+                    (verifying || sending) && { opacity: 0.6 },
+                  ]}
                   onPress={() => handleVerify()}
                   disabled={verifying || sending}
                 >
                   <ThemedText style={styles.verifyButtonText}>
-                    {verifying ? 'Verifying…' : 'Verify'}
+                    {verifying ? "Verifying…" : "Verify"}
                   </ThemedText>
                 </TouchableOpacity>
 
@@ -298,12 +331,17 @@ export default function VerifyEmail() {
                   disabled={sending || resendCooldown > 0}
                   style={styles.resendButton}
                 >
-                  <ThemedText style={[styles.resendText, (sending || resendCooldown > 0) && { opacity: 0.45 }]}>
+                  <ThemedText
+                    style={[
+                      styles.resendText,
+                      (sending || resendCooldown > 0) && { opacity: 0.45 },
+                    ]}
+                  >
                     {resendCooldown > 0
                       ? `Resend in ${resendCooldown}s`
                       : sending
-                      ? 'Sending…'
-                      : 'Resend code'}
+                        ? "Sending…"
+                        : "Resend code"}
                   </ThemedText>
                 </TouchableOpacity>
 
@@ -312,7 +350,9 @@ export default function VerifyEmail() {
                   onPress={handleSignOut}
                   style={styles.signOutButton}
                 >
-                  <ThemedText style={styles.signOutText}>Use a different account</ThemedText>
+                  <ThemedText style={styles.signOutText}>
+                    Use a different account
+                  </ThemedText>
                 </TouchableOpacity>
               </ThemedView>
             </LinearGradient>
@@ -326,68 +366,68 @@ export default function VerifyEmail() {
 const styles = StyleSheet.create({
   card: {
     flex: 1,
-    width: '100%',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    width: "100%",
+    backgroundColor: "rgba(255,255,255,0.1)",
     borderRadius: moderateScale(25),
     paddingHorizontal: scale(10),
     paddingVertical: verticalScale(10),
   },
   topBar: {
     paddingHorizontal: scale(16),
-    paddingTop: Platform.OS === 'android' ? verticalScale(16) : 0,
+    paddingTop: Platform.OS === "android" ? verticalScale(16) : 0,
   },
   backButton: {
     paddingVertical: verticalScale(8),
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   backText: {
-    color: 'rgba(111,255,233,0.9)',
+    color: "rgba(111,255,233,0.9)",
     fontSize: moderateScale(17),
-    fontWeight: '500',
+    fontWeight: "500",
   },
   body: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: scale(24),
     gap: scale(12),
   },
   errorBox: {
-    width: '100%',
-    backgroundColor: 'rgba(255,80,80,0.12)',
+    width: "100%",
+    backgroundColor: "rgba(255,80,80,0.12)",
     borderWidth: 1,
-    borderColor: 'rgba(255,80,80,0.4)',
+    borderColor: "rgba(255,80,80,0.4)",
     borderRadius: moderateScale(12),
     padding: scale(14),
-    alignItems: 'center',
+    alignItems: "center",
     gap: scale(6),
     marginBottom: verticalScale(8),
   },
   errorText: {
-    color: '#ff8080',
-    fontWeight: '700',
+    color: "#ff8080",
+    fontWeight: "700",
     fontSize: moderateScale(14),
   },
   errorDetail: {
-    color: 'rgba(255,255,255,0.55)',
+    color: "rgba(255,255,255,0.55)",
     fontSize: moderateScale(12),
-    textAlign: 'center',
+    textAlign: "center",
   },
   title: {
     fontSize: moderateScale(26),
-    fontWeight: '700',
-    color: 'white',
-    textAlign: 'center',
+    fontWeight: "700",
+    color: "white",
+    textAlign: "center",
     marginBottom: verticalScale(4),
   },
   subtitle: {
     fontSize: moderateScale(14),
-    color: 'rgba(255,255,255,0.6)',
-    textAlign: 'center',
+    color: "rgba(255,255,255,0.6)",
+    textAlign: "center",
     marginBottom: verticalScale(16),
   },
   codeRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: scale(10),
     marginBottom: verticalScale(24),
   },
@@ -396,57 +436,57 @@ const styles = StyleSheet.create({
     height: verticalScale(56),
     borderRadius: moderateScale(10),
     borderWidth: 1.5,
-    borderColor: 'rgba(167,139,250,0.4)',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    color: 'white',
+    borderColor: "rgba(167,139,250,0.4)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    color: "white",
     fontSize: moderateScale(24),
-    fontWeight: '700',
+    fontWeight: "700",
   },
   digitBoxFilled: {
-    borderColor: 'rgba(167,139,250,0.9)',
-    backgroundColor: 'rgba(167,139,250,0.12)',
+    borderColor: "rgba(167,139,250,0.9)",
+    backgroundColor: "rgba(167,139,250,0.12)",
   },
   verifyButton: {
-    width: '80%',
-    backgroundColor: 'rgba(167,139,250,0.5)',
+    width: "80%",
+    backgroundColor: "rgba(167,139,250,0.5)",
     borderRadius: moderateScale(40),
     paddingVertical: verticalScale(15),
-    alignItems: 'center',
+    alignItems: "center",
   },
   verifyButtonText: {
-    color: 'white',
+    color: "white",
     fontSize: moderateScale(18),
-    fontWeight: '600',
+    fontWeight: "600",
   },
   resendButton: {
     paddingVertical: verticalScale(8),
   },
   resendText: {
-    color: 'rgba(255,255,255,0.6)',
+    color: "rgba(255,255,255,0.6)",
     fontSize: moderateScale(14),
-    textDecorationLine: 'underline',
+    textDecorationLine: "underline",
   },
   signOutButton: {
     marginTop: verticalScale(8),
   },
   signOutText: {
-    color: 'rgba(255,255,255,0.35)',
+    color: "rgba(255,255,255,0.35)",
     fontSize: moderateScale(13),
   },
   verifyError: {
-    color: '#ff8080',
+    color: "#ff8080",
     fontSize: moderateScale(13),
-    textAlign: 'center',
+    textAlign: "center",
   },
   emailRow: {
-    alignItems: 'center',
-    gap: scale(4),
+    alignItems: "center",
+    gap: scale(2),
     marginBottom: verticalScale(8),
   },
   emailDisplay: {
-    color: 'white',
+    color: "white",
     fontSize: moderateScale(14),
-    fontWeight: '600',
-    textAlign: 'center',
+    fontWeight: "600",
+    textAlign: "center",
   },
 });

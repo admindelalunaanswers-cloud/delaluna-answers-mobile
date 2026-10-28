@@ -39,6 +39,7 @@ import {
   REVENUECAT_ENABLED,
 } from "@/src/services/revenuecat.service";
 import { useUser } from "./user-context";
+import { logger } from "@/src/utils/logger";
 
 let AsyncStorage: any = null;
 try {
@@ -62,6 +63,25 @@ export type DevPlan = "auto" | "free" | "premium";
 interface RevenueCatContextValue {
   /** Whether the user has the "Delaluna Answers Pro" entitlement */
   isPro: boolean;
+  /**
+   * Mirror of the `admin` auth claim, read from `users/{uid}.isAdmin`.
+   *
+   * Safe to read here despite the "never gate premium on a Firestore field"
+   * rule: `firestore.rules` lists `isAdmin` among the protected fields on both
+   * create and update, so only `syncAdminClaim` can ever write it. A client
+   * cannot promote itself. Still display-only — the server meters chat off the
+   * claim, not this.
+   */
+  isAdmin: boolean;
+  /**
+   * Premium *access*, whether paid for or granted by being an admin. This is
+   * what UI gates should read.
+   *
+   * Kept distinct from `isPro` on purpose: `isPro` means "is actually paying"
+   * and is reported per-screen by `use-screen-perf-log`, so folding admins into
+   * it would quietly corrupt the free-vs-premium performance split.
+   */
+  hasFullAccess: boolean;
   /** Latest CustomerInfo from RevenueCat */
   customerInfo: CustomerInfo | null;
   /** True while the initial customer info is loading */
@@ -102,6 +122,8 @@ interface RevenueCatContextValue {
 
 const RevenueCatContext = createContext<RevenueCatContextValue>({
   isPro: false,
+  isAdmin: false,
+  hasFullAccess: false,
   customerInfo: null,
   loading: true,
   refresh: async () => {},
@@ -120,7 +142,7 @@ const RevenueCatContext = createContext<RevenueCatContextValue>({
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function RevenueCatProvider({ children }: { children: ReactNode }) {
-  const { authUser } = useUser();
+  const { authUser, userDoc } = useUser();
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [loading, setLoading] = useState(REVENUECAT_ENABLED);
   const configuredRef = useRef(false);
@@ -140,6 +162,19 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
     if (!REVENUECAT_ENABLED || customerInfo === null) return false;
     return hasEntitlement(customerInfo);
   }, [customerInfo, devPlan]);
+
+  // Admins get premium access without paying. `userDoc` arrives from a live
+  // snapshot, so this follows a claim change as soon as syncAdminClaim mirrors
+  // it — no reload needed. Deliberately NOT folded into `isPro`; see the type.
+  const isAdmin = !!userDoc?.isAdmin;
+
+  // An explicit `free` dev plan is an admin deliberately testing the non-paying
+  // experience, so it has to win over the admin unlock — otherwise the admin
+  // screen's own free/premium toggle would do nothing for the people who use it.
+  const hasFullAccess = useMemo(
+    () => (devPlan === "free" ? false : isPro || isAdmin),
+    [devPlan, isPro, isAdmin],
+  );
 
   // Hydrate devPlan from AsyncStorage when the auth user changes.
   useEffect(() => {
@@ -228,7 +263,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
           if (!cancelled) setCustomerInfo(info);
         }
       } catch (err) {
-        console.error("[RevenueCat] syncUser error:", err);
+        logger.error("[RevenueCat] syncUser failed", err, "rc_sync_user");
         recordError(err, "rc_sync_user");
       } finally {
         if (!cancelled) setLoading(false);
@@ -258,7 +293,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       const info = await getCustomerInfo();
       setCustomerInfo(info);
     } catch (err) {
-      console.error("[RevenueCat] refresh error:", err);
+      logger.error("[RevenueCat] refresh failed", err, "rc_refresh");
       recordError(err, "rc_refresh");
     }
   }, []);
@@ -272,7 +307,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       Events.restorePurchases({ success: ok });
       return ok;
     } catch (err) {
-      console.error("[RevenueCat] restorePurchases error:", err);
+      logger.error("[RevenueCat] restorePurchases failed", err, "rc_restore");
       recordError(err, "rc_restore");
       Events.restorePurchases({ success: false });
       return false;
@@ -330,7 +365,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
 
   const presentPaywall = useCallback(async (): Promise<boolean> => {
     if (!REVENUECAT_ENABLED) {
-      console.log("[RevenueCat] disabled — skipping presentPaywall");
+      logger.debug("[RevenueCat] disabled — skipping presentPaywall");
       return false;
     }
     try {
@@ -341,7 +376,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       );
       return await handlePaywallResult(result, "manual");
     } catch (err) {
-      console.error("[RevenueCat] presentPaywall error:", err);
+      logger.error("[RevenueCat] presentPaywall failed", err, "rc_present_paywall");
       recordError(err, "rc_present_paywall");
       Events.purchaseFailed({
         product_id: "unknown",
@@ -353,7 +388,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
 
   const presentPaywallIfNeeded = useCallback(async (): Promise<boolean> => {
     if (!REVENUECAT_ENABLED) {
-      console.log("[RevenueCat] disabled — skipping presentPaywallIfNeeded");
+      logger.debug("[RevenueCat] disabled — skipping presentPaywallIfNeeded");
       return false;
     }
     try {
@@ -366,7 +401,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       });
       return await handlePaywallResult(result, "gated");
     } catch (err) {
-      console.error("[RevenueCat] presentPaywallIfNeeded error:", err);
+      logger.error("[RevenueCat] presentPaywallIfNeeded failed", err, "rc_present_paywall_if_needed");
       recordError(err, "rc_present_paywall_if_needed");
       Events.purchaseFailed({
         product_id: "unknown",
@@ -384,7 +419,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       const offerings = await getOfferings();
       const offering = offerings.all[CHAT_PACK_OFFERING_ID] ?? null;
       if (!offering) {
-        console.warn("[RevenueCat] in-app-purchases offering not found");
+        logger.warn("[RevenueCat] in-app-purchases offering not found");
         return "unavailable";
       }
       Events.paywallViewed("manual");
@@ -414,7 +449,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       });
       return { purchased: true, quantity };
     } catch (err) {
-      console.error("[RevenueCat] presentChatPackPaywall error:", err);
+      logger.error("[RevenueCat] presentChatPackPaywall failed", err, "rc_present_chat_pack");
       recordError(err, "rc_chat_pack_paywall");
       return "unavailable";
     }
@@ -422,7 +457,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
 
   const presentCustomerCenter = useCallback(async () => {
     if (!REVENUECAT_ENABLED) {
-      console.log("[RevenueCat] disabled — skipping presentCustomerCenter");
+      logger.debug("[RevenueCat] disabled — skipping presentCustomerCenter");
       return;
     }
     try {
@@ -430,7 +465,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       // Refresh after user manages their subscription
       await refresh();
     } catch (err) {
-      console.error("[RevenueCat] presentCustomerCenter error:", err);
+      logger.error("[RevenueCat] presentCustomerCenter failed", err, "rc_customer_center");
       recordError(err, "rc_customer_center");
     }
   }, [refresh]);
@@ -439,6 +474,8 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
     <RevenueCatContext.Provider
       value={{
         isPro,
+        isAdmin,
+        hasFullAccess,
         customerInfo,
         loading,
         refresh,

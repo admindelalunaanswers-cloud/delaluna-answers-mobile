@@ -23,6 +23,7 @@ import type { DailyCardPack } from '@/src/schemas/dailyCardPack.schema';
 import { calculateTransits } from '@/src/services/astroEngine';
 import { getTodayDateId, subscribeToHoroscope } from '@/src/services/horoscope.service';
 import { getTarotCardDraw } from '@/src/services/tarot-card.service';
+import { tarotCardImageUrl } from '@/src/utils/tarot-image';
 import { ChatStore } from '@/src/stores/chat-store';
 import type { HoroscopeResult } from '@/src/types/horoscope.types';
 import { useHoroscope } from '@/src/context/horoscope-context';
@@ -32,6 +33,7 @@ import { useResponsive } from '@/src/hooks/use-responsive';
 import { verticalScale } from '@/src/utils/responsive';
 import { getContentPadding } from '@/src/utils/layout';
 import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
+import { logger } from '@/src/utils/logger';
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -43,9 +45,9 @@ export default function HomeScreen() {
     transitMoon,
     breakdown,
   } = useHoroscope();
-  const { isPro, loading: rcLoading } = useRevenueCat();
+  const { hasFullAccess, loading: rcLoading } = useRevenueCat();
   const { markReady } = useScreenPerfLog('/(main)/index');
-  const hasPremiumAccess = rcLoading || isPro;
+  const hasPremiumAccess = rcLoading || hasFullAccess;
 
 
   const todayDateId = getTodayDateId();
@@ -66,7 +68,7 @@ export default function HomeScreen() {
           [packs.tomorrow.date]:  packs.tomorrow,
         });
       })
-      .catch(console.error);
+      .catch(logger.catchAsync('home_bootstrap'));
 
     const offset = (days: number) => {
       const d = new Date();
@@ -89,7 +91,7 @@ export default function HomeScreen() {
         [yesterdayId]: { phaseName: yestTransits.moon.phase, illumination: yestTransits.moon.illumination, moonSign: yestTransits.moon.sign },
         [tomorrowId]:  { phaseName: tmrwTransits.moon.phase, illumination: tmrwTransits.moon.illumination, moonSign: tmrwTransits.moon.sign },
       }));
-    }).catch(console.error);
+    }).catch(logger.catchAsync('home_moon_phases'));
 
     // Subscribe to yesterday/tomorrow horoscope docs so they populate when the
     // extension finishes generating them — can lag 10-30s on real devices.
@@ -125,9 +127,7 @@ export default function HomeScreen() {
     const allCards = Object.values(cardDraw).flatMap(pack => pack.cards ?? []);
     const uniqueIds = Array.from(new Set(allCards.map(card => card.id)));
     uniqueIds.forEach(id => {
-      Image.prefetch(
-        `https://firebasestorage.googleapis.com/v0/b/delaluna-answers.firebasestorage.app/o/tarot-card-front%2F${id}.png?alt=media`
-      ).catch(() => {});
+      Image.prefetch(tarotCardImageUrl(id)).catch(() => {});
     });
   }, [cardDraw]);
 

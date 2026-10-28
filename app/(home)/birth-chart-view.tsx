@@ -60,9 +60,9 @@ export default function BirthChartScreen() {
     });
   }
 
-  const { isPro, loading: rcLoading } = useRevenueCat();
+  const { hasFullAccess, loading: rcLoading } = useRevenueCat();
   const { markReady } = useScreenPerfLog('/(home)/birth-chart-view');
-  const isPremium = rcLoading || isPro;
+  const isPremium = rcLoading || hasFullAccess;
 
   useEffect(() => {
     if (!rcLoading) markReady();

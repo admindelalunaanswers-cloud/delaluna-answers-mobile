@@ -1,27 +1,34 @@
 const { withAndroidManifest } = require("@expo/config-plugins");
 
-// Restricts Android distribution to phones only (< 600dp width).
-// Tablets are >= 600dp and will be filtered out on Google Play.
-const withPhoneOnly = (config) =>
+// Keeps the Android manifest free of large-screen restrictions.
+//
+// From Android 16, orientation and resizability restrictions are ignored on
+// displays >= 600dp, and Google Play flags them as large-screen usability
+// issues. So instead of `android:screenOrientation`, phones are held in portrait
+// at runtime (src/hooks/use-portrait-lock.ts) while tablets and unfolded
+// foldables get the full window. iOS keeps its portrait lock via the top-level
+// `orientation` field, which only reaches Info.plist once the attribute below
+// is stripped.
+const withAndroidLargeScreenSupport = (config) =>
   withAndroidManifest(config, (mod) => {
     const manifest = mod.modResults.manifest;
 
-    // Restrict to phone screen sizes; tablets (≥600dp) are excluded via largestWidthLimitDp
-    manifest["supports-screens"] = [
-      {
-        $: {
-          "android:smallScreens": "true",
-          "android:normalScreens": "true",
-          "android:largeScreens": "false",
-          "android:xlargeScreens": "false",
-          "android:requiresSmallestWidthDp": "320",
-          "android:largestWidthLimitDp": "600",
-        },
-      },
-    ];
+    // A <supports-screens> filter would drop foldables and ChromeOS off the Play
+    // listing alongside tablets. Tablet exclusion belongs in the Play Console
+    // device catalog (Release > Device catalog), not here.
+    delete manifest["supports-screens"];
 
-    // Declare telephony as not required so Google Play targets phones without blocking
-    // non-phone form factors via hardware.type.* (Play rejects required="false" on those)
+    const application = manifest.application?.[0];
+    if (application) {
+      application.$["android:resizeableActivity"] = "true";
+
+      for (const activity of application.activity ?? []) {
+        delete activity.$["android:screenOrientation"];
+      }
+    }
+
+    // Declare telephony optional so Google Play does not filter out non-phone
+    // hardware on its behalf.
     const existing = manifest["uses-feature"] ?? [];
     if (
       !existing.some(
@@ -40,11 +47,35 @@ const withPhoneOnly = (config) =>
     return mod;
   });
 
+// Normalised build environment, matching src/constants/env.ts: `production` and
+// `preview*` are their own envs, anything else (including unset) is development.
+const APP_ENV = (() => {
+  const raw = process.env.APP_ENV ?? "";
+  if (raw === "production") return "production";
+  if (raw.startsWith("preview")) return "preview";
+  return "development";
+})();
+
+// Emulators are a development-only affordance. Gating here as well as in
+// firebaseConfig.ts keeps `USE_EMULATOR=true` left over in a .env from ever
+// reaching a preview or production build's manifest.
+const USE_EMULATOR = process.env.USE_EMULATOR === "true";
+
+// Which Firebase project this build talks to. `production` uses
+// delaluna-answers; development and preview use delaluna-answers-test.
+//
+// This selects the *native* config file (Analytics, Crashlytics, Performance,
+// FCM) so it cannot drift from the JS SDK credentials below — the two halves
+// resolving to different projects is invisible at runtime except for the
+// PROJECT MISMATCH line in logRuntimeBanner(), and it presents as healthy
+// crash reporting alongside a Firestore that denies every read.
+const USES_TEST_BACKEND = APP_ENV !== "production";
+
 module.exports = {
   expo: {
     name: "Delaluna Answers",
     slug: "delaluna-answers-mobile",
-    version: "1.1.0",
+    version: "2.0.0",
     orientation: "portrait",
     icon: "./src/assets/dlla-branded/delaluna_app_icon.png",
     scheme: "delalunaanswersmobile",
@@ -56,7 +87,9 @@ module.exports = {
       bundleIdentifier: "com.app.delaluna.answers",
       appleTeamId: "RG6859Q9LQ",
       newArchEnabled: true,
-      googleServicesFile: "./GoogleService-Info.plist",
+      googleServicesFile: USES_TEST_BACKEND
+        ? "./firebase/test/GoogleService-Info.plist"
+        : "./GoogleService-Info.plist",
       deploymentTarget: "15.1",
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
@@ -72,11 +105,14 @@ module.exports = {
         monochromeImage: "./src/assets/images/android-icon-monochrome.png",
       },
       package: "com.mobile.delaluna.answers",
-      googleServicesFile: "./google-services.json",
+      googleServicesFile: USES_TEST_BACKEND
+        ? "./firebase/test/google-services.json"
+        : "./google-services.json",
     },
     plugins: [
-      withPhoneOnly,
+      withAndroidLargeScreenSupport,
       "./plugins/with-adi-registration",
+      "./plugins/with-fmt-consteval-fix",
       "expo-router",
       "@react-native-firebase/app",
       "@react-native-firebase/perf",
@@ -105,8 +141,22 @@ module.exports = {
         "expo-build-properties",
         {
           android: {
-            compileSdkVersion: 35,
-            targetSdkVersion: 35,
+            // Google Play has required API 36 for new uploads since 2026-08-31;
+            // API 35 no longer accepts an update at all. 36 is also what Expo
+            // SDK 54 / React Native 0.81 default to, so this block only pins
+            // what it needs to and does not hold the project a level behind.
+            //
+            // The Android 16 behaviour changes that apply at this target are
+            // already handled: edge-to-edge is enforced with no opt-out and
+            // `android.edgeToEdgeEnabled` is on; orientation and resizability
+            // restrictions are ignored at >= 600dp, which is exactly what
+            // withAndroidLargeScreenSupport and src/hooks/use-portrait-lock.ts
+            // were written for; and predictive back stays off via
+            // `android.predictiveBackGestureEnabled`, whose
+            // `android:enableOnBackInvokedCallback="false"` is still honoured
+            // at API 36 (it stops being honoured at API 37).
+            compileSdkVersion: 36,
+            targetSdkVersion: 36,
             AGPVersion: "8.10.2",
           },
           ios: {
@@ -133,17 +183,19 @@ module.exports = {
       FIREBASE_MESSAGING_SENDER_ID: process.env.FIREBASE_MESSAGING_SENDER_ID,
       FIREBASE_APP_ID: process.env.FIREBASE_APP_ID,
       APP_ENV: process.env.APP_ENV,
-      USE_EMULATOR: process.env.USE_EMULATOR === "true",
+      USE_EMULATOR,
       EMULATOR_HOST_ANDROID: process.env.EMULATOR_HOST_ANDROID,
       EMULATOR_HOST_IOS: process.env.EMULATOR_HOST_IOS,
       REVENUECAT_AAS_API_KEY: process.env.REVENUECAT_AAS_API_KEY,
       REVENUECAT_GPS_API_KEY: process.env.REVENUECAT_GPS_API_KEY,
       REVENUECAT_TST_API_KEY: process.env.REVENUECAT_TST_API_KEY,
-      // Server-side secret keys — use only in Cloud Functions / trusted server code, never in client SDK calls
-      REVENUECAT_KEY_V1: process.env.REVENUECAT_KEY_V1,
-      REVENUECAT_KEY_V2: process.env.REVENUECAT_KEY_V2,
+      // No RevenueCat secret (sk_) keys here. Everything under `extra` is
+      // serialized into the app manifest and readable from any installed build
+      // via `Constants.expoConfig.extra`, so an sk_ key placed here is public.
+      // Secret-key calls live in Cloud Functions, which read REVENUECAT_KEY_V2
+      // from Firebase Secret Manager (functions/src/index.ts).
     },
-    runtimeVersion: "1.1.0",
+    runtimeVersion: "2.0.0",
     updates: {
       url: "https://u.expo.dev/a267fc5e-e587-4e94-b9ab-1cddd6decb94",
     },
