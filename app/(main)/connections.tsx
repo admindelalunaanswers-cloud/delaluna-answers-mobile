@@ -1,18 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
 import React, { memo, useEffect, useState } from "react";
 import {
   Alert,
   Image,
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   useWindowDimensions,
-  View
+  View,
 } from "react-native";
+import { Text } from "@/src/components/app-text";
 import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
 import Animated, {
   Easing,
@@ -33,11 +32,11 @@ import { useRevenueCat } from "@/src/context/revenuecat-context";
 import { useUser } from "@/src/context/user-context";
 import { useAdmin } from "@/src/context/admin-context";
 import { ConnectionsCache } from "@/src/services/connections-cache.service";
-import { Events } from "@/src/services/analytics.service";
+import { deleteConnection } from "@/src/services/connection.service";
 import { recordError } from "@/src/services/crashlytics.service";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { getContentPadding } from "@/src/utils/layout";
-import { db, functions } from "../../firebaseConfig";
+import { db } from "../../firebaseConfig";
 import { logger } from "@/src/utils/logger";
 
 const NAV_BAR_HEIGHT = 44;
@@ -61,12 +60,17 @@ const AnimatedConnectionItem = memo(
       transform: [{ translateY: itemSlide.value }],
     }));
 
+    const fullName = (p: any) => [p?.firstName, p?.lastName].filter(Boolean).join(" ");
+    const pairName = `${fullName(connection.firstPerson)} and ${fullName(connection.secondPerson)}`;
+
     const renderRightActions = () => (
       <View style={styles.deleteActionContainer}>
         <TouchableOpacity
           style={styles.deleteButton}
           onPress={() => onDelete(connection.id)}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={`Delete ${pairName}`}
         >
           <Ionicons name="trash-outline" size={moderateScale(22)} color="#fff" />
           <Text style={styles.deleteText}>Delete</Text>
@@ -86,6 +90,15 @@ const AnimatedConnectionItem = memo(
               onPress={() => (isLocked ? onLockedPress(connection.id) : onOpen(connection.id))}
               style={styles.connectionItemInner}
               activeOpacity={0.75}
+              accessibilityRole="button"
+              // The heart / lock between the names is a font glyph, so locked state was never spoken
+              accessibilityLabel={isLocked ? `${pairName}, locked` : pairName}
+              // Swipe-to-delete is the only other way in, and screen readers,
+              // Switch Control and keyboards can't swipe (WCAG 2.5.1).
+              accessibilityActions={[{ name: "delete", label: "Delete connection" }]}
+              onAccessibilityAction={(e) => {
+                if (e.nativeEvent.actionName === "delete") onDelete(connection.id);
+              }}
             >
               <Text
                 style={[styles.connectionName, isLocked && styles.connectionNameLocked]}
@@ -250,10 +263,9 @@ export default function ConnectionsScreen() {
             if (!uid) return;
             const previous = connections;
             setConnections((prev) => prev.filter((c) => c.id !== connectionId));
+            // Optimistic: drop it from the list and cache now, restore both on failure.
             ConnectionsCache.remove(uid, connectionId);
-            const deleteFn = httpsCallable(functions, "deleteConnection");
-            deleteFn({ userId: uid, connectionId })
-              .then(() => Events.connectionDeleted())
+            deleteConnection(uid, connectionId)
               .catch((err) => {
                 logger.error("[connections] delete failed", err, "connection_delete");
                 recordError(err, 'connection_delete');
@@ -279,6 +291,7 @@ export default function ConnectionsScreen() {
           title="Connections"
           rightIconName={hasConnections && !isPaygated ? "add" : undefined}
           onRightPress={hasConnections && !isPaygated ? goToNewConnectionScreen : undefined}
+          rightAccessibilityLabel="Add connection"
         />
          <ThemedText type="definition" style={{ marginTop: headerHeight, paddingHorizontal: scale(10), paddingVertical: scale(25), textAlign: "center" }}>
             {CONNECTIONS_DEFINITION}
@@ -317,6 +330,7 @@ export default function ConnectionsScreen() {
                 style={styles.placeholderItem}
                 onPress={goToNewConnectionScreen}
                 activeOpacity={0.7}
+                accessibilityRole="button"
               >
                 <Ionicons name="add-circle-outline" size={moderateScale(20)} color="rgba(255,255,255,0.3)" />
                 <Text style={styles.placeholderText}>Add Connection</Text>
@@ -335,6 +349,7 @@ export default function ConnectionsScreen() {
             <DelalunaContainer style={{ padding: scale(10), marginBottom: verticalScale(20) }}>
               <TouchableOpacity
                 onPress={goToNewConnectionScreen}
+                accessibilityRole="button"
                 accessibilityLabel="Add Connection"
                 style={styles.addButton}>
                 <Image
@@ -429,11 +444,11 @@ const styles = StyleSheet.create({
     marginTop: verticalScale(8),
   },
   placeholderText: {
-    color: "rgba(255,255,255,0.3)",
+    color: "rgba(255,255,255,0.7)", // was 0.3 (~2.4:1) — it is a button label, not decoration
     fontSize: moderateScale(14),
   },
   slotCounter: {
-    color: "rgba(255,255,255,0.35)",
+    color: "rgba(255,255,255,0.65)", // was 0.35 (~2.8:1)
     fontSize: moderateScale(12),
     textAlign: "center" as const,
     marginTop: verticalScale(12),

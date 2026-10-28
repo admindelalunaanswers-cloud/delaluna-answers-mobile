@@ -50,6 +50,7 @@ dataconnect/.dataconnect/
 
 # local env files
 .env
+.env.backup
 .env*.local
 
 # Firebase extension secrets (contain API keys — never commit)
@@ -72,8 +73,10 @@ app.apk
 # so the negation below only works if the directory itself stays untracked-eligible)
 /scripts/*
 !/scripts/exclude-dev-client.js
-!/scripts/sync-admin-env.js
 !/scripts/regenerate-user.js
+!/scripts/cleanup-orphaned-connection-data.js
+!/scripts/security-smoke-test.js
+!/scripts/security-pentest.js
 
 # credentials
 /credentials.json
@@ -82,6 +85,8 @@ credentials/
 # Backups taken by scripts/regenerate-user.js before it deletes anything.
 # These hold whole prompt bodies, which carry birth data — never commit them.
 /.regen-backups/
+# cleanup-orphaned-connection-data.js backups — hold birth details
+/.orphan-backups/
 
 # local Claude Code config
 .claude/
@@ -194,3 +199,27 @@ firebase-export-1787752942958xZrT0x/auth_export/config.json
 .agents/skills/gemini-api-dev/SKILL.md
 .agents/skills/gemini-api-dev/references/migration.md
 scripts/regenerate-user.js
+device-captures/devcap-20261017-214534.mp4
+device-captures/latest.mp4
+.specify/init-options.json
+.specify/integration.json
+.specify/integrations/claude.manifest.json
+.specify/integrations/speckit.manifest.json
+.specify/memory/.constitution-template.json
+.specify/memory/constitution.md
+.specify/scripts/bash/check-prerequisites.sh
+.specify/scripts/bash/common.sh
+.specify/scripts/bash/create-new-feature.sh
+.specify/scripts/bash/resolve-template.sh
+.specify/scripts/bash/setup-plan.sh
+.specify/scripts/bash/setup-tasks.sh
+.specify/templates/checklist-template.md
+.specify/templates/constitution-template.md
+.specify/templates/plan-template.md
+.specify/templates/spec-template.md
+.specify/templates/tasks-template.md
+.specify/workflows/workflow-registry.json
+.specify/workflows/speckit/workflow.yml
+device-captures/
+scripts/cleanup-orphaned-connection-data.js
+firebase-debug 2.log

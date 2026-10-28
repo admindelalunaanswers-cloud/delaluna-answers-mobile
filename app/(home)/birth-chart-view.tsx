@@ -62,7 +62,16 @@ export default function BirthChartScreen() {
 
   const { hasFullAccess, loading: rcLoading } = useRevenueCat();
   const { markReady } = useScreenPerfLog('/(home)/birth-chart-view');
-  const isPremium = rcLoading || hasFullAccess;
+  // Not `rcLoading || hasFullAccess`, as elsewhere: here the free and premium
+  // breakdowns are one Firestore doc (horoscope-context), so assuming premium
+  // while RevenueCat loads showed a free user — and their screen reader — the
+  // full Planets and Aspects tabs. What prevents that is `rcLoading` in
+  // isBreakdownLoading below: the breakdown shows as loading until access is
+  // known. isPremium no longer assumes premium either, so nothing else reading
+  // it can show premium content early; and no lock is drawn until then, so a
+  // subscriber doesn't see locks flash.
+  const isPremium = hasFullAccess;
+  const showLocks = !rcLoading && !hasFullAccess;
 
   useEffect(() => {
     if (!rcLoading) markReady();
@@ -80,9 +89,9 @@ export default function BirthChartScreen() {
   }
 
   const activeBreakdown    = isPremium ? (premiumBreakdown ?? breakdown) : breakdown;
-  const isBreakdownLoading = isPremium
+  const isBreakdownLoading = rcLoading || (isPremium
     ? (!premiumBreakdown && premiumBreakdownGenerating)
-    : (!breakdown && breakdownGenerating);
+    : (!breakdown && breakdownGenerating));
 
   // ─── Render helpers ─────────────────────────────────────────────────────────
 
@@ -91,7 +100,8 @@ export default function BirthChartScreen() {
     if (!content) return null;
     return (
       <ThemedView key={label} style={styles.insightCard}>
-        <ThemedText style={styles.insightLabel}>{label}</ThemedText>
+        {/* Headings, so the rotor can jump card to card */}
+        <ThemedText style={styles.insightLabel} accessibilityRole="header">{label}</ThemedText>
         {title ? <ThemedText style={styles.insightTitle}>{title}</ThemedText> : null}
         <ThemedText style={styles.insightBody}>{renderRichText(content)}</ThemedText>
       </ThemedView>
@@ -129,7 +139,13 @@ export default function BirthChartScreen() {
       : houses.map(h => ({ ...h, locked: !freeUnlockedHouses.has(h.house) }));
     return displayHouses.map((h) => (
       <ThemedView key={h.house} style={styles.card}>
-        <ThemedView style={styles.cardHeader}>
+        <ThemedView
+          style={styles.cardHeader}
+          accessible
+          accessibilityRole="header"
+          // The lock is an icon — without this a locked house just has no reading, unexplained
+          accessibilityLabel={`House ${h.house}, ${h.sign} ${h.degree}${h.ruler ? `, ruled by ${h.ruler}` : ''}${h.locked ? '. Premium' : ''}`}
+        >
           <ThemedText style={styles.cardTitle}>
             House {h.house} — {h.sign} {h.degree}
           </ThemedText>
@@ -152,7 +168,7 @@ export default function BirthChartScreen() {
     if (!planets?.length) return <ThemedText style={styles.emptyText}>No planet data.</ThemedText>;
     return planets.map((p) => (
       <ThemedView key={p.name} style={styles.card}>
-        <ThemedView style={styles.cardHeader}>
+        <ThemedView style={styles.cardHeader} accessible accessibilityRole="header">
           <ThemedText style={styles.cardTitle}>
             {p.name} in {p.sign} {p.degree}
           </ThemedText>
@@ -167,7 +183,7 @@ export default function BirthChartScreen() {
     if (!aspects?.length) return <ThemedText style={styles.emptyText}>No aspect data.</ThemedText>;
     return aspects.map((a, i) => (
       <ThemedView key={i} style={styles.card}>
-        <ThemedView style={styles.cardHeader}>
+        <ThemedView style={styles.cardHeader} accessible accessibilityRole="header">
           <ThemedText style={styles.cardTitle}>
             {a.planet1} {a.aspect} {a.planet2}
           </ThemedText>
@@ -183,7 +199,8 @@ export default function BirthChartScreen() {
       return (
         <>
           {Array.from({ length: 5 }, (_, i) => (
-            <View key={i} style={styles.card}>
+            // Blank shapes to a screen reader otherwise
+            <View key={i} style={styles.card} accessible accessibilityLabel="Loading">
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(8) }}>
                 <SkeletonLines lines={1} widths={[scale(120)]} lineHeight={moderateScale(12)} color="rgba(255,255,255,0.15)" />
                 <SkeletonLines lines={1} widths={[scale(48)]} lineHeight={moderateScale(10)} color="rgba(255,255,255,0.09)" />
@@ -206,6 +223,9 @@ export default function BirthChartScreen() {
         <PremiumUnlock
           title={`Unlock ${breakdownTab}`}
           message={messages[breakdownTab]}
+          // PremiumUnlock only draws its button when given this — without it the
+          // card was a dead end for every free user
+          onUnlock={() => router.push('/(settings)/paywall')}
         />
       );
     }
@@ -231,12 +251,15 @@ export default function BirthChartScreen() {
 
         {/* ── Chart view (Wheel / Table) ─────────────────────────── */}
         <ThemedView style={styles.topSection}>
-          <ThemedView style={styles.chartTabList}>
+          <ThemedView style={styles.chartTabList} accessibilityRole="tablist">
             {CHART_TABS.map(tab => (
               <Pressable
                 key={tab}
                 style={[styles.chartTab, chartTab === tab && styles.chartTabActive]}
                 onPress={() => setChartTab(tab)}
+                // Selection was only an underline
+                accessibilityRole="tab"
+                accessibilityState={{ selected: chartTab === tab }}
               >
                 <ThemedText type="defaultSemiBold">{tab}</ThemedText>
               </Pressable>
@@ -252,7 +275,11 @@ export default function BirthChartScreen() {
               )
             ) : (
               chartDetails ? (
-                <NatalTable planets={chartDetails.planets} asc={chartDetails.ascendant} />
+                // The frame above is a fixed height that hides overflow, so at
+                // large text sizes the lower houses were cut off with no way to them
+                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                  <NatalTable planets={chartDetails.planets} asc={chartDetails.ascendant} />
+                </ScrollView>
               ) : (
                 <ThemedText>No chart data available.</ThemedText>
               )
@@ -266,22 +293,26 @@ export default function BirthChartScreen() {
 
           {/* Tinted tab bar — visually distinct from chart tabs above */}
           <ThemedView style={styles.breakdownTabBar}>
-            <ThemedView style={styles.breakdownTabList}>
+            <ThemedView style={styles.breakdownTabList} accessibilityRole="tablist">
               {BREAKDOWN_TABS.map(tab => {
-                const locked = !isPremium && (tab === 'Planets' || tab === 'Aspects');
+                const locked = showLocks && (tab === 'Planets' || tab === 'Aspects');
                 const isActive = breakdownTab === tab;
                 return (
                   <Pressable
                     key={tab}
                     style={[styles.breakdownTab, isActive && styles.breakdownTabActive]}
                     onPress={() => switchBreakdownTab(tab)}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: isActive }}
+                    // The lock is an icon, so "premium" was never spoken
+                    accessibilityLabel={locked ? `${tab}, premium` : tab}
                   >
                     <ThemedView style={styles.breakdownTabInner}>
                       <ThemedText style={[styles.breakdownTabText, isActive && styles.breakdownTabTextActive]}>
                         {tab}
                       </ThemedText>
                       {locked && (
-                        <Ionicons name="lock-closed" size={scale(9)} color="rgba(255,255,255,0.35)" />
+                        <Ionicons name="lock-closed" size={scale(9)} color="rgba(255,255,255,0.7)" />
                       )}
                     </ThemedView>
                   </Pressable>
@@ -319,7 +350,7 @@ const styles = StyleSheet.create({
   // ── Chart section ──────────────────────────────────────────────────────────
   topSection:     { height: CHART_FRAME_HEIGHT, overflow: 'hidden'},
   chartTabList:   { flexDirection: 'row', paddingHorizontal: scale(5), paddingVertical: verticalScale(5) },
-  chartTab:       { flex: 1, paddingVertical: verticalScale(6), alignItems: 'center' },
+  chartTab:       { flex: 1, minHeight: 44, justifyContent: 'center', paddingVertical: verticalScale(6), alignItems: 'center' }, // was ~32pt
   chartTabActive: { borderBottomWidth: 2, borderBottomColor: '#5BC0BE' },
   chartContent:   { flex: 1, paddingHorizontal: scale(5), paddingTop: verticalScale(5) },
 
@@ -338,6 +369,8 @@ const styles = StyleSheet.create({
   },
   breakdownTab: {
     flex: 1,
+    minHeight: 44, // was ~26pt
+    justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: verticalScale(5),
     borderBottomWidth: 2,
@@ -349,7 +382,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#7c6ef7',
   },
   breakdownTabText: {
-    color: 'rgba(255,255,255,0.4)',
+    color: 'rgba(255,255,255,0.7)', // was 0.4 at 12pt, ~3.3:1
     fontSize: moderateScale(12),
     fontWeight: '600',
     letterSpacing: 0.3,
@@ -434,6 +467,6 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
 
-  emptyText: { color: 'rgba(255,255,255,0.3)', fontSize: moderateScale(13), textAlign: 'center', marginTop: verticalScale(24) },
+  emptyText: { color: 'rgba(255,255,255,0.7)', fontSize: moderateScale(13), textAlign: 'center', marginTop: verticalScale(24) },
   errorText: { color: 'rgba(255,100,100,0.8)', fontSize: moderateScale(13), marginTop: verticalScale(16), textAlign: 'center' },
 });

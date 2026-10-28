@@ -1,14 +1,20 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
-import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
+import { View, StyleSheet } from "react-native";
+import { Text } from "@/src/components/app-text";
+import { verticalScale, moderateScale } from "@/src/utils/responsive";
 import { renderRichText } from "@/src/utils/rich-text";
 
 interface BulletListProps {
   items: string[];
-  bullet?: string;
 }
 
-export function BulletList({ items, bullet = "•" }: BulletListProps) {
+/**
+ * A centred list with no markers — the look it has shipped with since it was
+ * first written. It once took a `bullet` prop and had a `bullet` style, but
+ * never rendered either; both are gone so nothing suggests otherwise. Each item
+ * is its own Text, so a screen reader still steps through them one by one.
+ */
+export function BulletList({ items }: BulletListProps) {
   return (
     <View style={styles.list}>
       {items.map((item, index) => (
@@ -30,13 +36,6 @@ const styles = StyleSheet.create({
   flexDirection: "row",
   alignItems: "center",
   marginBottom: verticalScale(10),
-},
-  bullet: {
-  width: scale(18),
-  marginRight: scale(8),
-  fontSize: moderateScale(16),
-  lineHeight: moderateScale(22),
-  color: "#FFFFFF",
 },
 text: {
   flex: 1,

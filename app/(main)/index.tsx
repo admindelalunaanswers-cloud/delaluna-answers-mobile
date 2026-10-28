@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Text } from '@/src/components/app-text';
 
 import { router } from 'expo-router';
 
@@ -37,6 +38,20 @@ import { logger } from '@/src/utils/logger';
 
 const NAV_BAR_HEIGHT = 44;
 
+/** A local-date id `days` from today, and the Date it was built from. */
+function offsetDate(days: number) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return {
+    dateId: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+    date: d,
+  };
+}
+
+function neighbouringDateIds() {
+  return { yesterdayId: offsetDate(-1).dateId, tomorrowId: offsetDate(+1).dateId };
+}
+
 export default function HomeScreen() {
   const { authUser, userDoc } = useUser();
   const {
@@ -70,17 +85,8 @@ export default function HomeScreen() {
       })
       .catch(logger.catchAsync('home_bootstrap'));
 
-    const offset = (days: number) => {
-      const d = new Date();
-      d.setDate(d.getDate() + days);
-      return {
-        dateId: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
-        date: d,
-      };
-    };
-
-    const { dateId: yesterdayId, date: yesterdayDate } = offset(-1);
-    const { dateId: tomorrowId,  date: tomorrowDate  } = offset(+1);
+    const { dateId: yesterdayId, date: yesterdayDate } = offsetDate(-1);
+    const { dateId: tomorrowId,  date: tomorrowDate  } = offsetDate(+1);
 
     Promise.all([
       calculateTransits(yesterdayDate, 0, 0),
@@ -92,9 +98,23 @@ export default function HomeScreen() {
         [tomorrowId]:  { phaseName: tmrwTransits.moon.phase, illumination: tmrwTransits.moon.illumination, moonSign: tmrwTransits.moon.sign },
       }));
     }).catch(logger.catchAsync('home_moon_phases'));
+  }, [authUser?.uid]);
 
-    // Subscribe to yesterday/tomorrow horoscope docs so they populate when the
-    // extension finishes generating them — can lag 10-30s on real devices.
+  // Yesterday's and tomorrow's readings are premium. Only subscribe for a user
+  // who can see them: loaded for everyone, they sat in the tree under the
+  // paygate's blur, where a screen reader (or anything walking the tree) could
+  // read them. A free user's locked days now blur over the loading skeleton
+  // instead of the real text.
+  //
+  // hasPremiumAccess is true while RevenueCat is still loading, so a subscriber
+  // never sees a flash of locked skeleton; if it then resolves to free, the
+  // cleanup drops the subscriptions and the readings they delivered.
+  useEffect(() => {
+    if (!authUser || !hasPremiumAccess) return;
+
+    const { yesterdayId, tomorrowId } = neighbouringDateIds();
+
+    // Populate when generation finishes — can lag 10-30s on real devices.
     const unsubYesterday = subscribeToHoroscope(authUser.uid, yesterdayId, (result) => {
       setHoroscopeByDate(prev => ({ ...prev, [yesterdayId]: result }));
     });
@@ -105,8 +125,12 @@ export default function HomeScreen() {
     return () => {
       unsubYesterday();
       unsubTomorrow();
+      setHoroscopeByDate(prev => {
+        const { [yesterdayId]: _y, [tomorrowId]: _t, ...rest } = prev;
+        return rest;
+      });
     };
-  }, [authUser?.uid]);
+  }, [authUser?.uid, hasPremiumAccess]);
 
   // Keep today's horoscope and moon in the by-date maps
   useEffect(() => {
@@ -266,6 +290,8 @@ export default function HomeScreen() {
             style={styles.questionButton}
             onPress={() => { ChatStore.setInitialMessage(HOME_STRINGS.newLove.questionFunnel); router.push('/(main)/chat'); }}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityHint="Asks Delaluna in chat"
           >
             <Text style={styles.questionButtonText}>{HOME_STRINGS.newLove.questionFunnel}</Text>
           </TouchableOpacity>
@@ -277,6 +303,8 @@ export default function HomeScreen() {
             style={styles.questionButton}
             onPress={() => { ChatStore.setInitialMessage(HOME_STRINGS.returns.questionFunnel1); router.push('/(main)/chat'); }}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityHint="Asks Delaluna in chat"
           >
             <Text style={styles.questionButtonText}>{HOME_STRINGS.returns.questionFunnel1}</Text>
           </TouchableOpacity>
@@ -284,6 +312,8 @@ export default function HomeScreen() {
             style={[styles.questionButton, { marginTop: 8 }]}
             onPress={() => { ChatStore.setInitialMessage(HOME_STRINGS.returns.questionFunnel2); router.push('/(main)/chat'); }}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityHint="Asks Delaluna in chat"
           >
             <Text style={styles.questionButtonText}>{HOME_STRINGS.returns.questionFunnel2}</Text>
           </TouchableOpacity>
@@ -354,7 +384,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   sectionDefinition: {
-    color: 'rgba(255,255,255,0.4)',
+    color: 'rgba(255,255,255,0.7)', // was 0.4 at 12pt, ~3.2:1
     fontSize: 12,
     lineHeight: 18,
     marginTop: -8,
@@ -362,6 +392,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   questionButton: {
+    minHeight: 44, // was ~38pt
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(188,168,244,0.35)',
     borderRadius: 20,

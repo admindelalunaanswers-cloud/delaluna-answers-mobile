@@ -1,13 +1,12 @@
 import React, { useState } from "react";
 import {
   View,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
-  Text,
   Alert,
   Modal,
 } from "react-native";
+import { Text, TextInput } from "@/src/components/app-text";
 import { Ionicons } from "@expo/vector-icons";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { MESSAGE_IN_A_BOTTLE_RESPONSES } from "@/src/constants/strings";
@@ -58,6 +57,7 @@ export default function MessageInABottleComponent({
       <View style={styles.container}>
         <TextInput
           style={styles.input}
+          accessibilityLabel={placeholder}
           placeholder={placeholder}
           placeholderTextColor="#1F2024"
           value={message}
@@ -67,6 +67,12 @@ export default function MessageInABottleComponent({
           onPress={handleSend}
           disabled={!message.trim()}
           style={[styles.sendButton, !message.trim() && { opacity: 0.5 }]}
+          // Icon-only — it had no name, so VoiceOver read nothing useful
+          accessibilityRole="button"
+          accessibilityLabel="Send message"
+          accessibilityState={{ disabled: !message.trim() }}
+          // Grows the ~32pt circle to a 44pt touch target without moving the layout.
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
         >
           <Ionicons name="send" size={scale(18)} color="#FFF" />
         </TouchableOpacity>
@@ -79,10 +85,15 @@ export default function MessageInABottleComponent({
         statusBarTranslucent
         onRequestClose={() => setOverlayVisible(false)}
       >
+        {/* One element to a screen reader: the reply, as a button that closes it.
+            "Tap anywhere" means nothing without sight of the screen. */}
         <TouchableOpacity
           style={styles.overlay}
           activeOpacity={1}
           onPress={() => setOverlayVisible(false)}
+          accessibilityRole="button"
+          accessibilityLabel={overlayMessage ?? ""}
+          accessibilityHint="Closes the message"
         >
           <View style={styles.card}>
             <Text style={styles.messageText}>{overlayMessage}</Text>
@@ -100,7 +111,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     width: "100%",
-    height: verticalScale(40),
+    minHeight: verticalScale(40), // grows with the text size
     backgroundColor: "#F8F9FE",
     borderRadius: scale(71),
     paddingLeft: scale(16),
@@ -147,7 +158,7 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
   },
   dismissHint: {
-    color: "rgba(180, 150, 220, 0.4)",
+    color: "rgba(180, 150, 220, 0.75)", // was 0.4
     fontSize: moderateScale(11),
     textAlign: "center",
     letterSpacing: 0.5,

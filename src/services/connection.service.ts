@@ -1,6 +1,9 @@
 import { collection, doc, getDoc, getDocs, query, where, writeBatch } from 'firebase/firestore';
 
-import { db } from '@/firebaseConfig';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '@/firebaseConfig';
+import { Events } from '@/src/services/analytics.service';
+import { ConnectionsCache } from '@/src/services/connections-cache.service';
 import type { NatalChartDetailsDoc } from '@/src/types/user.type';
 import { calculateNatalChart, type NatalChart } from '@/src/services/astroEngine';
 import { requestSynastryReading } from '@/src/services/synastry-reading.service';
@@ -138,4 +141,23 @@ export async function refreshSynastryReadingsForUser(
     const nameB = sp.firstName ?? 'Partner';
     await requestSynastryReading(uid, connectionId, userChart, secondChart, userName, nameB);
   }));
+}
+
+/**
+ * Deletes a connection the one supported way: through the `deleteConnection`
+ * Cloud Function (which removes the document and its `report` /
+ * `synastryReading` subcollections), then out of the local cache, then counted.
+ *
+ * The Connections list and the Edit Connection screen used to do this
+ * separately, and the edit screen called `deleteDoc` directly — skipping the
+ * cache (so the deleted connection could reappear in the list until the next
+ * snapshot) and the analytics event. Both go through here now.
+ *
+ * Throws if the function call fails; the cache and the event are only touched
+ * once it has succeeded.
+ */
+export async function deleteConnection(uid: string, connectionId: string): Promise<void> {
+  await httpsCallable(functions, 'deleteConnection')({ userId: uid, connectionId });
+  await ConnectionsCache.remove(uid, connectionId);
+  Events.connectionDeleted();
 }

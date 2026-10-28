@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Text } from '@/src/components/app-text';
 
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -27,7 +28,8 @@ const NAV_BAR_HEIGHT = 44;
 
 function SkeletonHouseCard() {
   return (
-    <View style={houseStyles.card}>
+    // Blank shapes to a screen reader otherwise — nothing says a reading is coming
+    <View style={houseStyles.card} accessible accessibilityLabel="Loading house reading">
       <View style={houseStyles.header}>
         <View style={houseStyles.headerLeft}>
           <SkeletonLines lines={1} widths={[staticScale(60)]} lineHeight={moderateScale(12)} color="rgba(255,210,80,0.18)" />
@@ -66,6 +68,10 @@ function HouseCard({
       activeOpacity={0.75}
       onPress={() => (isLocked ? onLockedPress() : setExpanded(e => !e))}
       style={houseStyles.card}
+      accessibilityRole="button"
+      // The chevron and lock are icons, so neither state was ever spoken
+      accessibilityState={isLocked ? undefined : { expanded }}
+      accessibilityHint={isLocked ? 'Premium. Opens upgrade options' : undefined}
     >
       {/* Header: house number + keyword + chevron / lock */}
       <View style={houseStyles.header}>
@@ -98,7 +104,12 @@ function HouseCard({
             const color = C.planet[transit.name] ?? C.muted;
             return (
               <View key={transit.name} style={houseStyles.planetChip}>
-                <Text style={[houseStyles.planetName, { color }]} numberOfLines={1}>
+                <Text
+                  style={[houseStyles.planetName, { color }]}
+                  numberOfLines={1}
+                  // "Rx" is otherwise read as the letters R X
+                  accessibilityLabel={isRx ? `${transit.name}, retrograde` : transit.name}
+                >
                   {transit.name}{isRx ? ' Rx' : ''}
                 </Text>
                 <Text style={houseStyles.planetPos} numberOfLines={1}>{transit.degree} {transit.sign}</Text>
@@ -279,7 +290,7 @@ const houseStyles = StyleSheet.create({
   excerpt: {
     fontSize: moderateScale(12),
     lineHeight: moderateScale(18),
-    color: 'rgba(255,255,255,0.45)',
+    color: 'rgba(255,255,255,0.7)', // was 0.45 at 12pt italic, ~3.6:1
     fontStyle: 'italic',
   },
   planetChip: {

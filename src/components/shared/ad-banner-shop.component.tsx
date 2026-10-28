@@ -5,10 +5,10 @@ import {
   Image,
   Linking,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Text } from '@/src/components/app-text';
 
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -68,6 +68,13 @@ export default function AdBannerShop({
           style={styles.surface}
           onPress={handleOpen}
           activeOpacity={0.85}
+          accessibilityRole="link"
+          // The dismiss button is nested inside this touchable, so VoiceOver can't
+          // reach it on its own — offer it as an action on the banner instead.
+          accessibilityActions={onDismiss ? [{ name: "dismiss", label: "Dismiss" }] : undefined}
+          onAccessibilityAction={(e) => {
+            if (e.nativeEvent.actionName === "dismiss") onDismiss?.();
+          }}
         >
           <View style={styles.avatarFrame}>
             <Image
@@ -104,7 +111,13 @@ export default function AdBannerShop({
           ) : null}
 
           {onDismiss ? (
-            <TouchableOpacity style={styles.dismissButton} onPress={onDismiss} hitSlop={8}>
+            <TouchableOpacity
+              style={styles.dismissButton}
+              onPress={onDismiss}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss"
+            >
               <Ionicons name="close" size={scale(14)} color={C.muted} />
             </TouchableOpacity>
           ) : null}

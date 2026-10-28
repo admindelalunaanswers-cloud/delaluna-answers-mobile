@@ -75,7 +75,7 @@ module.exports = {
   expo: {
     name: "Delaluna Answers",
     slug: "delaluna-answers-mobile",
-    version: "2.0.0",
+    version: "3.0.0",
     orientation: "portrait",
     icon: "./src/assets/dlla-branded/delaluna_app_icon.png",
     scheme: "delalunaanswersmobile",
@@ -90,14 +90,18 @@ module.exports = {
       googleServicesFile: USES_TEST_BACKEND
         ? "./firebase/test/GoogleService-Info.plist"
         : "./GoogleService-Info.plist",
-      deploymentTarget: "15.1",
+      deploymentTarget: "16.4",
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         UIBackgroundModes: ["remote-notification"],
+        // iOS 27 made the UIApplication status bar API a no-op, so the style has
+        // to come from the root view controller (src/components/app-status-bar.tsx).
+        // Expo's template sets this to NO; with YES, React Native's StatusBar
+        // errors on every call, so nothing may render expo-status-bar on iOS.
+        UIViewControllerBasedStatusBarAppearance: false,
       },
     },
     android: {
-      edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
       adaptiveIcon: {
         foregroundImage: "./src/assets/images/android-icon-foreground.png",
@@ -114,6 +118,9 @@ module.exports = {
       "./plugins/with-adi-registration",
       "./plugins/with-fmt-consteval-fix",
       "expo-router",
+      // Before "@react-native-firebase/app", and instead of the app-check package's
+      // own plugin — see the header of the file for both.
+      "./plugins/with-app-check-ios",
       "@react-native-firebase/app",
       "@react-native-firebase/perf",
       "@react-native-firebase/crashlytics",
@@ -143,26 +150,37 @@ module.exports = {
           android: {
             // Google Play has required API 36 for new uploads since 2026-08-31;
             // API 35 no longer accepts an update at all. 36 is also what Expo
-            // SDK 54 / React Native 0.81 default to, so this block only pins
+            // SDK 57 / React Native 0.86 default to, so this block only pins
             // what it needs to and does not hold the project a level behind.
             //
             // The Android 16 behaviour changes that apply at this target are
-            // already handled: edge-to-edge is enforced with no opt-out and
-            // `android.edgeToEdgeEnabled` is on; orientation and resizability
+            // already handled: edge-to-edge is enforced with no opt-out (the
+            // `android.edgeToEdgeEnabled` flag is gone as of SDK 57 — setting
+            // it is now a prebuild error); orientation and resizability
             // restrictions are ignored at >= 600dp, which is exactly what
             // withAndroidLargeScreenSupport and src/hooks/use-portrait-lock.ts
             // were written for; and predictive back stays off via
             // `android.predictiveBackGestureEnabled`, whose
             // `android:enableOnBackInvokedCallback="false"` is still honoured
             // at API 36 (it stops being honoured at API 37).
+            //
+            // AGP matches the version React Native itself builds with
+            // (`agp` in node_modules/react-native/gradle/libs.versions.toml).
+            // Re-check it on every React Native upgrade.
             compileSdkVersion: 36,
             targetSdkVersion: 36,
-            AGPVersion: "8.10.2",
+            AGPVersion: "8.12.0",
           },
           ios: {
-            deploymentTarget: "15.1",
+            deploymentTarget: "16.4",
             useFrameworks: "static",
             buildReactNativeFromSource: true,
+            // The iOS 27 SDK (Xcode 27) refuses to launch an app that hasn't
+            // adopted the UIScene life cycle. This moves React Native startup
+            // into Expo's `ExpoAppSceneDelegate` and adds the scene manifest.
+            // Needs expo >= 57.0.23; SDK 58's template does it natively, so
+            // delete this line on that upgrade.
+            enableSceneSupport: true,
           },
         },
       ],
@@ -188,14 +206,26 @@ module.exports = {
       EMULATOR_HOST_IOS: process.env.EMULATOR_HOST_IOS,
       REVENUECAT_AAS_API_KEY: process.env.REVENUECAT_AAS_API_KEY,
       REVENUECAT_GPS_API_KEY: process.env.REVENUECAT_GPS_API_KEY,
-      REVENUECAT_TST_API_KEY: process.env.REVENUECAT_TST_API_KEY,
+      // Test Store purchases are free, and everything in `extra` is readable from
+      // an installed build, so a production build must not carry this key.
+      REVENUECAT_TST_API_KEY: USES_TEST_BACKEND
+        ? process.env.REVENUECAT_TST_API_KEY
+        : undefined,
+      // App Check debug token for dev builds (src/services/app-check.service.ts).
+      // A registered debug token passes App Check from any device, so a
+      // production build must never carry one.
+      APP_CHECK_DEBUG_TOKEN: USES_TEST_BACKEND
+        ? process.env.APP_CHECK_DEBUG_TOKEN
+        : undefined,
       // No RevenueCat secret (sk_) keys here. Everything under `extra` is
       // serialized into the app manifest and readable from any installed build
       // via `Constants.expoConfig.extra`, so an sk_ key placed here is public.
       // Secret-key calls live in Cloud Functions, which read REVENUECAT_KEY_V2
       // from Firebase Secret Manager (functions/src/index.ts).
     },
-    runtimeVersion: "2.0.0",
+    // Bumped with `version`: 3.0 adds a native module (App Check), so an OTA
+    // update built for it must never reach a 2.0 binary.
+    runtimeVersion: "3.0.0",
     updates: {
       url: "https://u.expo.dev/a267fc5e-e587-4e94-b9ab-1cddd6decb94",
     },

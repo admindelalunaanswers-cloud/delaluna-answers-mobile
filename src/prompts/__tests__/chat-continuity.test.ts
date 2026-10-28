@@ -158,6 +158,8 @@ describe('buildChatTurnPrompt', () => {
   });
 
   describe('restored sessions', () => {
+    const MIN_SHARE = 300;
+
     it('recaps turns the extension cannot replay', () => {
       const prompt = buildChatTurnPrompt({
         userMessage: 'so what now',
@@ -219,6 +221,38 @@ describe('buildChatTurnPrompt', () => {
       expect(prompt).not.toContain('User: q3 ');
       expect(prompt).toContain('User: q9');
       expect(prompt).not.toContain('x'.repeat(400));
+    });
+
+    // A flat 320-character cap cut a lone restored reply off before the quote
+    // it ended on, and the model then denied having given one.
+    it('keeps the whole of a long reply when it is the only one restored', () => {
+      const reply = `${'Reading. '.repeat(100)}As someone wise once said, "Never interrupt an enemy."`;
+
+      const prompt = buildChatTurnPrompt({
+        userMessage: 'what was the quote you gave me?',
+        systemContext: SYSTEM,
+        history: [restored({ userMessage: 'give me a reading', response: reply })],
+      });
+
+      expect(prompt).toContain('"Never interrupt an enemy."');
+    });
+
+    it('shares the recap budget across the turns it keeps', () => {
+      const history = Array.from({ length: 6 }, (_, i) =>
+        restored({ userMessage: `q${i}`, response: `${i}`.repeat(3000) }),
+      );
+
+      const prompt = buildChatTurnPrompt({
+        userMessage: 'now',
+        systemContext: SYSTEM,
+        history,
+      });
+      const recap = prompt.split('\n\n').find(part => part.startsWith('[[RECAP:'))!;
+      const body = recap.slice(recap.indexOf('User: q0'));
+
+      expect(body.length).toBeLessThanOrEqual(2500);
+      // Every kept turn gets a share, not just the first ones to fit.
+      for (let i = 0; i < 6; i++) expect(body).toContain(`${i}`.repeat(MIN_SHARE));
     });
   });
 

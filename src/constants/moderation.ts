@@ -2,7 +2,7 @@
  * moderation.ts — per-account feature blocks.
  *
  * An admin can switch individual features off for one user from the admin
- * dashboard (admin-web/). The block lives at `moderation/{uid}`, written only
+ * dashboard (the delaluna-admin-dash repo). The block lives at `moderation/{uid}`, written only
  * by the `setUserFeatureBlocks` Cloud Function; firestore.rules gives the owner
  * read access and nobody client-side any write access, so a user can see that
  * they are blocked but cannot unblock themselves.

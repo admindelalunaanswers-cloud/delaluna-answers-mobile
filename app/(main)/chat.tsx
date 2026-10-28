@@ -17,29 +17,35 @@ import {
   Modal,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { Text, TextInput } from "@/src/components/app-text";
+import { useFocusEffect, useIsFocused } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import ChatExportSheet from "@/src/components/chat/chat-export-sheet";
+import ExportTip, {
+  hasSeenExportTip,
+  markExportTipSeen,
+} from "@/src/components/chat/export-tip";
 import ChatTarotDraw from "@/src/components/chat/tarot-draw.component";
 import ConnectionPickerSheet, {
   type PickerConnection,
 } from "@/src/components/connection-picker-sheet";
 import ConsumablePlaceholder from "@/src/components/shared/consumable-placeholder.component";
-import HeaderNav from "@/src/components/shared/header-nav";
+import HeaderNav, { HEADER_ICON_GAP } from "@/src/components/shared/header-nav";
 import PaygateOverlay from "@/src/components/shared/paygate-overlay.component";
 import { ThemedView } from "@/src/components/themed-view";
 import { HOME_STRINGS } from "@/src/constants/strings";
 import { C, R, S } from "@/src/constants/theme";
 import { useAdmin } from "@/src/context/admin-context";
+import { useReducedMotion } from "@/src/context/accessibility-context";
 import { useHoroscope } from "@/src/context/horoscope-context";
 import { useRevenueCat } from "@/src/context/revenuecat-context";
 import { useUser } from "@/src/context/user-context";
 import { useResponsive } from "@/src/hooks/use-responsive";
+import { useReplyAnnouncements } from "@/src/hooks/use-reply-announcements";
 import { useScreenPerfLog } from "@/src/hooks/use-screen-perf-log";
 import { Events } from "@/src/services/analytics.service";
 import {
@@ -81,6 +87,18 @@ import { ChatStore } from "@/src/stores/chat-store";
 import type { DrawnTarotCard } from "@/src/types/tarot-cards.type";
 import { resolveChatAllowance } from "@/src/utils/chat-allowance";
 import {
+  CHAT_ACCESS_DAYS,
+  chatExpiryLabel,
+} from "@/src/utils/chat-retention";
+import {
+  countChatMessages,
+  exportableFromSession,
+  exportableFromThread,
+  formatBirthDetails,
+  messageCountLabel,
+  type ExportableChat,
+} from "@/src/utils/chat-export-format";
+import {
   blockedMessage,
   isFeatureBlocked,
   type BlockableFeature,
@@ -88,7 +106,7 @@ import {
 import { checkForHarm, HARM_ALERTS } from "@/src/utils/harm-filter";
 import { getContentPadding, MAX_CONTENT_WIDTH } from "@/src/utils/layout";
 import { logger } from "@/src/utils/logger";
-import { renderRichText } from "@/src/utils/rich-text";
+import { plainRichText, renderRichText } from "@/src/utils/rich-text";
 
 const SUGGESTIONS = [
   HOME_STRINGS.newLove.questionFunnel,
@@ -114,6 +132,8 @@ const CONNECTION_SUGGESTIONS = [
 
 const VISIBLE_SUGGESTIONS = 5;
 
+const HISTORY_RETENTION_NOTE = `Chats stay in your history for ${CHAT_ACCESS_DAYS} days. Export one to keep it.`;
+
 const CHAT_MODES = ["astrology", "tarot"] as const;
 
 // The sliding thumb is absolutely positioned, which Yoga measures from the
@@ -136,8 +156,10 @@ function TypingDots() {
     useRef(new Animated.Value(0)).current,
     useRef(new Animated.Value(0)).current,
   ];
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
+    if (reduceMotion) return; // the three dots still read as "typing" standing still
     const anims = dots.map((dot, i) =>
       Animated.loop(
         Animated.sequence([
@@ -157,9 +179,12 @@ function TypingDots() {
       ),
     );
     anims.forEach((a) => a.start());
-    return () => anims.forEach((a) => a.stop());
+    return () => {
+      anims.forEach((a) => a.stop());
+      dots.forEach((dot) => dot.setValue(0));
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [reduceMotion]);
 
   return (
     <View style={styles.typingRow}>
@@ -235,7 +260,13 @@ function MessageBubble({
         <Text style={styles.aboutTag}>about {msg.connectionName}</Text>
       ) : null}
       <View style={styles.userBubbleRow}>
-        <View style={styles.userBubble}>
+        {/* Speaker prefixes: bubble side and colour say who is talking, which a
+            screen reader can't see. */}
+        <View
+          style={styles.userBubble}
+          accessible
+          accessibilityLabel={`You: ${msg.userMessage}`}
+        >
           <Text style={styles.userBubbleText}>{msg.userMessage}</Text>
         </View>
       </View>
@@ -244,7 +275,17 @@ function MessageBubble({
 
       {!holdAnswer && (
         <View style={styles.aiBubbleRow}>
-          <View style={styles.aiBubble}>
+          <View
+            style={styles.aiBubble}
+            accessible
+            accessibilityLabel={
+              waiting
+                ? `Delaluna is typing${isSlow ? ". Still thinking — this one's taking a while." : ""}`
+                : msg.isError || isStuck
+                  ? "Delaluna: Something went wrong. Try again — this one's on us."
+                  : `Delaluna: ${plainRichText(msg.response)}`
+            }
+          >
             {waiting ? (
               <>
                 <TypingDots />
@@ -269,6 +310,8 @@ function MessageBubble({
               onPress={() => onRetry(msg)}
               disabled={isRetrying}
               style={[styles.retryButton, isRetrying && styles.retryButtonBusy]}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: isRetrying, busy: isRetrying }}
             >
               <Text style={styles.retryText}>
                 {isRetrying ? "Retrying…" : "Retry"}
@@ -303,7 +346,7 @@ export default function ChatScreen() {
   } = useScreenPerfLog("/(main)/chat");
   const hasPremiumAccess = rcLoading || hasFullAccess;
   const insets = useSafeAreaInsets();
-  const { scale, width: screenWidth } = useResponsive();
+  const { scale, moderateScale, width: screenWidth } = useResponsive();
   const headerHeight = insets.top + scale(44);
 
   const [messages, setMessages] = useState<ChatMessageDoc[]>([]);
@@ -330,6 +373,17 @@ export default function ChatScreen() {
    */
   const [retryingIds, setRetryingIds] = useState<string[]>([]);
   const [modeTrackWidth, setModeTrackWidth] = useState(0);
+  /** What the export sheet is open on — the open thread or a saved chat. */
+  const [exportTarget, setExportTarget] = useState<{
+    chat: ExportableChat;
+    source: "chat" | "history";
+  } | null>(null);
+  /** Null until storage answers, so the tip can't flash on for a returning user. */
+  const [exportTipSeen, setExportTipSeen] = useState<boolean | null>(null);
+  // Chat is a tab and stays mounted. Without this the tip — and its spoken
+  // announcement — could appear while the user is on another tab, the moment
+  // the first answer landed.
+  const isFocused = useIsFocused();
   const modeAnim = useRef(new Animated.Value(0)).current;
 
   // Questions granted by the fallback sheet when RevenueCat can't sell — no
@@ -950,6 +1004,96 @@ export default function ChatScreen() {
     [authUser],
   );
 
+  // Deleted on a single tap before, with nothing to undo it.
+  const confirmDeleteSession = useCallback(
+    (session: SavedChatSession) => {
+      Alert.alert("Delete saved chat?", `"${session.title}" will be removed.`, [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            if (!authUser) return;
+            deleteChatSession(authUser.uid, session.id).catch(
+              logger.catchAsync("chat_session_delete"),
+            );
+          },
+        },
+      ]);
+    },
+    [authUser],
+  );
+
+  // ─── Export ────────────────────────────────────────────────────────────────
+
+  // The open thread as an export, or null while nothing in it has been
+  // answered — which is also what hides the header button. Card names come
+  // off the same derived draws the screen shows, so the export names the cards
+  // the model actually read.
+  const threadExport = useMemo(() => {
+    const cards = new Map<string, string[]>();
+    tarotDraws.forEach((draw, id) =>
+      cards.set(
+        id,
+        draw.map((c) => (c.reversed ? `${c.name} (reversed)` : c.name)),
+      ),
+    );
+    return exportableFromThread(messages, cards);
+  }, [messages, tarotDraws]);
+
+  const birthDetails = useMemo(() => formatBirthDetails(userDoc), [userDoc]);
+
+  useEffect(() => {
+    let cancelled = false;
+    hasSeenExportTip().then((seen) => {
+      if (!cancelled) setExportTipSeen(seen);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const dismissExportTip = useCallback(() => {
+    setExportTipSeen(true);
+    markExportTipSeen();
+  }, []);
+
+  const openThreadExport = useCallback(() => {
+    if (!threadExport) return;
+    if (exportTipSeen === false) dismissExportTip();
+    setExportTarget({ chat: threadExport, source: "chat" });
+  }, [threadExport, exportTipSeen, dismissExportTip]);
+
+  const openSessionExport = useCallback((session: SavedChatSession) => {
+    const chat = exportableFromSession(session);
+    if (!chat) {
+      Alert.alert("Nothing to export", "This chat has no replies yet.");
+      return;
+    }
+    setExportTarget({ chat, source: "history" });
+  }, []);
+
+  // Centre of the Export icon, measured from the right of the header row:
+  // the bar's padding, then New chat, the gap, and half of Export itself.
+  const headerIconSize = moderateScale(30);
+  const exportAnchorFromRight =
+    scale(5) + headerIconSize + HEADER_ICON_GAP + headerIconSize / 2;
+
+  // One instance, mounted inside whichever modal is on top. iOS won't present
+  // a modal from a sibling of one that is already showing, so from the history
+  // list it has to live inside the history modal.
+  const exportSheet = (
+    <ChatExportSheet
+      visible={!!exportTarget}
+      chat={exportTarget?.chat ?? null}
+      birthDetails={birthDetails}
+      source={exportTarget?.source ?? "chat"}
+      onClose={() => setExportTarget(null)}
+    />
+  );
+
+  useReplyAnnouncements(messages, tarotDraws, revealedDraws);
+
   // The same five rotating prompts back both the empty-state list and the
   // scrolling panel above the input once a conversation is under way.
   const visibleSuggestions = useMemo(() => {
@@ -977,6 +1121,10 @@ export default function ChatScreen() {
       onPress={handleClearConnection}
       activeOpacity={0.7}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      accessibilityRole="button"
+      // Tapping clears it — "Talking about X" alone reads as a status, not an action
+      accessibilityLabel={`Talking about ${selectedConnection.name}`}
+      accessibilityHint="Stops talking about this connection"
     >
       <Ionicons name="person-circle-outline" size={14} color={C.purpleLight} />
       <Text style={styles.contextChipText}>
@@ -990,6 +1138,10 @@ export default function ChatScreen() {
       onPress={() => setPickerOpen(true)}
       activeOpacity={0.7}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      accessibilityRole="button"
+      // Icon-plus-text buttons on this screen are named outright: the icon glyph
+      // otherwise joins the derived label as an empty part (", Add a Connection").
+      accessibilityLabel="Add a Connection"
     >
       <Ionicons name="add" size={14} color={C.muted} />
       <Text style={styles.contextChipAddText}>Add a Connection</Text>
@@ -1004,8 +1156,13 @@ export default function ChatScreen() {
         title="Chat"
         leftIconName="time-outline"
         onLeftPress={() => setShowHistory(true)}
+        leftAccessibilityLabel="Chat history"
+        rightSecondaryIconName={threadExport ? "share-outline" : undefined}
+        onRightSecondaryPress={openThreadExport}
+        rightSecondaryAccessibilityLabel="Export chat"
         rightIconName="add"
         onRightPress={handleNewChat}
+        rightAccessibilityLabel="New chat"
       />
 
       <PaygateOverlay
@@ -1034,20 +1191,34 @@ export default function ChatScreen() {
                   <TouchableOpacity
                     onPress={() => setViewingSession(null)}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Back to chat history"
                   >
                     <Ionicons name="arrow-back" size={24} color={C.white} />
                   </TouchableOpacity>
                   <Text
                     style={[styles.historyTitle, { flex: 1, marginLeft: S.sm }]}
                     numberOfLines={1}
+                    accessibilityRole="header"
                   >
                     {viewingSession.title}
                   </Text>
+                  <TouchableOpacity
+                    onPress={() => openSessionExport(viewingSession)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={{ marginRight: S.md }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Export chat"
+                  >
+                    <Ionicons name="share-outline" size={22} color={C.white} />
+                  </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => handleResumeSession(viewingSession)}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     style={styles.resumeButton}
                     activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel="Resume"
                   >
                     <Ionicons name="play" size={16} color={C.white} />
                     <Text style={styles.resumeButtonText}>Resume</Text>
@@ -1059,6 +1230,8 @@ export default function ChatScreen() {
                     }}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     style={{ marginLeft: S.sm }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close chat history"
                   >
                     <Ionicons name="close" size={24} color={C.white} />
                   </TouchableOpacity>
@@ -1074,6 +1247,8 @@ export default function ChatScreen() {
                       </Text>
                       <View
                         style={[styles.userBubble, { alignSelf: "flex-end" }]}
+                        accessible
+                        accessibilityLabel={`You: ${m.userMessage}`}
                       >
                         <Text style={styles.userBubbleText}>
                           {m.userMessage}
@@ -1082,6 +1257,8 @@ export default function ChatScreen() {
                       {m.response ? (
                         <View
                           style={[styles.aiBubble, { alignSelf: "flex-start" }]}
+                          accessible
+                          accessibilityLabel={`Delaluna: ${plainRichText(m.response)}`}
                         >
                           <Text style={styles.aiBubbleText}>
                             {renderRichText(m.response)}
@@ -1095,10 +1272,14 @@ export default function ChatScreen() {
             ) : (
               <>
                 <View style={styles.historyHeader}>
-                  <Text style={styles.historyTitle}>Chat History</Text>
+                  <Text style={styles.historyTitle} accessibilityRole="header">
+                    Chat History
+                  </Text>
                   <TouchableOpacity
                     onPress={() => setShowHistory(false)}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close chat history"
                   >
                     <Ionicons name="close" size={24} color={C.white} />
                   </TouchableOpacity>
@@ -1108,49 +1289,73 @@ export default function ChatScreen() {
                     <Text style={styles.historyEmptyText}>
                       No saved chats yet.
                     </Text>
+                    <Text style={styles.historyNote}>{HISTORY_RETENTION_NOTE}</Text>
                   </View>
                 ) : (
                   <ScrollView
                     contentContainerStyle={styles.historyList}
                     showsVerticalScrollIndicator={false}
                   >
+                    <Text style={styles.historyNote}>{HISTORY_RETENTION_NOTE}</Text>
                     {savedSessions.map((session) => (
-                      <TouchableOpacity
-                        key={session.id}
-                        style={styles.sessionRow}
-                        onPress={() => setViewingSession(session)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.sessionInfo}>
+                      // Siblings, not nested: inside the row's own touchable the
+                      // delete button was swallowed into one VoiceOver element and
+                      // could not be reached.
+                      <View key={session.id} style={styles.sessionRow}>
+                        <TouchableOpacity
+                          style={styles.sessionInfo}
+                          onPress={() => setViewingSession(session)}
+                          activeOpacity={0.7}
+                          accessibilityRole="button"
+                        >
                           <Text style={styles.sessionTitle} numberOfLines={1}>
                             {session.title}
                           </Text>
                           <Text style={styles.sessionDate}>
                             {session.savedAt.toLocaleDateString()} ·{" "}
-                            {session.messages.length} message
-                            {session.messages.length !== 1 ? "s" : ""}
+                            {messageCountLabel(
+                              countChatMessages(session.messages),
+                            )}
                           </Text>
-                        </View>
+                          {chatExpiryLabel(session) ? (
+                            <Text style={styles.sessionExpiry}>
+                              {chatExpiryLabel(session)}
+                            </Text>
+                          ) : null}
+                        </TouchableOpacity>
                         <TouchableOpacity
-                          onPress={() =>
-                            authUser &&
-                            deleteChatSession(authUser.uid, session.id)
-                          }
-                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          onPress={() => openSessionExport(session)}
+                          hitSlop={{ top: 12, bottom: 12, left: 12, right: 8 }}
+                          style={styles.sessionAction}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Export ${session.title}`}
                         >
                           <Ionicons
-                            name="trash-outline"
-                            size={18}
+                            name="share-outline"
+                            size={20}
                             color={C.muted}
                           />
                         </TouchableOpacity>
-                      </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => confirmDeleteSession(session)}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Delete ${session.title}`}
+                        >
+                          <Ionicons
+                            name="trash-outline"
+                            size={20}
+                            color={C.muted}
+                          />
+                        </TouchableOpacity>
+                      </View>
                     ))}
                   </ScrollView>
                 )}
               </>
             )}
           </View>
+          {showHistory ? exportSheet : null}
         </Modal>
 
         <KeyboardAvoidingView style={styles.flex} behavior="padding">
@@ -1191,6 +1396,7 @@ export default function ChatScreen() {
                     style={styles.modeTab}
                     activeOpacity={0.8}
                     accessibilityRole="tab"
+                    accessibilityLabel={m === "astrology" ? "Astrology" : "Tarot"}
                     accessibilityState={{ selected: mode === m }}
                   >
                     <Ionicons
@@ -1228,6 +1434,7 @@ export default function ChatScreen() {
                     style={styles.suggestionChip}
                     onPress={() => handleSuggestionPress(q)}
                     activeOpacity={0.7}
+                    accessibilityRole="button"
                   >
                     <Text style={styles.suggestionText}>{q}</Text>
                   </TouchableOpacity>
@@ -1253,6 +1460,7 @@ export default function ChatScreen() {
                           <ChatTarotDraw
                             cardNumber={draw.map((c) => c.id)}
                             reversed={draw.map((c) => c.reversed)}
+                            names={draw.map((c) => c.name)}
                             alreadyRevealed={revealed}
                             onDrawComplete={() => handleDrawComplete(item.id)}
                           />
@@ -1295,6 +1503,9 @@ export default function ChatScreen() {
                     style={styles.quickChip}
                     onPress={() => handleSuggestionPress(q)}
                     activeOpacity={0.7}
+                    accessibilityRole="button"
+                    // The visible text is cut to one line; the name shouldn't be
+                    accessibilityLabel={q}
                   >
                     <Text style={styles.quickChipText} numberOfLines={1}>
                       {q}
@@ -1308,6 +1519,7 @@ export default function ChatScreen() {
                 style={styles.textInput}
                 value={inputText}
                 onChangeText={setInputText}
+                accessibilityLabel="Message Delaluna"
                 placeholder="Ask Delaluna anything..."
                 placeholderTextColor={C.muted}
                 multiline
@@ -1324,6 +1536,12 @@ export default function ChatScreen() {
                 onPress={() => handleSend()}
                 disabled={sendDisabled}
                 activeOpacity={0.7}
+                // Icon-only — without a name this, the screen's main action, was read as nothing
+                accessibilityRole="button"
+                accessibilityLabel={isSending ? "Sending" : "Send"}
+                accessibilityState={{ disabled: sendDisabled, busy: isSending }}
+                // Grows the 40pt circle to a 48pt touch target without moving the layout.
+                hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
               >
                 {isSending ? (
                   <ActivityIndicator size="small" color={C.white} />
@@ -1356,6 +1574,8 @@ export default function ChatScreen() {
           if (isDevMode) setMockExtraQuestions((n) => n + quantity);
         }}
         onRefresh={refreshRevenueCat}
+        // Only dev builds may grant a pack without a real purchase
+        allowMock={isDevMode}
       />
 
       <Modal
@@ -1366,7 +1586,9 @@ export default function ChatScreen() {
       >
         <View style={styles.chooserOverlay}>
           <View style={styles.chooserCard}>
-            <Text style={styles.chooserTitle}>How should Delaluna answer?</Text>
+            <Text style={styles.chooserTitle} accessibilityRole="header">
+              How should Delaluna answer?
+            </Text>
             <Text style={styles.chooserQuestion}>{pendingInitial}</Text>
 
             {CHAT_MODES.map((m) => (
@@ -1375,6 +1597,13 @@ export default function ChatScreen() {
                 style={styles.chooserOption}
                 onPress={() => handleChooseInitialMode(m)}
                 activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={m === "astrology" ? "Astrology" : "Tarot"}
+                accessibilityHint={
+                  m === "astrology"
+                    ? "Read from your chart and the current transits"
+                    : "Pull a card and read the question from it"
+                }
               >
                 <Ionicons
                   name={
@@ -1400,6 +1629,7 @@ export default function ChatScreen() {
               style={styles.chooserCancel}
               onPress={() => setPendingInitial(null)}
               activeOpacity={0.7}
+              accessibilityRole="button"
             >
               <Text style={styles.chooserCancelText}>Not now</Text>
             </TouchableOpacity>
@@ -1413,6 +1643,16 @@ export default function ChatScreen() {
         onClose={() => setPickerOpen(false)}
         onSelect={handleSelectConnection}
       />
+
+      {showHistory ? null : exportSheet}
+
+      {threadExport && exportTipSeen === false && !exportTarget && isFocused ? (
+        <ExportTip
+          top={headerHeight}
+          anchorFromRight={exportAnchorFromRight}
+          onDismiss={dismissExportTip}
+        />
+      ) : null}
     </ThemedView>
   );
 }
@@ -1610,7 +1850,7 @@ const styles = StyleSheet.create({
   modeTrack: {
     flexDirection: "row",
     alignItems: "stretch",
-    height: 52,
+    minHeight: 52, // grows with the text size; the thumb stretches with it
     padding: MODE_TRACK_PADDING,
     borderRadius: R.lg,
     backgroundColor: C.white + "0A",
@@ -1782,6 +2022,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: S.lg,
   },
   historyEmptyText: {
     color: C.muted,
@@ -1812,6 +2053,21 @@ const styles = StyleSheet.create({
   sessionInfo: {
     flex: 1,
     marginRight: S.sm,
+  },
+  sessionExpiry: {
+    color: C.turquoise,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  historyNote: {
+    color: C.muted,
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: "center",
+    marginTop: S.sm,
+  },
+  sessionAction: {
+    marginRight: S.md + 4,
   },
   sessionTitle: {
     color: C.white,

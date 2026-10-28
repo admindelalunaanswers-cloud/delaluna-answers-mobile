@@ -1,6 +1,7 @@
 import React from "react";
 
-import { View, Text, StyleSheet } from "react-native";
+import { View, StyleSheet } from "react-native";
+import { Text } from "@/src/components/app-text";
 
 import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
 import { renderRichText } from "@/src/utils/rich-text";
@@ -30,7 +31,8 @@ export default function MoonView({
 
       <View style={styles.detailsContainer}>
         {phaseName && (
-            <Text style={styles.textPhase}>{sign} {phaseName}, {illumination}°</Text>
+            // Illumination is a percentage (astroEngine: 0–100 %); this showed "°", which VoiceOver read as degrees
+            <Text style={styles.textPhase}>{sign} {phaseName}, {illumination}%</Text>
           
         )}
 

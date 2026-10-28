@@ -1,15 +1,35 @@
 import React from "react";
-import { Pressable, Text, StyleSheet, ViewStyle, TextStyle } from "react-native";
+import { Pressable, StyleSheet, ViewStyle, TextStyle } from "react-native";
+import { Text } from "@/src/components/app-text";
 import { LinearGradient } from "expo-linear-gradient";
 import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
 
 interface GlassButtonProps {
   title: string;
   onPress: () => void;
+  /**
+   * Real disabled state, announced to screen readers. Callers used to fake it
+   * with a wrapping `opacity` + `pointerEvents="none"`, which VoiceOver still
+   * read as an active button that did nothing.
+   */
+  disabled?: boolean;
+  /** An action is in flight. */
+  busy?: boolean;
+  /** Spoken name, when the visible title alone is not it. */
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 }
 
-export const GlassButton: React.FC<GlassButtonProps> = ({ title, onPress }) => (
-  <Pressable onPress={onPress} style={styles.pressable}>
+export const GlassButton: React.FC<GlassButtonProps> = ({ title, onPress, disabled = false, busy = false, accessibilityLabel, accessibilityHint }) => (
+  <Pressable
+    onPress={onPress}
+    disabled={disabled}
+    style={[styles.pressable, disabled && styles.disabled]}
+    accessibilityRole="button"
+    accessibilityLabel={accessibilityLabel}
+    accessibilityHint={accessibilityHint}
+    accessibilityState={{ disabled, busy }}
+  >
     <LinearGradient
       colors={["rgba(255,255,255,0.5)", "rgba(255,255,255,0.07)"]}
       locations={[0.0115, 0.9891]}
@@ -24,6 +44,7 @@ export const GlassButton: React.FC<GlassButtonProps> = ({ title, onPress }) => (
 
 const styles = StyleSheet.create<{
   pressable: ViewStyle;
+  disabled: ViewStyle;
   gradient: ViewStyle;
   text: TextStyle;
 }>({
@@ -31,9 +52,15 @@ const styles = StyleSheet.create<{
     alignItems: "center",
     justifyContent: "center",
   },
+  disabled: {
+    opacity: 0.5,
+  },
   gradient: {
-    width: scale(200),
-    height: verticalScale(50),
+    // min, not fixed: the label clipped at large text sizes
+    minWidth: scale(200),
+    minHeight: verticalScale(50),
+    paddingHorizontal: scale(20),
+    paddingVertical: verticalScale(8),
     borderRadius: scale(25),
     alignItems: "center",
     justifyContent: "center",
