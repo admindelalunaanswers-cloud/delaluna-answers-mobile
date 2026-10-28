@@ -1,0 +1,29 @@
+# Test builds: every push to `preview` (a merged release PR) builds both
+# platforms against the test backend (EAS environment `preview` →
+# delaluna-answers-test). Internal distribution, so testers install from the
+# build page; nothing goes to a store. Also runnable by hand:
+#   npx eas-cli workflow:run .eas/workflows/build-preview.yml
+
+name: Build preview (test)
+
+on:
+  push:
+    branches: ['preview']
+  workflow_dispatch: {}
+
+jobs:
+  build_android:
+    name: Build Android (preview)
+    type: build
+    params:
+      platform: android
+      profile: preview
+      message: ${{ github.commit_message }}
+
+  build_ios:
+    name: Build iOS (preview)
+    type: build
+    params:
+      platform: ios
+      profile: preview
+      message: ${{ github.commit_message }}
