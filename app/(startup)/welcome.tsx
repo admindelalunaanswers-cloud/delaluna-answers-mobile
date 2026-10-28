@@ -11,7 +11,6 @@ import {
 import PrimaryButton from "@/src/assets/buttons/primary-button-component";
 import { useReducedMotion } from "@/src/context/accessibility-context";
 import SecondaryButton from "@/src/assets/buttons/secondary-button-component";
-import { ButtonText } from "@/src/components/typography/button-text";
 import { scale, verticalScale } from "@/src/utils/responsive";
 
 export default function Welcome() {
@@ -54,13 +53,13 @@ export default function Welcome() {
       <View style={styles.bottomContainer}>
         <PrimaryButton title="Get Started" onPress={handleGetStarted} />
 
-        <ButtonText>
-          <SecondaryButton
-            title="Already a member?"
-            linkString="Log In"
-            onPress={() => router.replace("/login")}
-          />
-        </ButtonText>
+        {/* Not inside a <Text>: a touchable nested in text becomes an inline
+            attachment VoiceOver can't reach. */}
+        <SecondaryButton
+          title="Already a member?"
+          linkString="Log In"
+          onPress={() => router.replace("/login")}
+        />
       </View>
     </ImageBackground>
   );
