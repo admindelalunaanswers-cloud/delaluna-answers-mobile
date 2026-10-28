@@ -22,6 +22,7 @@ export default function PrimaryButton({ title, onPress, style, ...rest }: Props)
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.85}
+      accessibilityRole="button"
       style={[styles.wrapper, style]}
       {...rest}
     >
