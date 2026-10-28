@@ -500,6 +500,8 @@ export default function ConnectionViewScreen() {
                 onPress={handleTalkToDelaluna}
                 activeOpacity={0.85}
                 accessibilityRole="button"
+                // Named outright: the icon glyph otherwise leads the label with ", ".
+                accessibilityLabel="Talk to Delaluna About It"
               >
                 <Ionicons
                   name="chatbubble-ellipses-outline"

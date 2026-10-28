@@ -1139,6 +1139,9 @@ export default function ChatScreen() {
       activeOpacity={0.7}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       accessibilityRole="button"
+      // Icon-plus-text buttons on this screen are named outright: the icon glyph
+      // otherwise joins the derived label as an empty part (", Add a Connection").
+      accessibilityLabel="Add a Connection"
     >
       <Ionicons name="add" size={14} color={C.muted} />
       <Text style={styles.contextChipAddText}>Add a Connection</Text>
@@ -1215,6 +1218,7 @@ export default function ChatScreen() {
                     style={styles.resumeButton}
                     activeOpacity={0.7}
                     accessibilityRole="button"
+                    accessibilityLabel="Resume"
                   >
                     <Ionicons name="play" size={16} color={C.white} />
                     <Text style={styles.resumeButtonText}>Resume</Text>
@@ -1392,6 +1396,7 @@ export default function ChatScreen() {
                     style={styles.modeTab}
                     activeOpacity={0.8}
                     accessibilityRole="tab"
+                    accessibilityLabel={m === "astrology" ? "Astrology" : "Tarot"}
                     accessibilityState={{ selected: mode === m }}
                   >
                     <Ionicons
@@ -1593,6 +1598,12 @@ export default function ChatScreen() {
                 onPress={() => handleChooseInitialMode(m)}
                 activeOpacity={0.8}
                 accessibilityRole="button"
+                accessibilityLabel={m === "astrology" ? "Astrology" : "Tarot"}
+                accessibilityHint={
+                  m === "astrology"
+                    ? "Read from your chart and the current transits"
+                    : "Pull a card and read the question from it"
+                }
               >
                 <Ionicons
                   name={
