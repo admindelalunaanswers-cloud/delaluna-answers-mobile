@@ -9,9 +9,10 @@ import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as StoreReview from "expo-store-review";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -91,6 +92,18 @@ export default function FeedbackScreen() {
   const [comment, setComment] = useState("");
   const [allowFollowUp, setAllowFollowUp] = useState(true);
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
+
+  // The comment box is the only field and sits near the bottom, so the
+  // ScrollView never brought it up on its own: it opened under the keyboard.
+  // Scrolling to the end once the keyboard is up shows it with Send below.
+  const scrollRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    const sub = Keyboard.addListener("keyboardDidShow", () => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    });
+    // Optional: jest.setup.js mocks NativeEventEmitter, so there it's undefined.
+    return () => sub?.remove();
+  }, []);
 
   const toggle = (
     arr: string[],
@@ -303,12 +316,12 @@ export default function FeedbackScreen() {
         leftIconName="chevron-back-outline"
         onLeftPress={() => router.back()}
       />
-      <KeyboardAvoidingView
-        behavior="padding"
-        style={s.flex}
-        keyboardVerticalOffset={insets.top + scale(NAV_BAR_HEIGHT)}
-      >
+      {/* No keyboardVerticalOffset: the header is absolutely positioned, so
+          this view already starts at the top of the screen. Offsetting by the
+          header height left that much of the form under the keyboard. */}
+      <KeyboardAvoidingView behavior="padding" style={s.flex}>
         <ScrollView
+          ref={scrollRef}
           style={[s.scroll, { marginTop: insets.top + scale(NAV_BAR_HEIGHT) }]}
           contentContainerStyle={s.content}
           keyboardShouldPersistTaps="handled"
