@@ -1,10 +1,11 @@
 module.exports = {
-  preset: 'react-native',
+  preset: '@react-native/jest-preset',
   testEnvironment: 'node',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {
       tsconfig: {
+        rootDir: __dirname,
         jsx: 'react',
         esModuleInterop: true,
       },

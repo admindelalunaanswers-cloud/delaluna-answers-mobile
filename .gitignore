@@ -50,6 +50,7 @@ dataconnect/.dataconnect/
 
 # local env files
 .env
+.env.backup
 .env*.local
 
 # Firebase extension secrets (contain API keys — never commit)

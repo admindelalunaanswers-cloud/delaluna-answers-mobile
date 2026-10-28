@@ -90,14 +90,13 @@ module.exports = {
       googleServicesFile: USES_TEST_BACKEND
         ? "./firebase/test/GoogleService-Info.plist"
         : "./GoogleService-Info.plist",
-      deploymentTarget: "15.1",
+      deploymentTarget: "16.4",
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         UIBackgroundModes: ["remote-notification"],
       },
     },
     android: {
-      edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
       adaptiveIcon: {
         foregroundImage: "./src/assets/images/android-icon-foreground.png",
@@ -143,26 +142,37 @@ module.exports = {
           android: {
             // Google Play has required API 36 for new uploads since 2026-08-31;
             // API 35 no longer accepts an update at all. 36 is also what Expo
-            // SDK 54 / React Native 0.81 default to, so this block only pins
+            // SDK 57 / React Native 0.86 default to, so this block only pins
             // what it needs to and does not hold the project a level behind.
             //
             // The Android 16 behaviour changes that apply at this target are
-            // already handled: edge-to-edge is enforced with no opt-out and
-            // `android.edgeToEdgeEnabled` is on; orientation and resizability
+            // already handled: edge-to-edge is enforced with no opt-out (the
+            // `android.edgeToEdgeEnabled` flag is gone as of SDK 57 — setting
+            // it is now a prebuild error); orientation and resizability
             // restrictions are ignored at >= 600dp, which is exactly what
             // withAndroidLargeScreenSupport and src/hooks/use-portrait-lock.ts
             // were written for; and predictive back stays off via
             // `android.predictiveBackGestureEnabled`, whose
             // `android:enableOnBackInvokedCallback="false"` is still honoured
             // at API 36 (it stops being honoured at API 37).
+            //
+            // AGP matches the version React Native itself builds with
+            // (`agp` in node_modules/react-native/gradle/libs.versions.toml).
+            // Re-check it on every React Native upgrade.
             compileSdkVersion: 36,
             targetSdkVersion: 36,
-            AGPVersion: "8.10.2",
+            AGPVersion: "8.12.0",
           },
           ios: {
-            deploymentTarget: "15.1",
+            deploymentTarget: "16.4",
             useFrameworks: "static",
             buildReactNativeFromSource: true,
+            // The iOS 27 SDK (Xcode 27) refuses to launch an app that hasn't
+            // adopted the UIScene life cycle. This moves React Native startup
+            // into Expo's `ExpoAppSceneDelegate` and adds the scene manifest.
+            // Needs expo >= 57.0.23; SDK 58's template does it natively, so
+            // delete this line on that upgrade.
+            enableSceneSupport: true,
           },
         },
       ],
