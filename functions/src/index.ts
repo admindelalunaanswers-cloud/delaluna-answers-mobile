@@ -2628,6 +2628,27 @@ const GENERATION_MODERATED_FEATURE: Record<string, string> = {
   generateSynastryReading: "connections",
 };
 
+/**
+ * One-time exemptions from the daily limit for a re-request we made ourselves
+ * (scripts/regenerate-incomplete.js repairing a generation that failed). The
+ * user never asked for it, so it must not spend their allowance.
+ *
+ * The exemption cannot live on the generated document: the client writes those,
+ * so any flag there could be forged into unlimited generations. Instead the
+ * script writes `generationGrants/{sha256(doc path)}` holding the path and the
+ * exact `requestedAt` it stamped, in the same batch as the re-request. Clients
+ * cannot write this top-level collection (only admins match the catch-all, and
+ * admins are exempt anyway). A grant counts only for that path *and* that
+ * stamp, and is deleted when it is used, so it covers exactly one generation.
+ * A moderation block still applies.
+ */
+const GENERATION_GRANTS = "generationGrants";
+
+// Mirrored in scripts/regenerate-incomplete.js — keep the two in step.
+function generationGrantId(docPath: string): string {
+  return createHash("sha256").update(docPath).digest("hex");
+}
+
 /** Admins are exempt from generation limits, as they are from chat metering. */
 async function isAdminUid(uid: string): Promise<boolean> {
   try {
@@ -2738,9 +2759,24 @@ async function runAnchoredGeneration(opts: {
       blocked = features.includes(moderatedAs);
     }
 
+    // A repair we triggered (see GENERATION_GRANTS) is neither limited nor
+    // counted. It must match this document and this exact request.
+    const grantRef = db
+      .collection(GENERATION_GRANTS)
+      .doc(generationGrantId(opts.ref.path));
+    const grant = (await tx.get(grantRef)).data();
+    const granted =
+      grant?.path === opts.ref.path &&
+      stamp !== "" &&
+      String(grant?.requestedAtMillis) === stamp;
+    if (granted) tx.delete(grantRef);
+
     // The admin lookup is an Auth call, so it is made only once a request
     // would otherwise be refused rather than on every generation.
-    if ((blocked || used >= limit) && !(await isAdminUid(opts.uid))) {
+    if (
+      (blocked || (!granted && used >= limit)) &&
+      !(await isAdminUid(opts.uid))
+    ) {
       refused = blocked ? "blocked" : "daily limit";
       // Stamping the hash marks this request as answered, so the ERROR write
       // re-fires the trigger, matches, and stops like any other write-back.
@@ -2758,15 +2794,18 @@ async function runAnchoredGeneration(opts: {
 
     // Counted when the request is claimed, not when it succeeds: a failed
     // generation still spent a Gemini call, and the limits are loose enough
-    // that a legitimate retry will not run into them.
-    tx.set(
-      usageRef,
-      {
-        [opts.label]: FieldValue.increment(1),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
+    // that a legitimate retry will not run into them. A granted repair is not
+    // the user's request, so it is not counted.
+    if (!granted) {
+      tx.set(
+        usageRef,
+        {
+          [opts.label]: FieldValue.increment(1),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
 
     tx.update(opts.ref, {
       requestHash,
