@@ -311,11 +311,11 @@ export async function generateJson(
 export function describeGenerationError(err: unknown): string {
   if (!(err instanceof Error)) return "Generation failed";
   const e = err as Error & { statusCode?: number; body?: unknown };
-  const body =
-    typeof e.body === "string" && e.body && !e.message.includes(e.body)
-      ? ` | status=${e.statusCode ?? "?"} body=${e.body}`
-      : "";
-  return `${e.name}: ${e.message}${body}`.replace(/\s+/g, " ").slice(0, 400);
+  const status =
+    typeof e.statusCode === "number" ? ` | status=${e.statusCode}` : "";
+  return `${e.name}: ${e.message}${status}`
+    .replace(/\s+/g, " ")
+    .slice(0, 400);
 }
 
 /**
