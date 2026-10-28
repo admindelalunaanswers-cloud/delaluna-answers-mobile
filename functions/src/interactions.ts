@@ -181,6 +181,22 @@ export interface GenerateJsonOptions {
   previousInteractionId?: string;
 }
 
+/**
+ * The model stopped before finishing — in practice, a repetition loop that ran
+ * into `max_output_tokens`. Its own class so a caller can retry this failure
+ * and nothing else: a loop is a sampling accident and usually does not recur
+ * on a second attempt, whereas an API error or an empty reply will.
+ */
+export class IncompleteGenerationError extends Error {
+  constructor(status: string, chars: number) {
+    super(
+      `Generation did not complete (status: ${status}, ${chars} chars) — ` +
+        "output was truncated or the model stopped early",
+    );
+    this.name = "IncompleteGenerationError";
+  }
+}
+
 /** What a generation produced, plus the id that makes it chainable. */
 export interface GeneratedJson {
   text: string;
@@ -285,10 +301,7 @@ export async function generateJson(
   // 193,633 characters, the word "Amen" 741 times, cut off at the cap. Without
   // this check that would have been written to Firestore as a valid response.
   if (status !== "completed") {
-    throw new Error(
-      `Generation did not complete (status: ${status}, ${text.length} chars) — ` +
-        "output was truncated or the model stopped early",
-    );
+    throw new IncompleteGenerationError(status, text.length);
   }
 
   return { text, interactionId: interaction.id, model };
@@ -557,7 +570,24 @@ export const NATAL_BREAKDOWN_SCHEMA: Record<string, unknown> = {
       },
     },
   },
-  required: ["houses"],
+  // Everything the birth chart screen reads. With only `houses` required the
+  // model was free to drop the rest and did: from the 2026-09-09 migration
+  // until 2026-10-25, breakdowns came back as houses, planets, quote and one
+  // ~3,000-char `warning`, so the Insights tab rendered nothing at all.
+  required: [
+    "quote",
+    "personalitySnapshot",
+    "loveRead",
+    "careerRead",
+    "growthRead",
+    "advice",
+    "warning",
+    "affirmation",
+    "release",
+    "houses",
+    "planets",
+    "aspects",
+  ],
 };
 
 /**
