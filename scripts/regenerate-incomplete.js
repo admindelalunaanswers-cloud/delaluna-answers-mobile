@@ -45,10 +45,13 @@
  * `parseConnectionCompatibility` path completes the connection when the new
  * `response` lands.
  *
- * Each regeneration counts against that user's daily limit for the feature
- * (`GENERATION_DAILY_LIMITS`, 10–30 per day). A user with more failures than
- * that in one run gets "Daily limit reached" on the rest — run again tomorrow,
- * or use --limit.
+ * A repair does not count against the user's daily limit. With each re-request
+ * the script writes a one-time grant, `generationGrants/{sha256(doc path)}`,
+ * holding the path and the exact `requestedAt` it stamped, in the same batch.
+ * `runAnchoredGeneration` skips the limit and the count for a request that
+ * matches a grant, and deletes the grant (see GENERATION_GRANTS in
+ * functions/src/index.ts). Clients cannot write that collection, so the grant
+ * cannot be forged. A moderation block still applies.
  *
  * Deploy the functions first. Against the old breakdown function, a re-request
  * is one more attempt at the same 32k cap with no retry.
@@ -86,6 +89,7 @@
  *   --credentials <path> | --adc                      see regenerate-user.js
  */
 
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
@@ -98,6 +102,11 @@ const PROJECTS = {
   test: "delaluna-answers-test",
   prod: "delaluna-answers",
 };
+
+/** Grant id for a document: mirrors generationGrantId in functions/src/index.ts. */
+function generationGrantId(docPath) {
+  return crypto.createHash("sha256").update(docPath).digest("hex");
+}
 
 /** The phrase both wordings of the incomplete-generation error contain. */
 const INCOMPLETE = /did not complete/;
@@ -441,10 +450,21 @@ async function main() {
   // ── 3. Re-request ──
   console.log("\n  ── Re-requesting ──");
   for (const f of ready) {
-    await f.ref.update({
-      requestedAt: FieldValue.serverTimestamp(),
+    // An explicit stamp rather than serverTimestamp, so the grant can carry the
+    // exact value the function will hash. One batch, so the trigger never sees
+    // the re-request without its grant.
+    const requestedAt = Timestamp.now();
+    const batch = db.batch();
+    batch.set(db.collection("generationGrants").doc(generationGrantId(f.ref.path)), {
+      path: f.ref.path,
+      requestedAtMillis: requestedAt.toMillis(),
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    batch.update(f.ref, {
+      requestedAt,
       status: FieldValue.delete(),
     });
+    await batch.commit();
     console.log(`  → ${f.name.padEnd(10)} ${shortPath(f.ref.path)}`);
   }
 
