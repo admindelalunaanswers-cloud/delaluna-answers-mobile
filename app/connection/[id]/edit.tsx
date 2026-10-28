@@ -547,7 +547,10 @@ export default function EditConnectionScreen() {
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior="padding"
-          keyboardVerticalOffset={insets.bottom + 40}
+          // This view starts below the header (marginTop above), so offset by
+          // exactly that. insets.bottom + 40 fell ~35pt short and left Save and
+          // Delete under the keyboard even scrolled to the end.
+          keyboardVerticalOffset={headerHeight}
         >
           <FlatList
             ref={flatListRef}
