@@ -284,6 +284,22 @@ async function productionPurchases() {
     (await sendAs(await meteredUser('sandbox-pro', 2, premiumBackedBy(SANDBOX)))) === exhausted);
   check('a paid subscription makes the user premium',
     (await sendAs(await meteredUser('paid-pro', 2, premiumBackedBy(PAID)))) === 'ok');
+
+  // The App Store review login (REVIEW_ACCOUNT_UIDS) buys with sandbox, so its
+  // purchases must still count; everyone else's stay refused.
+  const reviewPack = await meteredUser('review-pack', 5, credit(SANDBOX));
+  const reviewPro = await meteredUser('review-pro', 2, premiumBackedBy(SANDBOX));
+  const otherPack = await meteredUser('not-review-pack', 5, credit(SANDBOX));
+  process.env.REVIEW_ACCOUNT_UIDS = ` ${reviewPack}, ${reviewPro} `;
+  try {
+    check('the review account\'s sandbox chat pack is counted', (await sendAs(reviewPack)) === 'ok');
+    check('the review account\'s sandbox subscription makes it premium',
+      (await sendAs(reviewPro)) === 'ok');
+    check('another user\'s sandbox chat pack is still not counted',
+      (await sendAs(otherPack)) === exhausted);
+  } finally {
+    delete process.env.REVIEW_ACCOUNT_UIDS;
+  }
 }
 
 async function perfLogLimits() {

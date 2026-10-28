@@ -1,7 +1,7 @@
 import { createHash, randomInt } from "crypto";
 import * as admin from "firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { defineSecret, projectID } from "firebase-functions/params";
+import { defineSecret, defineString, projectID } from "firebase-functions/params";
 import {
   onDocumentCreated,
   onDocumentUpdated,
@@ -904,8 +904,25 @@ function jitterHour(uid: string, salt: string): number {
  */
 const PRODUCTION_PROJECT_ID = "delaluna-answers";
 
-function honoursUnpaidPurchases(): boolean {
-  return projectID.value() !== PRODUCTION_PROJECT_ID;
+// Accounts whose sandbox purchases still count in production: the App Store
+// review login. Apple reviews against the production backend with sandbox
+// purchases, so without this a reviewer's chat pack shows in the app and is then
+// refused by the server, which reads as a broken purchase. Uids, not emails,
+// because both callers already have the uid. Set per project in
+// functions/.env.<project id>; empty unless set, so nothing changes by default.
+// A plain comma-separated string rather than defineList, whose runtime value is
+// JSON-parsed: a malformed entry would throw instead of matching nobody.
+const reviewAccountUids = defineString("REVIEW_ACCOUNT_UIDS", { default: "" });
+
+function isReviewAccount(uid: string): boolean {
+  return reviewAccountUids
+    .value()
+    .split(",")
+    .some((entry) => entry.trim() === uid);
+}
+
+function honoursUnpaidPurchases(uid: string): boolean {
+  return projectID.value() !== PRODUCTION_PROJECT_ID || isReviewAccount(uid);
 }
 
 /**
@@ -948,7 +965,7 @@ async function isUserPremium(uid: string): Promise<boolean> {
       data?.entitlements?.[PREMIUM_ENTITLEMENT_ID];
     if (!ent) return false;
 
-    if (!honoursUnpaidPurchases()) {
+    if (!honoursUnpaidPurchases(uid)) {
       const subscriber = data?.subscriber ?? data;
       const productId = ent.product_identifier ?? ent.productIdentifier;
       const subscription = subscriber?.subscriptions?.[productId];
@@ -1822,7 +1839,7 @@ async function purchasedChatCredits(uid: string): Promise<number> {
 
     // Sandbox and Test Store packs cost nothing; production doesn't count them.
     // See PRODUCTION_PROJECT_ID.
-    const countUnpaid = honoursUnpaidPurchases();
+    const countUnpaid = honoursUnpaidPurchases(uid);
 
     let total = 0;
     for (const [productId, purchases] of Object.entries(nonSubs)) {
