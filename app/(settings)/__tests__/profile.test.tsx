@@ -146,6 +146,17 @@ describe('ProfileScreen', () => {
     }
   });
 
+  // The icon is a font glyph, so on iOS it joined the derived label as an
+  // empty part: ", Edit Profile". The mocked icon renders nothing, so check
+  // the label is set outright rather than derived.
+  it('names the icon buttons outright', () => {
+    render(<ProfileScreen />);
+
+    for (const name of ['Edit Profile', 'Change Theme']) {
+      expect(screen.getByRole('button', { name })).toHaveProp('accessibilityLabel', name);
+    }
+  });
+
   // While working, the text was replaced by a spinner, leaving it nameless.
   it('keeps the delete confirmation button named while it works', async () => {
     let finish!: () => void;

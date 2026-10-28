@@ -309,6 +309,9 @@ export default function ProfileScreen() {
           <TouchableOpacity
             style={ss.actionButton}
             accessibilityRole="button"
+            // Named outright: the icon glyph joins the derived label as an empty
+            // part, which read as ", Edit Profile".
+            accessibilityLabel="Edit Profile"
             onPress={() => router.push("/(settings)/edit-profile")}
             activeOpacity={0.8}
           >
@@ -319,6 +322,7 @@ export default function ProfileScreen() {
           <TouchableOpacity
             style={ss.actionButton}
             accessibilityRole="button"
+            accessibilityLabel="Change Theme"
             onPress={() => router.push("/(settings)/update-theme.screen")}
             activeOpacity={0.8}
           >

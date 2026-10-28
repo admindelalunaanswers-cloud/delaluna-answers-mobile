@@ -259,6 +259,19 @@ describe('ChatScreen', () => {
     expect(screen.getByRole('button', { name: 'New chat' })).toBeTruthy();
   });
 
+  // Icon glyphs joined the derived label on iOS as an empty part (", Tarot"),
+  // and the mocked icon renders nothing, so check the label is set outright.
+  it('names the icon-and-text controls outright', async () => {
+    await renderChat();
+
+    expect(screen.getByRole('tab', { name: 'Astrology' })).toHaveProp('accessibilityLabel', 'Astrology');
+    expect(screen.getByRole('tab', { name: 'Tarot' })).toHaveProp('accessibilityLabel', 'Tarot');
+    expect(screen.getByRole('button', { name: 'Add a Connection' })).toHaveProp(
+      'accessibilityLabel',
+      'Add a Connection',
+    );
+  });
+
   describe('export', () => {
     // Nothing answered yet means nothing to export — a button that opened an
     // empty sheet would be a dead end.
