@@ -1,13 +1,13 @@
 import React from "react";
 import {
   TouchableOpacity,
-  Text,
   StyleSheet,
   TouchableOpacityProps,
   ViewStyle,
   TextStyle,
   StyleProp,
 } from "react-native";
+import { Text } from "@/src/components/app-text";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
@@ -22,6 +22,7 @@ export default function PrimaryButton({ title, onPress, style, ...rest }: Props)
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.85}
+      accessibilityRole="button"
       style={[styles.wrapper, style]}
       {...rest}
     >
@@ -57,17 +58,20 @@ const styles = StyleSheet.create<{
 }>({
   wrapper: {
     width: scale(327),
-    height: verticalScale(54),
+    // min, not fixed: the label grows with the device and in-app text size.
+    minHeight: verticalScale(54),
     borderRadius: scale(40),
   },
   border: {
-    flex: 1,
+    // flexGrow, not flex: 1 — flex's zero basis would size the button by its
+    // minHeight alone and let a larger label overflow it.
+    flexGrow: 1,
     borderRadius: scale(40),
     padding: StyleSheet.hairlineWidth,
     overflow: "hidden",
   },
   glass: {
-    flex: 1,
+    flexGrow: 1,
     borderRadius: scale(40),
     paddingVertical: verticalScale(12),
     paddingHorizontal: scale(16),

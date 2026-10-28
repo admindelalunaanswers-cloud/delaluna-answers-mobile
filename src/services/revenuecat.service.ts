@@ -18,9 +18,16 @@ import { logger } from "@/src/utils/logger";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-/** RevenueCat public SDK key — test key for dev, platform-specific production key from EAS env */
-const API_KEY = __DEV__
-  ? ((Constants.expoConfig?.extra?.REVENUECAT_TST_API_KEY as string) ?? "")
+/**
+ * RevenueCat public SDK key — the Test Store key for dev, the platform key otherwise.
+ *
+ * app.config.js only ships the Test Store key to test-backend builds, so a dev build
+ * pointed at production has none and falls through to the platform key.
+ */
+const TEST_STORE_KEY =
+  (Constants.expoConfig?.extra?.REVENUECAT_TST_API_KEY as string | undefined) ?? "";
+const API_KEY = __DEV__ && TEST_STORE_KEY
+  ? TEST_STORE_KEY
   : (Platform.select({
       ios: Constants.expoConfig?.extra?.REVENUECAT_AAS_API_KEY as string,
       android: Constants.expoConfig?.extra?.REVENUECAT_GPS_API_KEY as string,

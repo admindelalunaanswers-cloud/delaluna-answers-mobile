@@ -49,7 +49,7 @@ import * as admin from "firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 import { generateWithAnchor } from "./anchor";
-import { CHAT_CONTEXT } from "./interactions";
+import { CHAT_CONTEXT, describeGenerationError } from "./interactions";
 
 /** One replayed turn, in the shape the Interactions API takes as input. */
 type Step = { type: string; content: { type: "text"; text: string }[] };
@@ -161,9 +161,7 @@ export async function runChatGeneration(
       model,
     });
   } catch (err) {
-    const reason = (
-      err instanceof Error ? `${err.name}: ${err.message}` : "Generation failed"
-    ).slice(0, 200);
+    const reason = describeGenerationError(err);
 
     console.error(`[generateChatMessage] Generation failed — ${reason}`);
 

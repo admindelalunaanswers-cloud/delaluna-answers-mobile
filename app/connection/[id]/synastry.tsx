@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AccessibilityInfo,
   ScrollView,
   StyleSheet,
-  Text,
   View,
   useWindowDimensions,
 } from "react-native";
+import { Text } from "@/src/components/app-text";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -45,12 +46,23 @@ function pad(n: number) {
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
-function AspectRow({ a }: { a: Aspect }) {
+/**
+ * "Luna's Sun trine Sol's Venus, harmonious, orb 2 degrees 5 minutes". The row
+ * otherwise read as up to seven fragments, and two of its meanings were colour
+ * alone: the aspect's tone, and which planet is whose (purple / gold).
+ */
+export function aspectLabel(a: Aspect, nameA: string, nameB: string): string {
+  const orbDeg = Math.floor(a.orb);
+  const orbMin = Math.floor((a.orb % 1) * 60);
+  return `${nameA}'s ${a.planet1} ${a.type} ${nameB}'s ${a.planet2}, ${a.nature}, orb ${orbDeg} degrees ${orbMin} minutes`;
+}
+
+function AspectRow({ a, nameA, nameB }: { a: Aspect; nameA: string; nameB: string }) {
   const color = ASPECT_COLORS[a.nature] ?? C.muted;
   const orbDeg = Math.floor(a.orb);
   const orbMin = Math.floor((a.orb % 1) * 60);
   return (
-    <View style={styles.aspectRow}>
+    <View style={styles.aspectRow} accessible accessibilityLabel={aspectLabel(a, nameA, nameB)}>
       <View style={styles.aspectSide}>
         <Text style={[styles.aspectPSym, { color: C.purpleLight }]}>
           {a.symbol1}
@@ -82,7 +94,7 @@ function AspectRow({ a }: { a: Aspect }) {
 
 function NamesRow({ nameA, nameB }: { nameA: string; nameB: string }) {
   return (
-    <View style={styles.namesRow}>
+    <View style={styles.namesRow} accessible accessibilityRole="header" accessibilityLabel={`${nameA} and ${nameB}`}>
       <Text
         style={[styles.nameText, { color: C.purpleLight }]}
         numberOfLines={1}
@@ -116,13 +128,16 @@ function ReadingSection({
 }) {
   return (
     <View style={styles.readingCard}>
-      <Text style={styles.readingLabel}>{label}</Text>
+      <Text style={styles.readingLabel} accessibilityRole="header">{label}</Text>
       {body ? (
         <Animated.View entering={FadeIn.duration(450)}>
           <Text style={styles.readingBody}>{renderRichText(body)}</Text>
         </Animated.View>
       ) : loading ? (
-        <SkeletonLines lines={4} />
+        // Blank shapes to a screen reader otherwise
+        <View accessible accessibilityLabel="Loading">
+          <SkeletonLines lines={4} />
+        </View>
       ) : (
         <Text style={styles.readingPlaceholder}>Reading unavailable.</Text>
       )}
@@ -150,6 +165,11 @@ export default function SynastryAnalysisScreen() {
 
   const [reading, setReading] = useState<SynastryReadingResult | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  // A fresh reading is generated on first view and lands by snapshot, with
+  // focus elsewhere. Announced from the subscription below, which only exists
+  // when no saved reading did — so a saved one is never announced. Once: the
+  // document can update again after it first lands.
+  const announcedReading = useRef(false);
   const unsubRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -185,6 +205,10 @@ export default function SynastryAnalysisScreen() {
         unsubRef.current = subscribeToSynastryReading(uid, connectionId, (r) => {
           setReading(r);
           setLoading(false);
+          if (!announcedReading.current) {
+            announcedReading.current = true;
+            AccessibilityInfo.announceForAccessibility("Synastry reading ready.");
+          }
         });
       } catch (err) {
         logger.error("[synastry] failed to load reading", err, "synastry_load");
@@ -232,7 +256,17 @@ export default function SynastryAnalysisScreen() {
           <Animated.View entering={FadeIn.duration(350)}>
             <NamesRow nameA={nameA} nameB={nameB} />
 
-            <View style={styles.wheelWrap}>
+            {/* SVG — nothing for a screen reader without a summary */}
+            <View
+              style={styles.wheelWrap}
+              accessible
+              accessibilityRole="image"
+              accessibilityLabel={`Synastry chart wheel comparing ${nameA}, in purple, and ${nameB}, in gold. ${
+                topAspects.length > 0
+                  ? `The ${topAspects.length === 1 ? "key aspect is" : `${topAspects.length} key aspects are`} listed below.`
+                  : "No major aspects found."
+              }`}
+            >
               <SynastryWheel
                 chartA={chartA}
                 chartB={chartB}
@@ -254,12 +288,14 @@ export default function SynastryAnalysisScreen() {
           </Animated.View>
 
           <Animated.View entering={FadeIn.duration(400).delay(150)} style={styles.aspectsSection}>
-            <Text style={styles.aspectsTitle}>KEY ASPECT</Text>
+            <Text style={styles.aspectsTitle} accessibilityRole="header">KEY ASPECT</Text>
             <View style={styles.aspectsList}>
               {topAspects.length === 0 ? (
                 <Text style={styles.aspectsEmpty}>No major aspects found.</Text>
               ) : (
-                topAspects.map((a, i) => <AspectRow key={`${a.planet1}-${a.planet2}-${i}`} a={a} />)
+                topAspects.map((a, i) => (
+                  <AspectRow key={`${a.planet1}-${a.planet2}-${i}`} a={a} nameA={nameA} nameB={nameB} />
+                ))
               )}
             </View>
           </Animated.View>
@@ -377,7 +413,7 @@ const styles = StyleSheet.create({
     paddingVertical: verticalScale(4),
   },
   aspectsEmpty: {
-    color: "rgba(255,255,255,0.5)",
+    color: "rgba(255,255,255,0.7)", // was 0.5
     fontSize: moderateScale(12),
     textAlign: "center",
     paddingVertical: verticalScale(14),
@@ -465,12 +501,12 @@ const styles = StyleSheet.create({
     gap: scale(10),
   },
   readingLoadingText: {
-    color: "rgba(255,255,255,0.55)",
+    color: "rgba(255,255,255,0.7)", // was 0.55
     fontSize: moderateScale(12),
     fontStyle: "italic",
   },
   readingPlaceholder: {
-    color: "rgba(255,255,255,0.35)",
+    color: "rgba(255,255,255,0.65)", // was 0.35
     fontSize: moderateScale(12),
     fontStyle: "italic",
   },

@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from "react";
 
 import {
+  AccessibilityInfo,
   Image,
   ImageSourcePropType,
   Linking,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Text } from "@/src/components/app-text";
 import Animated, {
   Easing,
   interpolate,
@@ -22,7 +23,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { CARD_LINKS } from "@/src/constants/links";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
-import { isOracleCard, tarotCardImageUrl } from "@/src/utils/tarot-image";
+import { isOracleCard, tarotCardImageUrl, tarotCardLabel } from "@/src/utils/tarot-image";
 
 const FLIP_DURATION = 650;
 const STAGGER_MS = 140;
@@ -30,11 +31,14 @@ const STAGGER_MS = 140;
 interface TarotCardProps {
   cardNumber: number[];
   reversed?: boolean[];
+  /** Card names, parallel to cardNumber. The faces are images, so without these a screen-reader user never learns what was drawn. */
+  names?: string[];
   firstView?: boolean;
   onReveal?: () => void;
 }
 
 interface FlipCardProps {
+  label: string;
   backSource: ImageSourcePropType;
   frontUri: string;
   reversed: boolean;
@@ -44,6 +48,7 @@ interface FlipCardProps {
 }
 
 function FlipCard({
+  label,
   backSource,
   frontUri,
   reversed,
@@ -87,7 +92,12 @@ function FlipCard({
   }));
 
   return (
-    <View style={styles.cardSlot}>
+    <View
+      style={styles.cardSlot}
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel={label}
+    >
       <Animated.View style={[styles.face, backStyle]}>
         <Image source={backSource} style={styles.cardImage} />
       </Animated.View>
@@ -101,6 +111,7 @@ function FlipCard({
 export default function TarotCardImageFrame({
   cardNumber,
   reversed = [],
+  names = [],
   firstView = false,
   onReveal,
 }: TarotCardProps) {
@@ -124,6 +135,12 @@ export default function TarotCardImageFrame({
     setAnimate(true);
     setRevealed(true);
     onReveal?.();
+    // The button that had focus disappears with the reveal, so say what landed.
+    if (names.length > 0) {
+      AccessibilityInfo.announceForAccessibility(
+        `Your cards: ${cardNumber.map((_, i) => tarotCardLabel(names[i], !!reversed[i], true, i)).join("; ")}`,
+      );
+    }
   };
 
   const determineCardBack = (num: number): ImageSourcePropType =>
@@ -137,6 +154,7 @@ export default function TarotCardImageFrame({
         {cardNumber.map((num, idx) => (
           <FlipCard
             key={`${num}-${idx}`}
+            label={tarotCardLabel(names[idx], !!reversed[idx], revealed, idx)}
             backSource={determineCardBack(num)}
             frontUri={tarotCardImageUrl(num)}
             reversed={!!reversed[idx]}
@@ -148,19 +166,33 @@ export default function TarotCardImageFrame({
       </View>
 
       {!revealed && (
-        <TouchableOpacity style={styles.revealButton} onPress={handleRevealCards}>
+        <TouchableOpacity
+          style={styles.revealButton}
+          onPress={handleRevealCards}
+          accessibilityRole="button"
+        >
           <Text style={styles.revealButtonText}>Tap to Reveal Cards</Text>
         </TouchableOpacity>
       )}
 
       <View style={styles.linksWrapper}>
-        <TouchableOpacity style={styles.linkContainer} onPress={handleOracleLinkPress}>
+        <TouchableOpacity
+          style={styles.linkContainer}
+          onPress={handleOracleLinkPress}
+          accessibilityRole="link"
+          accessibilityHint="Opens Amazon in your browser"
+        >
           <Ionicons name="cart-outline" size={14} color="#8eeceaff" />
           <Text style={styles.linkText}>Oracle Cards</Text>
           <Ionicons name="open-outline" size={12} color="rgba(255,255,255,0.91)" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.linkContainer} onPress={handleTarotLinkPress}>
+        <TouchableOpacity
+          style={styles.linkContainer}
+          onPress={handleTarotLinkPress}
+          accessibilityRole="link"
+          accessibilityHint="Opens Amazon in your browser"
+        >
           <Ionicons name="cart-outline" size={14} color="#8eeceaff" />
           <Text style={styles.linkText}>Tarot Cards</Text>
           <Ionicons name="open-outline" size={12} color="rgba(255, 255, 255, 0.91)" />

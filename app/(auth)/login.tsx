@@ -7,10 +7,10 @@ import {
   KeyboardAvoidingView,
   ScrollView,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { TextInput } from "@/src/components/app-text";
 
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import { StatusBar } from "expo-status-bar";
+import { AppStatusBar } from "@/src/components/app-status-bar";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc, serverTimestamp } from "firebase/firestore";
 
@@ -46,6 +46,8 @@ try {
   AsyncStorage = { getItem: async () => null, setItem: async () => {} };
 }
 
+const MIN_TARGET = 44;
+
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -58,6 +60,7 @@ export default function Login() {
   const { setThemeKey } = useContext(ThemeContext);
   const insets = useSafeAreaInsets();
 
+  const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
 
   useEffect(() => {
@@ -92,14 +95,18 @@ export default function Login() {
   const handleLogin = async () => {
     if (loading) return;
 
+    // Each alert returns focus to the field that needs fixing once dismissed.
+    const focusEmail = [{ text: "OK", onPress: () => emailRef.current?.focus() }];
+    const focusPassword = [{ text: "OK", onPress: () => passwordRef.current?.focus() }];
+
     if (!email.trim() && !password.trim()) {
-      return Alert.alert("Invalid Login", "Email and password are required.");
+      return Alert.alert("Invalid Login", "Email and password are required.", focusEmail);
     }
     if (!email.trim()) {
-      return Alert.alert("Invalid Login", "Please enter your email.");
+      return Alert.alert("Invalid Login", "Please enter your email.", focusEmail);
     }
     if (!password.trim()) {
-      return Alert.alert("Invalid Login", "Please enter your password.");
+      return Alert.alert("Invalid Login", "Please enter your password.", focusPassword);
     }
 
     try {
@@ -138,7 +145,7 @@ export default function Login() {
       ]);
 
       if (invalidCredCodes.has(e?.code)) {
-        Alert.alert("Login failed", "Incorrect email or password.");
+        Alert.alert("Login failed", "Incorrect email or password.", focusPassword);
       } else {
         Alert.alert("Login failed", e?.message ?? "Login failed.");
       }
@@ -150,7 +157,7 @@ export default function Login() {
 
   return (
     <>
-      <StatusBar style="light" translucent />
+      <AppStatusBar style="light" />
 
       <ImageBackground
         source={require("@/src/assets/start-up/welcome-background.jpg")}
@@ -169,6 +176,9 @@ export default function Login() {
                 source={require("@/src/assets/dlla-branded/delaluna_logo.png")}
                 style={styles.logo}
                 resizeMode="contain"
+                accessible
+                accessibilityRole="header"
+                accessibilityLabel="Delaluna Answers — sign in"
               />
             </View>
 
@@ -180,13 +190,17 @@ export default function Login() {
                   "rgba(0,0,0,0.05)",
                 ]}
                 locations={[0, 0.49, 1]}
-                style={StyleSheet.absoluteFillObject}
+                style={StyleSheet.absoluteFill}
               />
 
               <View style={styles.bodyContainer}>
                 <View style={styles.form}>
                   {/* EMAIL */}
                   <TextInput
+                    ref={emailRef}
+                    accessibilityLabel="Email"
+                    autoComplete="email"
+                    textContentType="emailAddress"
                     placeholder="Email"
                     placeholderTextColor="rgba(255, 255, 255, 0.5)"
                     style={styles.textField}
@@ -204,6 +218,7 @@ export default function Login() {
                   <View style={styles.passwordWrapper}>
                     <TextInput
                       ref={passwordRef}
+                      accessibilityLabel="Password"
                       placeholder="Password"
                       placeholderTextColor="rgba(255, 255, 255, 0.5)"
                       style={[styles.textField, styles.passwordField]}
@@ -217,7 +232,10 @@ export default function Login() {
                     />
                     <TouchableOpacity
                       style={styles.eyeButton}
+                      hitSlop={{ top: 4, bottom: 4, left: 12, right: 12 }}
                       onPress={() => setShowPassword((v) => !v)}
+                      accessibilityRole="button"
+                      accessibilityLabel={showPassword ? "Hide password" : "Show password"}
                     >
                       <Ionicons
                         name={showPassword ? "eye-off" : "eye"}
@@ -230,6 +248,8 @@ export default function Login() {
                   <TouchableOpacity
                     style={styles.forgotPasswordButton}
                     onPress={() => router.replace("/(auth)/forgot-password")}
+                    accessibilityRole="button"
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                   >
                     <ThemedText style={styles.forgotPassword}>
                       Forgot Password?
@@ -241,6 +261,10 @@ export default function Login() {
                   style={[styles.loginButton, loading && { opacity: 0.6 }]}
                   onPress={handleLogin}
                   disabled={loading}
+                  accessibilityRole="button"
+                  // No accessibilityLabel: the visible text is the name, so Voice
+                  // Control's "Tap Login" matches what is on screen.
+                  accessibilityState={{ disabled: loading, busy: loading }}
                 >
                   <ThemedText style={styles.loginButtonText}>
                     {loading ? "Signing in\u2026" : "Login"}
@@ -254,7 +278,7 @@ export default function Login() {
                   }}
                 >
                   <SecondaryButton
-                    title="Not a member? "
+                    title="Not a member?"
                     linkString="Sign up"
                     onPress={() => router.replace("/(auth)/sign-up")}
                   />
@@ -313,7 +337,8 @@ const styles = StyleSheet.create({
     borderColor: "rgba(142,68,173,0.6)",
     marginBottom: verticalScale(15),
     paddingHorizontal: scale(15),
-    height: verticalScale(48),
+    minHeight: verticalScale(48),
+    paddingVertical: verticalScale(12),
     color: "white",
   },
   passwordWrapper: {
@@ -329,6 +354,8 @@ const styles = StyleSheet.create({
     right: scale(15),
     top: 0,
     bottom: 0,
+    minWidth: MIN_TARGET,
+    alignItems: "center",
     justifyContent: "center",
   },
   forgotPassword: {
@@ -338,7 +365,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
     margin: scale(10),
   },
-  forgotPasswordButton: { alignSelf: "flex-end" },
+  forgotPasswordButton: { alignSelf: "flex-end", minHeight: MIN_TARGET, justifyContent: "center" },
   loginButton: {
     width: "80%",
     backgroundColor: "rgba(255,255,255,0.5)",

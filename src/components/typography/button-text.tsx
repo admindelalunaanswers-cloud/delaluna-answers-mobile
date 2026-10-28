@@ -1,5 +1,6 @@
 import React from 'react';
-import { Text, TextStyle } from 'react-native';
+import { TextStyle } from 'react-native';
+import { Text } from '@/src/components/app-text';
 import { moderateScale } from '@/src/utils/responsive';
 
 type ButtonTextProps = {

@@ -3,10 +3,10 @@ import {
   Modal,
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Text } from '@/src/components/app-text';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
@@ -70,12 +70,25 @@ export default function ConnectionPickerSheet({ visible, uid, onClose, onSelect 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <TouchableOpacity style={styles.backdropTouch} activeOpacity={1} onPress={onClose} />
+        {/* Tap-outside-to-close is for touch; to a screen reader it was an empty,
+            unnamed element. Close and the Android back button cover it. */}
+        <TouchableOpacity
+          style={styles.backdropTouch}
+          activeOpacity={1}
+          onPress={onClose}
+          accessible={false}
+          importantForAccessibility="no"
+        />
         <View style={[styles.sheet, { paddingBottom: insets.bottom + S.md }]}>
           <View style={styles.handle} />
           <View style={styles.header}>
-            <Text style={styles.title}>Talk about a connection</Text>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={styles.title} accessibilityRole="header">Talk about a connection</Text>
+            <TouchableOpacity
+              onPress={onClose}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            >
               <Ionicons name="close" size={22} color={C.white} />
             </TouchableOpacity>
           </View>
@@ -86,7 +99,12 @@ export default function ConnectionPickerSheet({ visible, uid, onClose, onSelect 
               <Text style={styles.emptyBody}>
                 Save someone in Connections, then come back to chat about them.
               </Text>
-              <TouchableOpacity style={styles.emptyCta} onPress={handleGoToConnections} activeOpacity={0.8}>
+              <TouchableOpacity
+                style={styles.emptyCta}
+                onPress={handleGoToConnections}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+              >
                 <Text style={styles.emptyCtaText}>Go to Connections</Text>
               </TouchableOpacity>
             </View>
@@ -98,6 +116,7 @@ export default function ConnectionPickerSheet({ visible, uid, onClose, onSelect 
                   style={styles.row}
                   onPress={() => onSelect(c)}
                   activeOpacity={0.75}
+                  accessibilityRole="button"
                 >
                   <View style={styles.rowText}>
                     <Text style={styles.rowName} numberOfLines={1}>{c.name}</Text>
@@ -124,7 +143,7 @@ const styles = StyleSheet.create({
   },
   backdropTouch: { flex: 1 },
   sheet: {
-    backgroundColor: '#15152a',
+    backgroundColor: C.deepSpace,
     borderTopLeftRadius: R.xl,
     borderTopRightRadius: R.xl,
     paddingHorizontal: S.md,

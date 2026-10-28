@@ -18,7 +18,9 @@ export interface UserDoc {
   lastName:           string;
 
   // Birth details
-  birthday:       Timestamp;       // midnight UTC of birth date
+  // "YYYY-MM-DD", as sign-up and Edit Profile write it. This was typed as
+  // Timestamp, which nothing writes; older documents may still hold one.
+  birthday:       string | Timestamp;
   placeOfBirth:     string;          // human-readable city/country
   isPlaceOfBirthUnknown: boolean;
   birthLat:       number;

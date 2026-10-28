@@ -120,9 +120,12 @@ const LEGACY_CHART_HEADER = "The user's natal chart for personalized answers:";
 const LEGACY_CONNECTION_HEADER = "Context on the person they're asking about";
 
 // Recap budget. A restored session can be long; the recap is a memory aid, not
-// a transcript, so replies are trimmed hard and only the tail is kept.
+// a transcript, so only the last few turns are kept and their replies share a
+// fixed budget. Sharing it matters: a flat per-reply cap kept only the opening
+// of a long reply even when it was the only turn restored, so the model could
+// not see, say, the quote it closed on and denied ever giving one.
 const MAX_RECAP_TURNS = 6;
-const MAX_RECAP_REPLY_CHARS = 320;
+const MIN_RECAP_REPLY_CHARS = 320;
 const MAX_RECAP_CHARS = 2500;
 
 /** Matches `prompt` in SendChatMessageSchema — over this the call is rejected. */
@@ -239,14 +242,17 @@ function buildRecap(restored: ContinuityTurn[], visible: ContinuityTurn[]): stri
   // Already covered by an earlier turn, which the extension replays for us.
   if (restored.length <= recappedCount(visible)) return null;
 
+  const kept = restored.slice(-MAX_RECAP_TURNS);
+  const leads = kept.map(turn => `User: ${collapse(turn.userMessage)} → You: `);
+  const overhead = leads.reduce((sum, lead) => sum + lead.length, 0) + ' || '.length * (kept.length - 1);
+  const replyBudget = Math.max(
+    MIN_RECAP_REPLY_CHARS,
+    Math.floor((MAX_RECAP_CHARS - overhead) / kept.length),
+  );
+
   const body = truncate(
-    restored
-      .slice(-MAX_RECAP_TURNS)
-      .map(
-        turn =>
-          `User: ${collapse(turn.userMessage)} → You: ` +
-          truncate(collapse(turn.response ?? ''), MAX_RECAP_REPLY_CHARS),
-      )
+    kept
+      .map((turn, i) => leads[i] + truncate(collapse(turn.response ?? ''), replyBudget))
       .join(' || '),
     MAX_RECAP_CHARS,
   );

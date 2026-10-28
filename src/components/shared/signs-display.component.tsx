@@ -15,6 +15,12 @@ interface HomeSignsDisplayProps {
   birthChartReady?: boolean;
 }
 
+// The sun / moon / arrow icons are the only thing saying which sign is which;
+// without this a screen reader reads "Aries, Leo, Virgo" with no placements.
+export function signLabel(placement: "Sun" | "Moon" | "Rising", sign: string): string {
+  return sign && sign !== "—" ? `${placement} in ${sign}` : `${placement} sign not available yet`;
+}
+
 export default function HomeSignsDisplay({ sun, moon, rising, showViewChart = true, birthChartReady = false }: HomeSignsDisplayProps) {
   const goToBirthchart = () => router.push('/(home)/birth-chart-view');
 
@@ -22,7 +28,7 @@ export default function HomeSignsDisplay({ sun, moon, rising, showViewChart = tr
     <ThemedView style={[styles.container, !showViewChart && { justifyContent: 'center' }]}>
 
       <ThemedView style={{ flexDirection: "row", gap: scale(4), alignItems: "flex-start" }}>
-        <ThemedView style={styles.signItem}>
+        <ThemedView style={styles.signItem} accessible accessibilityLabel={signLabel("Sun", sun)}>
           <Image
             source={require("@/src/assets/main/sun_icon.png")}
             style={[styles.icon]}
@@ -31,7 +37,7 @@ export default function HomeSignsDisplay({ sun, moon, rising, showViewChart = tr
         </ThemedView>
 
         {/* Moon Sign */}
-        <ThemedView style={styles.signItem}>
+        <ThemedView style={styles.signItem} accessible accessibilityLabel={signLabel("Moon", moon)}>
           <Image
             source={require("@/src/assets/main/moon_icon.png")}
             style={styles.icon}
@@ -40,7 +46,7 @@ export default function HomeSignsDisplay({ sun, moon, rising, showViewChart = tr
         </ThemedView>
 
         {/* Rising Sign */}
-        <ThemedView style={styles.signItem}>
+        <ThemedView style={styles.signItem} accessible accessibilityLabel={signLabel("Rising", rising)}>
           <Image
             source={require("@/src/assets/main/arrow_upward_icon.png")}
             style={styles.icon}
@@ -53,7 +59,13 @@ export default function HomeSignsDisplay({ sun, moon, rising, showViewChart = tr
       <ThemedView style={{ flexDirection: "row", gap: scale(5), alignItems: "flex-start", justifyContent: "flex-end" }}>
         {showViewChart && (
         <ThemedView style={styles.chartItem}>
-          <TouchableOpacity onPress={goToBirthchart} disabled={!birthChartReady}>
+          <TouchableOpacity
+            onPress={goToBirthchart}
+            disabled={!birthChartReady}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !birthChartReady, busy: !birthChartReady }}
+            hitSlop={{ top: 14, bottom: 14, left: 10, right: 10 }}
+          >
             <ThemedText style={[styles.birtChartText, !birthChartReady && styles.birtChartTextDisabled]}>
               {birthChartReady ? "View Chart" : "Chart Loading..."}
             </ThemedText>

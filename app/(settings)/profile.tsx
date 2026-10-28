@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from "react";
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   Alert,
   Image,
   Modal,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Text, TextInput } from "@/src/components/app-text";
 
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
@@ -246,7 +246,7 @@ export default function ProfileScreen() {
             { paddingTop: insets.top + scale(NAV_BAR_HEIGHT) },
           ]}
         >
-          <ActivityIndicator size="large" color="#6FFFE9" />
+          <ActivityIndicator size="large" color="#6FFFE9" accessibilityLabel="Loading profile" />
         </View>
       </ThemedView>
     );
@@ -274,6 +274,11 @@ export default function ProfileScreen() {
             style={ss.pencilBadge}
             onPress={() => router.push("/(settings)/select-avatar")}
             activeOpacity={0.8}
+            // Icon-only
+            accessibilityRole="button"
+            accessibilityLabel="Change profile image"
+            // Grows the ~30pt badge to a 44pt touch target without moving the layout.
+            hitSlop={{ top: 7, bottom: 7, left: 7, right: 7 }}
           >
             <Ionicons name="pencil" size={scale(22)} color="#6FFFE9" />
           </TouchableOpacity>
@@ -303,6 +308,10 @@ export default function ProfileScreen() {
         <View style={ss.actionRow}>
           <TouchableOpacity
             style={ss.actionButton}
+            accessibilityRole="button"
+            // Named outright: the icon glyph joins the derived label as an empty
+            // part, which read as ", Edit Profile".
+            accessibilityLabel="Edit Profile"
             onPress={() => router.push("/(settings)/edit-profile")}
             activeOpacity={0.8}
           >
@@ -312,6 +321,8 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             style={ss.actionButton}
+            accessibilityRole="button"
+            accessibilityLabel="Change Theme"
             onPress={() => router.push("/(settings)/update-theme.screen")}
             activeOpacity={0.8}
           >
@@ -324,21 +335,23 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ── Account info card ── */}
+        {/* ── Account info card ──
+            Each detail row is `accessible`, so label and value read as one stop
+            ("First name, Luna") rather than two. */}
         <View style={ss.detailsCard}>
-          <Text style={ss.sectionLabel}>ACCOUNT</Text>
+          <Text style={ss.sectionLabel} accessibilityRole="header">ACCOUNT</Text>
 
-          <View style={ss.detailRow}>
+          <View style={ss.detailRow} accessible>
             <Text style={ss.detailLabel}>First name</Text>
             <Text style={ss.detailValue}>{ud?.firstName ?? "—"}</Text>
           </View>
           <View style={ss.separator} />
-          <View style={ss.detailRow}>
+          <View style={ss.detailRow} accessible>
             <Text style={ss.detailLabel}>Last name</Text>
             <Text style={ss.detailValue}>{ud?.lastName ?? "—"}</Text>
           </View>
           <View style={ss.separator} />
-          <View style={ss.detailRow}>
+          <View style={ss.detailRow} accessible>
             <Text style={ss.detailLabel}>Pronouns</Text>
             <Text
               style={[ss.detailValue, !ud?.pronouns && ss.detailValueMuted]}
@@ -347,7 +360,7 @@ export default function ProfileScreen() {
             </Text>
           </View>
           <View style={ss.separator} />
-          <View style={ss.detailRow}>
+          <View style={ss.detailRow} accessible>
             <Text style={ss.detailLabel}>Email</Text>
             <Text style={ss.detailValue} numberOfLines={1}>
               {ud?.email ?? authUser?.email ?? "—"}
@@ -357,10 +370,14 @@ export default function ProfileScreen() {
           <TouchableOpacity
             style={ss.detailRow}
             disabled={!authUser?.uid}
+            accessibilityRole="button"
+            accessibilityHint="Copies your user ID"
             onPress={async () => {
               if (!authUser?.uid) return;
               await Clipboard.setStringAsync(authUser.uid);
               setUidCopied(true);
+              // The visible "Copied" lasts 1.5s and isn't where focus is
+              AccessibilityInfo.announceForAccessibility("User ID copied");
               setTimeout(() => setUidCopied(false), 1500);
             }}
           >
@@ -375,7 +392,7 @@ export default function ProfileScreen() {
               <TouchableOpacity
                 onPress={() => router.push("/(settings)/purchased-reports")}
               >
-                <View style={ss.detailRow}>
+                <View style={ss.detailRow} accessible>
                   <Text style={ss.detailLabel}>Reports purchased</Text>
                   <Text style={ss.detailValue}>
                     {ud?.purchasedReports ?? "-"}
@@ -389,7 +406,7 @@ export default function ProfileScreen() {
         {/* ── Birth details card ── */}
         <View style={[ss.detailsCard, { marginTop: scale(12) }]}>
           <View style={ss.sectionLabelRow}>
-            <Text style={ss.sectionLabelInner}>BIRTH DETAILS</Text>
+            <Text style={ss.sectionLabelInner} accessibilityRole="header">BIRTH DETAILS</Text>
             {(() => {
               const remaining = Math.max(
                 0,
@@ -410,14 +427,14 @@ export default function ProfileScreen() {
             })()}
           </View>
 
-          <View style={ss.detailRow}>
+          <View style={ss.detailRow} accessible>
             <Text style={ss.detailLabel}>Birthday</Text>
             <Text style={ss.detailValue}>
               {ud?.birthday ? formatDateDisplay(ud.birthday) : "—"}
             </Text>
           </View>
           <View style={ss.separator} />
-          <View style={ss.detailRow}>
+          <View style={ss.detailRow} accessible>
             <Text style={ss.detailLabel}>Birth time</Text>
             <Text
               style={[
@@ -433,7 +450,7 @@ export default function ProfileScreen() {
             </Text>
           </View>
           <View style={ss.separator} />
-          <View style={ss.detailRow}>
+          <View style={ss.detailRow} accessible>
             <Text style={ss.detailLabel}>Birth place</Text>
             <Text
               style={[
@@ -455,6 +472,8 @@ export default function ProfileScreen() {
             onPress={handleEnableNotifications}
             disabled={enablingNotifs}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: enablingNotifs, busy: enablingNotifs }}
           >
             <Ionicons
               name="notifications-outline"
@@ -473,6 +492,7 @@ export default function ProfileScreen() {
             <>
               <TouchableOpacity
                 style={ss.settingsRow}
+                accessibilityRole="button"
                 onPress={() => router.push("/(settings)/admin")}
                 activeOpacity={0.75}
               >
@@ -494,6 +514,7 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             style={ss.settingsRow}
+            accessibilityRole="button"
             onPress={() => router.push("/(settings)/update-password")}
             activeOpacity={0.75}
           >
@@ -508,6 +529,28 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             style={ss.settingsRow}
+            accessibilityRole="button"
+            onPress={() => router.push("/(settings)/accessibility")}
+            activeOpacity={0.75}
+          >
+            <Ionicons
+              name="accessibility-outline"
+              size={scale(18)}
+              color="#ffffff"
+              style={{ marginRight: scale(4) }}
+            />
+            <Text style={ss.rowText}>Accessibility</Text>
+            <Image
+              source={require("@/src/assets/actions/arrow-right-icon.png")}
+              style={ss.rowArrow}
+            />
+          </TouchableOpacity>
+
+          <View style={ss.rowDivider} />
+
+          <TouchableOpacity
+            style={ss.settingsRow}
+            accessibilityRole="button"
             onPress={() => router.push("/(util)/support")}
             activeOpacity={0.75}
           >
@@ -528,6 +571,7 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             style={ss.settingsRow}
+            accessibilityRole="button"
             onPress={() => router.push("/(util)/feedback")}
             activeOpacity={0.75}
           >
@@ -548,6 +592,7 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             style={ss.settingsRow}
+            accessibilityRole="button"
             onPress={handleLogout}
             activeOpacity={0.75}
           >
@@ -568,6 +613,7 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             style={ss.settingsRow}
+            accessibilityRole="button"
             onPress={() => {
               setPolicyModalContent("Terms & Conditions");
               setPolicyModalVisible(true);
@@ -591,6 +637,7 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             style={ss.settingsRow}
+            accessibilityRole="button"
             onPress={() => {
               setPolicyModalContent("Privacy Policy");
               setPolicyModalVisible(true);
@@ -615,6 +662,7 @@ export default function ProfileScreen() {
           style={ss.deleteButton}
           onPress={handleDeleteAccount}
           activeOpacity={0.8}
+          accessibilityRole="button"
         >
           <Ionicons name="trash-outline" size={scale(16)} color={C.white} />
           <Text style={ss.deleteButtonText}>Delete account</Text>
@@ -627,6 +675,7 @@ export default function ProfileScreen() {
             onPress={handleManageSubscription}
             disabled={busy}
             activeOpacity={0.8}
+            accessibilityRole="button"
           >
             <Text style={ss.buttonText}>
               {busy ? "Loading..." : "Manage Subscription"}
@@ -639,6 +688,7 @@ export default function ProfileScreen() {
               onPress={handleUpgrade}
               disabled={busy}
               activeOpacity={0.8}
+              accessibilityRole="button"
             >
               <Text style={ss.buttonText}>
                 {busy ? "Loading..." : "Upgrade to Premium"}
@@ -650,6 +700,7 @@ export default function ProfileScreen() {
               onPress={handleRestore}
               disabled={busy}
               activeOpacity={0.8}
+              accessibilityRole="button"
             >
               <Text style={ss.restoreButtonText}>Restore Purchases</Text>
             </TouchableOpacity>
@@ -684,15 +735,16 @@ export default function ProfileScreen() {
       >
         <View style={ss.reauthOverlay}>
           <View style={ss.reauthCard}>
-            <Text style={ss.reauthTitle}>Delete your account?</Text>
+            <Text style={ss.reauthTitle} accessibilityRole="header">Delete your account?</Text>
             <Text style={ss.reauthBody}>
               This will permanently delete your account and all your data. This
               cannot be undone.{"\n\n"}Enter your password to confirm.
             </Text>
             <TextInput
               style={ss.reauthInput}
+              accessibilityLabel="Password"
               placeholder="Password"
-              placeholderTextColor="rgba(255,255,255,0.4)"
+              placeholderTextColor="rgba(255,255,255,0.6)"
               secureTextEntry
               value={reauthPassword}
               onChangeText={setReauthPassword}
@@ -706,6 +758,7 @@ export default function ProfileScreen() {
                 onPress={() => setShowReauthModal(false)}
                 style={[ss.reauthBtn, ss.reauthBtnGhost]}
                 disabled={reauthLoading}
+                accessibilityRole="button"
               >
                 <Text style={ss.reauthBtnGhostText}>Cancel</Text>
               </TouchableOpacity>
@@ -717,6 +770,10 @@ export default function ProfileScreen() {
                   (reauthLoading || !reauthPassword) && ss.reauthBtnDisabled,
                 ]}
                 disabled={reauthLoading || !reauthPassword}
+                accessibilityRole="button"
+                // While loading the text is replaced by a spinner, which left it nameless
+                accessibilityLabel={reauthLoading ? "Deleting account" : "Delete account"}
+                accessibilityState={{ disabled: reauthLoading || !reauthPassword, busy: reauthLoading }}
               >
                 {reauthLoading ? (
                   <ActivityIndicator size="small" color="#fff" />
@@ -775,7 +832,7 @@ const ss = StyleSheet.create({
     marginTop: verticalScale(8),
   },
   email: {
-    color: "rgba(255,255,255,0.45)",
+    color: "rgba(255,255,255,0.7)", // was 0.45
     fontSize: moderateScale(13),
     marginBottom: verticalScale(4),
   },
@@ -831,7 +888,7 @@ const ss = StyleSheet.create({
     overflow: "hidden",
   },
   sectionLabel: {
-    color: "rgba(255,255,255,0.4)",
+    color: "rgba(255,255,255,0.7)", // was 0.4 at 11pt
     fontSize: moderateScale(11),
     fontWeight: "700",
     letterSpacing: 1.2,
@@ -848,7 +905,7 @@ const ss = StyleSheet.create({
     paddingBottom: verticalScale(10),
   },
   sectionLabelInner: {
-    color: "rgba(255,255,255,0.4)",
+    color: "rgba(255,255,255,0.7)", // was 0.4 at 11pt
     fontSize: moderateScale(11),
     fontWeight: "700",
     letterSpacing: 1.2,
@@ -860,7 +917,7 @@ const ss = StyleSheet.create({
     paddingHorizontal: scale(16),
     paddingVertical: verticalScale(13),
   },
-  detailLabel: { color: "rgba(255,255,255,0.55)", fontSize: moderateScale(14) },
+  detailLabel: { color: "rgba(255,255,255,0.7)", fontSize: moderateScale(14) },
   detailValue: {
     color: "#fff",
     fontSize: moderateScale(14),
@@ -870,7 +927,7 @@ const ss = StyleSheet.create({
     marginLeft: scale(16),
   },
   detailValueMuted: {
-    color: "rgba(255,255,255,0.35)",
+    color: "rgba(255,255,255,0.6)", // was 0.35
     fontStyle: "italic",
     fontWeight: "400",
   },
@@ -880,7 +937,7 @@ const ss = StyleSheet.create({
     marginHorizontal: scale(16),
   },
   changesRemaining: {
-    color: "rgba(111,255,233,0.6)",
+    color: "rgba(111,255,233,0.85)", // was 0.6 at 11pt
     fontSize: moderateScale(11),
     fontWeight: "600",
   },
@@ -927,13 +984,13 @@ const ss = StyleSheet.create({
   buttonText: { color: "#fff", fontSize: moderateScale(14), fontWeight: "600" },
   restoreButton: { marginTop: verticalScale(8) },
   restoreButtonText: {
-    color: "rgba(255,255,255,0.45)",
+    color: "rgba(255,255,255,0.75)", // was 0.45 — a button label
     fontSize: moderateScale(13),
     textAlign: "center",
     textDecorationLine: "underline",
   },
   hint: {
-    color: "rgba(255,255,255,0.3)",
+    color: "rgba(255,255,255,0.6)", // was 0.3
     fontSize: moderateScale(11),
     textAlign: "center",
     marginTop: verticalScale(6),
@@ -1014,7 +1071,7 @@ const ss = StyleSheet.create({
     paddingHorizontal: scale(24),
   },
   reauthCard: {
-    backgroundColor: "#1a1a2e",
+    backgroundColor: C.deepSpace,
     borderRadius: scale(20),
     padding: scale(24),
     borderWidth: 1,

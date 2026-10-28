@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
@@ -10,24 +9,24 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { Text } from '@/src/components/app-text';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import HeaderNav from '@/src/components/shared/header-nav';
+import { C } from '@/src/constants/theme';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
 
 const COLORS = {
-  bg: '#0e0b1a',
-  header: '#110d22',
-  card: '#1a1535',
-  border: '#2a2050',
-  primary: '#7c6fd4',
-  light: '#c8bfff',
-  muted: '#6b5fa8',
-  text: '#ffffff',
-  subText: 'rgba(200,191,255,0.65)',
+  card: 'rgba(255,255,255,0.06)', // translucent so the theme background shows through, as on Profile
+  border: 'rgba(255,255,255,0.1)',
+  light: C.purpleLight,
+  muted: C.purple, // icons and dividers only — too low-contrast for text
+  mutedText: 'rgba(255,255,255,0.7)', // matches Profile; sits on the theme image, not a flat fill
+  text: C.white,
+  subText: 'rgba(255,255,255,0.7)',
   available: '#4ade80',
 };
 
@@ -41,11 +40,13 @@ const TERMS_URL = 'https://delaluna.app/terms';
 const FAQ: { q: string; a: string }[] = [
   {
     q: 'How do I read my birth chart?',
-    a: 'Your birth chart maps where every planet was at the moment you were born. Tap any planet or sign on the wheel to see what it means in your life. Start with the Sun, Moon, and Rising — they form your core trio.',
+    // The wheel has no touch targets — this used to say "tap any planet or sign on the wheel".
+    a: 'Your birth chart maps where every planet was at the moment you were born. Open it with View Chart on Home: the Natal Table lists every placement, and the tabs below explain what each one means for you. Start with the Sun, Moon, and Rising — they form your core trio.',
   },
   {
     q: 'Why is my horoscope the same as yesterday?',
-    a: 'Daily horoscopes refresh once per 24 hours, based on your local time at midnight. If yesterday\'s message still appears, pull to refresh — the new reading should appear within a moment.',
+    // Home has no pull-to-refresh — this used to tell users to pull. A cold start recomputes today's date.
+    a: 'Daily horoscopes refresh once per 24 hours, at midnight in your local time. If yesterday\'s reading still appears, close the app fully and reopen it — the new reading should appear within a moment.',
   },
   {
     q: 'Can I cancel my subscription?',
@@ -65,7 +66,15 @@ type RowProps = {
 
 function ContactRow({ icon, title, subtitle, onPress, iconColor, rightAccessory, loading }: RowProps) {
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.75} style={s.row}>
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.75}
+      style={s.row}
+      accessibilityRole="button"
+      // While loading it was still tappable (a second restore) and the spinner unannounced
+      disabled={loading}
+      accessibilityState={{ disabled: !!loading, busy: !!loading }}
+    >
       <View style={s.rowIconWrap}>
         <Ionicons name={icon} size={moderateScale(20)} color={iconColor ?? COLORS.light} />
       </View>
@@ -74,7 +83,7 @@ function ContactRow({ icon, title, subtitle, onPress, iconColor, rightAccessory,
         {subtitle ? <Text style={s.rowSubtitle}>{subtitle}</Text> : null}
       </View>
       {loading ? (
-        <ActivityIndicator color={COLORS.light} />
+        <ActivityIndicator color={COLORS.light} accessibilityLabel="Working" />
       ) : (
         rightAccessory ?? (
           <Ionicons name="chevron-forward" size={moderateScale(18)} color={COLORS.muted} />
@@ -85,12 +94,13 @@ function ContactRow({ icon, title, subtitle, onPress, iconColor, rightAccessory,
 }
 
 function SectionLabel({ children }: { children: string }) {
-  return <Text style={s.sectionLabel}>{children}</Text>;
+  return <Text style={s.sectionLabel} accessibilityRole="header">{children}</Text>;
 }
 
 function MoonDivider() {
   return (
-    <View style={s.dividerRow}>
+    // Decorative — the ☽ was read aloud between every section
+    <View style={s.dividerRow} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       <View style={s.dividerLine} />
       <Text style={s.dividerMoon}>☽</Text>
       <View style={s.dividerLine} />
@@ -112,14 +122,6 @@ export default function SupportScreen() {
     Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${subject}`).catch(() => {
       Alert.alert('Email unavailable', `Reach us at ${SUPPORT_EMAIL}`);
     });
-  };
-
-  const handleLiveChat = () => {
-    Alert.alert(
-      'Live Chat',
-      'Our team is online. Live chat will open in a moment.',
-      [{ text: 'OK' }]
-    );
   };
 
   const handleRestore = async () => {
@@ -148,7 +150,10 @@ export default function SupportScreen() {
   };
 
   const handleTerms = () => {
-    Linking.openURL(TERMS_URL).catch(() => {});
+    // Swallowed before, so a failure looked like the link doing nothing
+    Linking.openURL(TERMS_URL).catch(() => {
+      Alert.alert('Link unavailable', `You can read them at ${TERMS_URL}`);
+    });
   };
 
   return (
@@ -157,8 +162,6 @@ export default function SupportScreen() {
         title="Support"
         leftIconName="chevron-back-outline"
         onLeftPress={() => router.back()}
-        backgroundColor={COLORS.header}
-        textColor={COLORS.light}
       />
       <ScrollView
         style={[s.scroll, { marginTop: insets.top + scale(NAV_BAR_HEIGHT) }]}
@@ -209,6 +212,9 @@ export default function SupportScreen() {
                   onPress={() => setOpenFaq(open ? null : i)}
                   activeOpacity={0.75}
                   style={s.faqRow}
+                  // Open / closed was only the chevron
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: open }}
                 >
                   <Text style={s.faqQuestion}>{item.q}</Text>
                   <Ionicons
@@ -226,7 +232,12 @@ export default function SupportScreen() {
 
         <View style={s.footer}>
           <Text style={s.footerVersion}>Delaluna · v{appVersion}</Text>
-          <TouchableOpacity onPress={handleTerms}>
+          <TouchableOpacity
+            onPress={handleTerms}
+            accessibilityRole="link"
+            accessibilityHint="Opens in your browser"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
             <Text style={s.footerLink}>Terms & Privacy</Text>
           </TouchableOpacity>
         </View>
@@ -239,12 +250,12 @@ export default function SupportScreen() {
 
 const s = StyleSheet.create({
   flex: { flex: 1 },
-  root: { flex: 1, backgroundColor: COLORS.bg },
+  root: { flex: 1 },
   scroll: { flex: 1 },
   content: { paddingHorizontal: scale(20), paddingTop: verticalScale(20) },
 
   sectionLabel: {
-    color: COLORS.muted,
+    color: COLORS.mutedText,
     fontFamily: FONT,
     fontSize: moderateScale(10),
     fontWeight: '700',
@@ -272,7 +283,7 @@ const s = StyleSheet.create({
     width: scale(36),
     height: scale(36),
     borderRadius: scale(18),
-    backgroundColor: 'rgba(124,111,212,0.18)',
+    backgroundColor: 'rgba(139,111,200,0.18)', // C.purple,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -358,7 +369,7 @@ const s = StyleSheet.create({
     gap: verticalScale(6),
   },
   footerVersion: {
-    color: COLORS.muted,
+    color: COLORS.mutedText,
     fontFamily: FONT,
     fontSize: moderateScale(12),
   },

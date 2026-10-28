@@ -1,12 +1,12 @@
 import React, { useRef, useEffect } from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
   StyleSheet,
   Animated,
   Easing,
 } from 'react-native';
+import { Text } from '@/src/components/app-text';
 
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -103,7 +103,7 @@ export default function AdBanner({
 
               {/* CTA */}
               {ctaLabel ? (
-                <TouchableOpacity style={styles.ctaButton} onPress={onPress} activeOpacity={0.8}>
+                <TouchableOpacity style={styles.ctaButton} onPress={onPress} activeOpacity={0.8} accessibilityRole="button">
                   <LinearGradient
                     colors={[C.gold, C.goldBright]}
                     start={{ x: 0, y: 0 }}
@@ -117,7 +117,13 @@ export default function AdBanner({
 
               {/* Dismiss */}
               {onDismiss ? (
-                <TouchableOpacity style={styles.dismissButton} onPress={onDismiss} hitSlop={8}>
+                <TouchableOpacity
+                  style={styles.dismissButton}
+                  onPress={onDismiss}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Dismiss"
+                >
                   <Ionicons name="close" size={scale(14)} color={C.muted} />
                 </TouchableOpacity>
               ) : null}
@@ -150,7 +156,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(13, 8, 42, 0.94)',
     borderRadius: R.lg - 1,
-    height: BANNER_HEIGHT,
+    // min, not fixed: the title + subtitle clipped at large text sizes
+    minHeight: BANNER_HEIGHT,
+    paddingVertical: S.xs,
     paddingHorizontal: S.sm,
     gap: S.sm,
   },

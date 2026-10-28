@@ -1,6 +1,7 @@
 import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
 import React from "react";
-import { Text, TouchableOpacity, StyleSheet } from "react-native";
+import { TouchableOpacity, StyleSheet } from "react-native";
+import { Text } from "@/src/components/app-text";
 
 interface SecondaryButtonProps {
   title: string;
@@ -18,6 +19,7 @@ const SecondaryButton: React.FC<SecondaryButtonProps> = ({
       activeOpacity={0.8}
       style={styles.button}
       onPress={onPress}
+      accessibilityRole="button"
     >
       <Text style={styles.text}>
         {title}
@@ -30,7 +32,8 @@ const SecondaryButton: React.FC<SecondaryButtonProps> = ({
 const styles = StyleSheet.create({
   button: {
     borderRadius: scale(8),
-    height: verticalScale(50),
+    minHeight: verticalScale(50), // min, not fixed — clipped the label at large text sizes
+    paddingVertical: verticalScale(8),
     paddingHorizontal: scale(20),
     justifyContent: "center",
     alignItems: "center",
@@ -44,7 +47,7 @@ const styles = StyleSheet.create({
   },
   linkText: {
     fontSize: moderateScale(16),
-    color: "#006FFD", // soft turquoise accent (Delaluna palette)
+    color: "#6FFFE9", // soft turquoise accent (Delaluna palette); #006FFD was under 4.5:1 on the dark cards
     fontWeight: "700",
   },
 });

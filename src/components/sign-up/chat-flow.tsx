@@ -2,16 +2,16 @@ import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  AccessibilityInfo,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Text, TextInput } from "@/src/components/app-text";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
@@ -19,6 +19,7 @@ import {
   termsAndConditions,
 } from "@/src/assets/legal/legal-texts";
 import PasswordInput from "@/src/components/shared/password-input";
+import { useAnnounce } from "@/src/hooks/use-announce";
 import PolicyModal from "@/src/components/sign-up/policy-modals";
 import {
   NominatimResult,
@@ -143,6 +144,15 @@ export default function ChatFlow({
 
   const [checkedPolicy, setCheckedPolicy] = useState(false);
   const [checkedTerms, setCheckedTerms] = useState(false);
+  useAnnounce(dateError);
+  useAnnounce(emailError);
+  useAnnounce(passwordError);
+  // Results appear under the field with focus still in it.
+  useAnnounce(
+    locationResults.length > 0
+      ? `${locationResults.length} ${locationResults.length === 1 ? "place" : "places"} found`
+      : null,
+  );
   const [isPolicyModalVisible, setIsPolicyModalVisible] = useState(false);
   const [policyModalContent, setPolicyModalContent] = useState<
     "Privacy Policy" | "Terms & Conditions"
@@ -239,6 +249,10 @@ export default function ChatFlow({
       const t = setTimeout(() => inputRef.current?.focus(), 30);
       return () => clearTimeout(t);
     }
+    // No field to focus (choices, the final step): the Next button that had
+    // focus is gone, so say the new question rather than leave it unspoken.
+    const prompt = QUESTIONS[s.key]?.(answers);
+    if (prompt) AccessibilityInfo.announceForAccessibility(prompt);
   }, [step]);
 
   const currentStep = steps[step];
@@ -595,13 +609,23 @@ export default function ChatFlow({
             const answerDisplay = formatAnswer(s, answers);
             return (
               <View key={i} style={styles.chatPair}>
-                <View style={styles.questionBubble}>
+                {/* Speaker prefixes: bubble side and colour say who is talking,
+                    which a screen reader can't see. */}
+                <View
+                  style={styles.questionBubble}
+                  accessible
+                  accessibilityLabel={`Delaluna: ${QUESTIONS[s.key]?.(answers) ?? ""}`}
+                >
                   <Text style={styles.questionText}>
                     {QUESTIONS[s.key]?.(answers) ?? ""}
                   </Text>
                 </View>
                 {!!answerDisplay && (
-                  <View style={styles.answerBubble}>
+                  <View
+                    style={styles.answerBubble}
+                    accessible
+                    accessibilityLabel={`You: ${answerDisplay}`}
+                  >
                     <Text style={styles.answerText}>{answerDisplay}</Text>
                   </View>
                 )}
@@ -610,7 +634,7 @@ export default function ChatFlow({
           })}
 
           {/* Current question */}
-          <View style={styles.questionBubble}>
+          <View style={styles.questionBubble} accessible accessibilityLabel={`Delaluna: ${question}`}>
             <Text style={styles.questionText}>{question}</Text>
           </View>
         </ScrollView>
@@ -624,7 +648,7 @@ export default function ChatFlow({
         >
           {/* Choices */}
           {inputType === "choices" && choices && (
-            <View style={styles.choicesContainer}>
+            <View style={styles.choicesContainer} accessibilityRole="radiogroup" accessibilityLabel={question}>
               {choices.map((c) => (
                 <TouchableOpacity
                   key={c}
@@ -633,6 +657,9 @@ export default function ChatFlow({
                     answers[currentStep.key] === c && styles.choiceSelected,
                   ]}
                   onPress={() => handleChoice(c)}
+                  // The selection was only a fill
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: answers[currentStep.key] === c }}
                 >
                   <Text style={styles.choiceText}>{c}</Text>
                 </TouchableOpacity>
@@ -673,6 +700,8 @@ export default function ChatFlow({
                     />
                   </View>
                   <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Type it instead"
                     style={styles.iconButton}
                     onPress={() => setPickerVisible(false)}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -685,6 +714,8 @@ export default function ChatFlow({
                     />
                   </TouchableOpacity>
                   <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Next"
                     style={[
                       styles.sendButton,
                       !currentValue.trim() && styles.sendButtonDisabled,
@@ -707,6 +738,8 @@ export default function ChatFlow({
                       style={styles.inputInner}
                       value={currentValue}
                       onChangeText={onDateTextChange}
+                      accessibilityLabel={question}
+                      accessibilityHint={"Format month, day, year"}
                       placeholder="MM/DD/YYYY"
                       placeholderTextColor="rgba(255,255,255,0.4)"
                       keyboardType="numbers-and-punctuation"
@@ -715,6 +748,8 @@ export default function ChatFlow({
                       maxLength={10}
                     />
                     <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel="Choose date from calendar"
                       style={styles.iconButton}
                       onPress={() => {
                         Keyboard.dismiss();
@@ -731,6 +766,8 @@ export default function ChatFlow({
                     </TouchableOpacity>
                   </View>
                   <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Next"
                     style={[
                       styles.sendButton,
                       !currentValue.trim() && styles.sendButtonDisabled,
@@ -799,6 +836,8 @@ export default function ChatFlow({
                     />
                   </View>
                   <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Type it instead"
                     style={styles.iconButton}
                     onPress={() => setPickerVisible(false)}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -811,6 +850,8 @@ export default function ChatFlow({
                     />
                   </TouchableOpacity>
                   <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Next"
                     style={[
                       styles.sendButton,
                       !currentValue.trim() && styles.sendButtonDisabled,
@@ -833,6 +874,8 @@ export default function ChatFlow({
                       style={styles.inputInner}
                       value={currentValue}
                       onChangeText={onTimeTextChange}
+                      accessibilityLabel={question}
+                      accessibilityHint={"Format hour, minutes, A M or P M"}
                       placeholder="H:MM AM/PM"
                       placeholderTextColor="rgba(255,255,255,0.4)"
                       keyboardType="numbers-and-punctuation"
@@ -840,6 +883,8 @@ export default function ChatFlow({
                       onSubmitEditing={handleNext}
                     />
                     <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel="Choose time from picker"
                       style={styles.iconButton}
                       onPress={() => {
                         Keyboard.dismiss();
@@ -856,6 +901,8 @@ export default function ChatFlow({
                     </TouchableOpacity>
                   </View>
                   <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Next"
                     style={[
                       styles.sendButton,
                       !currentValue.trim() && styles.sendButtonDisabled,
@@ -895,6 +942,8 @@ export default function ChatFlow({
               <TouchableOpacity
                 style={[styles.choiceButton, { alignSelf: "center" }]}
                 onPress={handleSkipTime}
+                accessibilityRole="button"
+                accessibilityLabel="I don't know my birth time"
               >
                 <Text style={styles.choiceText}>I don&apos;t know</Text>
               </TouchableOpacity>
@@ -910,6 +959,7 @@ export default function ChatFlow({
                 style={styles.textInput}
                 value={currentValue}
                 onChangeText={setCurrentValue}
+                accessibilityLabel={question}
                 placeholder={placeholder ?? "Type here…"}
                 placeholderTextColor="rgba(255,255,255,0.4)"
                 autoCapitalize="words"
@@ -917,6 +967,8 @@ export default function ChatFlow({
                 onSubmitEditing={handleNext}
               />
               <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Next"
                 style={[
                   styles.sendButton,
                   !currentValue.trim() && styles.sendButtonDisabled,
@@ -944,6 +996,7 @@ export default function ChatFlow({
                     setCurrentValue(t);
                     setPasswordError(null);
                   }}
+                  accessibilityLabel={question}
                   placeholder={placeholder ?? "Password…"}
                   placeholderTextColor="rgba(255,255,255,0.4)"
                   autoCapitalize="none"
@@ -953,6 +1006,8 @@ export default function ChatFlow({
                   onSubmitEditing={handleNext}
                 />
                 <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Next"
                   style={[
                     styles.sendButton,
                     !currentValue.trim() && styles.sendButtonDisabled,
@@ -985,6 +1040,7 @@ export default function ChatFlow({
                     setCurrentValue(t);
                     setEmailError(null);
                   }}
+                  accessibilityLabel={question}
                   placeholder="Email address…"
                   placeholderTextColor="rgba(255,255,255,0.4)"
                   keyboardType="email-address"
@@ -994,6 +1050,8 @@ export default function ChatFlow({
                   onSubmitEditing={handleEmailNext}
                 />
                 <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Next"
                   style={[
                     styles.sendButton,
                     !currentValue.trim() && styles.sendButtonDisabled,
@@ -1023,12 +1081,15 @@ export default function ChatFlow({
                   style={[styles.textInput, styles.locationInput]}
                   value={locationQuery}
                   onChangeText={onLocationChange}
+                  accessibilityLabel={question}
                   placeholder={placeholder ?? "Search city…"}
                   placeholderTextColor="rgba(255,255,255,0.4)"
                   autoCapitalize="words"
                   returnKeyType="search"
                 />
                 <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Next"
                   style={[
                     styles.sendButton,
                     (!selectedLocation ||
@@ -1059,6 +1120,7 @@ export default function ChatFlow({
                       key={r.place_id}
                       style={styles.locationRow}
                       onPress={() => selectLocation(r)}
+                      accessibilityRole="button"
                     >
                       <Text style={styles.locationRowText} numberOfLines={2}>
                         {formatPlace(r)}
@@ -1070,6 +1132,8 @@ export default function ChatFlow({
               <TouchableOpacity
                 style={[styles.choiceButton, { alignSelf: "center" }]}
                 onPress={skipLocation}
+                accessibilityRole="button"
+                accessibilityLabel="I don't know my birth place"
               >
                 <Text style={styles.choiceText}>I don&apos;t know</Text>
               </TouchableOpacity>
@@ -1080,7 +1144,14 @@ export default function ChatFlow({
           {inputType === "final" && (
             <View style={styles.finalArea}>
               <View style={styles.policyRow}>
-                <TouchableOpacity onPress={() => setCheckedTerms((v) => !v)}>
+                <TouchableOpacity
+                  onPress={() => setCheckedTerms((v) => !v)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: checkedTerms }}
+                  accessibilityLabel="I agree to the Terms & Conditions"
+                  // Grows the ~22pt box to a 44pt touch target without moving the layout.
+                  hitSlop={{ top: 11, bottom: 11, left: 11, right: 11 }}
+                >
                   <View
                     style={[
                       styles.policyCheckbox,
@@ -1088,7 +1159,7 @@ export default function ChatFlow({
                     ]}
                   >
                     {checkedTerms && (
-                      <Text style={styles.policyCheckmark}>✓</Text>
+                      <Text style={styles.policyCheckmark} accessible={false}>✓</Text>
                     )}
                   </View>
                 </TouchableOpacity>
@@ -1096,6 +1167,8 @@ export default function ChatFlow({
                   I agree to the{" "}
                   <Text
                     style={styles.policyLink}
+                    accessibilityRole="link"
+                    accessibilityHint="Opens the full text"
                     onPress={() => {
                       setPolicyModalContent("Terms & Conditions");
                       setIsPolicyModalVisible(true);
@@ -1107,7 +1180,14 @@ export default function ChatFlow({
               </View>
 
               <View style={styles.policyRow}>
-                <TouchableOpacity onPress={() => setCheckedPolicy((v) => !v)}>
+                <TouchableOpacity
+                  onPress={() => setCheckedPolicy((v) => !v)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: checkedPolicy }}
+                  accessibilityLabel="I agree to the Privacy Policy"
+                  // Grows the ~22pt box to a 44pt touch target without moving the layout.
+                  hitSlop={{ top: 11, bottom: 11, left: 11, right: 11 }}
+                >
                   <View
                     style={[
                       styles.policyCheckbox,
@@ -1115,7 +1195,7 @@ export default function ChatFlow({
                     ]}
                   >
                     {checkedPolicy && (
-                      <Text style={styles.policyCheckmark}>✓</Text>
+                      <Text style={styles.policyCheckmark} accessible={false}>✓</Text>
                     )}
                   </View>
                 </TouchableOpacity>
@@ -1123,6 +1203,8 @@ export default function ChatFlow({
                   I agree to the{" "}
                   <Text
                     style={styles.policyLink}
+                    accessibilityRole="link"
+                    accessibilityHint="Opens the full text"
                     onPress={() => {
                       setPolicyModalContent("Privacy Policy");
                       setIsPolicyModalVisible(true);
@@ -1141,6 +1223,13 @@ export default function ChatFlow({
                 ]}
                 onPress={handleNext}
                 disabled={!checkedPolicy || !checkedTerms}
+                accessibilityRole="button"
+                // Says why it's disabled, not just that it is
+                accessibilityHint={
+                  !checkedPolicy || !checkedTerms
+                    ? "Agree to the Terms and the Privacy Policy first"
+                    : undefined
+                }
               >
                 <Text style={styles.nextButtonText}>Get Started</Text>
               </TouchableOpacity>
@@ -1264,6 +1353,10 @@ const styles = StyleSheet.create({
   sendButton: {
     width: scale(44),
     height: scale(44),
+    // scale() shrinks below 44pt on screens narrower than 375pt (42pt at 360).
+    // A floor rather than a hitSlop: the neighbouring buttons already have one.
+    minWidth: 44,
+    minHeight: 44,
     borderRadius: scale(22),
     backgroundColor: "rgba(111,255,233,0.15)",
     borderWidth: 1,

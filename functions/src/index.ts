@@ -1,23 +1,32 @@
 import { createHash, randomInt } from "crypto";
 import * as admin from "firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { defineSecret } from "firebase-functions/params";
+import { defineSecret, defineString, projectID } from "firebase-functions/params";
 import {
+  onDocumentCreated,
   onDocumentUpdated,
   onDocumentWritten,
 } from "firebase-functions/v2/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as nodemailer from "nodemailer";
-import { z, ZodError, ZodType } from "zod";
+import { ZodError, ZodType, z } from "zod";
 
 import { generateWithAnchor, invalidateAnchor } from "./anchor";
 import { runChatGeneration } from "./chat-generation";
 import {
-  recentHoroscopeQuotes,
-  withQuoteDirection,
-  withQuotesToAvoid,
-} from "./quote-history";
+  archiveChatTurn,
+  buildSavedSession,
+  savedChatExpireAt,
+} from "./chat-retention";
+import {
+  COMPATIBILITY_SCHEMA,
+  NATAL_BREAKDOWN_SCHEMA,
+  TRANSITS_SCHEMA,
+  describeGenerationError,
+  geminiApiKey,
+  generateJson,
+} from "./interactions";
 import {
   BIRTH_CHART_BODIES,
   CHAT_REPLY_BODIES,
@@ -27,12 +36,10 @@ import {
   pickPushBody,
 } from "./push-copy";
 import {
-  COMPATIBILITY_SCHEMA,
-  NATAL_BREAKDOWN_SCHEMA,
-  TRANSITS_SCHEMA,
-  generateJson,
-  geminiApiKey,
-} from "./interactions";
+  recentHoroscopeQuotes,
+  withQuoteDirection,
+  withQuotesToAvoid,
+} from "./quote-history";
 
 // ─── Secrets (set via: firebase functions:secrets:set EMAIL_USER) ─────────────
 const emailUser = defineSecret("EMAIL_USER");
@@ -312,7 +319,9 @@ function birthDetailsDiffer(
 ): boolean {
   if (!stored || typeof stored !== "object") return false; // nothing to compare against
   const prev = stored as Record<string, unknown>;
-  return BIRTH_DETAIL_FIELDS.some((f) => (prev[f] ?? null) !== (incoming[f] ?? null));
+  return BIRTH_DETAIL_FIELDS.some(
+    (f) => (prev[f] ?? null) !== (incoming[f] ?? null),
+  );
 }
 
 // ─── Chat quota ──────────────────────────────────────────────────────────────
@@ -326,7 +335,7 @@ function birthDetailsDiffer(
 // (see sendChatMessage) so that testing workflow still works without letting a
 // client-side setting relax a server-side limit.
 const FREE_DAILY_CHAT_LIMIT = 2;
-const PREMIUM_DAILY_CHAT_LIMIT = 2;
+const PREMIUM_DAILY_CHAT_LIMIT = 5;
 
 // A chat document with no response older than this is treated as a failed
 // generation, and only then may it be retried. Mirrored (plus a skew buffer)
@@ -442,18 +451,6 @@ export const verifyCode = onCall({ invoker: "public" }, async (request) => {
   const { code } = parseInput(VerifyCodeSchema, request.data);
 
   const otpRef = getOtpDocRef(uid);
-  const snap = await otpRef.get();
-
-  if (!snap.exists) {
-    throw new HttpsError(
-      "not-found",
-      "No verification code found. Please request a new one.",
-    );
-  }
-
-  const data = snap.data()!;
-  const expiresAt: Timestamp = data.expiresAt;
-  const attempts: number = data.attempts ?? 0;
 
   // Bind the code to the mailbox it was actually delivered to. Without this a
   // user could request a code at an address they own, change the account email
@@ -466,44 +463,92 @@ export const verifyCode = onCall({ invoker: "public" }, async (request) => {
   // the ID token is cached for up to an hour, so a token minted before the
   // email change would still carry the old address.
   const authUser = await admin.auth().getUser(uid);
-  const issuedTo = String(data.email ?? "").toLowerCase();
   const currentEmail = (authUser.email ?? "").toLowerCase();
 
-  if (!issuedTo || !currentEmail || issuedTo !== currentEmail) {
-    // The code is dead — it belongs to an address no longer on this account.
-    await otpRef.delete();
-    throw new HttpsError(
-      "failed-precondition",
-      "Your email address changed after this code was sent. Please request a new one.",
-    );
-  }
+  // The check and the attempt it spends happen in one transaction. Read, compare
+  // and increment as separate steps let parallel guesses all read the same
+  // `attempts` and each pass the limit, so the five-guess cap held only for a
+  // caller who waited for each answer. Contended transactions retry, so every
+  // guess now sees the count the previous one left.
+  //
+  // Errors are returned rather than thrown: a throw inside the callback aborts
+  // the transaction, and with it the delete or increment that has to land.
+  type Outcome =
+    | { ok: true }
+    | { ok: false; error: HttpsError };
+  const outcome = await db.runTransaction(async (tx): Promise<Outcome> => {
+    const snap = await tx.get(otpRef);
 
-  if (attempts >= 5) {
-    await otpRef.delete();
-    throw new HttpsError(
-      "resource-exhausted",
-      "Too many attempts. Please request a new code.",
-    );
-  }
+    if (!snap.exists) {
+      return {
+        ok: false,
+        error: new HttpsError(
+          "not-found",
+          "No verification code found. Please request a new one.",
+        ),
+      };
+    }
 
-  if (expiresAt.toMillis() < Date.now()) {
-    await otpRef.delete();
-    throw new HttpsError(
-      "deadline-exceeded",
-      "Code has expired. Please request a new one.",
-    );
-  }
+    const data = snap.data()!;
+    const expiresAt: Timestamp = data.expiresAt;
+    const attempts: number = data.attempts ?? 0;
+    const issuedTo = String(data.email ?? "").toLowerCase();
 
-  if (data.code !== code.toUpperCase()) {
-    await otpRef.update({ attempts: FieldValue.increment(1) });
-    const remaining = 4 - attempts;
-    throw new HttpsError(
-      "invalid-argument",
-      remaining > 0
-        ? `Incorrect code. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.`
-        : "Incorrect code.",
-    );
-  }
+    if (!issuedTo || !currentEmail || issuedTo !== currentEmail) {
+      // The code is dead — it belongs to an address no longer on this account.
+      tx.delete(otpRef);
+      return {
+        ok: false,
+        error: new HttpsError(
+          "failed-precondition",
+          "Your email address changed after this code was sent. Please request a new one.",
+        ),
+      };
+    }
+
+    if (attempts >= 5) {
+      tx.delete(otpRef);
+      return {
+        ok: false,
+        error: new HttpsError(
+          "resource-exhausted",
+          "Too many attempts. Please request a new code.",
+        ),
+      };
+    }
+
+    if (expiresAt.toMillis() < Date.now()) {
+      tx.delete(otpRef);
+      return {
+        ok: false,
+        error: new HttpsError(
+          "deadline-exceeded",
+          "Code has expired. Please request a new one.",
+        ),
+      };
+    }
+
+    if (data.code !== code.toUpperCase()) {
+      tx.update(otpRef, { attempts: attempts + 1 });
+      const remaining = 4 - attempts;
+      return {
+        ok: false,
+        error: new HttpsError(
+          "invalid-argument",
+          remaining > 0
+            ? `Incorrect code. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.`
+            : "Incorrect code.",
+        ),
+      };
+    }
+
+    // Spent here, inside the transaction, so a correct code cannot be redeemed
+    // twice by two parallel calls.
+    tx.delete(otpRef);
+    return { ok: true };
+  });
+
+  if (!outcome.ok) throw outcome.error;
 
   // Code is correct — mark email as verified. `set` with merge (not `update`)
   // so this doesn't throw NOT_FOUND if the users/{uid} doc is ever missing
@@ -514,7 +559,6 @@ export const verifyCode = onCall({ invoker: "public" }, async (request) => {
     .collection("users")
     .doc(uid)
     .set({ isEmailVerified: true }, { merge: true });
-  await otpRef.delete();
 
   return { verified: true };
 });
@@ -635,7 +679,16 @@ interface ExpoPushMessage {
  */
 /**
  * Runs every day at midnight UTC.
- * Deletes all chat messages older than 24 hours across all users.
+ *
+ * Moves every open-thread turn older than 24 hours into the user's saved chat
+ * history, then clears it from the thread. The chat screen still starts fresh
+ * each day and the replay stays short — this used to *delete* those turns
+ * outright, so anything the user hadn't parked with "+" before midnight was
+ * gone, which cannot square with a 60-day access window (chat-retention.ts).
+ *
+ * One saved session per user per night. Turns that never got an answer
+ * (pending past GENERATION_STUCK_MS, or failed) are dropped as before; they
+ * have nothing to read and the archive only holds answered turns anyway.
  */
 export const clearDailyChatHistory = onSchedule("every day 00:00", async () => {
   const cutoff = admin.firestore.Timestamp.fromMillis(
@@ -649,13 +702,99 @@ export const clearDailyChatHistory = onSchedule("every day 00:00", async () => {
 
   if (snap.empty) return;
 
-  const BATCH_SIZE = 500;
-  for (let i = 0; i < snap.docs.length; i += BATCH_SIZE) {
-    const batch = db.batch();
-    snap.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
-    await batch.commit();
+  const byUser = new Map<string, FirebaseFirestore.QueryDocumentSnapshot[]>();
+  for (const d of snap.docs) {
+    const userRef = d.ref.parent.parent;
+    if (!userRef) continue;
+    const list = byUser.get(userRef.id) ?? [];
+    list.push(d);
+    byUser.set(userRef.id, list);
   }
+
+  const BATCH_SIZE = 500;
+  let parked = 0;
+  let failed = 0;
+  for (const [uid, docs] of byUser) {
+    // One user's failure must not strand everyone after them; their turns are
+    // still in the thread and tomorrow's run picks them up again.
+    try {
+      const session = buildSavedSession(
+        docs.map((d) => ({ id: d.id, data: d.data() })),
+      );
+      // The session lands in the same batch as the first deletes, so a run
+      // that dies part way can't leave the turns both saved and still live —
+      // which tomorrow would save a second time.
+      for (let i = 0; i < docs.length; i += BATCH_SIZE - 1) {
+        const batch = db.batch();
+        if (i === 0 && session) {
+          batch.set(
+            db.collection("users").doc(uid).collection("savedChats").doc(),
+            session,
+          );
+        }
+        docs.slice(i, i + BATCH_SIZE - 1).forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+      }
+      if (session) parked++;
+    } catch (err) {
+      failed++;
+      console.error(`[clearDailyChatHistory] park failed for user ${uid}`, err);
+    }
+  }
+  console.info(
+    `[clearDailyChatHistory] parked ${parked} threads, ${failed} failed`,
+  );
 });
+
+// ─── Chat retention ──────────────────────────────────────────────────────────
+
+/**
+ * Copies every answered chat turn into the four-year legal archive
+ * (chat-retention.ts). Fires on the update that writes `response` — a resumed
+ * session's turns are *created* with their response already in place, so they
+ * never reach here and are not archived twice.
+ *
+ * `retry: true` because a missed copy is a hole in a legal record, not a
+ * cosmetic glitch; archiveChatTurn is idempotent, so a redelivery is harmless.
+ */
+export const archiveChatReply = onDocumentUpdated(
+  { document: "users/{userId}/updayedChat/{messageId}", retry: true },
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    if (!after?.response || !after.userMessage) return;
+    if (before?.response === after.response) return;
+
+    await archiveChatTurn(event.params.userId, event.params.messageId, after);
+  },
+);
+
+/**
+ * Stamps `expireAt` on a saved chat that arrived without one — every session a
+ * client saves, since only the server decides when access ends. The TTL policy
+ * on `savedChats.expireAt` (firestore.indexes.json) does the removal.
+ *
+ * Overwrites a client-supplied value too: otherwise a modified client could
+ * keep its history past the window by writing a far-future date.
+ */
+export const stampSavedChatExpiry = onDocumentCreated(
+  "users/{userId}/savedChats/{sessionId}",
+  async (event) => {
+    const snap = event.data;
+    const data = snap?.data();
+    if (!snap || !data) return;
+
+    const expireAt = savedChatExpireAt(data);
+    if (!expireAt) return;
+    if (
+      data.expireAt instanceof Timestamp &&
+      data.expireAt.toMillis() === expireAt.toMillis()
+    ) {
+      return;
+    }
+    await snap.ref.update({ expireAt });
+  },
+);
 
 // Silent midnight rollover hour in user local time. The client treats this as
 // a hint to pre-generate today's horoscope so it's ready by morning.
@@ -681,6 +820,30 @@ const CHAT_FOREGROUND_GRACE_MS = 30_000;
 // AI can take 60-180s. Use a 3-minute window so a user watching the loading
 // screen isn't notified, but one who backgrounded the app is.
 const GENERATION_FOREGROUND_GRACE_MS = 3 * 60 * 1000;
+
+/** Real UTC offsets run from −12:00 (Baker Island) to +14:00 (Kiribati). */
+const MIN_UTC_OFFSET_MINUTES = -12 * 60;
+const MAX_UTC_OFFSET_MINUTES = 14 * 60;
+
+/**
+ * The UTC offset, in minutes, that chat billing uses to name the user's day:
+ * the stored `timezoneOffsetMinutes` when it is a real offset, else 0 (UTC).
+ *
+ * The user writes that field, and every distinct day id is a fresh daily
+ * allowance, so an unchecked value let any user mint new days — and new
+ * questions — at will by writing a new offset. Within the real range the most a
+ * change can do is reach the neighbouring day. Mirrored by `billingOffsetMinutes`
+ * in src/services/chat.service.ts; keep the two in step, or the client watches a
+ * different ledger document than the one being charged.
+ */
+function billingOffsetMinutes(offsetMinutes: unknown): number {
+  return typeof offsetMinutes === "number" &&
+    Number.isInteger(offsetMinutes) &&
+    offsetMinutes >= MIN_UTC_OFFSET_MINUTES &&
+    offsetMinutes <= MAX_UTC_OFFSET_MINUTES
+    ? offsetMinutes
+    : 0;
+}
 
 /**
  * Returns the user's current local hour (0-23) given a UTC offset in minutes.
@@ -728,10 +891,68 @@ function jitterHour(uid: string, salt: string): number {
 }
 
 /**
+ * The Firebase project that must only honour purchases somebody paid for.
+ *
+ * One RevenueCat project (proj4ac9ef9a) serves both Firebase projects, and it
+ * includes a Test Store app, whose purchases are free by design. Its public key
+ * shipped readable in every build until it was gated on the test backend, so
+ * anyone could configure the SDK with it, log in as their own uid and "buy" a
+ * chat pack or a subscription. The same is true of App Store and Play sandbox
+ * purchases, which any TestFlight tester can make against production.
+ *
+ * The test project keeps honouring them: that is how QA buys things.
+ */
+const PRODUCTION_PROJECT_ID = "delaluna-answers";
+
+// Accounts whose sandbox purchases still count in production: the App Store
+// review login. Apple reviews against the production backend with sandbox
+// purchases, so without this a reviewer's chat pack shows in the app and is then
+// refused by the server, which reads as a broken purchase. Uids, not emails,
+// because both callers already have the uid. Set per project in
+// functions/.env.<project id>; empty unless set, so nothing changes by default.
+// A plain comma-separated string rather than defineList, whose runtime value is
+// JSON-parsed: a malformed entry would throw instead of matching nobody.
+const reviewAccountUids = defineString("REVIEW_ACCOUNT_UIDS", { default: "" });
+
+function isReviewAccount(uid: string): boolean {
+  return reviewAccountUids
+    .value()
+    .split(",")
+    .some((entry) => entry.trim() === uid);
+}
+
+function honoursUnpaidPurchases(uid: string): boolean {
+  return projectID.value() !== PRODUCTION_PROJECT_ID || isReviewAccount(uid);
+}
+
+/**
+ * True for a v1 subscriber purchase record (a `non_subscriptions` entry or a
+ * `subscriptions` value) that RevenueCat marks as sandbox or Test Store.
+ *
+ * It denies only what is positively marked unpaid. The mirror's shape has never
+ * been checked against a real record (see CLAUDE.md), so requiring the flags to
+ * be present would zero every paying user's credits if they turned out to be
+ * missing. The flags are written by RevenueCat, not the client, so an attacker
+ * cannot strip them.
+ */
+function isUnpaidPurchase(record: unknown): boolean {
+  if (!record || typeof record !== "object") return false;
+  const { is_sandbox: isSandbox, store } = record as {
+    is_sandbox?: unknown;
+    store?: unknown;
+  };
+  return isSandbox === true || store === "test_store";
+}
+
+/**
  * Server-side premium check. Reads the RevenueCat extension's purchaser-info
  * mirror and returns true if the user has the active "Delaluna Answers Pro"
  * entitlement. Returns false on any error so we never push premium content
  * to non-premium users by mistake.
+ *
+ * In production an entitlement backed only by a sandbox or Test Store purchase
+ * does not count. The v1 entitlement carries no sandbox flag of its own, so it
+ * is read off the purchase its `product_identifier` names.
  */
 async function isUserPremium(uid: string): Promise<boolean> {
   try {
@@ -743,6 +964,22 @@ async function isUserPremium(uid: string): Promise<boolean> {
       data?.subscriber?.entitlements?.[PREMIUM_ENTITLEMENT_ID] ??
       data?.entitlements?.[PREMIUM_ENTITLEMENT_ID];
     if (!ent) return false;
+
+    if (!honoursUnpaidPurchases(uid)) {
+      const subscriber = data?.subscriber ?? data;
+      const productId = ent.product_identifier ?? ent.productIdentifier;
+      const subscription = subscriber?.subscriptions?.[productId];
+      const oneTime = subscriber?.non_subscriptions?.[productId];
+      if (isUnpaidPurchase(subscription)) return false;
+      if (
+        Array.isArray(oneTime) &&
+        oneTime.length > 0 &&
+        oneTime.every(isUnpaidPurchase)
+      ) {
+        return false;
+      }
+    }
+
     const expires = ent.expires_date ?? ent.expiresDate;
     if (!expires) return true; // lifetime / non-subscription purchase
     return new Date(expires).getTime() > Date.now();
@@ -1161,41 +1398,49 @@ async function assertTargetIsNotAdmin(targetUid: string): Promise<void> {
  * state without an Auth lookup per row. It lives in `moderation/`, not on the
  * user document, because that document is delete-able by its owner.
  */
-export const setUserDisabled = onCall({ invoker: "public" }, async (request) => {
-  const input = parseInput(SetUserDisabledSchema, request.data);
-  const adminUid = requireAdminActingOnOther(request, input.targetUid);
-  await assertTargetIsNotAdmin(input.targetUid);
+export const setUserDisabled = onCall(
+  { invoker: "public" },
+  async (request) => {
+    // Before parsing, so a caller who isn't an admin learns nothing about the
+    // input format from validation errors.
+    requireAdminCaller(request);
+    const input = parseInput(SetUserDisabledSchema, request.data);
+    const adminUid = requireAdminActingOnOther(request, input.targetUid);
+    await assertTargetIsNotAdmin(input.targetUid);
 
-  await admin.auth().updateUser(input.targetUid, { disabled: input.disabled });
+    await admin
+      .auth()
+      .updateUser(input.targetUid, { disabled: input.disabled });
 
-  if (input.disabled) {
-    // Order matters: disable first, then revoke. Revoking first would leave a
-    // window where the user could obtain a fresh token from a still-enabled
-    // account and keep it for another hour.
-    await admin.auth().revokeRefreshTokens(input.targetUid);
-  }
+    if (input.disabled) {
+      // Order matters: disable first, then revoke. Revoking first would leave a
+      // window where the user could obtain a fresh token from a still-enabled
+      // account and keep it for another hour.
+      await admin.auth().revokeRefreshTokens(input.targetUid);
+    }
 
-  await db
-    .collection("moderation")
-    .doc(input.targetUid)
-    .set(
-      {
-        disabled: input.disabled,
-        note: input.note ?? "",
-        updatedAt: FieldValue.serverTimestamp(),
-        updatedBy: adminUid,
-      },
-      { merge: true },
+    await db
+      .collection("moderation")
+      .doc(input.targetUid)
+      .set(
+        {
+          disabled: input.disabled,
+          note: input.note ?? "",
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: adminUid,
+        },
+        { merge: true },
+      );
+
+    // Both uids are document keys, not PII. The note is admin free-text and is
+    // deliberately not logged.
+    console.info(
+      `[setUserDisabled] admin=${adminUid} set disabled=${input.disabled} for targetUid=${input.targetUid}`,
     );
 
-  // Both uids are document keys, not PII. The note is admin free-text and is
-  // deliberately not logged.
-  console.info(
-    `[setUserDisabled] admin=${adminUid} set disabled=${input.disabled} for targetUid=${input.targetUid}`,
-  );
-
-  return { success: true, disabled: input.disabled };
-});
+    return { success: true, disabled: input.disabled };
+  },
+);
 
 // ─── setUserFeatureBlocks ────────────────────────────────────────────────────
 
@@ -1215,6 +1460,8 @@ export const setUserDisabled = onCall({ invoker: "public" }, async (request) => 
 export const setUserFeatureBlocks = onCall(
   { invoker: "public" },
   async (request) => {
+    // Before parsing — see setUserDisabled.
+    requireAdminCaller(request);
     const input = parseInput(SetUserFeatureBlocksSchema, request.data);
     const adminUid = requireAdminActingOnOther(request, input.targetUid);
     await assertTargetIsNotAdmin(input.targetUid);
@@ -1275,9 +1522,143 @@ export const deleteConnection = onCall(
       throw new HttpsError("not-found", "Connection not found.");
     }
 
-    await connectionRef.delete();
+    // The document and everything under it. A plain delete() left the
+    // `report` and `synastryReading` subcollections orphaned — still holding
+    // both people's names, birth details and the readings, with no parent
+    // document left to find them by. Safe for the triggers on those paths:
+    // the generators bail when the document no longer exists, and the push
+    // triggers are onDocumentUpdated, which deletes don't fire.
+    await db.recursiveDelete(connectionRef);
 
     return { deleted: true };
+  },
+);
+
+// ─── submitFeedback ───────────────────────────────────────────────────────────
+// Saves in-app feedback to `feedback/{id}` and emails it to the admin inbox.
+//
+// A callable rather than a client write, like sendChatMessage: the input is
+// validated and throttled here, the contact address is read off the Auth record
+// (only with the user's consent), and `feedback` stays server-only in the rules.
+// The email is best-effort — feedback is saved even if the mail fails, and the
+// doc records which happened (`email.status`), so nothing is lost silently.
+
+const FEEDBACK_ADMIN_EMAIL = "admin.delalunaanswers@gmail.com";
+const FEEDBACK_MIN_INTERVAL_MS = 60 * 1000;
+
+const FeedbackOption = z.string().trim().min(1).max(40);
+const SubmitFeedbackSchema = z.object({
+  rating: z.number().int().min(1).max(5),
+  loved: z.array(FeedbackOption).max(20),
+  improve: z.array(FeedbackOption).max(20),
+  comment: z.string().max(2000),
+  allowFollowUp: z.boolean(),
+  appVersion: z.string().max(40).optional(),
+  platform: z.string().max(40).optional(),
+});
+
+/** User text goes into an HTML email; never interpolate it raw. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+export const submitFeedback = onCall(
+  { secrets: [emailUser, emailPass], invoker: "public" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+    const uid = request.auth.uid;
+    const input = parseInput(SubmitFeedbackSchema, request.data);
+    const comment = input.comment.trim();
+
+    // Only with consent, and off the Auth record — the ID token can carry a
+    // stale address for up to an hour after an email change.
+    const contactEmail = input.allowFollowUp
+      ? ((await admin.auth().getUser(uid)).email ?? null)
+      : null;
+
+    const throttleRef = db.collection("feedbackThrottle").doc(uid);
+    const feedbackRef = db.collection("feedback").doc();
+
+    await db.runTransaction(async (tx) => {
+      const throttle = await tx.get(throttleRef);
+      const lastAt = throttle.exists
+        ? (throttle.data()?.lastAt as Timestamp | undefined)
+        : undefined;
+      if (lastAt && Date.now() - lastAt.toMillis() < FEEDBACK_MIN_INTERVAL_MS) {
+        throw new HttpsError(
+          "resource-exhausted",
+          "Please wait a minute before sending more feedback.",
+        );
+      }
+      tx.set(throttleRef, { lastAt: FieldValue.serverTimestamp() });
+      tx.set(feedbackRef, {
+        uid,
+        rating: input.rating,
+        loved: input.loved,
+        improve: input.improve,
+        comment,
+        allowFollowUp: input.allowFollowUp,
+        contactEmail,
+        appVersion: input.appVersion ?? null,
+        platform: input.platform ?? null,
+        createdAt: FieldValue.serverTimestamp(),
+        email: { status: "pending" },
+      });
+    });
+
+    const list = (items: string[]) =>
+      items.length ? items.map(escapeHtml).join(", ") : "<em>none</em>";
+    const row = (label: string, value: string) =>
+      `<tr><td style="padding:4px 12px 4px 0;color:#9ca3af;vertical-align:top;">${label}</td><td style="padding:4px 0;">${value}</td></tr>`;
+
+    try {
+      const transporter = buildTransporter(emailUser.value(), emailPass.value());
+      await transporter.sendMail({
+        from: `"Delaluna Answers" <${emailUser.value()}>`,
+        to: FEEDBACK_ADMIN_EMAIL,
+        // Reply straight to the user — but only if they allowed follow-up.
+        ...(contactEmail ? { replyTo: contactEmail } : {}),
+        subject: `Feedback: ${input.rating}/5${comment ? " — with comment" : ""}`,
+        html: `
+          <div style="font-family:sans-serif;color:#111;max-width:560px;">
+            <h2 style="margin:0 0 12px;">New in-app feedback</h2>
+            <table style="border-collapse:collapse;font-size:14px;">
+              ${row("Rating", `${input.rating} / 5`)}
+              ${row("Loved", list(input.loved))}
+              ${row("Improve", list(input.improve))}
+              ${row("Follow-up", contactEmail ? `Yes — ${escapeHtml(contactEmail)}` : "Not allowed")}
+              ${row("App", escapeHtml(`${input.appVersion ?? "?"} (${input.platform ?? "?"})`))}
+              ${row("User", escapeHtml(uid))}
+              ${row("Feedback ID", escapeHtml(feedbackRef.id))}
+            </table>
+            <h3 style="margin:20px 0 6px;">Comment</h3>
+            <p style="white-space:pre-wrap;margin:0;">${comment ? escapeHtml(comment) : "<em>No comment.</em>"}</p>
+          </div>
+        `,
+      });
+      await feedbackRef.update({
+        "email.status": "sent",
+        "email.sentAt": FieldValue.serverTimestamp(),
+      });
+    } catch (err) {
+      // The shape, not the contents: no comment, no address. SMTP errors can
+      // echo recipients, so only the error code is logged.
+      console.error("[submitFeedback] admin email failed", {
+        uid,
+        feedbackId: feedbackRef.id,
+        code: (err as { code?: string })?.code ?? "unknown",
+      });
+      await feedbackRef.update({ "email.status": "failed" });
+    }
+
+    return { id: feedbackRef.id };
   },
 );
 
@@ -1456,11 +1837,21 @@ async function purchasedChatCredits(uid: string): Promise<number> {
       data?.subscriber?.non_subscriptions ?? data?.non_subscriptions;
     if (!nonSubs || typeof nonSubs !== "object") return 0;
 
+    // Sandbox and Test Store packs cost nothing; production doesn't count them.
+    // See PRODUCTION_PROJECT_ID.
+    const countUnpaid = honoursUnpaidPurchases(uid);
+
     let total = 0;
     for (const [productId, purchases] of Object.entries(nonSubs)) {
       const perPurchase = CHAT_PACK_QUANTITIES[productId];
       if (!perPurchase) continue; // not a chat pack
-      total += perPurchase * (Array.isArray(purchases) ? purchases.length : 1);
+      const records: unknown[] = Array.isArray(purchases)
+        ? purchases
+        : [purchases];
+      const counted = countUnpaid
+        ? records
+        : records.filter((p) => !isUnpaidPurchase(p));
+      total += perPurchase * counted.length;
     }
     return total;
   } catch (err) {
@@ -1495,6 +1886,15 @@ async function refundChatQuestion(
       if (!snap.exists) return;
 
       const data = snap.data()!;
+      // Only sendChatMessage can write a non-empty prompt (the rules allow a
+      // client create only with `prompt == ''`) and nothing ever clears one, so
+      // this is what proves the receipt below was stamped by the server. A
+      // client may create a prompt-less message carrying any fields it likes —
+      // without this check a forged `billedDay` / `billedCredit` plus a retry
+      // refunded a question that was never charged, and repeating it gave
+      // unlimited chat and refilled spent credits.
+      if (typeof data.prompt !== "string" || !data.prompt) return;
+
       const dayId = data.billedDay;
       // Nothing was charged: an admin send, or a message written before
       // billing receipts existed.
@@ -1560,189 +1960,207 @@ async function refundChatQuestion(
  * kept for an answer that arrived: a failure refunds it (refundFailedChat),
  * and so does the retry that supersedes it.
  */
-export const sendChatMessage = onCall({ invoker: "public" }, async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Must be signed in.");
-  }
-  if (request.auth.token.email_verified !== true) {
-    throw new HttpsError(
-      "permission-denied",
-      "Please verify your email address first.",
-    );
-  }
-
-  const uid = request.auth.uid;
-  const input = parseInput(SendChatMessageSchema, request.data);
-
-  const userRef = db.collection("users").doc(uid);
-  const usageRef = userRef.collection("chatUsage");
-  const chatRef = userRef.collection("updayedChat");
-
-  // Admins are exempt — they already hold a full read/write claim, so metering
-  // them adds nothing, and it keeps the admin screen's limit sliders usable.
-  const isAdmin = request.auth.token.admin === true;
-
-  // Moderation gate. This is the half of feature-blocking that actually bites:
-  // the client hides blocked features, but only this stops a modified or stale
-  // build from spending Gemini budget. Read before any billing happens so a
-  // blocked user is never charged for a question that will not be answered.
-  //
-  // A tarot turn is blocked by either "tarot" or "chat" — tarot rides the chat
-  // pipeline, so blocking chat and leaving tarot open would be a hole rather
-  // than a finer-grained setting.
-  if (!isAdmin) {
-    const modSnap = await db.collection("moderation").doc(uid).get();
-    const blocked = (modSnap.data()?.blockedFeatures ?? []) as string[];
-    const wanted = input.mode === "tarot" ? ["tarot", "chat"] : ["chat"];
-    if (wanted.some((f) => blocked.includes(f))) {
+export const sendChatMessage = onCall(
+  { invoker: "public" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+    if (request.auth.token.email_verified !== true) {
       throw new HttpsError(
         "permission-denied",
-        "This feature is not available on your account.",
-      );
-    }
-  }
-
-  // A retry must never start a second generation for a message that is still
-  // in flight. It used to: a message only counted as failed once it was in the
-  // extension's ERROR state or older than GENERATION_STUCK_MS, and a retry
-  // arriving before then fell straight through to the billing below — charging
-  // a second question and adding a second document, so the user saw their
-  // question and two separate replies and paid twice for one answer. The
-  // client only offers the button once the message is eligible, but clock skew
-  // can beat it there, so the refusal is enforced here.
-  if (input.retryOf) {
-    const prevRef = chatRef.doc(input.retryOf);
-    const prev = await prevRef.get();
-
-    if (!prev.exists) {
-      // An eligible retry consumes the document it replaces, so a missing one
-      // means this is the second tap on the same button.
-      throw new HttpsError(
-        "failed-precondition",
-        "That message has already been retried.",
+        "Please verify your email address first.",
       );
     }
 
-    const prevData = prev.data()!;
-    const state = String(prevData.status?.state ?? "").toUpperCase();
-    const createdMs =
-      (prevData.createTime as Timestamp | undefined)?.toMillis() ?? 0;
-    const stuck =
-      !prevData.response &&
-      createdMs > 0 &&
-      Date.now() - createdMs > GENERATION_STUCK_MS;
+    const uid = request.auth.uid;
+    const input = parseInput(SendChatMessageSchema, request.data);
 
-    if (state !== "ERROR" && !stuck) {
-      throw new HttpsError(
-        "failed-precondition",
-        "That answer is still generating. Give it a moment.",
-      );
+    const userRef = db.collection("users").doc(uid);
+    const usageRef = userRef.collection("chatUsage");
+    const chatRef = userRef.collection("updayedChat");
+
+    // Admins are exempt — they already hold a full read/write claim, so metering
+    // them adds nothing, and it keeps the admin screen's limit sliders usable.
+    const isAdmin = request.auth.token.admin === true;
+
+    // Moderation gate. This is the half of feature-blocking that actually bites:
+    // the client hides blocked features, but only this stops a modified or stale
+    // build from spending Gemini budget. Read before any billing happens so a
+    // blocked user is never charged for a question that will not be answered.
+    //
+    // A tarot turn is blocked by either "tarot" or "chat" — tarot rides the chat
+    // pipeline, so blocking chat and leaving tarot open would be a hole rather
+    // than a finer-grained setting.
+    if (!isAdmin) {
+      const modSnap = await db.collection("moderation").doc(uid).get();
+      const blocked = (modSnap.data()?.blockedFeatures ?? []) as string[];
+      const wanted = input.mode === "tarot" ? ["tarot", "chat"] : ["chat"];
+      if (wanted.some((f) => blocked.includes(f))) {
+        throw new HttpsError(
+          "permission-denied",
+          "This feature is not available on your account.",
+        );
+      }
     }
 
-    // The failed turn hands its question back instead of the retry being
-    // waived. Same net cost — one question for one answer — but the new
-    // document carries its own billing record, so a retry that fails in turn
-    // is refunded too rather than the chain leaking a question per failure.
-    // The refund is awaited, so the ledger the transaction below reads has
-    // already been credited and a user at their limit is not bounced to the
-    // paywall for a question they never got an answer to.
-    await refundChatQuestion(uid, prevRef);
-    await prevRef.delete();
-  }
+    // A retry must never start a second generation for a message that is still
+    // in flight. It used to: a message only counted as failed once it was in the
+    // extension's ERROR state or older than GENERATION_STUCK_MS, and a retry
+    // arriving before then fell straight through to the billing below — charging
+    // a second question and adding a second document, so the user saw their
+    // question and two separate replies and paid twice for one answer. The
+    // client only offers the button once the message is eligible, but clock skew
+    // can beat it there, so the refusal is enforced here.
+    if (input.retryOf) {
+      const prevRef = chatRef.doc(input.retryOf);
+      const prev = await prevRef.get();
 
-  // What this message was billed for, recorded on the document so it can be
-  // handed back if the generation fails. Null when nothing was charged.
-  let billed: { dayId: string; fromCredit: boolean } | null = null;
+      if (!prev.exists) {
+        // An eligible retry consumes the document it replaces, so a missing one
+        // means this is the second tap on the same button.
+        throw new HttpsError(
+          "failed-precondition",
+          "That message has already been retried.",
+        );
+      }
 
-  if (!isAdmin) {
-    const [premium, purchased, userSnap] = await Promise.all([
-      isUserPremium(uid),
-      purchasedChatCredits(uid),
-      userRef.get(),
-    ]);
+      const prevData = prev.data()!;
 
-    // Bill against the user's local day so the quota resets at their midnight,
-    // matching what the in-app counter shows.
-    const offset = userSnap.data()?.timezoneOffsetMinutes;
-    const nowLocal =
-      typeof offset === "number" && Number.isFinite(offset)
-        ? new Date(Date.now() + offset * 60 * 1000)
-        : new Date();
-    const dayId = formatDateId(nowLocal);
+      // Only a message this function submitted can be retried. Anything with an
+      // empty prompt was written by the client — a restored turn, or a forgery
+      // whose `status` and `createTime` say whatever it wants — and the retry
+      // below would delete it and refund against it. See refundChatQuestion.
+      if (typeof prevData.prompt !== "string" || !prevData.prompt) {
+        throw new HttpsError(
+          "failed-precondition",
+          "That message can't be retried.",
+        );
+      }
 
-    const dailyLimit = premium
-      ? PREMIUM_DAILY_CHAT_LIMIT
-      : FREE_DAILY_CHAT_LIMIT;
+      const state = String(prevData.status?.state ?? "").toUpperCase();
+      const createdMs =
+        (prevData.createTime as Timestamp | undefined)?.toMillis() ?? 0;
+      const stuck =
+        !prevData.response &&
+        createdMs > 0 &&
+        Date.now() - createdMs > GENERATION_STUCK_MS;
 
-    // Read-modify-write in a transaction so parallel sends can't both pass the
-    // check and overspend the allowance. What it charged is returned rather
-    // than assigned from inside, because a contended transaction runs its
-    // callback more than once.
-    billed = await db.runTransaction(async (tx) => {
-      const dayRef = usageRef.doc(dayId);
-      const creditsRef = usageRef.doc("_credits");
-      const [daySnap, creditsSnap] = await Promise.all([
-        tx.get(dayRef),
-        tx.get(creditsRef),
+      if (state !== "ERROR" && !stuck) {
+        throw new HttpsError(
+          "failed-precondition",
+          "That answer is still generating. Give it a moment.",
+        );
+      }
+
+      // The failed turn hands its question back instead of the retry being
+      // waived. Same net cost — one question for one answer — but the new
+      // document carries its own billing record, so a retry that fails in turn
+      // is refunded too rather than the chain leaking a question per failure.
+      // The refund is awaited, so the ledger the transaction below reads has
+      // already been credited and a user at their limit is not bounced to the
+      // paywall for a question they never got an answer to.
+      await refundChatQuestion(uid, prevRef);
+      await prevRef.delete();
+    }
+
+    // What this message was billed for, recorded on the document so it can be
+    // handed back if the generation fails. Null when nothing was charged.
+    let billed: { dayId: string; fromCredit: boolean } | null = null;
+
+    if (!isAdmin) {
+      const [premium, purchased, userSnap] = await Promise.all([
+        isUserPremium(uid),
+        purchasedChatCredits(uid),
+        userRef.get(),
       ]);
 
-      const usedToday = Number(daySnap.data()?.count ?? 0);
-      const creditsSpent = Number(creditsSnap.data()?.consumed ?? 0);
-      const creditsLeft = Math.max(0, purchased - creditsSpent);
+      // Bill against the user's local day so the quota resets at their midnight,
+      // matching what the in-app counter shows.
+      const offset = billingOffsetMinutes(userSnap.data()?.timezoneOffsetMinutes);
+      const nowLocal = new Date(Date.now() + offset * 60 * 1000);
+      const dayId = formatDateId(nowLocal);
 
-      if (usedToday < dailyLimit) {
-        tx.set(
-          dayRef,
-          { count: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() },
-          { merge: true },
+      const dailyLimit = premium
+        ? PREMIUM_DAILY_CHAT_LIMIT
+        : FREE_DAILY_CHAT_LIMIT;
+
+      // Read-modify-write in a transaction so parallel sends can't both pass the
+      // check and overspend the allowance. What it charged is returned rather
+      // than assigned from inside, because a contended transaction runs its
+      // callback more than once.
+      billed = await db.runTransaction(async (tx) => {
+        const dayRef = usageRef.doc(dayId);
+        const creditsRef = usageRef.doc("_credits");
+        const [daySnap, creditsSnap] = await Promise.all([
+          tx.get(dayRef),
+          tx.get(creditsRef),
+        ]);
+
+        const usedToday = Number(daySnap.data()?.count ?? 0);
+        const creditsSpent = Number(creditsSnap.data()?.consumed ?? 0);
+        const creditsLeft = Math.max(0, purchased - creditsSpent);
+
+        if (usedToday < dailyLimit) {
+          tx.set(
+            dayRef,
+            {
+              count: FieldValue.increment(1),
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+          return { dayId, fromCredit: false };
+        }
+
+        if (creditsLeft > 0) {
+          // Daily allowance is spent — draw down a purchased chat-pack question.
+          tx.set(
+            creditsRef,
+            {
+              consumed: FieldValue.increment(1),
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+          tx.set(
+            dayRef,
+            {
+              count: FieldValue.increment(1),
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+          return { dayId, fromCredit: true };
+        }
+
+        throw new HttpsError(
+          "resource-exhausted",
+          "You've used all your questions. Purchase a chat pack to keep going.",
         );
-        return { dayId, fromCredit: false };
-      }
+      });
+    }
 
-      if (creditsLeft > 0) {
-        // Daily allowance is spent — draw down a purchased chat-pack question.
-        tx.set(
-          creditsRef,
-          {
-            consumed: FieldValue.increment(1),
-            updatedAt: FieldValue.serverTimestamp(),
-          },
-          { merge: true },
-        );
-        tx.set(
-          dayRef,
-          { count: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() },
-          { merge: true },
-        );
-        return { dayId, fromCredit: true };
-      }
+    const payload: Record<string, unknown> = {
+      userMessage: input.userMessage,
+      prompt: sanitizePrompt(input.prompt),
+      createTime: FieldValue.serverTimestamp(),
+    };
+    if (input.connectionId) payload.connectionId = input.connectionId;
+    if (input.connectionName) payload.connectionName = input.connectionName;
+    if (input.mode) payload.mode = input.mode;
+    // The receipt refundChatQuestion reads. Absent for an admin send, which is
+    // never metered and so has nothing to give back.
+    if (billed) {
+      payload.billedDay = billed.dayId;
+      payload.billedCredit = billed.fromCredit;
+    }
 
-      throw new HttpsError(
-        "resource-exhausted",
-        "You've used all your questions. Purchase a chat pack to keep going.",
-      );
-    });
-  }
+    const created = await chatRef.add(payload);
 
-  const payload: Record<string, unknown> = {
-    userMessage: input.userMessage,
-    prompt: sanitizePrompt(input.prompt),
-    createTime: FieldValue.serverTimestamp(),
-  };
-  if (input.connectionId) payload.connectionId = input.connectionId;
-  if (input.connectionName) payload.connectionName = input.connectionName;
-  if (input.mode) payload.mode = input.mode;
-  // The receipt refundChatQuestion reads. Absent for an admin send, which is
-  // never metered and so has nothing to give back.
-  if (billed) {
-    payload.billedDay = billed.dayId;
-    payload.billedCredit = billed.fromCredit;
-  }
-
-  const created = await chatRef.add(payload);
-
-  return { messageId: created.id };
-});
+    return { messageId: created.id };
+  },
+);
 
 // ─── Push helper ─────────────────────────────────────────────────────────────
 
@@ -2077,7 +2495,14 @@ export const parseConnectionCompatibility = onDocumentUpdated(
       await invalidateAnchor(userId);
       parseOk = true;
     } catch (err) {
-      console.error("[parseConnectionCompatibility] Parse error:", err);
+      // The shape, not the contents: a JSON.parse error quotes the text it
+      // failed on, and this text is a reading of two named people with their
+      // birth details. Cloud Logging would keep it.
+      const reason = err instanceof Error ? err.name : "unknown";
+      const length = typeof after.response === "string" ? after.response.length : 0;
+      console.error(
+        `[parseConnectionCompatibility] Parse error — ${reason}, response ${length} chars`,
+      );
       await connectionRef.update({
         "status.state": "error",
       });
@@ -2169,6 +2594,46 @@ export const parseConnectionCompatibility = onDocumentUpdated(
 // ─── AI generation (replaces the GenAI extension instances) ─────────────────
 
 /**
+ * Generations a user may start per UTC day, per feature, keyed by the `label`
+ * runAnchoredGeneration is called with.
+ *
+ * Unlike chat, these features take their prompt straight from a client write —
+ * the rules have to let the owner write `prompt`, because the client builds it —
+ * so without a server-side count any account could run unlimited, unfiltered
+ * Gemini generations by writing documents under fresh ids. The numbers are
+ * generous on purpose: sign-up requests three horoscopes at once and every
+ * birth-data edit regenerates them, and a legitimate user should never meet
+ * these. They bound abuse; they are not a product quota.
+ */
+const GENERATION_DAILY_LIMITS: Record<string, number> = {
+  generateHoroscope: 20,
+  generateNatalBreakdown: 10,
+  generateTransitReading: 10,
+  generateConnectionReport: 30,
+  generateSynastryReading: 30,
+};
+
+/**
+ * Generations a moderation block covers. createConnection checks the
+ * "connections" block, but the report and synastry documents can be written
+ * directly, so the generation itself has to check too.
+ */
+const GENERATION_MODERATED_FEATURE: Record<string, string> = {
+  generateConnectionReport: "connections",
+  generateSynastryReading: "connections",
+};
+
+/** Admins are exempt from generation limits, as they are from chat metering. */
+async function isAdminUid(uid: string): Promise<boolean> {
+  try {
+    const user = await admin.auth().getUser(uid);
+    return (user.customClaims ?? {}).admin === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Generates into a document that also *triggers* this function, which is the
  * one hazard the extension handled internally and we now own.
  *
@@ -2212,7 +2677,18 @@ async function runAnchoredGeneration(opts: {
    */
   anchored?: boolean;
 }): Promise<void> {
+  const usageRef = db
+    .collection("users")
+    .doc(opts.uid)
+    .collection("generationUsage")
+    .doc(new Date().toISOString().slice(0, 10));
+  const limit = GENERATION_DAILY_LIMITS[opts.label] ?? 0;
+  const moderatedAs = GENERATION_MODERATED_FEATURE[opts.label];
+  // Set inside the transaction callback, which narrowing cannot see into.
+  let refused = null as string | null;
+
   const prompt = await db.runTransaction(async (tx) => {
+    refused = null;
     const snap = await tx.get(opts.ref);
     if (!snap.exists) return null;
 
@@ -2229,6 +2705,48 @@ async function runAnchoredGeneration(opts: {
 
     if (data.requestHash === requestHash) return null;
 
+    // Limits are checked only for a new request, after the hash guard, so the
+    // write-backs that re-fire this trigger never count against them. Every
+    // read comes before any write — a transaction rejects the other order.
+    const usageSnap = await tx.get(usageRef);
+    const used = Number(usageSnap.data()?.[opts.label] ?? 0);
+    let blocked = false;
+    if (moderatedAs) {
+      const modSnap = await tx.get(db.collection("moderation").doc(opts.uid));
+      const features = (modSnap.data()?.blockedFeatures ?? []) as string[];
+      blocked = features.includes(moderatedAs);
+    }
+
+    // The admin lookup is an Auth call, so it is made only once a request
+    // would otherwise be refused rather than on every generation.
+    if ((blocked || used >= limit) && !(await isAdminUid(opts.uid))) {
+      refused = blocked ? "blocked" : "daily limit";
+      // Stamping the hash marks this request as answered, so the ERROR write
+      // re-fires the trigger, matches, and stops like any other write-back.
+      tx.update(opts.ref, {
+        requestHash,
+        status: {
+          state: "ERROR",
+          error: blocked
+            ? "This feature is not available on your account."
+            : "Daily limit reached for this feature. Try again tomorrow.",
+        },
+      });
+      return null;
+    }
+
+    // Counted when the request is claimed, not when it succeeds: a failed
+    // generation still spent a Gemini call, and the limits are loose enough
+    // that a legitimate retry will not run into them.
+    tx.set(
+      usageRef,
+      {
+        [opts.label]: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
     tx.update(opts.ref, {
       requestHash,
       status: { state: "PROCESSING" },
@@ -2239,6 +2757,9 @@ async function runAnchoredGeneration(opts: {
     return current;
   });
 
+  if (refused) {
+    console.warn(`[${opts.label}] Refused for ${opts.uid} — ${refused}`);
+  }
   if (!prompt) return;
 
   try {
@@ -2268,9 +2789,7 @@ async function runAnchoredGeneration(opts: {
     // functions send carry two people's names and birth data, and an SDK
     // error can quote the request it failed on — Cloud Logging persists, so
     // the message gets a hard length limit and the stack is dropped.
-    const reason = (
-      err instanceof Error ? `${err.name}: ${err.message}` : "Generation failed"
-    ).slice(0, 200);
+    const reason = describeGenerationError(err);
 
     console.error(`[${opts.label}] Generation failed — ${reason}`);
 
@@ -2340,7 +2859,6 @@ export const generateSynastryReading = onDocumentWritten(
     });
   },
 );
-
 
 /**
  * Natal chart breakdown — replaces `firestore-natal-chart-chatbot-6ppy`.
@@ -2462,7 +2980,6 @@ export const generateTransitReading = onDocumentWritten(
     });
   },
 );
-
 
 /**
  * AI chat — replaces `firestore-genai-chatbot-update-5i5h`.
@@ -2797,7 +3314,6 @@ export const aggregatePerfLogs = onSchedule("every day 02:00", async () => {
       (failedScreens > 0 ? `, ${failedScreens} screen(s) failed` : ""),
   );
 });
-
 
 // ─── Prompt testing ──────────────────────────────────────────────────────────
 

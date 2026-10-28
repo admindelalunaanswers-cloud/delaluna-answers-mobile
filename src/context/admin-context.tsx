@@ -11,11 +11,18 @@
  *   - premiumConnectionLimit:       10
  */
 
-import React, { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 
 let AsyncStorage: any = null;
 try {
-  AsyncStorage = require('@react-native-async-storage/async-storage').default;
+  AsyncStorage = require("@react-native-async-storage/async-storage").default;
 } catch {
   // Native module not available — context will operate in-memory only.
 }
@@ -23,12 +30,12 @@ try {
 // ─── Defaults ─────────────────────────────────────────────────────────────────
 
 export const DEFAULT_DAILY_CHAT_LIMIT = 2;
-export const DEFAULT_PREMIUM_DAILY_CHAT_LIMIT = 2;
+export const DEFAULT_PREMIUM_DAILY_CHAT_LIMIT = 5;
 export const DEFAULT_FREE_CONNECTION_LIMIT = 0;
 export const DEFAULT_TRIAL_CONNECTION_LIMIT = 3;
 export const DEFAULT_PREMIUM_CONNECTION_LIMIT = 10;
 
-const STORAGE_KEY = 'admin.limits.v2';
+const STORAGE_KEY = "admin.limits.v2";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -94,69 +101,164 @@ async function safeSet(value: AdminLimits): Promise<void> {
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function AdminProvider({ children }: { children: ReactNode }) {
-  const [dailyChatLimit, setDailyChatLimitState] = useState(DEFAULT_DAILY_CHAT_LIMIT);
-  const [premiumDailyChatLimit, setPremiumDailyChatLimitState] = useState(DEFAULT_PREMIUM_DAILY_CHAT_LIMIT);
-  const [freeConnectionLimit, setFreeConnectionLimitState] = useState(DEFAULT_FREE_CONNECTION_LIMIT);
-  const [trialConnectionLimit, setTrialConnectionLimitState] = useState(DEFAULT_TRIAL_CONNECTION_LIMIT);
-  const [premiumConnectionLimit, setPremiumConnectionLimitState] = useState(DEFAULT_PREMIUM_CONNECTION_LIMIT);
+  const [dailyChatLimit, setDailyChatLimitState] = useState(
+    DEFAULT_DAILY_CHAT_LIMIT,
+  );
+  const [premiumDailyChatLimit, setPremiumDailyChatLimitState] = useState(
+    DEFAULT_PREMIUM_DAILY_CHAT_LIMIT,
+  );
+  const [freeConnectionLimit, setFreeConnectionLimitState] = useState(
+    DEFAULT_FREE_CONNECTION_LIMIT,
+  );
+  const [trialConnectionLimit, setTrialConnectionLimitState] = useState(
+    DEFAULT_TRIAL_CONNECTION_LIMIT,
+  );
+  const [premiumConnectionLimit, setPremiumConnectionLimitState] = useState(
+    DEFAULT_PREMIUM_CONNECTION_LIMIT,
+  );
 
   // Hydrate from AsyncStorage once on mount
   useEffect(() => {
     let cancelled = false;
     safeGet().then((stored) => {
       if (cancelled || !stored) return;
-      if (typeof stored.dailyChatLimit === 'number') {
+      if (typeof stored.dailyChatLimit === "number") {
         setDailyChatLimitState(clampNonNegative(stored.dailyChatLimit));
       }
-      if (typeof stored.premiumDailyChatLimit === 'number') {
-        setPremiumDailyChatLimitState(clampNonNegative(stored.premiumDailyChatLimit));
+      if (typeof stored.premiumDailyChatLimit === "number") {
+        setPremiumDailyChatLimitState(
+          clampNonNegative(stored.premiumDailyChatLimit),
+        );
       }
-      if (typeof stored.freeConnectionLimit === 'number') {
-        setFreeConnectionLimitState(clampNonNegative(stored.freeConnectionLimit));
+      if (typeof stored.freeConnectionLimit === "number") {
+        setFreeConnectionLimitState(
+          clampNonNegative(stored.freeConnectionLimit),
+        );
       }
-      if (typeof stored.trialConnectionLimit === 'number') {
-        setTrialConnectionLimitState(clampNonNegative(stored.trialConnectionLimit));
+      if (typeof stored.trialConnectionLimit === "number") {
+        setTrialConnectionLimitState(
+          clampNonNegative(stored.trialConnectionLimit),
+        );
       }
-      if (typeof stored.premiumConnectionLimit === 'number') {
-        setPremiumConnectionLimitState(clampNonNegative(stored.premiumConnectionLimit));
+      if (typeof stored.premiumConnectionLimit === "number") {
+        setPremiumConnectionLimitState(
+          clampNonNegative(stored.premiumConnectionLimit),
+        );
       }
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const persist = useCallback((next: AdminLimits) => {
     void safeSet(next);
   }, []);
 
-  const setDailyChatLimit = useCallback((n: number) => {
-    const v = clampNonNegative(n);
-    setDailyChatLimitState(v);
-    persist({ dailyChatLimit: v, premiumDailyChatLimit, freeConnectionLimit, trialConnectionLimit, premiumConnectionLimit });
-  }, [premiumDailyChatLimit, freeConnectionLimit, trialConnectionLimit, premiumConnectionLimit, persist]);
+  const setDailyChatLimit = useCallback(
+    (n: number) => {
+      const v = clampNonNegative(n);
+      setDailyChatLimitState(v);
+      persist({
+        dailyChatLimit: v,
+        premiumDailyChatLimit,
+        freeConnectionLimit,
+        trialConnectionLimit,
+        premiumConnectionLimit,
+      });
+    },
+    [
+      premiumDailyChatLimit,
+      freeConnectionLimit,
+      trialConnectionLimit,
+      premiumConnectionLimit,
+      persist,
+    ],
+  );
 
-  const setPremiumDailyChatLimit = useCallback((n: number) => {
-    const v = clampNonNegative(n);
-    setPremiumDailyChatLimitState(v);
-    persist({ dailyChatLimit, premiumDailyChatLimit: v, freeConnectionLimit, trialConnectionLimit, premiumConnectionLimit });
-  }, [dailyChatLimit, freeConnectionLimit, trialConnectionLimit, premiumConnectionLimit, persist]);
+  const setPremiumDailyChatLimit = useCallback(
+    (n: number) => {
+      const v = clampNonNegative(n);
+      setPremiumDailyChatLimitState(v);
+      persist({
+        dailyChatLimit,
+        premiumDailyChatLimit: v,
+        freeConnectionLimit,
+        trialConnectionLimit,
+        premiumConnectionLimit,
+      });
+    },
+    [
+      dailyChatLimit,
+      freeConnectionLimit,
+      trialConnectionLimit,
+      premiumConnectionLimit,
+      persist,
+    ],
+  );
 
-  const setFreeConnectionLimit = useCallback((n: number) => {
-    const v = clampNonNegative(n);
-    setFreeConnectionLimitState(v);
-    persist({ dailyChatLimit, premiumDailyChatLimit, freeConnectionLimit: v, trialConnectionLimit, premiumConnectionLimit });
-  }, [dailyChatLimit, premiumDailyChatLimit, trialConnectionLimit, premiumConnectionLimit, persist]);
+  const setFreeConnectionLimit = useCallback(
+    (n: number) => {
+      const v = clampNonNegative(n);
+      setFreeConnectionLimitState(v);
+      persist({
+        dailyChatLimit,
+        premiumDailyChatLimit,
+        freeConnectionLimit: v,
+        trialConnectionLimit,
+        premiumConnectionLimit,
+      });
+    },
+    [
+      dailyChatLimit,
+      premiumDailyChatLimit,
+      trialConnectionLimit,
+      premiumConnectionLimit,
+      persist,
+    ],
+  );
 
-  const setTrialConnectionLimit = useCallback((n: number) => {
-    const v = clampNonNegative(n);
-    setTrialConnectionLimitState(v);
-    persist({ dailyChatLimit, premiumDailyChatLimit, freeConnectionLimit, trialConnectionLimit: v, premiumConnectionLimit });
-  }, [dailyChatLimit, premiumDailyChatLimit, freeConnectionLimit, premiumConnectionLimit, persist]);
+  const setTrialConnectionLimit = useCallback(
+    (n: number) => {
+      const v = clampNonNegative(n);
+      setTrialConnectionLimitState(v);
+      persist({
+        dailyChatLimit,
+        premiumDailyChatLimit,
+        freeConnectionLimit,
+        trialConnectionLimit: v,
+        premiumConnectionLimit,
+      });
+    },
+    [
+      dailyChatLimit,
+      premiumDailyChatLimit,
+      freeConnectionLimit,
+      premiumConnectionLimit,
+      persist,
+    ],
+  );
 
-  const setPremiumConnectionLimit = useCallback((n: number) => {
-    const v = clampNonNegative(n);
-    setPremiumConnectionLimitState(v);
-    persist({ dailyChatLimit, premiumDailyChatLimit, freeConnectionLimit, trialConnectionLimit, premiumConnectionLimit: v });
-  }, [dailyChatLimit, premiumDailyChatLimit, freeConnectionLimit, trialConnectionLimit, persist]);
+  const setPremiumConnectionLimit = useCallback(
+    (n: number) => {
+      const v = clampNonNegative(n);
+      setPremiumConnectionLimitState(v);
+      persist({
+        dailyChatLimit,
+        premiumDailyChatLimit,
+        freeConnectionLimit,
+        trialConnectionLimit,
+        premiumConnectionLimit: v,
+      });
+    },
+    [
+      dailyChatLimit,
+      premiumDailyChatLimit,
+      freeConnectionLimit,
+      trialConnectionLimit,
+      persist,
+    ],
+  );
 
   const resetToDefaults = useCallback(() => {
     setDailyChatLimitState(DEFAULT_DAILY_CHAT_LIMIT);

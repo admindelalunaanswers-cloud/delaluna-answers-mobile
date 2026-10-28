@@ -1,7 +1,8 @@
 import { verticalScale, moderateScale, scale } from '@/src/utils/responsive';
 import React from 'react';
 
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text, useScaledTextStyle } from '@/src/components/app-text';
 
 import { Dropdown } from 'react-native-element-dropdown';
 
@@ -15,13 +16,18 @@ type PronounDropdownProps = {
 };
 
 const PronounDropdown: React.FC<PronounDropdownProps> = ({ value, onChange, onFocus }) => {
+  // The dropdown draws these with react-native's Text, so Text size is applied here.
+  const itemText = useScaledTextStyle(styles.itemText);
+  const placeholderStyle = useScaledTextStyle(styles.placeholderStyle);
+  const selectedTextStyle = useScaledTextStyle(styles.selectedTextStyle);
+  const inputSearchStyle = useScaledTextStyle(styles.inputSearchStyle);
   return (
     <Dropdown
       style={styles.dropdown}
-      itemTextStyle={styles.itemText}
-      placeholderStyle={styles.placeholderStyle}
-      selectedTextStyle={styles.selectedTextStyle}
-      inputSearchStyle={styles.inputSearchStyle}
+      itemTextStyle={itemText}
+      placeholderStyle={placeholderStyle}
+      selectedTextStyle={selectedTextStyle}
+      inputSearchStyle={inputSearchStyle}
       iconStyle={styles.iconStyle}
       data={data}
       maxHeight={300}
@@ -58,7 +64,7 @@ const styles = StyleSheet.create({
   dropdown: {
     width: '100%',
     marginVertical: verticalScale(5),
-    height: verticalScale(45),
+    minHeight: verticalScale(45), // grows with the text size
     borderRadius: moderateScale(5),
     paddingHorizontal: scale(5),
   },
@@ -89,7 +95,7 @@ const styles = StyleSheet.create({
     height: verticalScale(20),
   },
   inputSearchStyle: {
-    height: verticalScale(40),
+    minHeight: verticalScale(40),
     fontSize: moderateScale(16),
     color: '#ffffff58',
   },

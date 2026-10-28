@@ -1,36 +1,41 @@
+import { GlassButton } from "@/src/assets/buttons/glass-button";
 import HeaderNav from "@/src/components/shared/header-nav";
+import { C } from "@/src/constants/theme";
+import { STORE_LINKS } from "@/src/constants/links";
+import { useAnnounce } from "@/src/hooks/use-announce";
+import { submitFeedback } from "@/src/services/feedback.service";
 import { logger } from "@/src/utils/logger";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import * as StoreReview from "expo-store-review";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
+  Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Linking,
   Platform,
   ScrollView,
   StyleSheet,
   Switch,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Text, TextInput } from "@/src/components/app-text";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const COLORS = {
-  bg: "#0e0b1a",
-  header: "#110d22",
-  card: "#1a1535",
-  border: "#2a2050",
-  primary: "#7c6fd4",
-  light: "#c8bfff",
-  muted: "#6b5fa8",
-  star: "#f0c040",
-  text: "#ffffff",
-  subText: "rgba(200,191,255,0.65)",
-  placeholder: "rgba(200,191,255,0.35)",
+  card: "rgba(255,255,255,0.06)", // translucent so the theme background shows through, as on Profile
+  border: "rgba(255,255,255,0.1)",
+  primary: C.turquoise,
+  light: C.purpleLight,
+  muted: C.purple, // icons and dividers only — too low-contrast for text
+  mutedText: "rgba(255,255,255,0.7)", // matches Profile; sits on the theme image, not a flat fill
+  star: C.gold,
+  text: C.white,
+  subText: "rgba(255,255,255,0.7)",
+  placeholder: "rgba(255,255,255,0.45)",
 };
 
 const FONT = Platform.select({
@@ -65,6 +70,17 @@ const IMPROVE_OPTIONS = [
 
 const NAV_BAR_HEIGHT = 44;
 
+// The store's review page, then its web listing if the store app can't open.
+const STORE = Platform.OS === "ios" ? STORE_LINKS.ios : STORE_LINKS.android;
+const STORE_REVIEW_URL = STORE.review;
+const STORE_REVIEW_WEB_URL = STORE.webReview;
+
+/** Decorative glyphs (✦ ☽) — otherwise read aloud as "four pointed star", "last quarter moon". */
+const DECORATIVE = {
+  accessibilityElementsHidden: true,
+  importantForAccessibility: "no-hide-descendants",
+} as const;
+
 type SubmitState = "idle" | "submitting" | "positive" | "negative";
 
 export default function FeedbackScreen() {
@@ -77,6 +93,18 @@ export default function FeedbackScreen() {
   const [allowFollowUp, setAllowFollowUp] = useState(true);
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
 
+  // The comment box is the only field and sits near the bottom, so the
+  // ScrollView never brought it up on its own: it opened under the keyboard.
+  // Scrolling to the end once the keyboard is up shows it with Send below.
+  const scrollRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    const sub = Keyboard.addListener("keyboardDidShow", () => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    });
+    // Optional: jest.setup.js mocks NativeEventEmitter, so there it's undefined.
+    return () => sub?.remove();
+  }, []);
+
   const toggle = (
     arr: string[],
     setArr: (v: string[]) => void,
@@ -87,46 +115,62 @@ export default function FeedbackScreen() {
 
   const canSubmit = rating > 0 && submitState !== "submitting";
 
+  // The form is swapped for a thank-you panel with focus left nowhere.
+  useAnnounce(
+    submitState === "positive"
+      ? "Thank you. Share the love?"
+      : submitState === "negative"
+        ? "Thank you. We hear you."
+        : null,
+  );
+
+  const stepRating = (delta: number) =>
+    setRating((r) => Math.max(0, Math.min(5, r + delta)));
+
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setSubmitState("submitting");
 
     try {
-      // TODO: persist feedback to Firestore once schema is defined.
-      // Until then this only confirms the handler ran — the comment is
-      // free-text the user wrote and the uid identifies them, so neither
-      // belongs in a log line.
-      logger.debug("[feedback] submitted", {
-        rating,
-        lovedCount: loved.length,
-        improveCount: improve.length,
-        hasComment: comment.length > 0,
-        allowFollowUp,
-      });
-    } catch (err) {
+      // Saved to feedback/{id} and emailed to the admin inbox by the
+      // submitFeedback Cloud Function.
+      await submitFeedback({ rating, loved, improve, comment, allowFollowUp });
+    } catch (err: any) {
       logger.error("[feedback] submit failed", err, "feedback_submit");
+      setSubmitState("idle");
+      // This used to fall through to the thank-you screen whether or not
+      // anything was saved. Keep the form so nothing typed is lost.
+      Alert.alert(
+        "Couldn't send feedback",
+        err?.code === "functions/resource-exhausted"
+          ? "Please wait a minute before sending more feedback."
+          : "Please check your connection and try again.",
+      );
+      return;
     }
 
     setSubmitState(rating >= 4 ? "positive" : "negative");
   };
 
   const handleLeaveReview = async () => {
+    // The in-app review sheet where the OS offers it. It is rate-limited by
+    // Apple / Google and never reports whether it was actually shown.
     try {
-      const StoreReview = require("expo-store-review");
-      const isAvailable = await StoreReview.isAvailableAsync();
-      if (isAvailable) {
+      if (await StoreReview.isAvailableAsync()) {
         await StoreReview.requestReview();
         router.back();
         return;
       }
-    } catch {
-      // expo-store-review not installed — fall back to deep link
+    } catch (err) {
+      logger.error("[feedback] in-app review failed", err, "feedback_store_review");
     }
-    const url = Platform.select({
-      ios: "itms-apps://itunes.apple.com/app/idYOUR_APP_ID?action=write-review",
-      android: "market://details?id=YOUR_PACKAGE_NAME",
-    });
-    if (url) Linking.openURL(url).catch(() => {});
+    // Otherwise the store's own review page. These were placeholder IDs
+    // (idYOUR_APP_ID / YOUR_PACKAGE_NAME), so the fallback opened nothing.
+    try {
+      await Linking.openURL(STORE_REVIEW_URL);
+    } catch {
+      await Linking.openURL(STORE_REVIEW_WEB_URL).catch(() => {});
+    }
     router.back();
   };
 
@@ -134,14 +178,36 @@ export default function FeedbackScreen() {
     router.replace("/(util)/support");
   };
 
+  // One adjustable control to a screen reader — swipe up / down. The stars were
+  // unnamed icon buttons, and a rating is required to send, so feedback could
+  // not be given at all. VoiceOver folds the stars into this; they keep labels
+  // for TalkBack, which can still reach them.
   const renderStars = () => (
-    <View style={s.starsRow}>
+    <View
+      style={s.starsRow}
+      accessible
+      accessibilityRole="adjustable"
+      accessibilityLabel="Rating"
+      accessibilityValue={{
+        min: 0,
+        max: 5,
+        now: rating,
+        text: rating ? `${rating} of 5 stars` : "No rating",
+      }}
+      accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
+      onAccessibilityAction={(e) =>
+        stepRating(e.nativeEvent.actionName === "increment" ? 1 : -1)
+      }
+    >
       {[1, 2, 3, 4, 5].map((n) => (
         <TouchableOpacity
           key={n}
           onPress={() => setRating(n)}
           hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`${n} ${n === 1 ? "star" : "stars"}`}
+          accessibilityState={{ selected: n === rating }}
         >
           <Ionicons
             name={n <= rating ? "star" : "star-outline"}
@@ -151,7 +217,7 @@ export default function FeedbackScreen() {
           />
         </TouchableOpacity>
       ))}
-      <Text style={s.ratingLabel}>{rating}/5</Text>
+      <Text style={s.ratingLabel} {...DECORATIVE}>{rating}/5</Text>
     </View>
   );
 
@@ -169,6 +235,9 @@ export default function FeedbackScreen() {
             onPress={() => toggle(selected, setSelected, opt)}
             style={[s.chip, on && s.chipOn]}
             activeOpacity={0.8}
+            // Multi-select; "selected" was only a border and tint
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: on }}
           >
             <Text style={[s.chipText, on && s.chipTextOn]}>{opt}</Text>
           </TouchableOpacity>
@@ -178,7 +247,7 @@ export default function FeedbackScreen() {
   );
 
   const Divider = () => (
-    <View style={s.dividerRow}>
+    <View style={s.dividerRow} {...DECORATIVE}>
       <View style={s.dividerLine} />
       <Text style={s.dividerMoon}>☽</Text>
       <View style={s.dividerLine} />
@@ -194,23 +263,17 @@ export default function FeedbackScreen() {
           title="Feedback"
           leftIconName="chevron-back-outline"
           onLeftPress={() => router.back()}
-          backgroundColor={COLORS.header}
-          textColor={COLORS.light}
         />
         <View style={s.statePanel}>
-          <Text style={s.starsBig}>✦</Text>
-          <Text style={s.stateTitle}>Share the love?</Text>
+          <Text style={s.starsBig} {...DECORATIVE}>✦</Text>
+          <Text style={s.stateTitle} accessibilityRole="header">Share the love?</Text>
           <Text style={s.stateBody}>
             Leave a Review — your words help other seekers find Delaluna.
           </Text>
-          <TouchableOpacity
-            style={s.primaryBtn}
-            onPress={handleLeaveReview}
-            activeOpacity={0.85}
-          >
-            <Text style={s.primaryBtnText}>Leave Review ✦</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.back()} style={s.linkBtn}>
+          <View style={s.primaryBtnWrap}>
+            <GlassButton title="Leave Review ✦" accessibilityLabel="Leave review" onPress={handleLeaveReview} />
+          </View>
+          <TouchableOpacity onPress={() => router.back()} style={s.linkBtn} accessibilityRole="button">
             <Text style={s.linkText}>Not now</Text>
           </TouchableOpacity>
         </View>
@@ -227,24 +290,18 @@ export default function FeedbackScreen() {
           title="Feedback"
           leftIconName="chevron-back-outline"
           onLeftPress={() => router.back()}
-          backgroundColor={COLORS.header}
-          textColor={COLORS.light}
         />
         <View style={s.statePanel}>
-          <Text style={s.starsBig}>☽</Text>
-          <Text style={s.stateTitle}>We hear you</Text>
+          <Text style={s.starsBig} {...DECORATIVE}>☽</Text>
+          <Text style={s.stateTitle} accessibilityRole="header">We hear you</Text>
           <Text style={s.stateBody}>
             Thank you for the honest reflection. Want to tell us more so we can
             make it right?
           </Text>
-          <TouchableOpacity
-            style={s.primaryBtn}
-            onPress={handleContactSupport}
-            activeOpacity={0.85}
-          >
-            <Text style={s.primaryBtnText}>Contact Support</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.back()} style={s.linkBtn}>
+          <View style={s.primaryBtnWrap}>
+            <GlassButton title="Contact Support" onPress={handleContactSupport} />
+          </View>
+          <TouchableOpacity onPress={() => router.back()} style={s.linkBtn} accessibilityRole="button">
             <Text style={s.linkText}>No thanks, go home</Text>
           </TouchableOpacity>
         </View>
@@ -258,21 +315,19 @@ export default function FeedbackScreen() {
         title="Feedback"
         leftIconName="chevron-back-outline"
         onLeftPress={() => router.back()}
-        backgroundColor={COLORS.header}
-        textColor={COLORS.light}
       />
-      <KeyboardAvoidingView
-        behavior="padding"
-        style={s.flex}
-        keyboardVerticalOffset={insets.top + scale(NAV_BAR_HEIGHT)}
-      >
+      {/* No keyboardVerticalOffset: the header is absolutely positioned, so
+          this view already starts at the top of the screen. Offsetting by the
+          header height left that much of the form under the keyboard. */}
+      <KeyboardAvoidingView behavior="padding" style={s.flex}>
         <ScrollView
+          ref={scrollRef}
           style={[s.scroll, { marginTop: insets.top + scale(NAV_BAR_HEIGHT) }]}
           contentContainerStyle={s.content}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={s.intro}>How was your experience?</Text>
+          <Text style={s.intro} accessibilityRole="header">How was your experience?</Text>
           <Text style={s.introSub}>
             Tap a star, and tell us what felt right (or wrong).
           </Text>
@@ -281,20 +336,21 @@ export default function FeedbackScreen() {
 
           <Divider />
 
-          <Text style={s.sectionLabel}>WHAT DID YOU LOVE?</Text>
+          <Text style={s.sectionLabel} accessibilityRole="header">WHAT DID YOU LOVE?</Text>
           {renderChips(LOVE_OPTIONS, loved, setLoved)}
 
           <Divider />
 
-          <Text style={s.sectionLabel}>ANYTHING TO IMPROVE?</Text>
+          <Text style={s.sectionLabel} accessibilityRole="header">ANYTHING TO IMPROVE?</Text>
           {renderChips(IMPROVE_OPTIONS, improve, setImprove)}
 
           <Divider />
 
-          <Text style={s.sectionLabel}>YOUR THOUGHTS</Text>
+          <Text style={s.sectionLabel} accessibilityRole="header">YOUR THOUGHTS</Text>
           <TextInput
             value={comment}
             onChangeText={setComment}
+            accessibilityLabel="Your thoughts"
             placeholder="The stars are listening..."
             placeholderTextColor={COLORS.placeholder}
             style={s.textarea}
@@ -303,7 +359,7 @@ export default function FeedbackScreen() {
           />
 
           <View style={s.toggleRow}>
-            <View style={s.flex}>
+            <View style={s.flex} {...DECORATIVE}>
               <Text style={s.toggleTitle}>Allow follow-up by email</Text>
               <Text style={s.toggleSub}>
                 We may reach out if we need to clarify something.
@@ -314,25 +370,28 @@ export default function FeedbackScreen() {
               onValueChange={setAllowFollowUp}
               trackColor={{
                 false: "rgba(255,255,255,0.12)",
-                true: "rgba(124,111,212,0.6)",
+                true: C.turquoise,
               }}
-              thumbColor={allowFollowUp ? COLORS.primary : "#f4f3f4"}
+              thumbColor="#f4f3f4"
               ios_backgroundColor="rgba(255,255,255,0.12)"
+              // The text beside a Switch isn't its name; it carries both here
+              // (the visible copy is hidden from screen readers to avoid reading it twice)
+              accessibilityLabel="Allow follow-up by email"
+              accessibilityHint="We may reach out if we need to clarify something."
             />
           </View>
 
-          <TouchableOpacity
-            onPress={handleSubmit}
-            disabled={!canSubmit}
-            style={[s.primaryBtn, !canSubmit && s.btnDisabled]}
-            activeOpacity={0.85}
-          >
-            {submitState === "submitting" ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={s.primaryBtnText}>Send Feedback ✦</Text>
-            )}
-          </TouchableOpacity>
+          <View style={s.primaryBtnWrap}>
+            <GlassButton
+              title={submitState === "submitting" ? "Sending…" : "Send Feedback ✦"}
+              onPress={handleSubmit}
+              disabled={!canSubmit}
+              busy={submitState === "submitting"}
+              // Stays named while sending, and says why it's disabled
+              accessibilityLabel="Send feedback"
+              accessibilityHint={rating === 0 ? "Choose a rating first" : undefined}
+            />
+          </View>
 
           <View style={{ height: verticalScale(48) }} />
         </ScrollView>
@@ -343,7 +402,7 @@ export default function FeedbackScreen() {
 
 const s = StyleSheet.create({
   flex: { flex: 1 },
-  root: { flex: 1, backgroundColor: COLORS.bg },
+  root: { flex: 1 },
   scroll: { flex: 1 },
   content: {
     paddingHorizontal: scale(20),
@@ -393,7 +452,7 @@ const s = StyleSheet.create({
   },
 
   sectionLabel: {
-    color: COLORS.muted,
+    color: COLORS.mutedText,
     fontFamily: FONT,
     fontSize: moderateScale(10),
     fontWeight: "700",
@@ -413,7 +472,7 @@ const s = StyleSheet.create({
   },
   chipOn: {
     borderColor: COLORS.primary,
-    backgroundColor: "rgba(124,111,212,0.18)",
+    backgroundColor: "rgba(111,255,233,0.12)",
   },
   chipText: {
     color: COLORS.subText,
@@ -460,22 +519,7 @@ const s = StyleSheet.create({
     marginTop: 2,
   },
 
-  primaryBtn: {
-    marginTop: verticalScale(24),
-    backgroundColor: COLORS.primary,
-    borderRadius: 999,
-    paddingVertical: verticalScale(14),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  primaryBtnText: {
-    color: "#fff",
-    fontFamily: FONT,
-    fontSize: moderateScale(15),
-    fontWeight: "700",
-    letterSpacing: 0.3,
-  },
-  btnDisabled: { opacity: 0.45 },
+  primaryBtnWrap: { marginTop: verticalScale(24), alignItems: "center" },
 
   // Confirmation states
   statePanel: {
@@ -507,7 +551,7 @@ const s = StyleSheet.create({
   },
   linkBtn: { marginTop: verticalScale(14), padding: scale(8) },
   linkText: {
-    color: COLORS.muted,
+    color: COLORS.mutedText,
     fontFamily: FONT,
     fontSize: moderateScale(13),
     textDecorationLine: "underline",

@@ -1,8 +1,10 @@
 import React, { useEffect, useRef } from "react";
 
-import { Animated, View, Text, StyleSheet, ViewStyle } from "react-native";
+import { Animated, View, StyleSheet, ViewStyle } from "react-native";
+import { Text } from "@/src/components/app-text";
 
 
+import { useReducedMotion } from "@/src/context/accessibility-context";
 import { DrawnTarotCard } from "@/src/types/tarot-cards.type";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { renderRichText } from "@/src/utils/rich-text";
@@ -33,8 +35,13 @@ export type SectionName =
 
 function SkeletonLine({ width = '100%', height = 14 }: { width?: number | string; height?: number }) {
   const opacity = useRef(new Animated.Value(0.25)).current;
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
+    if (reduceMotion) {
+      opacity.setValue(0.4); // a steady placeholder, midway through the pulse
+      return;
+    }
     const anim = Animated.loop(
       Animated.sequence([
         Animated.timing(opacity, { toValue: 0.55, duration: 850, useNativeDriver: true }),
@@ -43,7 +50,7 @@ function SkeletonLine({ width = '100%', height = 14 }: { width?: number | string
     );
     anim.start();
     return () => anim.stop();
-  }, [opacity]);
+  }, [opacity, reduceMotion]);
 
   // Wrap in a plain View so width (string | number) doesn't conflict with
   // Animated.View's narrower DimensionValue requirement.
@@ -61,9 +68,13 @@ function SkeletonLine({ width = '100%', height = 14 }: { width?: number | string
   );
 }
 
+// Skeletons are blank shapes to a screen reader, which would skip the section
+// entirely and leave the user unsure whether anything is coming.
+const LOADING_A11Y = { accessible: true, accessibilityLabel: 'Loading' } as const;
+
 function SkeletonTextBlock() {
   return (
-    <View style={{ width: '100%', gap: 10, paddingVertical: 4 }}>
+    <View style={{ width: '100%', gap: 10, paddingVertical: 4 }} {...LOADING_A11Y}>
       <SkeletonLine width="92%" height={13} />
       <SkeletonLine width="100%" height={13} />
       <SkeletonLine width="76%" height={13} />
@@ -73,7 +84,7 @@ function SkeletonTextBlock() {
 
 function SkeletonListBlock() {
   return (
-    <View style={{ width: '100%', gap: 10, paddingVertical: 4 }}>
+    <View style={{ width: '100%', gap: 10, paddingVertical: 4 }} {...LOADING_A11Y}>
       <SkeletonLine width="80%" height={13} />
       <SkeletonLine width="88%" height={13} />
       <SkeletonLine width="72%" height={13} />
@@ -83,7 +94,7 @@ function SkeletonListBlock() {
 
 function SkeletonHorizontalBlock() {
   return (
-    <View style={{ flexDirection: 'row', gap: 12, paddingVertical: 4, justifyContent: 'center', width: '100%' }}>
+    <View style={{ flexDirection: 'row', gap: 12, paddingVertical: 4, justifyContent: 'center', width: '100%' }} {...LOADING_A11Y}>
       <SkeletonLine width={72} height={28} />
       <SkeletonLine width={72} height={28} />
       <SkeletonLine width={72} height={28} />
@@ -148,6 +159,7 @@ export default function HomeTextBox({
             <TarotCardImageFrame
               cardNumber={cards.map(c => c.id)}
               reversed={cards.map(c => c.reversed)}
+              names={cards.map(c => c.name)}
               firstView={firstView}
               onReveal={onReveal}
             />
@@ -172,7 +184,16 @@ export default function HomeTextBox({
             {Array.isArray(content) ? content.map((item, index) => (
               <React.Fragment key={index}>
                 <Text style={styles.newLoveText}>{item}</Text>
-                {index < content.length - 1 && <Text style={styles.separator}>•</Text>}
+                {/* Decorative — otherwise read aloud as "bullet" between every number */}
+                {index < content.length - 1 && (
+                  <Text
+                    style={styles.separator}
+                    accessibilityElementsHidden
+                    importantForAccessibility="no"
+                  >
+                    •
+                  </Text>
+                )}
               </React.Fragment>
             )) : <Text style={styles.newLoveText}>{content}</Text>}
           </View>
