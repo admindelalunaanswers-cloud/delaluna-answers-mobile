@@ -198,6 +198,58 @@ async function generationLimits() {
   check('the refusal is not counted', (await usageRef.get()).data().generateHoroscope === 20);
 }
 
+/**
+ * A repair by scripts/regenerate-incomplete.js carries a one-time grant in
+ * generationGrants, so it is neither limited nor counted. The grant must be
+ * unforgeable, and must match the exact request.
+ */
+async function repairGrants() {
+  console.log('\n— Repairs (regenerate-incomplete.js) skip the daily limit');
+  const { uid, db } = await client('repair');
+  const usageRef = adb.doc(`users/${uid}/generationUsage/${UTC_DAY}`);
+  const grantId = (p) => require('crypto').createHash('sha256').update(p).digest('hex');
+
+  check(
+    'rules refuse a client write to generationGrants',
+    (await outcome(setDoc(doc(db, 'generationGrants', 'forged'), { path: 'x', requestedAtMillis: 1 })))
+      === 'permission-denied',
+  );
+
+  // At the natal limit, so only a grant can let a request through.
+  await usageRef.set({ generateNatalBreakdown: 10 });
+  const ref = adb.doc(`users/${uid}/natalChart/details`);
+
+  // What the script does: grant and re-request in one batch.
+  const repair = async (grantMillisOffset) => {
+    const requestedAt = admin.firestore.Timestamp.now();
+    const batch = adb.batch();
+    batch.set(adb.collection('generationGrants').doc(grantId(ref.path)), {
+      path: ref.path,
+      requestedAtMillis: requestedAt.toMillis() + grantMillisOffset,
+    });
+    batch.set(ref, { prompt: 'smoke test', requestedAt }, { merge: true });
+    batch.update(ref, { status: admin.firestore.FieldValue.delete() });
+    await batch.commit();
+    return waitFor(ref, (d) => d.status?.state === 'ERROR' || d.status?.state === 'COMPLETED');
+  };
+
+  // A grant for a different stamp is not this request's: refused as usual.
+  const mismatched = await repair(1);
+  check('a grant for another request does not exempt it',
+    /Daily limit/.test(mismatched?.status?.error ?? ''), JSON.stringify(mismatched?.status));
+  check('and that grant is left unused',
+    (await adb.collection('generationGrants').doc(grantId(ref.path)).get()).exists);
+
+  // The matching grant: claimed despite the limit (it then fails for want of a
+  // Gemini key, which is fine — the refusal is what matters), and not counted.
+  const granted = await repair(0);
+  check('a repair with its grant is not refused at the limit',
+    !!granted && !/Daily limit/.test(granted.status?.error ?? ''), JSON.stringify(granted?.status));
+  check('the repair is not counted', (await usageRef.get()).data().generateNatalBreakdown === 10);
+  check('the grant is used up',
+    !(await adb.collection('generationGrants').doc(grantId(ref.path)).get()).exists);
+}
+
 async function moderation() {
   console.log('\n— Fix 1: connections moderation block');
   const { uid, db } = await client('blocked');
@@ -386,6 +438,7 @@ async function testProjectHonoursSandbox() {
   } else {
     await forgedRefund();
     await generationLimits();
+    await repairGrants();
     await moderation();
     await adminExempt();
     await testProjectHonoursSandbox();

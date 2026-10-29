@@ -20,6 +20,8 @@ import React, {
   type ReactNode,
 } from "react";
 
+import { useRevenueCat } from "@/src/context/revenuecat-context";
+
 let AsyncStorage: any = null;
 try {
   AsyncStorage = require("@react-native-async-storage/async-storage").default;
@@ -275,14 +277,29 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     });
   }, [persist]);
 
+  // The overrides are stored per device, not per account, so they outlive a
+  // sign-out. Applied for everyone, an admin's test values became a non-admin's
+  // counter on the same device — "3 of 5 remaining" while the server, which
+  // never sees them, refused at 2. Only an admin gets them; everyone else gets
+  // the defaults, which match the server.
+  const { isAdmin } = useRevenueCat();
+
   return (
     <AdminContext.Provider
       value={{
-        dailyChatLimit,
-        premiumDailyChatLimit,
-        freeConnectionLimit,
-        trialConnectionLimit,
-        premiumConnectionLimit,
+        dailyChatLimit: isAdmin ? dailyChatLimit : DEFAULT_DAILY_CHAT_LIMIT,
+        premiumDailyChatLimit: isAdmin
+          ? premiumDailyChatLimit
+          : DEFAULT_PREMIUM_DAILY_CHAT_LIMIT,
+        freeConnectionLimit: isAdmin
+          ? freeConnectionLimit
+          : DEFAULT_FREE_CONNECTION_LIMIT,
+        trialConnectionLimit: isAdmin
+          ? trialConnectionLimit
+          : DEFAULT_TRIAL_CONNECTION_LIMIT,
+        premiumConnectionLimit: isAdmin
+          ? premiumConnectionLimit
+          : DEFAULT_PREMIUM_CONNECTION_LIMIT,
         setDailyChatLimit,
         setPremiumDailyChatLimit,
         setFreeConnectionLimit,

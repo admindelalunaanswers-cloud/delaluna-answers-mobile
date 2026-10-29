@@ -1,0 +1,30 @@
+# Store builds: every push to `production` (a merged release PR) builds both
+# platforms against the production backend (EAS environment `production` →
+# delaluna-answers), with build numbers auto-incremented by EAS. Builds only:
+# submitting to the stores stays a deliberate step (`eas submit`), since a
+# release also needs the functions deployed first. Also runnable by hand:
+#   npx eas-cli workflow:run .eas/workflows/build-production.yml
+
+name: Build production
+
+on:
+  push:
+    branches: ['production']
+  workflow_dispatch: {}
+
+jobs:
+  build_android:
+    name: Build Android (production)
+    type: build
+    params:
+      platform: android
+      profile: production
+      message: ${{ github.commit_message }}
+
+  build_ios:
+    name: Build iOS (production)
+    type: build
+    params:
+      platform: ios
+      profile: production
+      message: ${{ github.commit_message }}
