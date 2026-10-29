@@ -1,7 +1,7 @@
 import { createHash, randomInt } from "crypto";
 import * as admin from "firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { defineSecret, defineString, projectID } from "firebase-functions/params";
+import { defineSecret, projectID } from "firebase-functions/params";
 import {
   onDocumentCreated,
   onDocumentUpdated,
@@ -23,6 +23,8 @@ import {
   COMPATIBILITY_SCHEMA,
   NATAL_BREAKDOWN_SCHEMA,
   TRANSITS_SCHEMA,
+  IncompleteGenerationError,
+  type ThinkingLevel,
   describeGenerationError,
   geminiApiKey,
   generateJson,
@@ -908,15 +910,16 @@ const PRODUCTION_PROJECT_ID = "delaluna-answers";
 // review login. Apple reviews against the production backend with sandbox
 // purchases, so without this a reviewer's chat pack shows in the app and is then
 // refused by the server, which reads as a broken purchase. Uids, not emails,
-// because both callers already have the uid. Set per project in
-// functions/.env.<project id>; empty unless set, so nothing changes by default.
-// A plain comma-separated string rather than defineList, whose runtime value is
-// JSON-parsed: a malformed entry would throw instead of matching nobody.
-const reviewAccountUids = defineString("REVIEW_ACCOUNT_UIDS", { default: "" });
+// because both callers already have the uid. Comma-separated, held in Secret
+// Manager like ADMIN_EMAILS so the account stays out of the repo:
+//   firebase functions:secrets:set REVIEW_ACCOUNT_UIDS
+// Every function that reaches isUserPremium or purchasedChatCredits must list
+// it in `secrets`. It is read only in production; the test project needs the
+// secret to exist for the deploy, but its value is never consulted there.
+const reviewAccountUids = defineSecret("REVIEW_ACCOUNT_UIDS");
 
 function isReviewAccount(uid: string): boolean {
-  return reviewAccountUids
-    .value()
+  return (reviewAccountUids.value() ?? "")
     .split(",")
     .some((entry) => entry.trim() === uid);
 }
@@ -1096,7 +1099,8 @@ async function drainScheduledPushes(now: Date): Promise<number> {
  * to randomize delivery into the afternoon).
  */
 export const dailyHoroscopeNotifications = onSchedule(
-  "every 1 hours",
+  // The secret: this reaches isUserPremium (see REVIEW_ACCOUNT_UIDS).
+  { schedule: "every 1 hours", secrets: [reviewAccountUids] },
   async () => {
     const now = new Date();
     const messages: ExpoPushMessage[] = [];
@@ -1961,7 +1965,8 @@ async function refundChatQuestion(
  * and so does the retry that supersedes it.
  */
 export const sendChatMessage = onCall(
-  { invoker: "public" },
+  // The secret: this reaches isUserPremium and purchasedChatCredits.
+  { invoker: "public", secrets: [reviewAccountUids] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -2623,6 +2628,27 @@ const GENERATION_MODERATED_FEATURE: Record<string, string> = {
   generateSynastryReading: "connections",
 };
 
+/**
+ * One-time exemptions from the daily limit for a re-request we made ourselves
+ * (scripts/regenerate-incomplete.js repairing a generation that failed). The
+ * user never asked for it, so it must not spend their allowance.
+ *
+ * The exemption cannot live on the generated document: the client writes those,
+ * so any flag there could be forged into unlimited generations. Instead the
+ * script writes `generationGrants/{sha256(doc path)}` holding the path and the
+ * exact `requestedAt` it stamped, in the same batch as the re-request. Clients
+ * cannot write this top-level collection (only admins match the catch-all, and
+ * admins are exempt anyway). A grant counts only for that path *and* that
+ * stamp, and is deleted when it is used, so it covers exactly one generation.
+ * A moderation block still applies.
+ */
+const GENERATION_GRANTS = "generationGrants";
+
+// Mirrored in scripts/regenerate-incomplete.js — keep the two in step.
+function generationGrantId(docPath: string): string {
+  return createHash("sha256").update(docPath).digest("hex");
+}
+
 /** Admins are exempt from generation limits, as they are from chat metering. */
 async function isAdminUid(uid: string): Promise<boolean> {
   try {
@@ -2676,6 +2702,22 @@ async function runAnchoredGeneration(opts: {
    * and generates from its own prompt alone.
    */
   anchored?: boolean;
+  /**
+   * Overrides the default MAX_OUTPUT_TOKENS circuit breaker for this feature.
+   * The cap counts thought tokens too, so a tight one needs `thinkingLevel`
+   * lowered with it.
+   */
+  maxOutputTokens?: number;
+  /** Overrides DEFAULT_THINKING_LEVEL for this feature. */
+  thinkingLevel?: ThinkingLevel;
+  /**
+   * Make one more attempt when the model stops before finishing (a repetition
+   * loop running into the token cap). Opt-in, because a looping attempt runs
+   * until the cap: it is only safe where two capped attempts fit inside the
+   * function's `timeoutSeconds`. A function killed mid-retry never writes its
+   * ERROR, and the document sits on PROCESSING with nothing coming to clear it.
+   */
+  retryIncomplete?: boolean;
 }): Promise<void> {
   const usageRef = db
     .collection("users")
@@ -2717,9 +2759,24 @@ async function runAnchoredGeneration(opts: {
       blocked = features.includes(moderatedAs);
     }
 
+    // A repair we triggered (see GENERATION_GRANTS) is neither limited nor
+    // counted. It must match this document and this exact request.
+    const grantRef = db
+      .collection(GENERATION_GRANTS)
+      .doc(generationGrantId(opts.ref.path));
+    const grant = (await tx.get(grantRef)).data();
+    const granted =
+      grant?.path === opts.ref.path &&
+      stamp !== "" &&
+      String(grant?.requestedAtMillis) === stamp;
+    if (granted) tx.delete(grantRef);
+
     // The admin lookup is an Auth call, so it is made only once a request
     // would otherwise be refused rather than on every generation.
-    if ((blocked || used >= limit) && !(await isAdminUid(opts.uid))) {
+    if (
+      (blocked || (!granted && used >= limit)) &&
+      !(await isAdminUid(opts.uid))
+    ) {
       refused = blocked ? "blocked" : "daily limit";
       // Stamping the hash marks this request as answered, so the ERROR write
       // re-fires the trigger, matches, and stops like any other write-back.
@@ -2737,15 +2794,18 @@ async function runAnchoredGeneration(opts: {
 
     // Counted when the request is claimed, not when it succeeds: a failed
     // generation still spent a Gemini call, and the limits are loose enough
-    // that a legitimate retry will not run into them.
-    tx.set(
-      usageRef,
-      {
-        [opts.label]: FieldValue.increment(1),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
+    // that a legitimate retry will not run into them. A granted repair is not
+    // the user's request, so it is not counted.
+    if (!granted) {
+      tx.set(
+        usageRef,
+        {
+          [opts.label]: FieldValue.increment(1),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
 
     tx.update(opts.ref, {
       requestHash,
@@ -2767,11 +2827,22 @@ async function runAnchoredGeneration(opts: {
       prompt: opts.augmentPrompt ? await opts.augmentPrompt(prompt) : prompt,
       schema: opts.schema,
       label: opts.label,
+      maxOutputTokens: opts.maxOutputTokens,
+      thinkingLevel: opts.thinkingLevel,
     };
-    const { text, interactionId, model } =
+    const generate = () =>
       opts.anchored === false
-        ? await generateJson(request)
-        : await generateWithAnchor(opts.uid, request);
+        ? generateJson(request)
+        : generateWithAnchor(opts.uid, request);
+    // The retry is not counted against the daily limit: the request was
+    // claimed once, and a loop is the model's failure, not the user's.
+    const { text, interactionId, model } = await generate().catch((err) => {
+      if (!opts.retryIncomplete || !(err instanceof IncompleteGenerationError)) {
+        throw err;
+      }
+      console.warn(`[${opts.label}] Incomplete generation, retrying once`);
+      return generate();
+    });
     await opts.ref.update({
       response: text,
       status: { state: "COMPLETED" },
@@ -2889,6 +2960,22 @@ export const generateNatalBreakdown = onDocumentWritten(
       ref: after.ref,
       schema: NATAL_BREAKDOWN_SCHEMA,
       label: "generateNatalBreakdown",
+      // This prompt is the one that loops — 2026-09-08, and twice on test on
+      // 2026-10-25, each time writing until the 32k default cap stopped it,
+      // 3–4 minutes later. The three settings below hold together; change one
+      // and re-measure the others. Measured 2026-10-25 with every field
+      // required (see NATAL_BREAKDOWN_SCHEMA):
+      //   - "medium" thinking spent 1.3k, 16k and 23k thought tokens on three
+      //     identical requests, so a complete breakdown needed up to ~30k of
+      //     the cap and took up to 199s.
+      //   - "low" spent none: 6.1–6.5k output in 57–64s, all fields present at
+      //     the same lengths. It is also what this feature ran on until the
+      //     default was raised on 2026-09-14 for the connection readings.
+      // 16k is then ~2.5× headroom and halves what a loop costs, and a capped
+      // loop plus a retry stays well inside the 540s timeout.
+      thinkingLevel: "low",
+      maxOutputTokens: 16384,
+      retryIncomplete: true,
     });
   },
 );
