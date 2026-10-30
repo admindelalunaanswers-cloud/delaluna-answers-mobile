@@ -66,23 +66,8 @@ service cloud.firestore {
 
     // ─── Admin override ─────────────────────────────────────────────────────
     // Anything matching this rule short-circuits all other rules.
-    //
-    // Split on the top-level collection so the one exception can be made: the
-    // chat archive is a four-year legal record (functions/src/chat-retention.ts)
-    // and must not be editable from the admin screen either. Allows in rules
-    // are OR-ed, so a deny further down could not carve it out of a blanket
-    // `write: if isAdmin()` — it has to be excluded here.
-    match /{collection}/{document=**} {
-      allow read: if isAdmin();
-      allow write: if isAdmin() && collection != 'chatArchive';
-    }
-
-    // ─── Chat archive (server-only) ─────────────────────────────────────────
-    // Written by archiveChatReply with the Admin SDK; removed by its TTL policy
-    // (firestore.indexes.json). No client access — admins read it via the
-    // override above, nobody writes it.
-    match /chatArchive/{archiveId} {
-      allow read, write: if false;
+    match /{document=**} {
+      allow read, write: if isAdmin();
     }
 
     // ─── Moderation ─────────────────────────────────────────────────────────

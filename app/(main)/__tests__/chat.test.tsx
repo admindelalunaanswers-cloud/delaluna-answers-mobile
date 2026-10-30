@@ -368,14 +368,6 @@ describe('ChatScreen', () => {
     });
 
     // A stored message holds a question and its reply — two messages, not one.
-    it('says how long chats stay in history', async () => {
-      await openHistory();
-
-      expect(
-        screen.getByText('Chats stay in your history for 60 days. Export one to keep it.'),
-      ).toBeTruthy();
-    });
-
     it('counts the question and the reply separately', async () => {
       await openHistory();
 

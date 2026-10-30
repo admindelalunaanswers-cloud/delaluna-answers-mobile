@@ -1,7 +1,6 @@
 import { httpsCallable } from 'firebase/functions';
 import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore';
 import { logger } from '@/src/utils/logger';
-import { isChatAccessible } from '@/src/utils/chat-retention';
 import { logGenerationModel } from '@/src/utils/generation-model';
 
 import { db, functions } from '@/firebaseConfig';
@@ -102,12 +101,6 @@ export interface SavedChatSession {
   title: string;
   messages: SavedChatMessage[];
   savedAt: Date;
-  /**
-   * When the user loses access (60 days after the last turn). Stamped by the
-   * server after the save, so briefly absent on a fresh session — read it
-   * through `chatAccessEndsAt`, which derives the same date until then.
-   */
-  expireAt?: Date;
   /** Which persona the session ran under. Absent on pre-split sessions. */
   mode?: ChatMode;
 }
@@ -546,12 +539,9 @@ export function subscribeToChatSessions(
             mode: parseMode(m.mode),
           })),
           savedAt: (data.savedAt as Timestamp)?.toDate() ?? new Date(),
-          expireAt: (data.expireAt as Timestamp | undefined)?.toDate?.(),
         };
       });
-      // Past the 60-day window the chat is gone as far as the user is
-      // concerned, even if the TTL sweep hasn't reached it yet.
-      onSessions(sessions.filter((session) => isChatAccessible(session)));
+      onSessions(sessions);
     },
     // savedChats is gated on isVerifiedOwner — same denial as chat history.
     (err) => {
@@ -562,9 +552,7 @@ export function subscribeToChatSessions(
 }
 
 /**
- * Removes a saved chat from the user's history. The server keeps its own copy
- * of every answered turn in the legal archive (functions/src/chat-retention.ts),
- * which this does not touch.
+ * Deletes a saved chat session.
  */
 export async function deleteChatSession(uid: string, sessionId: string): Promise<void> {
   await deleteDoc(doc(db, 'users', uid, 'savedChats', sessionId));
