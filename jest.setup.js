@@ -192,6 +192,10 @@ jest.mock('expo-clipboard', () => ({
 }));
 jest.mock('react-native-view-shot', () => ({
   captureRef: jest.fn(() => Promise.resolve('file:///cache/card.jpg')),
+  captureScreen: jest.fn(() => Promise.resolve('file:///cache/screen.jpg')),
+}));
+jest.mock('expo-screen-capture', () => ({
+  addScreenshotListener: jest.fn(() => ({ remove: jest.fn() })),
 }));
 jest.mock('expo-media-library', () => ({
   requestPermissionsAsync: jest.fn(() => Promise.resolve({ granted: true })),

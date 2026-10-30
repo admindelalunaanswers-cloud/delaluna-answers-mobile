@@ -106,6 +106,9 @@ module.exports = {
       // the app only *saves* (the chat image export). Play restricts
       // READ_MEDIA_IMAGES / _VIDEO to apps whose core feature is the photo
       // library, and saving needs no permission on Android 10+.
+      // expo-screen-capture declares READ_MEDIA_IMAGES too, for screenshot
+      // detection on Android 13; blocking it is why the share prompt is
+      // Android 14+ only (DETECT_SCREEN_CAPTURE, no runtime prompt).
       blockedPermissions: [
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO",
