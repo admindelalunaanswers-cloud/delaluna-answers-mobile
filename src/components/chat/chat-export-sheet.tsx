@@ -1,6 +1,7 @@
 /**
  * "Export chat" bottom sheet: pick a format (copy as text, PDF, image) and what
- * to include, then one button does it. Opened from the chat header and from
+ * to include, then one button does it — two for the image, which can be saved
+ * straight to Photos or sent through the share sheet. Opened from the chat header and from
  * each row of the chat history.
  *
  * Birth details default to off every time the sheet opens — an export is
@@ -13,6 +14,7 @@ import {
   AccessibilityInfo,
   ActivityIndicator,
   Alert,
+  Linking,
   Modal,
   ScrollView,
   StyleSheet,
@@ -34,6 +36,8 @@ import { Events } from '@/src/services/analytics.service';
 import {
   copyChatAsText,
   exportChatAsPdf,
+  PhotosPermissionError,
+  saveChatImageToPhotos,
   shareChatImage,
   ShareUnavailableError,
 } from '@/src/services/chat-export.service';
@@ -70,9 +74,9 @@ const FORMATS: {
   {
     id: 'image',
     title: 'Image',
-    description: 'A card of the latest reading, sized for stories.',
+    description: 'A card of the latest reading, to save to Photos or share.',
     icon: 'image-outline',
-    action: 'Share image',
+    action: 'Save to Photos',
   },
 ];
 
@@ -82,8 +86,10 @@ const CAPTION_A11Y = {
   importantForAccessibility: 'no-hide-descendants',
 } as const;
 
-/** How long "Copied" stays on the button before the sheet closes itself. */
-const COPIED_CLOSE_MS = 1200;
+/** How long "Copied" / "Saved" stays on the button before the sheet closes itself. */
+const DONE_CLOSE_MS = 1200;
+
+type ImageDestination = 'photos' | 'share';
 
 interface Props {
   visible: boolean;
@@ -106,8 +112,10 @@ export default function ChatExportSheet({
   const [format, setFormat] = useState<ChatExportFormat>('pdf');
   const [includeQuestions, setIncludeQuestions] = useState(true);
   const [includeBirth, setIncludeBirth] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
+  /** Which button is working: the main one, or the image's Share. */
+  const [busy, setBusy] = useState<'primary' | 'share' | null>(null);
+  /** "Copied" or "Saved" once that's done; the sheet then closes itself. */
+  const [done, setDone] = useState<string | null>(null);
   const cardRef = useRef<View>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -122,14 +130,14 @@ export default function ChatExportSheet({
       setFormat('pdf');
       setIncludeQuestions(true);
       setIncludeBirth(false);
-      setBusy(false);
-      setCopied(false);
+      setBusy(null);
+      setDone(null);
     }
   }
 
-  // A copy's auto-close belongs to the sheet that copied. Cleared whenever the
+  // A copy's (or save's) auto-close belongs to the sheet that did it. Cleared whenever the
   // sheet closes, however it closes; left running it closed the next sheet
-  // opened within COPIED_CLOSE_MS.
+  // opened within DONE_CLOSE_MS.
   useEffect(() => {
     if (visible) return;
     if (closeTimer.current) {
@@ -163,32 +171,45 @@ export default function ChatExportSheet({
     birthDetails: includeBirth ? birthDetails : null,
   };
 
-  const handleExport = async () => {
+  const finish = (label: string, announcement: string) => {
+    setDone(label);
+    AccessibilityInfo.announceForAccessibility(announcement);
+    closeTimer.current = setTimeout(close, DONE_CLOSE_MS);
+  };
+
+  // `destination` only matters for the image; the other formats have one button.
+  const handleExport = async (destination: ImageDestination = 'photos') => {
     if (busy) return;
-    setBusy(true);
+    setBusy(destination === 'share' ? 'share' : 'primary');
     try {
       if (format === 'text') {
         await copyChatAsText(chat, options);
-        setCopied(true);
-        AccessibilityInfo.announceForAccessibility('Chat copied to clipboard');
-        closeTimer.current = setTimeout(close, COPIED_CLOSE_MS);
+        finish('Copied', 'Chat copied to clipboard');
       } else if (format === 'pdf') {
         await exportChatAsPdf(chat, options);
         close();
       } else {
         if (!cardRef.current) throw new Error('export card not mounted');
+        // JPEG rather than PNG: it's what a camera roll holds, and the card is
+        // a photo-like gradient that PNG stores several times larger.
         const uri = await captureRef(cardRef, {
-          format: 'png',
-          quality: 1,
+          format: 'jpg',
+          quality: 0.95,
           width: CARD_WIDTH * 3,
           height: CARD_HEIGHT * 3,
           result: 'tmpfile',
         });
-        await shareChatImage(uri);
-        close();
+        if (destination === 'photos') {
+          await saveChatImageToPhotos(uri);
+          finish('Saved', 'Image saved to Photos');
+        } else {
+          await shareChatImage(uri);
+          close();
+        }
       }
       Events.chatExported({
         format,
+        ...(format === 'image' ? { destination } : {}),
         source,
         includeQuestions,
         includeBirthDetails: includeBirth,
@@ -196,16 +217,25 @@ export default function ChatExportSheet({
     } catch (e) {
       if (e instanceof ShareUnavailableError) {
         Alert.alert('Sharing unavailable', "This device can't open the share sheet.");
+      } else if (e instanceof PhotosPermissionError) {
+        Alert.alert(
+          'Allow access to Photos',
+          'To save the image, let Delaluna Answers add photos in Settings.',
+          [
+            { text: 'Not now', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => void Linking.openSettings() },
+          ],
+        );
       } else {
         logger.error('[chat-export] export failed', e, `chat_export_${format}`);
         Alert.alert("Couldn't export", 'Something went wrong. Please try again.');
       }
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
 
-  const actionLabel = copied ? 'Copied' : selected.action;
+  const actionLabel = done ?? selected.action;
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
@@ -259,7 +289,7 @@ export default function ChatExportSheet({
                     style={[styles.formatRow, isSelected && styles.formatRowSelected]}
                     onPress={() => {
                       setFormat(f.id);
-                      setCopied(false);
+                      setDone(null);
                     }}
                     activeOpacity={0.8}
                     accessibilityRole="radio"
@@ -313,25 +343,48 @@ export default function ChatExportSheet({
           </ScrollView>
 
           <TouchableOpacity
-            style={[styles.primary, busy && styles.primaryBusy]}
-            onPress={handleExport}
-            disabled={busy || copied}
+            style={[styles.primary, busy === 'primary' && styles.primaryBusy]}
+            onPress={() => handleExport()}
+            disabled={busy !== null || done !== null}
             activeOpacity={0.85}
             accessibilityRole="button"
             accessibilityLabel={actionLabel}
-            accessibilityState={{ disabled: busy || copied, busy }}
+            accessibilityState={{
+              disabled: busy !== null || done !== null,
+              busy: busy === 'primary',
+            }}
           >
-            {busy ? (
+            {busy === 'primary' ? (
               <ActivityIndicator color={C.cosmos} />
             ) : (
               <View style={styles.primaryContent}>
-                {copied ? (
+                {done ? (
                   <Ionicons name="checkmark" size={18} color={C.cosmos} />
                 ) : null}
                 <Text style={styles.primaryText}>{actionLabel.toUpperCase()}</Text>
               </View>
             )}
           </TouchableOpacity>
+          {format === 'image' ? (
+            <TouchableOpacity
+              style={[styles.secondary, busy === 'share' && styles.primaryBusy]}
+              onPress={() => handleExport('share')}
+              disabled={busy !== null || done !== null}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Share image"
+              accessibilityState={{
+                disabled: busy !== null || done !== null,
+                busy: busy === 'share',
+              }}
+            >
+              {busy === 'share' ? (
+                <ActivityIndicator color={C.turquoise} />
+              ) : (
+                <Text style={styles.secondaryText}>SHARE IMAGE</Text>
+              )}
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {/* Rendered off-screen only to be captured; never seen or read aloud. */}
@@ -509,6 +562,22 @@ const styles = StyleSheet.create({
   },
   primaryText: {
     color: C.cosmos,
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 1.6,
+  },
+  secondary: {
+    minHeight: 52,
+    paddingVertical: S.sm + 6,
+    borderRadius: R.pill,
+    borderWidth: 1.5,
+    borderColor: C.turquoise,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: S.sm,
+  },
+  secondaryText: {
+    color: C.turquoise,
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: 1.6,

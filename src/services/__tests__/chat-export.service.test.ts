@@ -96,11 +96,11 @@ describe('chat-export.service', () => {
     await exportChatAsPdf(CHAT, OPTIONS);
     const firstPdf = sharedUri();
 
-    mockFiles.add('file:///cache/card.png');
-    await shareChatImage('file:///cache/card.png');
+    mockFiles.add('file:///cache/card.jpg');
+    await shareChatImage('file:///cache/card.jpg');
 
     expect(mockFiles.has(firstPdf)).toBe(false);
-    expect([...mockFiles]).toEqual(['file:///cache/card.png']);
+    expect([...mockFiles]).toEqual(['file:///cache/card.jpg']);
   });
 
   it('throws ShareUnavailableError when the device cannot share', async () => {
