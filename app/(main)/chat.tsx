@@ -87,6 +87,10 @@ import { ChatStore } from "@/src/stores/chat-store";
 import type { DrawnTarotCard } from "@/src/types/tarot-cards.type";
 import { resolveChatAllowance } from "@/src/utils/chat-allowance";
 import {
+  CHAT_ACCESS_DAYS,
+  chatExpiryLabel,
+} from "@/src/utils/chat-retention";
+import {
   countChatMessages,
   exportableFromSession,
   exportableFromThread,
@@ -127,6 +131,8 @@ const CONNECTION_SUGGESTIONS = [
 ];
 
 const VISIBLE_SUGGESTIONS = 5;
+
+const HISTORY_RETENTION_NOTE = `Chats stay in your history for ${CHAT_ACCESS_DAYS} days. Export one to keep it.`;
 
 const CHAT_MODES = ["astrology", "tarot"] as const;
 
@@ -1283,12 +1289,14 @@ export default function ChatScreen() {
                     <Text style={styles.historyEmptyText}>
                       No saved chats yet.
                     </Text>
+                    <Text style={styles.historyNote}>{HISTORY_RETENTION_NOTE}</Text>
                   </View>
                 ) : (
                   <ScrollView
                     contentContainerStyle={styles.historyList}
                     showsVerticalScrollIndicator={false}
                   >
+                    <Text style={styles.historyNote}>{HISTORY_RETENTION_NOTE}</Text>
                     {savedSessions.map((session) => (
                       // Siblings, not nested: inside the row's own touchable the
                       // delete button was swallowed into one VoiceOver element and
@@ -1309,6 +1317,11 @@ export default function ChatScreen() {
                               countChatMessages(session.messages),
                             )}
                           </Text>
+                          {chatExpiryLabel(session) ? (
+                            <Text style={styles.sessionExpiry}>
+                              {chatExpiryLabel(session)}
+                            </Text>
+                          ) : null}
                         </TouchableOpacity>
                         <TouchableOpacity
                           onPress={() => openSessionExport(session)}
@@ -2040,6 +2053,18 @@ const styles = StyleSheet.create({
   sessionInfo: {
     flex: 1,
     marginRight: S.sm,
+  },
+  sessionExpiry: {
+    color: C.turquoise,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  historyNote: {
+    color: C.muted,
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: "center",
+    marginTop: S.sm,
   },
   sessionAction: {
     marginRight: S.md + 4,
