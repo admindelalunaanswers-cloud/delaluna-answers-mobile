@@ -2,6 +2,7 @@ import React from 'react';
 import { AccessibilityInfo, Alert } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import * as Clipboard from 'expo-clipboard';
+import * as MediaLibrary from 'expo-media-library';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { captureRef } from 'react-native-view-shot';
@@ -98,7 +99,13 @@ describe('ChatExportSheet', () => {
     expect(screen.getByRole('radio', { name: /^Copy as text/ })).toBeChecked();
 
     fireEvent.press(screen.getByRole('radio', { name: /^Image/ }));
+    expect(screen.getByRole('button', { name: 'Save to Photos' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Share image' })).toBeTruthy();
+  });
+
+  it('offers Share image only for the image', () => {
+    renderSheet();
+    expect(screen.queryByRole('button', { name: 'Share image' })).toBeNull();
   });
 
   it('includes questions by default and birth details only when switched on', () => {
@@ -206,20 +213,64 @@ describe('ChatExportSheet', () => {
     expect(html).toContain('Chicago, IL');
   });
 
-  it('captures the story card at 1080×1920 and shares it', async () => {
-    renderSheet();
+  it('saves the story card to Photos as a 1080×1920 JPEG, then closes', async () => {
+    jest.useFakeTimers();
+    const { onClose } = renderSheet();
+    fireEvent.press(screen.getByRole('radio', { name: /^Image/ }));
+
+    await press('Save to Photos');
+
+    expect(captureRef).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ format: 'jpg', width: 1080, height: 1920 }),
+    );
+    // Add-only: the app never reads the library.
+    expect(MediaLibrary.requestPermissionsAsync).toHaveBeenCalledWith(true, ['photo']);
+    expect(MediaLibrary.Asset.create).toHaveBeenCalledWith('file:///cache/card.jpg');
+    expect(Sharing.shareAsync).not.toHaveBeenCalled();
+    expect(announce).toHaveBeenCalledWith('Image saved to Photos');
+    expect(screen.getByRole('button', { name: 'Saved' })).toBeDisabled();
+    expect(Events.chatExported).toHaveBeenCalledWith(
+      expect.objectContaining({ format: 'image', destination: 'photos' }),
+    );
+
+    act(() => {
+      jest.advanceTimersByTime(1500);
+    });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('points to Settings when Photos access is denied, and stays open', async () => {
+    (MediaLibrary.requestPermissionsAsync as jest.Mock).mockResolvedValueOnce({ granted: false });
+    const { onClose } = renderSheet();
+    fireEvent.press(screen.getByRole('radio', { name: /^Image/ }));
+
+    await press('Save to Photos');
+
+    expect(MediaLibrary.Asset.create).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Allow access to Photos',
+      expect.any(String),
+      expect.arrayContaining([expect.objectContaining({ text: 'Open Settings' })]),
+    );
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('shares the story card as a JPEG from Share image', async () => {
+    const { onClose } = renderSheet();
     fireEvent.press(screen.getByRole('radio', { name: /^Image/ }));
 
     await press('Share image');
 
-    expect(captureRef).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ format: 'png', width: 1080, height: 1920 }),
-    );
     expect(Sharing.shareAsync).toHaveBeenCalledWith(
-      'file:///cache/card.png',
-      expect.objectContaining({ mimeType: 'image/png' }),
+      'file:///cache/card.jpg',
+      expect.objectContaining({ mimeType: 'image/jpeg' }),
     );
+    expect(MediaLibrary.Asset.create).not.toHaveBeenCalled();
+    expect(Events.chatExported).toHaveBeenCalledWith(
+      expect.objectContaining({ format: 'image', destination: 'share' }),
+    );
+    expect(onClose).toHaveBeenCalled();
   });
 
   it('says so when the device cannot share, and stays open', async () => {
