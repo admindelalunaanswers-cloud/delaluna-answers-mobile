@@ -2,18 +2,6 @@
   "indexes": [],
   "fieldOverrides": [
     {
-      "collectionGroup": "chatArchive",
-      "fieldPath": "purgeAt",
-      "ttl": true,
-      "indexes": []
-    },
-    {
-      "collectionGroup": "savedChats",
-      "fieldPath": "expireAt",
-      "ttl": true,
-      "indexes": []
-    },
-    {
       "collectionGroup": "updayedChat",
       "fieldPath": "createTime",
       "ttl": false,
