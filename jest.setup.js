@@ -191,7 +191,11 @@ jest.mock('expo-clipboard', () => ({
   setStringAsync: jest.fn(() => Promise.resolve(true)),
 }));
 jest.mock('react-native-view-shot', () => ({
-  captureRef: jest.fn(() => Promise.resolve('file:///cache/card.png')),
+  captureRef: jest.fn(() => Promise.resolve('file:///cache/card.jpg')),
+}));
+jest.mock('expo-media-library', () => ({
+  requestPermissionsAsync: jest.fn(() => Promise.resolve({ granted: true })),
+  Asset: { create: jest.fn(() => Promise.resolve({})) },
 }));
 jest.mock('expo-asset', () => ({
   Asset: {

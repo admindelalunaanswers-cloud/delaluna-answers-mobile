@@ -1,16 +1,17 @@
 /**
  * chat-export.service.ts
- * The native half of "Export chat": clipboard, PDF printing, and the share
- * sheet. Everything that decides *what* goes out lives in
+ * The native half of "Export chat": clipboard, PDF printing, saving to the
+ * photo library, and the share sheet. Everything that decides *what* goes out lives in
  * `src/utils/chat-export-format.ts`.
  *
- * Needs expo-print, expo-sharing and react-native-view-shot, all native — a
- * dev client built before they were added will fail on import.
+ * Needs expo-print, expo-sharing, expo-media-library and react-native-view-shot,
+ * all native — a dev client built before they were added will fail on import.
  */
 
 import { Asset } from 'expo-asset';
 import * as Clipboard from 'expo-clipboard';
 import { File } from 'expo-file-system';
+import * as MediaLibrary from 'expo-media-library';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
@@ -31,6 +32,14 @@ export class ShareUnavailableError extends Error {
   constructor() {
     super('Sharing is not available on this device');
     this.name = 'ShareUnavailableError';
+  }
+}
+
+/** The user said no to saving into Photos, now or earlier. */
+export class PhotosPermissionError extends Error {
+  constructor() {
+    super('Photo library access was denied');
+    this.name = 'PhotosPermissionError';
   }
 }
 
@@ -123,8 +132,20 @@ export async function exportChatAsPdf(
   await share(named, 'application/pdf', 'com.adobe.pdf');
 }
 
-/** `uri` is a PNG already captured from the on-screen card. */
+/**
+ * `uri` is a JPEG already captured from the on-screen card. Asks for add-only
+ * access: the app never reads the library, so iOS shows the narrower "add
+ * photos" prompt and Android 10+ needs no permission at all.
+ */
+export async function saveChatImageToPhotos(uri: string): Promise<void> {
+  const { granted } = await MediaLibrary.requestPermissionsAsync(true, ['photo']);
+  if (!granted) throw new PhotosPermissionError();
+  replacePreviousExport(uri);
+  await MediaLibrary.Asset.create(uri);
+}
+
+/** `uri` is a JPEG already captured from the on-screen card. */
 export async function shareChatImage(uri: string): Promise<void> {
   replacePreviousExport(uri);
-  await share(uri, 'image/png', 'public.png');
+  await share(uri, 'image/jpeg', 'public.jpeg');
 }

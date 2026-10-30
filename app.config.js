@@ -102,6 +102,17 @@ module.exports = {
     },
     android: {
       predictiveBackGestureEnabled: false,
+      // expo-media-library's plugin always adds the read-media permissions, but
+      // the app only *saves* (the chat image export). Play restricts
+      // READ_MEDIA_IMAGES / _VIDEO to apps whose core feature is the photo
+      // library, and saving needs no permission on Android 10+.
+      blockedPermissions: [
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+      ],
       adaptiveIcon: {
         foregroundImage: "./src/assets/images/android-icon-foreground.png",
         backgroundImage: "./src/assets/images/android-icon-background.png",
@@ -143,6 +154,16 @@ module.exports = {
       ],
       "@react-native-community/datetimepicker",
       "expo-secure-store",
+      [
+        "expo-media-library",
+        {
+          // Add-only: the chat image export saves to Photos and never reads it.
+          photosPermission: false,
+          savePhotosPermission:
+            "Allow Delaluna Answers to save chat images to your Photos.",
+          granularPermissions: ["photo"],
+        },
+      ],
       [
         "expo-build-properties",
         {

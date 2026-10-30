@@ -185,6 +185,8 @@ export const Events = {
   chatRetry: () => logEvent("chat_retry"),
   chatExported: (params: {
     format: "text" | "pdf" | "image";
+    /** Image only: saved to the photo library, or sent through the share sheet. */
+    destination?: "photos" | "share";
     source: "chat" | "history";
     includeQuestions: boolean;
     includeBirthDetails: boolean;
