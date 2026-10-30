@@ -192,6 +192,19 @@ export const Events = {
     includeBirthDetails: boolean;
   }) => logEvent("chat_exported", params),
 
+  // Screenshot → "share & tag us" prompt. `screen` is the route label, never
+  // anything that was on it.
+  sharePromptShown: (screen: string) =>
+    logEvent("share_prompt_shown", { screen }),
+  sharePromptAction: (params: {
+    network: "instagram" | "facebook" | "x" | "tiktok" | "other";
+    screen: string;
+  }) => logEvent("share_prompt_action", params),
+  sharePromptDismissed: (params: {
+    reason: "not_now" | "opt_out";
+    screen: string;
+  }) => logEvent("share_prompt_dismissed", params),
+
   // Monetization (paywall + RevenueCat)
   paywallViewed: (source: string) => logEvent("paywall_viewed", { source }),
   paywallDismissed: (source: string) =>

@@ -25,6 +25,7 @@ import { useMinVersion } from '@/src/hooks/use-min-version';
 import { usePortraitLock } from '@/src/hooks/use-portrait-lock';
 import { useTheme } from '@/src/hooks/use-theme';
 import { UpdateRequiredScreen } from '@/src/components/update-required-screen';
+import { ScreenshotSharePrompt } from '@/src/components/screenshot-share-prompt';
 import { logScreenView, screenLabelForPath, setUserId } from '@/src/services/analytics.service';
 import {
   installGlobalErrorHandler,
@@ -199,6 +200,9 @@ function AuthGate() {
         <Slot />
       </View>
       {shouldHoldRender ? <SplashFallback /> : null}
+      <ScreenshotSharePrompt
+        enabled={!shouldHoldRender && !!authUser?.emailVerified}
+      />
     </ThemedRoot>
   );
 }
