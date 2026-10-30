@@ -2,6 +2,7 @@ import { createHash, randomInt } from "crypto";
 import * as admin from "firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { defineSecret, projectID } from "firebase-functions/params";
+import * as functionsV1 from "firebase-functions/v1";
 import {
   onDocumentUpdated,
   onDocumentWritten,
@@ -696,6 +697,42 @@ export const clearDailyChatHistory = onSchedule("every day 00:00", async () => {
     await batch.commit();
   }
 });
+
+// ─── Account deletion: chat archive ──────────────────────────────────────────
+
+/**
+ * Deletes the user's `chatArchive` records when their Auth account is deleted.
+ *
+ * delete-user-data clears `users/{uid}` recursively, but the archive is a
+ * top-level collection whose owner field is `ownerUid` and whose ids are
+ * `{uid}_{messageId}` — named to stay out of the extension's auto-discovery
+ * (`id,uid,userId`) — so nothing else reaches it. Production wrote these
+ * records from 2026-10-28 while retention was briefly deployed; this also
+ * covers retention itself if it ships again.
+ *
+ * Gen1 because Gen2 has no Auth delete trigger. Keyed on the Auth account, not
+ * on `users/{uid}`: the owner may delete that document without deleting the
+ * account. A no-op for anyone with no records.
+ */
+export const purgeChatArchiveOnAccountDelete = functionsV1.auth
+  .user()
+  .onDelete(async (user) => {
+    const snap = await db
+      .collection("chatArchive")
+      .where("ownerUid", "==", user.uid)
+      .select()
+      .get();
+    if (snap.empty) return;
+
+    const writer = db.bulkWriter();
+    const deletes = snap.docs.map((d) => writer.delete(d.ref));
+    await writer.close();
+    // close() settles even when writes fail; this is what surfaces them.
+    await Promise.all(deletes);
+    console.info(
+      `[purgeChatArchiveOnAccountDelete] removed ${snap.size} records for user ${user.uid}`,
+    );
+  });
 
 // Silent midnight rollover hour in user local time. The client treats this as
 // a hint to pre-generate today's horoscope so it's ready by morning.
