@@ -18,12 +18,13 @@ Two clocks, both in `functions/src/chat-retention.ts` (client mirror of the firs
   top-level `chatArchive/{uid}_{messageId}`, `purgeAt` = asked-at + 1,461 days, removed by
   a TTL policy. No client can touch it; the admin catch-all is read-only there.
 
-The archive survives the user deleting a chat, but **not their account**: since
-2026-10-30, `purgeChatArchiveOnAccountDelete` (an Auth `onDelete` trigger, on
-`development` already) deletes every record whose `ownerUid` matches. It is needed
-because the owner field is `ownerUid` and the doc id is never the bare uid, so
-`delete-user-data`'s auto-discovery on `id,uid,userId` never finds these records.
-(Before that the archive was meant to outlive the account; that was reversed.)
+The archive survives the user deleting a chat **and deleting their account** — the
+Privacy Policy (v.2026.11.04) says chat transcripts may be kept in archive storage for four
+years even after the account is deleted. The four-year `purgeAt` TTL is what removes them.
+Note `delete-user-data` would not find these records anyway (owner field `ownerUid`, doc id
+`${uid}_${messageId}`), so keeping them needs no extra work. (From 2026-10-30 to the
+revert on `fix/keep-chat-archive`, `purgeChatArchiveOnAccountDelete` deleted them with the
+account; production still runs it until it is deleted — see the deploy steps.)
 
 `clearDailyChatHistory` used to *delete* open-thread turns older than 24h — anything not
 parked with "+" before midnight UTC was lost. It now moves them into `savedChats` (one
@@ -32,13 +33,10 @@ daily but nothing leaves the user's history before 60 days.
 
 ## TODO — chat retention rollout (order matters)
 
-- [ ] **Update the Privacy Policy before shipping.** Play Data safety was updated
-      2026-10-29, but the policy (v2026.10.21 — `src/assets/legal/Privacy_Policy.md`, the
-      in-app copy in `legal-texts.ts`, and the PDF) still promises deletion on request
-      "except to the extent we are required by law to retain", says nothing about the
-      60-day window or the four-year chat record, and
-      states that deleting the app deletes your data. (A draft is on
-      `docs/privacy-policy-retention`.)
+- [x] **Update the Privacy Policy.** Counsel's v.2026.11.04 discloses the 60-day window
+      and the four-year archive, including after account deletion, and drops the claim
+      that deleting the app deletes your data (`docs/privacy-policy-2026-11-04`). Ship it
+      before or with this deploy.
 - [ ] **Deploy in this order, on `testing` first:**
       1. `firebase deploy --only functions` — starts archiving new answers, and the nightly
          job starts parking instead of deleting.
@@ -48,6 +46,9 @@ daily but nothing leaves the user's history before 60 days.
          yet archived goes with it. (The script is local only — `/scripts/*` is
          gitignored.)
       3. `firebase deploy --only firestore:indexes` — enables both TTL policies.
+      4. In production, `firebase functions:delete purgeChatArchiveOnAccountDelete
+         --project delaluna-answers` — a functions deploy from a branch without it will
+         also offer to delete it; say yes.
       4. `firebase deploy --only firestore:rules` — admin read-only on `chatArchive`.
       5. Ship the client (OTA is fine for this part — no native change).
 - [ ] **Confirm both TTL policies show "Serving"** in the console (Firestore → Time-to-live)
