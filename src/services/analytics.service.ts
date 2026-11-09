@@ -338,4 +338,15 @@ export const Events = {
 
   // Settings
   themeChanged: (theme: string) => logEvent("theme_changed", { theme }),
+
+  // What's new sheet. `release_id` and `item_id` come from
+  // src/constants/whats-new.ts — fixed strings, never user data.
+  whatsNewShown: (params: { release_id: string; source: "auto" | "profile" }) =>
+    logEvent("whats_new_shown", params),
+  whatsNewDismissed: (params: {
+    release_id: string;
+    reason: "button" | "backdrop" | "back";
+  }) => logEvent("whats_new_dismissed", params),
+  whatsNewCta: (params: { release_id: string; item_id: string }) =>
+    logEvent("whats_new_cta", params),
 } as const;

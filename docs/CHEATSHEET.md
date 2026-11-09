@@ -25,6 +25,12 @@ Find laptop IP: `ipconfig getifaddr en0`
 | JS fix to already-shipped preview build       | `npm run update:preview "msg"`       |
 | New preview for testers                       | `npm run build:preview`              |
 | Store release                                 | `eas build --profile production`     |
+| Release with something to announce (store or OTA) | Edit `src/constants/whats-new.ts`: new `id`, `releasedAt`, `items` |
+
+**Before every release, store or OTA:** update `src/constants/whats-new.ts`, or
+confirm there is nothing to announce and leave it alone (an unchanged `id`
+shows nothing). Fixing a typo after release: keep the `id`, or everyone who
+already closed the sheet sees it again.
 
 ## Build commands (from package.json)
 

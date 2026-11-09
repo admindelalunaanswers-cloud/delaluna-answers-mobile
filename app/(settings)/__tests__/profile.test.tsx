@@ -1,5 +1,6 @@
 import React from 'react';
 import { AccessibilityInfo } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { reauthenticateWithCredential } from 'firebase/auth';
 import { router } from 'expo-router';
@@ -53,6 +54,9 @@ jest.mock('@/src/services/notifications.service', () => ({
   unregisterPushToken: jest.fn(),
 }));
 jest.mock('@/src/services/user.service', () => ({ signOut: jest.fn() }));
+jest.mock('@/src/services/analytics.service', () => ({
+  Events: { whatsNewShown: jest.fn(), whatsNewDismissed: jest.fn(), whatsNewCta: jest.fn() },
+}));
 jest.mock('@/src/assets/legal/legal-texts', () => ({ privacyPolicy: '', termsAndConditions: '' }));
 
 jest.mock('@/src/components/shared/header-nav', () => () => null);
@@ -86,6 +90,20 @@ describe('ProfileScreen', () => {
 
     fireEvent.press(screen.getByRole('button', { name: 'Change profile image' }));
     expect(router.push).toHaveBeenCalledWith('/(settings)/select-avatar');
+  });
+
+  // Reopening the sheet from Profile also records it as seen, so Home won't
+  // show it again afterwards.
+  it("reopens What's new and marks it seen", async () => {
+    render(<ProfileScreen />);
+
+    expect(screen.queryByRole('header', { name: "What's new in Delaluna" })).toBeNull();
+    await act(async () => {
+      fireEvent.press(screen.getByRole('button', { name: "What's new" }));
+    });
+
+    expect(screen.getByRole('header', { name: "What's new in Delaluna" })).toBeTruthy();
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('whatsNew:lastSeen:v1', expect.any(String));
   });
 
   // The badge is ~30pt; the hit slop is what makes it a 44pt target.
@@ -133,6 +151,7 @@ describe('ProfileScreen', () => {
       'Change Theme',
       'Reset Password',
       'Accessibility',
+      "What's new",
       'Support',
       'Feedback',
       'Log out',
