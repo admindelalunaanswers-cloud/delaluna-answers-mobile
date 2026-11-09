@@ -18,6 +18,9 @@ import AdBannerFull from '@/src/components/shared/ad-banner-full.component';
 import AdBannerShop from '@/src/components/shared/ad-banner-shop.component';
 import AdBanner from '@/src/components/shared/ad-banner.component';
 import SectionTitle from '@/src/components/shared/section-title.component';
+import { TourTarget } from '@/src/components/tour/tour-target';
+import { TOUR_TARGETS } from '@/src/constants/tour';
+import { useReducedMotion } from '@/src/context/accessibility-context';
 import { ThemedView } from '@/src/components/themed-view';
 import { HOME_STRINGS } from '@/src/constants/strings';
 import type { DailyCardPack } from '@/src/schemas/dailyCardPack.schema';
@@ -194,6 +197,15 @@ export default function HomeScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const dateSwitcherDates = Object.keys(cardDraw).sort();
 
+  // The tour's "Today's Cards" step: today's reading (the only one a free
+  // account can see) scrolled so the cards sit under the spotlight.
+  const reduceMotion = useReducedMotion();
+  const cardsSectionY = useRef(0);
+  const showCardsForTour = () => {
+    setSelectedDate(todayDateId);
+    scrollRef.current?.scrollTo({ y: Math.max(0, cardsSectionY.current - 24), animated: !reduceMotion });
+  };
+
   const [adVariant] = useState<'upgrade-full' | 'upgrade-compact' | 'shop'>(() => {
     const variants = ['upgrade-full', 'upgrade-compact', 'shop'] as const;
     return variants[Math.floor(Math.random() * variants.length)];
@@ -233,17 +245,21 @@ export default function HomeScreen() {
         title={userDoc?.fullName ?? ([userDoc?.firstName, userDoc?.lastName].filter(Boolean).join(' ') || 'Home')}
         rightAvatarSource={getProfileImageSource((userDoc as any)?.profileImageId) ?? getProfileImageSource('profile8')!}
         onRightPress={() => router.push('/profile')}
+        rightTourTargetId={TOUR_TARGETS.homeProfile}
       />
 
       <View style={[styles.content, { paddingTop: headerHeight }]}>
-        <HomeSignsDisplay
-          sun={sunSign}
-          moon={moonSign}
-          rising={risingSign}
-          showViewChart={true}
-          birthChartReady={!!chartDetails && !!breakdown}
-          onViewChart={() => trackInteraction({ screen: 'home', feature: 'view_chart', action: 'tap' })}
-        />
+        <TourTarget id={TOUR_TARGETS.homeSigns}>
+          <HomeSignsDisplay
+            sun={sunSign}
+            moon={moonSign}
+            rising={risingSign}
+            showViewChart={true}
+            birthChartReady={!!chartDetails && !!breakdown}
+            onViewChart={() => trackInteraction({ screen: 'home', feature: 'view_chart', action: 'tap' })}
+          />
+        </TourTarget>
+        <TourTarget id={TOUR_TARGETS.homeDateSwitcher}>
         <DateSwitcher
           value={selectedDate}
           dates={dateSwitcherDates.length > 0 ? dateSwitcherDates : [todayDateId]}
@@ -253,6 +269,7 @@ export default function HomeScreen() {
             scrollRef.current?.scrollTo({ y: 0, animated: false });
           }}
         />
+        </TourTarget>
 
         <PaygateOverlay
           locked={isPaygated}
@@ -282,15 +299,21 @@ export default function HomeScreen() {
           <SectionTitle sectionName="affirmation" title="Affirmation" />
           <HomeTextBox sectionName="affirmation" content={activeHoroscope?.affirmation} generating={isGenerating} />
 
-          <SectionTitle sectionName="tarot" title="Today's Cards" />
-          <HomeTextBox
-            sectionName="tarot"
-            content={activeHoroscope?.tarot}
-            cards={activeCards?.cards}
-            firstView={activeCards?.firstView}
-            onReveal={handleCardReveal}
-            generating={isGenerating}
-          />
+          <TourTarget
+            id={TOUR_TARGETS.homeCards}
+            onActivate={showCardsForTour}
+            onLayout={(e) => { cardsSectionY.current = e.nativeEvent.layout.y; }}
+          >
+            <SectionTitle sectionName="tarot" title="Today's Cards" />
+            <HomeTextBox
+              sectionName="tarot"
+              content={activeHoroscope?.tarot}
+              cards={activeCards?.cards}
+              firstView={activeCards?.firstView}
+              onReveal={handleCardReveal}
+              generating={isGenerating}
+            />
+          </TourTarget>
 
           <SectionTitle sectionName="message" title="Message in a Bottle" />
           <HomeTextBox sectionName="message" />
