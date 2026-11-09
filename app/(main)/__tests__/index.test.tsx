@@ -4,6 +4,9 @@ import { act, render } from '@testing-library/react-native';
 import HomeScreen from '@/app/(main)/index';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { subscribeToHoroscope } from '@/src/services/horoscope.service';
+import { logEvent } from '@react-native-firebase/analytics';
+import DateSwitcher from '@/src/components/home/date-switcher.component';
+import HomeSignsDisplay from '@/src/components/shared/signs-display.component';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 jest.mock('@/firebaseConfig', () => ({ db: {} }));
@@ -38,10 +41,10 @@ jest.mock('@/src/hooks/use-screen-perf-log', () => {
 // Rendering is not under test here — only what the screen subscribes to.
 jest.mock('@/app/(settings)/select-avatar', () => ({ getProfileImageSource: () => 1 }));
 // jest.mock, not a doMock loop: only jest.mock is hoisted above the imports.
-jest.mock('@/src/components/home/date-switcher.component', () => () => null);
+jest.mock('@/src/components/home/date-switcher.component', () => jest.fn(() => null));
 jest.mock('@/src/components/home/home-text-box.component', () => () => null);
 jest.mock('@/src/components/shared/header-nav', () => () => null);
-jest.mock('@/src/components/shared/signs-display.component', () => () => null);
+jest.mock('@/src/components/shared/signs-display.component', () => jest.fn(() => null));
 jest.mock('@/src/components/shared/paygate-overlay.component', () => () => null);
 jest.mock('@/src/components/shared/ad-banner-full.component', () => () => null);
 jest.mock('@/src/components/shared/ad-banner-shop.component', () => () => null);
@@ -100,5 +103,41 @@ describe('HomeScreen', () => {
     await act(async () => {});
 
     expect(unsubscribe).toHaveBeenCalledTimes(2);
+  });
+
+  describe('analytics', () => {
+    const interactions = () =>
+      (logEvent as jest.Mock).mock.calls.filter(([, n]) => n === 'ui_interaction').map(([, , p]) => p);
+    const lastProps = (component: unknown) => {
+      const calls = (component as jest.Mock).mock.calls;
+      return calls[calls.length - 1][0];
+    };
+
+    beforeEach(() => {
+      (useRevenueCat as jest.Mock).mockReturnValue({ hasFullAccess: true, loading: false });
+    });
+
+    // The date id is never sent — only which day it is relative to today.
+    it('reports the date switcher as a relative day', async () => {
+      render(<HomeScreen />);
+      await act(async () => {});
+
+      await act(async () => lastProps(DateSwitcher).onChange('2026-10-22'));
+      await act(async () => lastProps(DateSwitcher).onChange('2026-10-20'));
+
+      expect(interactions()).toEqual([
+        { screen: 'home', feature: 'date_switcher', action: 'select', item: 'tomorrow' },
+        { screen: 'home', feature: 'date_switcher', action: 'select', item: 'yesterday' },
+      ]);
+    });
+
+    it('reports the View chart link', async () => {
+      render(<HomeScreen />);
+      await act(async () => {});
+
+      await act(async () => lastProps(HomeSignsDisplay).onViewChart());
+
+      expect(interactions()).toEqual([{ screen: 'home', feature: 'view_chart', action: 'tap' }]);
+    });
   });
 });

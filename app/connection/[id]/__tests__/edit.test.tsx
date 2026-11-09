@@ -8,6 +8,7 @@ import { router } from 'expo-router';
 
 import EditConnectionScreen from '@/app/connection/[id]/edit';
 import { deleteConnection } from '@/src/services/connection.service';
+import { logEvent } from '@react-native-firebase/analytics';
 
 jest.mock('expo-router', () => ({
   router: { replace: jest.fn(), back: jest.fn() },
@@ -98,5 +99,22 @@ describe('EditConnectionScreen', () => {
     for (const b of screen.getAllByRole('button', { name: /Choose (birthday|time of birth)/ })) {
       expect(b).toBeDisabled();
     }
+  });
+
+  describe('analytics', () => {
+    const events = (name: string) =>
+      (logEvent as jest.Mock).mock.calls.filter(([, n]) => n === name).map(([, , p]) => p);
+
+    it('reports a relationship change and a delete tap', async () => {
+      await load();
+      fireEvent.press(screen.getByRole('radio', { name: "It's Consistent" })); // the saved one
+      fireEvent.press(screen.getByRole('radio', { name: 'I Dunno' }));
+      fireEvent.press(screen.getByRole('button', { name: 'Delete Connection' }));
+
+      expect(events('ui_interaction')).toEqual([
+        { screen: 'connection_edit', feature: 'relationship_type', action: 'select', item: 'i_dunno' },
+        { screen: 'connection_edit', feature: 'delete_connection', action: 'tap' },
+      ]);
+    });
   });
 });

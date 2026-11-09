@@ -13,6 +13,8 @@ interface HomeSignsDisplayProps {
   rising: string;
   showViewChart?: boolean;
   birthChartReady?: boolean;
+  /** Called when "View chart" is tapped, before navigating — for analytics. */
+  onViewChart?: () => void;
 }
 
 // The sun / moon / arrow icons are the only thing saying which sign is which;
@@ -21,8 +23,11 @@ export function signLabel(placement: "Sun" | "Moon" | "Rising", sign: string): s
   return sign && sign !== "—" ? `${placement} in ${sign}` : `${placement} sign not available yet`;
 }
 
-export default function HomeSignsDisplay({ sun, moon, rising, showViewChart = true, birthChartReady = false }: HomeSignsDisplayProps) {
-  const goToBirthchart = () => router.push('/(home)/birth-chart-view');
+export default function HomeSignsDisplay({ sun, moon, rising, showViewChart = true, birthChartReady = false, onViewChart }: HomeSignsDisplayProps) {
+  const goToBirthchart = () => {
+    onViewChart?.();
+    router.push('/(home)/birth-chart-view');
+  };
 
   return (
     <ThemedView style={[styles.container, !showViewChart && { justifyContent: 'center' }]}>

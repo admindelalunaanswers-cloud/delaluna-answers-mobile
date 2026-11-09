@@ -35,6 +35,7 @@ import { verticalScale } from '@/src/utils/responsive';
 import { getContentPadding } from '@/src/utils/layout';
 import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
 import { logger } from '@/src/utils/logger';
+import { Events, relativeDay, trackInteraction } from '@/src/services/analytics.service';
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -165,6 +166,8 @@ export default function HomeScreen() {
 
   const handleCardReveal = async () => {
     if (!authUser || !activeCards) return;
+    trackInteraction({ screen: 'home', feature: 'tarot_cards', action: 'reveal', item: relativeDay(selectedDate, todayDateId) });
+    Events.tarotDrawn({ source: 'home', cards: activeCards.cards?.length ?? 0 });
     const db = getFirestore();
     await updateDoc(doc(db, 'users', authUser.uid, 'cards', selectedDate), { firstView: true });
     setCardDraw(prev => ({
@@ -199,8 +202,27 @@ export default function HomeScreen() {
   const isPaygated = selectedDate !== todayDateId && !isPremium;
   const isGenerating = !activeHoroscope;
 
-  const handleUnlock = () => {
+  // Once per day per mount: the reading was actually on screen, not behind the
+  // paygate or still generating. Tabs stay mounted, so in practice once per
+  // day per app session — screen_view counts visits.
+  const viewedDates = useRef(new Set<string>());
+  useEffect(() => {
+    if (!activeHoroscope || isPaygated || viewedDates.current.has(selectedDate)) return;
+    viewedDates.current.add(selectedDate);
+    Events.horoscopeViewed({ day: relativeDay(selectedDate, todayDateId) });
+  }, [activeHoroscope, isPaygated, selectedDate, todayDateId]);
+
+  /** `feature` says which upgrade prompt was tapped: the paygate or a banner. */
+  const handleUnlock = (feature: 'paygate' | 'ad_banner_full' | 'ad_banner') => {
+    trackInteraction({ screen: 'home', feature, action: 'unlock', item: relativeDay(selectedDate, todayDateId) });
     router.push('/(settings)/paywall');
+  };
+
+  /** The "ask Delaluna" buttons under New Love and Returns. */
+  const askInChat = (item: 'new_love' | 'returns_1' | 'returns_2', message: string) => {
+    trackInteraction({ screen: 'home', feature: 'chat_prompt', action: 'tap', item });
+    ChatStore.setInitialMessage(message);
+    router.push('/(main)/chat');
   };
 
   // ─── Render ─────────────────────────────────────────────────────────────────
@@ -220,11 +242,13 @@ export default function HomeScreen() {
           rising={risingSign}
           showViewChart={true}
           birthChartReady={!!chartDetails && !!breakdown}
+          onViewChart={() => trackInteraction({ screen: 'home', feature: 'view_chart', action: 'tap' })}
         />
         <DateSwitcher
           value={selectedDate}
           dates={dateSwitcherDates.length > 0 ? dateSwitcherDates : [todayDateId]}
           onChange={(date) => {
+            trackInteraction({ screen: 'home', feature: 'date_switcher', action: 'select', item: relativeDay(date, todayDateId) });
             setSelectedDate(date);
             scrollRef.current?.scrollTo({ y: 0, animated: false });
           }}
@@ -235,7 +259,7 @@ export default function HomeScreen() {
           style={{ flex: 1 }}
           unlockTitle="Unlock Past & Future Readings"
           unlockMessage="Upgrade to Premium to view yesterday's and tomorrow's horoscope."
-          onUnlock={handleUnlock}
+          onUnlock={() => handleUnlock('paygate')}
         >
         <ScrollView
           ref={scrollRef}
@@ -288,7 +312,7 @@ export default function HomeScreen() {
           <HomeTextBox sectionName="newLove" content={activeHoroscope?.newLove ?? []} generating={isGenerating} />
           <TouchableOpacity
             style={styles.questionButton}
-            onPress={() => { ChatStore.setInitialMessage(HOME_STRINGS.newLove.questionFunnel); router.push('/(main)/chat'); }}
+            onPress={() => askInChat('new_love', HOME_STRINGS.newLove.questionFunnel)}
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityHint="Asks Delaluna in chat"
@@ -301,7 +325,7 @@ export default function HomeScreen() {
           <HomeTextBox sectionName="returns" content={activeHoroscope?.returns ?? []} generating={isGenerating} />
           <TouchableOpacity
             style={styles.questionButton}
-            onPress={() => { ChatStore.setInitialMessage(HOME_STRINGS.returns.questionFunnel1); router.push('/(main)/chat'); }}
+            onPress={() => askInChat('returns_1', HOME_STRINGS.returns.questionFunnel1)}
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityHint="Asks Delaluna in chat"
@@ -310,7 +334,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.questionButton, { marginTop: 8 }]}
-            onPress={() => { ChatStore.setInitialMessage(HOME_STRINGS.returns.questionFunnel2); router.push('/(main)/chat'); }}
+            onPress={() => askInChat('returns_2', HOME_STRINGS.returns.questionFunnel2)}
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityHint="Asks Delaluna in chat"
@@ -334,7 +358,7 @@ export default function HomeScreen() {
                 title="Unlock Your Full Birth Chart"
                 subtitle="Premium readings, ad-free."
                 ctaLabel="Upgrade"
-                onPress={handleUnlock}
+                onPress={() => handleUnlock('ad_banner_full')}
               />
             );
           }
@@ -344,7 +368,7 @@ export default function HomeScreen() {
               title="Unlock Your Full Birth Chart"
               subtitle="Premium readings, ad-free."
               ctaLabel="Upgrade"
-              onPress={handleUnlock}
+              onPress={() => handleUnlock('ad_banner')}
             />
           );
         })()}

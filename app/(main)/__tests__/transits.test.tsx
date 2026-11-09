@@ -1,6 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { router } from 'expo-router';
+import { logEvent } from '@react-native-firebase/analytics';
 
 import TransitsScreen from '@/app/(main)/transits';
 import { useHoroscope } from '@/src/context/horoscope-context';
@@ -91,6 +92,42 @@ describe('TransitsScreen', () => {
 
     fireEvent.press(locked);
     expect(router.push).toHaveBeenCalledWith('/(settings)/paywall');
+  });
+
+  describe('analytics', () => {
+    const events = (name: string) =>
+      (logEvent as jest.Mock).mock.calls.filter(([, n]) => n === name).map(([, , p]) => p);
+
+    it('reports a house card opening and closing', () => {
+      render(<TransitsScreen />);
+      fireEvent.press(houseCard(1));
+      fireEvent.press(houseCard(1));
+
+      expect(events('ui_interaction')).toEqual([
+        { screen: 'transits', feature: 'house_card', action: 'expand', item: 'house_1' },
+        { screen: 'transits', feature: 'house_card', action: 'collapse', item: 'house_1' },
+      ]);
+    });
+
+    it('reports a locked house as an unlock, not an expand', () => {
+      render(<TransitsScreen />);
+      fireEvent.press(houseCard(5));
+
+      expect(events('ui_interaction')).toEqual([
+        { screen: 'transits', feature: 'house_card', action: 'unlock', item: 'house_5' },
+      ]);
+    });
+
+    it('counts the reading as viewed once, and not while it is loading', () => {
+      setHoroscope({ loading: true });
+      const { rerender } = render(<TransitsScreen />);
+      expect(events('transits_viewed')).toHaveLength(0);
+
+      setHoroscope();
+      rerender(<TransitsScreen />);
+      rerender(<TransitsScreen />);
+      expect(events('transits_viewed')).toHaveLength(1);
+    });
   });
 
   // "Rx" was read as the letters R X.
