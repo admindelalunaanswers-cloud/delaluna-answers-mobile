@@ -15,6 +15,12 @@ import { ZodError, ZodType, z } from "zod";
 import { generateWithAnchor, invalidateAnchor } from "./anchor";
 import { runChatGeneration } from "./chat-generation";
 import {
+  currentReportPeriod,
+  offsetsDueForRefresh,
+  parseReportPeriod,
+  withReportPeriod,
+} from "./connection-refresh";
+import {
   archiveChatTurn,
   buildSavedSession,
   savedChatExpireAt,
@@ -35,6 +41,8 @@ import {
   COMPATIBILITY_BODIES,
   DAILY_HOROSCOPE_BODIES,
   TRANSIT_BODIES,
+  WEEKDAY_REPORT_BODIES,
+  WEEKEND_REPORT_BODIES,
   pickPushBody,
 } from "./push-copy";
 import {
@@ -808,7 +816,13 @@ const ROLLOVER_PUSH_LOCAL_HOUR = 0;
 const HOUR_BASE = 8; // earliest local hour
 const HOUR_SPAN = 3; // 8,9,10
 const SUNDAY = 0; // Date.getUTCDay()
-const THURSDAY = 4; // Date.getUTCDay()
+const FRIDAY = 5; // Date.getUTCDay()
+
+// Mirrors DEFAULT_PREMIUM_CONNECTION_LIMIT in src/context/admin-context.tsx —
+// the most connections any non-admin account can read. The scheduled refresh
+// regenerates at most this many per user, oldest first (the ones the
+// Connections screen leaves unlocked). Keep the two in step.
+const MAX_REFRESHED_CONNECTIONS = 10;
 
 // Premium entitlement id used by RevenueCat (must match the entitlement
 // configured in the RC dashboard and used by useRevenueCat().isPro).
@@ -1091,16 +1105,17 @@ async function drainScheduledPushes(now: Date): Promise<number> {
  *    pre-generate today's horoscope before morning.
  *  - Local horoscope hour (6-10 AM): visible daily horoscope reminder.
  *  - Sunday at local transits hour (6-10 AM): weekly transits reminder.
- *  - Sunday and Thursday at local connections hour (6-10 AM): connection
- *    report refresh. Premium users with at least one connection only.
- *    Thursday is the "weekend romance report"; Sunday is the weekly update.
+ *  - Sunday and Friday at local connections hour (8-10 AM): connection report
+ *    reminder. Any user with at least one established connection — free and
+ *    premium alike. Sunday is the weekday report, Friday the weekend romance
+ *    report; refreshConnectionReports regenerates both at 5 AM local, ahead
+ *    of this.
  *
  * Also drains the scheduledPushes queue (used by the connection-report flow
  * to randomize delivery into the afternoon).
  */
 export const dailyHoroscopeNotifications = onSchedule(
-  // The secret: this reaches isUserPremium (see REVIEW_ACCOUNT_UIDS).
-  { schedule: "every 1 hours", secrets: [reviewAccountUids] },
+  { schedule: "every 1 hours" },
   async () => {
     const now = new Date();
     const messages: ExpoPushMessage[] = [];
@@ -1189,41 +1204,59 @@ export const dailyHoroscopeNotifications = onSchedule(
       }
 
       if (
-        (localDay === SUNDAY || localDay === THURSDAY) &&
+        (localDay === SUNDAY || localDay === FRIDAY) &&
         localHour === cxHour
       ) {
-        // Premium-gated and only relevant if the user has at least one established
-        // connection (created more than 24 hours ago). Connections without a
-        // createTime field are legacy/pre-date the field — treat them as established.
-        const cutoff24h = Timestamp.fromDate(
-          new Date(now.getTime() - 24 * 60 * 60 * 1000),
+        // "Your report is in" — sent only once refreshConnectionReports' 5 AM
+        // run has produced this period's report for at least one connection.
+        // A report that failed, or one the user generated themselves (which
+        // already got its own "report ready" push), doesn't count. Same rules
+        // for free and premium; the connections read are the ones the
+        // Connections screen leaves unlocked, as in the refresh.
+        const period = currentReportPeriod(now, offset);
+        const cxSnap = await userDoc.ref
+          .collection("connections")
+          .orderBy("createTime", "asc")
+          .limit(MAX_REFRESHED_CONNECTIONS)
+          .get();
+        const reports = await Promise.all(
+          cxSnap.docs.map((c) =>
+            c.ref.collection("report").doc("details").get(),
+          ),
         );
-        const [premium, cxSnap] = await Promise.all([
-          isUserPremium(uid),
-          userDoc.ref.collection("connections").limit(10).get(),
-        ]);
-        const hasEstablishedConnection = cxSnap.docs.some((d) => {
-          const ct = d.data().createTime as Timestamp | undefined;
-          return !ct || ct.toMillis() <= cutoff24h.toMillis();
-        });
-        if (premium && hasEstablishedConnection) {
-          // The two runs are distinct products, so the titles differ — and the
-          // dedupe pass below keys on title, so identical titles on the same
-          // token would collapse into one. The body rotates out of the shared
-          // compatibility pool; the day key keeps Thursday and Sunday apart.
-          const isWeekendRomance = localDay === THURSDAY;
+        const refreshedIds = reports
+          .filter((r) => {
+            const d = r.data();
+            return (
+              d?.periodKey === period.key &&
+              d.refreshTrigger === "scheduled" &&
+              typeof d.response === "string" &&
+              d.response.length > 0
+            );
+          })
+          .map((r) => r.ref.parent.parent!.id);
+
+        if (refreshedIds.length > 0) {
+          // Distinct titles: the dedupe pass below keys on title, so the two
+          // reports must not share one. The day key keeps the body rotating.
+          const isWeekend = period.kind === "weekend";
           messages.push({
             to: token,
             sound: "default",
-            title: isWeekendRomance
-              ? "💘 Weekend Romance Report"
-              : "💞 Weekly Connection Update",
+            title: isWeekend
+              ? "💘 Your Weekend Romance Report"
+              : "💞 Your Weekday Connection Report",
             body: pickPushBody(
-              COMPATIBILITY_BODIES,
+              isWeekend ? WEEKEND_REPORT_BODIES : WEEKDAY_REPORT_BODIES,
               hashUid(uid, `connections-copy:${copyDayKey}`),
             ),
             channelId: "default",
-            data: { screen: "/(main)/connections" },
+            // One refreshed connection (every free account) opens straight
+            // into it, the way "Connection Report Ready" does; more open the list.
+            data:
+              refreshedIds.length === 1
+                ? { screen: "/connection/[id]", connectionId: refreshedIds[0] }
+                : { screen: "/(main)/connections" },
             priority: "high",
             _contentAvailable: true,
           });
@@ -1761,8 +1794,18 @@ export const createConnection = onCall(async (request) => {
 
   const reportRef = connectionRef.collection("report").doc("details");
 
-  const existingSnap = await connectionRef.get();
+  const [existingSnap, userSnap] = await Promise.all([
+    connectionRef.get(),
+    db.collection("users").doc(userId).get(),
+  ]);
   const isNew = !existingSnap.exists;
+  // Every report belongs to a weekday or weekend period (connection-refresh.ts),
+  // so one created midweek is framed around that week and the Sunday/Friday
+  // refresh knows whether it already has this period's report.
+  const period = currentReportPeriod(
+    new Date(),
+    userSnap.data()?.timezoneOffsetMinutes,
+  );
   const existing = existingSnap.data();
 
   // Birth-detail edits are capped (MAX_BIRTH_DETAIL_CHANGES in
@@ -1810,6 +1853,11 @@ export const createConnection = onCall(async (request) => {
       prompt,
       response: FieldValue.delete(),
       requestedAt: FieldValue.serverTimestamp(),
+      period: { kind: period.kind, startDate: period.startDate },
+      periodKey: period.key,
+      // A user's own create or edit gets the "report ready" push; only the
+      // scheduled refresh is quiet (see parseConnectionCompatibility).
+      refreshTrigger: FieldValue.delete(),
     },
     { merge: true },
   );
@@ -2515,6 +2563,11 @@ export const parseConnectionCompatibility = onDocumentUpdated(
 
     if (!parseOk) return;
 
+    // A scheduled refresh regenerates every connection at once; the single
+    // Sunday / Friday reminder in dailyHoroscopeNotifications announces them,
+    // rather than one "report ready" push per connection.
+    if (after.refreshTrigger === "scheduled") return;
+
     const userSnap = await db.collection("users").doc(userId).get();
     const userData = userSnap.data();
 
@@ -2832,6 +2885,83 @@ async function runAnchoredGeneration(opts: {
 }
 
 /**
+ * Regenerates compatibility reports twice a week: the weekday report on the
+ * user's local Sunday and the weekend report on their local Friday, at
+ * REPORT_REFRESH_LOCAL_HOUR (5 AM) so they are ready before the 8–10 AM
+ * reminder push. Free and premium accounts follow the same rules; see
+ * connection-refresh.ts.
+ *
+ * It only re-stamps `requestedAt` (plus the period) on each report document.
+ * The stored prompt is unchanged, but the request hash covers `requestedAt`,
+ * so generateConnectionReport treats it as a new request and adds the period
+ * framing at generation time. The connection keeps showing the previous
+ * report until parseConnectionCompatibility writes the new one, and a failed
+ * generation leaves the previous report in place.
+ *
+ * Users without a stored `timezoneOffsetMinutes` are not refreshed — the
+ * reminder push needs one too.
+ */
+export const refreshConnectionReports = onSchedule(
+  { schedule: "every 1 hours" },
+  async () => {
+    const now = new Date();
+    const offsets = offsetsDueForRefresh(now);
+    if (offsets.length === 0) return;
+
+    const users = await db
+      .collection("users")
+      .where("timezoneOffsetMinutes", "in", offsets)
+      .get();
+
+    let refreshed = 0;
+    for (const userDoc of users.docs) {
+      const period = currentReportPeriod(
+        now,
+        userDoc.data().timezoneOffsetMinutes,
+      );
+      // Oldest first, matching which connections the Connections screen leaves
+      // unlocked. Docs with no createTime are skipped by orderBy here exactly
+      // as they are by the screen's own query, so nothing hidden is refreshed.
+      const connections = await userDoc.ref
+        .collection("connections")
+        .orderBy("createTime", "asc")
+        .limit(MAX_REFRESHED_CONNECTIONS)
+        .get();
+      if (connections.empty) continue;
+
+      const reports = await Promise.all(
+        connections.docs.map((c) => c.ref.collection("report").doc("details").get()),
+      );
+
+      const batch = db.batch();
+      let queued = 0;
+      for (const report of reports) {
+        const data = report.data();
+        // Nothing to regenerate from, or already written for this period
+        // (created or edited since it opened, or this job ran twice).
+        if (typeof data?.prompt !== "string" || !data.prompt) continue;
+        if (data.periodKey === period.key) continue;
+        batch.update(report.ref, {
+          requestedAt: FieldValue.serverTimestamp(),
+          period: { kind: period.kind, startDate: period.startDate },
+          periodKey: period.key,
+          refreshTrigger: "scheduled",
+        });
+        queued++;
+      }
+      if (queued === 0) continue;
+      await batch.commit();
+      refreshed += queued;
+    }
+
+    console.info(
+      `[refreshConnectionReports] ${refreshed} reports across ` +
+        `${users.size} users (offsets ${offsets.join(",")})`,
+    );
+  },
+);
+
+/**
  * Compatibility report — replaces the `firestore-genai-chatbot` instance that
  * watched `users/{uid}/connections/{id}/report`.
  *
@@ -2856,6 +2986,13 @@ export const generateConnectionReport = onDocumentWritten(
       ref: after.ref,
       schema: COMPATIBILITY_SCHEMA,
       label: "generateConnectionReport",
+      // The weekday / weekend framing. Read fresh rather than off the event,
+      // so it matches the request the transaction actually claimed.
+      augmentPrompt: async (p) =>
+        withReportPeriod(
+          p,
+          parseReportPeriod((await after.ref.get()).data()?.period),
+        ),
     });
   },
 );
