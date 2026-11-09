@@ -1,8 +1,11 @@
 import { router, Tabs, usePathname } from 'expo-router';
-import { useWindowDimensions } from 'react-native';
+import { useWindowDimensions, View } from 'react-native';
 
 import { IconSymbol } from '@/src/components/ui/icon-symbol';
+import TourOverlay, { useTourCoversScreen } from '@/src/components/tour/tour-overlay';
+import { TourTarget } from '@/src/components/tour/tour-target';
 import WhatsNewSheet from '@/src/components/whats-new-sheet';
+import { TOUR_TARGETS } from '@/src/constants/tour';
 import { useTheme } from '@/src/hooks/use-theme';
 import { useWhatsNew } from '@/src/hooks/use-whats-new';
 
@@ -32,9 +35,17 @@ export default function TabLayout() {
   const { width } = useWindowDimensions();
   // Scale icon size from base 28 on 375px width, clamped between 22–36
   const iconSize = Math.round(Math.min(Math.max((width / 375) * 28, 22), 36));
+  // While the tour covers the screen, the app under it is out of reach for
+  // TalkBack too (iOS gets that from the overlay's accessibilityViewIsModal).
+  const tourCovers = useTourCoversScreen();
 
   return (
     <>
+      <View
+        style={{ flex: 1 }}
+        importantForAccessibility={tourCovers ? 'no-hide-descendants' : 'auto'}
+        accessibilityElementsHidden={tourCovers}
+      >
       <Tabs
         screenOptions={{
           tabBarActiveTintColor: C.activeTab,
@@ -57,14 +68,22 @@ export default function TabLayout() {
           name="connections"
           options={{
             title: 'Connections',
-            tabBarIcon: ({ color }) => <IconSymbol name={require('@/src/assets/tabs/connections.png')} size={iconSize} color={color} />,
+            tabBarIcon: ({ color }) => (
+              <TourTarget id={TOUR_TARGETS.tabConnections}>
+                <IconSymbol name={require('@/src/assets/tabs/connections.png')} size={iconSize} color={color} />
+              </TourTarget>
+            ),
           }}
         />
         <Tabs.Screen
           name="transits"
           options={{
             title: 'Transits',
-            tabBarIcon: ({ color }) => <IconSymbol name={require('@/src/assets/tabs/transits.png')} size={iconSize} color={color} />,
+            tabBarIcon: ({ color }) => (
+              <TourTarget id={TOUR_TARGETS.tabTransits}>
+                <IconSymbol name={require('@/src/assets/tabs/transits.png')} size={iconSize} color={color} />
+              </TourTarget>
+            ),
           }}
         />
         <Tabs.Screen
@@ -75,7 +94,9 @@ export default function TabLayout() {
           }}
         />
       </Tabs>
+      </View>
       <WhatsNewOnHome />
+      <TourOverlay />
     </>
   );
 }
