@@ -8,7 +8,6 @@ jest.mock('@/src/context/theme-context', () => {
 });
 jest.mock('@/src/services/astroEngine', () => ({ calculateNatalChart: jest.fn() }));
 jest.mock('@/src/prompts/compatibility-prompt', () => ({ buildCompatibilityPrompt: jest.fn(() => '') }));
-jest.mock('@/src/services/analytics.service', () => ({ Events: { connectionCreated: jest.fn() } }));
 jest.mock('@/src/services/performance.service', () => ({ measure: jest.fn((_n: string, fn: () => unknown) => fn()) }));
 jest.mock('@/src/services/crashlytics.service', () => ({ recordError: jest.fn() }));
 jest.mock('@/src/utils/location', () => ({

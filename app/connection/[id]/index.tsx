@@ -35,6 +35,7 @@ import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { renderRichText } from "@/src/utils/rich-text";
 import { ThemedView } from "@/src/components/themed-view";
 import { logger } from "@/src/utils/logger";
+import { Events, trackInteraction } from "@/src/services/analytics.service";
 
 const NAV_BAR_HEIGHT = 44;
 const BAR_MAX_WIDTH = Dimensions.get("window").width - scale(18) * 2;
@@ -292,7 +293,25 @@ export default function ConnectionViewScreen() {
     return () => unsub();
   }, [authUser?.uid, connectionId]);
 
-  const handleToggleKeyword = (keyword: string) => {
+  // Once per mount: the report was on screen, not the loading skeleton.
+  const reportViewed = useRef(false);
+  useEffect(() => {
+    if (reportViewed.current || !hasReport) return;
+    reportViewed.current = true;
+    Events.connectionReportViewed();
+  }, [hasReport]);
+
+  /**
+   * `defKey` is the KEYWORD_DEFINITIONS key — a fixed list in the app — not the
+   * score name the model wrote, which is only tracked when it matches one.
+   */
+  const handleToggleKeyword = (keyword: string, defKey: string) => {
+    trackInteraction({
+      screen: 'connection_report',
+      feature: 'score_definition',
+      action: expandedKeyword === keyword ? 'collapse' : 'expand',
+      item: defKey,
+    });
     setExpandedKeyword((prev) => (prev === keyword ? null : keyword));
   };
 
@@ -385,14 +404,17 @@ export default function ConnectionViewScreen() {
 
   const handleCompareBirthChart = async () => {
     if (!hasPremiumAccess && !hasSynastryReading && !synastryUnlocked) {
+      trackInteraction({ screen: 'connection_report', feature: 'synastry', action: 'unlock' });
       presentPaywall();
       return;
     }
+    trackInteraction({ screen: 'connection_report', feature: 'synastry', action: 'tap' });
     await runSynastryCompare();
   };
 
   const handleTalkToDelaluna = () => {
     if (!connectionId) return;
+    trackInteraction({ screen: 'connection_report', feature: 'talk_to_delaluna', action: 'tap' });
     const sp = connection?.secondPerson;
     const name = sp?.firstName?.trim() || "this connection";
     ChatStore.setPendingConnection({ id: String(connectionId), name });
@@ -444,9 +466,10 @@ export default function ConnectionViewScreen() {
         leftIconName="arrow-back"
         onLeftPress={() => router.replace("/(main)/connections")}
         rightIconName={report ? "create-outline" : undefined}
-        onRightPress={report ? () =>
-          router.push({ pathname: "/connection/[id]/edit", params: { id: connectionId } })
-        : undefined}
+        onRightPress={report ? () => {
+          trackInteraction({ screen: 'connection_report', feature: 'edit_connection', action: 'tap' });
+          router.push({ pathname: "/connection/[id]/edit", params: { id: connectionId } });
+        } : undefined}
         rightAccessibilityLabel="Edit connection"
       />
 
@@ -532,7 +555,7 @@ export default function ConnectionViewScreen() {
                   return (
                     <View key={keyword} style={styles.keywordContainer}>
                       <TouchableOpacity
-                        onPress={() => definition && handleToggleKeyword(keyword)}
+                        onPress={() => definition && handleToggleKeyword(keyword, defKey)}
                         activeOpacity={definition ? 0.7 : 1}
                         // One stop for name and score; the ⓘ icon and expand/collapse
                         // were only visual

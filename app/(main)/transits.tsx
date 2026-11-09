@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Text } from '@/src/components/app-text';
 
@@ -21,6 +21,7 @@ import type { TransitHouseReading } from '@/src/types/transit-reading.types';
 
 import { ThemedText } from '@/src/components/themed-text';
 import { HOUSE_KEYWORDS, TRANSITS_DEFINITION } from '@/src/constants/definitions';
+import { Events, trackInteraction } from '@/src/services/analytics.service';
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -66,7 +67,15 @@ function HouseCard({
   return (
     <TouchableOpacity
       activeOpacity={0.75}
-      onPress={() => (isLocked ? onLockedPress() : setExpanded(e => !e))}
+      onPress={() => {
+        if (isLocked) {
+          trackInteraction({ screen: 'transits', feature: 'house_card', action: 'unlock', item: `house_${house.house}` });
+          onLockedPress();
+          return;
+        }
+        trackInteraction({ screen: 'transits', feature: 'house_card', action: expanded ? 'collapse' : 'expand', item: `house_${house.house}` });
+        setExpanded(e => !e);
+      }}
       style={houseStyles.card}
       accessibilityRole="button"
       // The chevron and lock are icons, so neither state was ever spoken
@@ -197,6 +206,15 @@ export default function TransitsScreen() {
   const handleUnlock = () => {
     router.push('/(settings)/paywall');
   };
+
+  // Once per mount: the reading was on screen, not a skeleton. Tabs stay
+  // mounted, so in practice once per app session — screen_view counts visits.
+  const readingViewed = useRef(false);
+  useEffect(() => {
+    if (readingViewed.current || loading || !transitReading) return;
+    readingViewed.current = true;
+    Events.transitsViewed();
+  }, [loading, transitReading]);
 
   return (
     <ThemedView style={styles.container}>

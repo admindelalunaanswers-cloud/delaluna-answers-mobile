@@ -44,7 +44,8 @@ jest.mock('@/src/services/tarotCache.service', () => ({
 }));
 jest.mock('@/src/services/revenuecat.service', () => ({ purchasedChatCredits: () => 0 }));
 jest.mock('@/src/services/analytics.service', () => ({
-  Events: { chatMessageSent: jest.fn(), chatRetry: jest.fn() },
+  Events: { chatMessageSent: jest.fn(), chatRetry: jest.fn(), tarotDrawn: jest.fn() },
+  trackInteraction: jest.fn(),
 }));
 jest.mock('@/src/services/crashlytics.service', () => ({ recordError: jest.fn() }));
 

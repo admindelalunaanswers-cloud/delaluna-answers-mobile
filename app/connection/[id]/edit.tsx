@@ -29,6 +29,7 @@ import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 
 import LoadingScreen from "../../(util)/loading-screen";
 import { logger } from "@/src/utils/logger";
+import { Events, trackInteraction } from "@/src/services/analytics.service";
 import { useAnnounce } from "@/src/hooks/use-announce";
 import { deleteConnection } from "@/src/services/connection.service";
 import {
@@ -232,6 +233,8 @@ export default function EditConnectionScreen() {
           ? { "First Name": firstNameRef, "Last Name": firstLastNameRef, "Place of Birth": firstLocationRef }
           : { "First Name": secondNameRef, "Last Name": secondLastNameRef, "Place of Birth": secondLocationRef };
       const target = refs[missing[0]];
+      // Which required field stops people — its name, never what was typed.
+      trackInteraction({ screen: 'connection_edit', feature: 'save_blocked', action: 'tap', item: `${label}_${missing[0]}` });
       Alert.alert(
         "Missing Information",
         `${label}: please enter ${missing.join(", ")}.`,
@@ -330,6 +333,7 @@ export default function EditConnectionScreen() {
 
       const ref = doc(db, "users", authUser!.uid, "connections", connectionId!);
       await updateDoc(ref, updatedData);
+      Events.connectionUpdated({ change: 'pronouns_only' });
       router.back();
     } catch (err) {
       logger.error("[connection-edit] save pronouns failed", err, "connection_save_pronouns");
@@ -340,16 +344,19 @@ export default function EditConnectionScreen() {
 
   const handleSave = async () => {
     dismissAllSuggestions();
+    trackInteraction({ screen: 'connection_edit', feature: 'save', action: 'tap' });
 
     // Validate before showing the loading screen so we never flash LoadingScreen
     // and immediately unmount it (which can crash LottieView on rapid mount/unmount).
     if (!validatePerson(firstPerson, "First Person")) return;
     if (!validatePerson(secondPerson, "Second Person")) return;
     if (!relationshipType) {
+      trackInteraction({ screen: 'connection_edit', feature: 'save_blocked', action: 'tap', item: 'relationship_type' });
       Alert.alert("Missing Relationship Type", "Please select a relationship type.");
       return;
     }
     if (birthDetailsChanged && changeCount >= MAX_BIRTH_DETAIL_CHANGES) {
+      trackInteraction({ screen: 'connection_edit', feature: 'save_blocked', action: 'tap', item: 'change_limit' });
       Alert.alert(
         "Change limit reached",
         `Connection birth details can only be updated ${MAX_BIRTH_DETAIL_CHANGES} times. Please contact support if you need further changes.`,
@@ -488,6 +495,7 @@ export default function EditConnectionScreen() {
         });
       }
 
+      Events.connectionUpdated({ change: birthDetailsChanged ? 'birth_details' : 'details' });
       router.back();
     } catch (err) {
       logger.error("[connection-edit] save failed", err, "connection_save");
@@ -497,6 +505,7 @@ export default function EditConnectionScreen() {
   };
 
   const handleDelete = () => {
+    trackInteraction({ screen: 'connection_edit', feature: 'delete_connection', action: 'tap' });
     Alert.alert(
       "Delete Connection",
       "This will permanently delete this connection and its compatibility report.",
@@ -520,7 +529,10 @@ export default function EditConnectionScreen() {
     );
   };
 
-  const handleCancel = () => router.back();
+  const handleCancel = () => {
+    trackInteraction({ screen: 'connection_edit', feature: 'cancel', action: 'tap' });
+    router.back();
+  };
 
   const sanitizeValue = (val: any): string | number | undefined =>
     typeof val === "boolean" ? "" : val;
@@ -688,7 +700,13 @@ export default function EditConnectionScreen() {
                         <TouchableOpacity
                           key={option}
                           style={[styles.relationshipButton, relationshipType === option && styles.relationshipSelected]}
-                          onPress={() => { dismissAllSuggestions(); setRelationshipType(option); }}
+                          onPress={() => {
+                            dismissAllSuggestions();
+                            if (option !== relationshipType) {
+                              trackInteraction({ screen: 'connection_edit', feature: 'relationship_type', action: 'select', item: option });
+                            }
+                            setRelationshipType(option);
+                          }}
                           activeOpacity={0.8}
                           // Image-only: the option names existed only in code, and this
                           // field is required to save — a screen-reader user couldn't finish

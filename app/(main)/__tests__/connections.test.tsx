@@ -2,6 +2,7 @@ import React from 'react';
 import { Alert } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { onSnapshot } from 'firebase/firestore';
+import { logEvent } from '@react-native-firebase/analytics';
 
 import ConnectionsScreen from '@/app/(main)/connections';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
@@ -168,5 +169,52 @@ describe('ConnectionsScreen', () => {
     await renderWith(true);
 
     expect(screen.getAllByRole('button', { name: 'Add Connection' }).length).toBeGreaterThan(0);
+  });
+
+  describe('analytics', () => {
+    const events = (name: string) =>
+      (logEvent as jest.Mock).mock.calls.filter(([, n]) => n === name).map(([, , p]) => p);
+
+    it('reports how many connections the list loaded with, once', async () => {
+      await renderWith(true, [SECOND_CONNECTION, ...CONNECTIONS]);
+      const onNext = (onSnapshot as jest.Mock).mock.calls.at(-1)[1];
+      await act(async () => {
+        onNext({ docs: [] });
+      });
+
+      expect(events('connections_list_viewed')).toEqual([{ count: 2 }]);
+    });
+
+    it('reports opening a connection without its id or names', async () => {
+      await renderWith(true);
+      fireEvent.press(screen.getByRole('button', { name: 'Luna Moon and Sol Sun' }));
+
+      expect(events('ui_interaction')).toEqual([
+        { screen: 'connections', feature: 'connection_card', action: 'tap' },
+      ]);
+      expect(JSON.stringify((logEvent as jest.Mock).mock.calls)).not.toMatch(/c1|Luna|Sol/);
+    });
+
+    it('reports a locked connection, then the upgrade tapped from its alert', async () => {
+      await renderWith(false, [SECOND_CONNECTION, ...CONNECTIONS]);
+      fireEvent.press(screen.getByRole('button', { name: 'Luna Moon and Stella Star, locked' }));
+
+      const buttons = alertSpy.mock.calls[0][2] as { text: string; onPress?: () => void }[];
+      act(() => buttons.find((b) => b.text === 'Upgrade')!.onPress!());
+
+      expect(events('ui_interaction')).toEqual([
+        { screen: 'connections', feature: 'locked_connection', action: 'tap' },
+        { screen: 'connections', feature: 'locked_alert', action: 'unlock' },
+      ]);
+    });
+
+    it('says which Add button was used', async () => {
+      await renderWith(false, []);
+      fireEvent.press(screen.getByRole('button', { name: 'Add Connection' }));
+
+      expect(events('ui_interaction')).toEqual([
+        { screen: 'connections', feature: 'add_connection', action: 'tap', item: 'empty_state' },
+      ]);
+    });
   });
 });

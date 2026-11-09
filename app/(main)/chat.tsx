@@ -47,7 +47,7 @@ import { useUser } from "@/src/context/user-context";
 import { useResponsive } from "@/src/hooks/use-responsive";
 import { useReplyAnnouncements } from "@/src/hooks/use-reply-announcements";
 import { useScreenPerfLog } from "@/src/hooks/use-screen-perf-log";
-import { Events } from "@/src/services/analytics.service";
+import { Events, trackInteraction } from "@/src/services/analytics.service";
 import {
   MAX_READER_SWITCHES,
   readerSwitchesUsed,
@@ -66,6 +66,7 @@ import {
   deleteChatSession,
   drawForTurn,
   lastChatMode,
+  TAROT_CHAT_CARD_COUNT,
   resumeChatSession,
   retryChatMessage,
   saveChatAndClear,
@@ -722,7 +723,11 @@ export default function ChatScreen() {
           history: historyOverride ?? messages,
         });
         logOp("chat_send", Date.now() - t);
-        Events.chatMessageSent({ length: msg.length });
+        const sentMode = modeOverride ?? mode;
+        Events.chatMessageSent({ length: msg.length, mode: sentMode });
+        if (sentMode === "tarot") {
+          Events.tarotDrawn({ source: "chat", cards: TAROT_CHAT_CARD_COUNT });
+        }
       } catch (e) {
         // The server is the authority on the question allowance — the counter
         // above is only a display. If it says we're out, fall back to the paywall.
@@ -871,6 +876,7 @@ export default function ChatScreen() {
   const handleSelectMode = useCallback(
     async (next: ChatMode): Promise<boolean> => {
       if (next === mode) return false;
+      trackInteraction({ screen: "chat", feature: "reader_toggle", action: "select", item: next });
 
       // The user has now had their say either way, so a later snapshot must not
       // put the toggle back on the reader the thread happens to have been in.
@@ -892,6 +898,12 @@ export default function ChatScreen() {
           ],
           { onDismiss: () => resolve(false) },
         );
+      });
+      trackInteraction({
+        screen: "chat",
+        feature: "reader_switch_limit",
+        action: "tap",
+        item: startFresh ? "start_new_chat" : "stay",
       });
       if (!startFresh) return false;
 
