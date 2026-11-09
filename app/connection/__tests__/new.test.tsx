@@ -5,6 +5,7 @@ import { Alert, TextInput } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 import SingleConnectionCreateScreen from '@/app/connection/new';
+import { logEvent } from '@react-native-firebase/analytics';
 
 jest.mock('expo-router', () => ({ router: { replace: jest.fn(), push: jest.fn() } }));
 // Stable values, as the real providers give — see app/(main)/__tests__/chat.test.tsx.
@@ -84,5 +85,35 @@ describe('SingleConnectionCreateScreen', () => {
       alertSpy.mock.calls[0][2][0].onPress();
     });
     expect(focus.mock.contexts[0].props.accessibilityLabel).toBe('Second Individual, first name');
+  });
+
+  describe('analytics', () => {
+    const events = (name: string) =>
+      (logEvent as jest.Mock).mock.calls.filter(([, n]) => n === name).map(([, , p]) => p);
+
+    it('reports the Use my chart toggle and the relationship choice', () => {
+      render(<SingleConnectionCreateScreen />);
+      fireEvent(screen.getByRole('switch', { name: 'Use my chart' }), 'valueChange', false);
+      fireEvent.press(screen.getByRole('radio', { name: "It's Complicated" }));
+      fireEvent.press(screen.getByRole('radio', { name: "It's Complicated" })); // already chosen
+
+      expect(events('ui_interaction')).toEqual([
+        { screen: 'connection_new', feature: 'use_my_chart', action: 'select', item: 'off' },
+        { screen: 'connection_new', feature: 'relationship_type', action: 'select', item: 'it_s_complicated' },
+      ]);
+    });
+
+    // The field's name, so the report shows which one people skip — never its value.
+    it('reports which required field blocked the save', async () => {
+      render(<SingleConnectionCreateScreen />);
+      await act(async () => {
+        fireEvent.press(screen.getByRole('button', { name: 'View Connection' }));
+      });
+
+      expect(events('ui_interaction')).toEqual([
+        { screen: 'connection_new', feature: 'save', action: 'tap' },
+        { screen: 'connection_new', feature: 'save_blocked', action: 'tap', item: 'second_person_first_name' },
+      ]);
+    });
   });
 });

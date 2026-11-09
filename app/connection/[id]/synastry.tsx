@@ -30,6 +30,9 @@ import { scale, verticalScale, moderateScale } from "@/src/utils/responsive";
 import { renderRichText } from "@/src/utils/rich-text";
 import { ThemedView } from "@/src/components/themed-view";
 import { logger } from "@/src/utils/logger";
+import { Events, trackInteraction } from "@/src/services/analytics.service";
+import { useSectionsReached } from "@/src/hooks/use-sections-reached";
+import type { LayoutChangeEvent } from "react-native";
 
 const NAV_BAR_HEIGHT = 44;
 
@@ -121,13 +124,15 @@ function ReadingSection({
   label,
   body,
   loading,
+  onLayout,
 }: {
   label: string;
   body?: string;
   loading: boolean;
+  onLayout?: (e: LayoutChangeEvent) => void;
 }) {
   return (
-    <View style={styles.readingCard}>
+    <View style={styles.readingCard} onLayout={onLayout}>
       <Text style={styles.readingLabel} accessibilityRole="header">{label}</Text>
       {body ? (
         <Animated.View entering={FadeIn.duration(450)}>
@@ -165,6 +170,13 @@ export default function SynastryAnalysisScreen() {
 
   const [reading, setReading] = useState<SynastryReadingResult | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // Read depth: which sections people scroll far enough to see. Held off until
+  // the reading lands, so a section seen as a skeleton isn't counted as read.
+  const sections = useSectionsReached(
+    (key) => trackInteraction({ screen: "synastry", feature: "reading_section", action: "view", item: key }),
+    !!reading,
+  );
   // A fresh reading is generated on first view and lands by snapshot, with
   // focus elsewhere. Announced from the subscription below, which only exists
   // when no saved reading did — so a saved one is never announced. Once: the
@@ -186,6 +198,7 @@ export default function SynastryAnalysisScreen() {
         if (existing.result) {
           setReading(existing.result);
           setLoading(false);
+          Events.synastryViewed({ saved: true });
           return;
         }
 
@@ -208,6 +221,7 @@ export default function SynastryAnalysisScreen() {
           if (!announcedReading.current) {
             announcedReading.current = true;
             AccessibilityInfo.announceForAccessibility("Synastry reading ready.");
+            Events.synastryViewed({ saved: false });
           }
         });
       } catch (err) {
@@ -252,6 +266,9 @@ export default function SynastryAnalysisScreen() {
         <ScrollView
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
+          onScroll={sections.onScroll}
+          onLayout={sections.onViewportLayout}
+          scrollEventThrottle={250}
         >
           <Animated.View entering={FadeIn.duration(350)}>
             <NamesRow nameA={nameA} nameB={nameB} />
@@ -287,7 +304,11 @@ export default function SynastryAnalysisScreen() {
             </View>
           </Animated.View>
 
-          <Animated.View entering={FadeIn.duration(400).delay(150)} style={styles.aspectsSection}>
+          <Animated.View
+            entering={FadeIn.duration(400).delay(150)}
+            style={styles.aspectsSection}
+            onLayout={sections.onLayout("key_aspect")}
+          >
             <Text style={styles.aspectsTitle} accessibilityRole="header">KEY ASPECT</Text>
             <View style={styles.aspectsList}>
               {topAspects.length === 0 ? (
@@ -306,16 +327,19 @@ export default function SynastryAnalysisScreen() {
             label="LOVE LANGUAGE"
             body={reading?.loveLanguage}
             loading={loading}
+            onLayout={sections.onLayout("love_language")}
           />
           <ReadingSection
             label="CONFLICT STYLE"
             body={reading?.conflictStyle}
             loading={loading}
+            onLayout={sections.onLayout("conflict_style")}
           />
           <ReadingSection
             label="LONGEVITY"
             body={reading?.longevity}
             loading={loading}
+            onLayout={sections.onLayout("longevity")}
           />
         </ScrollView>
       </View>

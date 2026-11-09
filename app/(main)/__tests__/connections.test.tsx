@@ -2,6 +2,7 @@ import React from 'react';
 import { Alert } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { onSnapshot } from 'firebase/firestore';
+import { logEvent } from '@react-native-firebase/analytics';
 
 import ConnectionsScreen from '@/app/(main)/connections';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
@@ -15,7 +16,7 @@ jest.mock('@/src/context/user-context', () => ({
 }));
 jest.mock('@/src/context/revenuecat-context', () => ({ useRevenueCat: jest.fn() }));
 jest.mock('@/src/context/admin-context', () => ({
-  useAdmin: () => ({ premiumConnectionLimit: 5 }),
+  useAdmin: () => ({ freeConnectionLimit: 1, premiumConnectionLimit: 5 }),
 }));
 jest.mock('@/src/services/connections-cache.service', () => ({
   ConnectionsCache: {
@@ -73,13 +74,20 @@ const CONNECTIONS = [
   },
 ];
 
-const renderWith = async (premium: boolean) => {
+// Ordered newest first, as the screen's `createTime desc` query returns them.
+const SECOND_CONNECTION = {
+  id: 'c2',
+  firstPerson: { firstName: 'Luna', lastName: 'Moon' },
+  secondPerson: { firstName: 'Stella', lastName: 'Star' },
+};
+
+const renderWith = async (premium: boolean, connections = CONNECTIONS) => {
   (useRevenueCat as jest.Mock).mockReturnValue({ isAdmin: false, hasFullAccess: premium });
   render(<ConnectionsScreen />);
   // Deliver the Firestore snapshot the screen subscribes to.
   const onNext = (onSnapshot as jest.Mock).mock.calls.at(-1)[1];
   await act(async () => {
-    onNext({ docs: CONNECTIONS.map(({ id, ...data }) => ({ id, data: () => data })) });
+    onNext({ docs: connections.map(({ id, ...data }) => ({ id, data: () => data })) });
   });
 };
 
@@ -131,15 +139,82 @@ describe('ConnectionsScreen', () => {
     expect(deleteConnection).toHaveBeenCalledWith('uid-1', 'c1');
   });
 
+  // Free accounts get one connection. A lapsed subscriber keeps the oldest
+  // one open and the rest lock, newest first.
   it('says when a connection is locked', async () => {
+    await renderWith(false, [SECOND_CONNECTION, ...CONNECTIONS]);
+
+    expect(screen.getByRole('button', { name: 'Luna Moon and Stella Star, locked' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Luna Moon and Sol Sun' })).toBeTruthy();
+  });
+
+  it("leaves a free user's one connection unlocked", async () => {
     await renderWith(false);
 
-    expect(screen.getByRole('button', { name: 'Luna Moon and Sol Sun, locked' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Luna Moon and Sol Sun' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Add Connection' })).toBeNull();
+    expect(screen.getByText('1 of 1 connections')).toBeTruthy();
+  });
+
+  it('offers a free user with no connections a slot', async () => {
+    await renderWith(false, []);
+
+    fireEvent.press(screen.getByRole('button', { name: 'Add Connection' }));
+
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(require('expo-router').router.push).toHaveBeenCalledWith('/connection/new');
   });
 
   it('gives the empty capacity slots a button role', async () => {
     await renderWith(true);
 
     expect(screen.getAllByRole('button', { name: 'Add Connection' }).length).toBeGreaterThan(0);
+  });
+
+  describe('analytics', () => {
+    const events = (name: string) =>
+      (logEvent as jest.Mock).mock.calls.filter(([, n]) => n === name).map(([, , p]) => p);
+
+    it('reports how many connections the list loaded with, once', async () => {
+      await renderWith(true, [SECOND_CONNECTION, ...CONNECTIONS]);
+      const onNext = (onSnapshot as jest.Mock).mock.calls.at(-1)[1];
+      await act(async () => {
+        onNext({ docs: [] });
+      });
+
+      expect(events('connections_list_viewed')).toEqual([{ count: 2 }]);
+    });
+
+    it('reports opening a connection without its id or names', async () => {
+      await renderWith(true);
+      fireEvent.press(screen.getByRole('button', { name: 'Luna Moon and Sol Sun' }));
+
+      expect(events('ui_interaction')).toEqual([
+        { screen: 'connections', feature: 'connection_card', action: 'tap' },
+      ]);
+      expect(JSON.stringify((logEvent as jest.Mock).mock.calls)).not.toMatch(/c1|Luna|Sol/);
+    });
+
+    it('reports a locked connection, then the upgrade tapped from its alert', async () => {
+      await renderWith(false, [SECOND_CONNECTION, ...CONNECTIONS]);
+      fireEvent.press(screen.getByRole('button', { name: 'Luna Moon and Stella Star, locked' }));
+
+      const buttons = alertSpy.mock.calls[0][2] as { text: string; onPress?: () => void }[];
+      act(() => buttons.find((b) => b.text === 'Upgrade')!.onPress!());
+
+      expect(events('ui_interaction')).toEqual([
+        { screen: 'connections', feature: 'locked_connection', action: 'tap' },
+        { screen: 'connections', feature: 'locked_alert', action: 'unlock' },
+      ]);
+    });
+
+    it('says which Add button was used', async () => {
+      await renderWith(false, []);
+      fireEvent.press(screen.getByRole('button', { name: 'Add Connection' }));
+
+      expect(events('ui_interaction')).toEqual([
+        { screen: 'connections', feature: 'add_connection', action: 'tap', item: 'empty_state' },
+      ]);
+    });
   });
 });

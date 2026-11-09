@@ -1,6 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
 import { router } from 'expo-router';
+import { logEvent } from '@react-native-firebase/analytics';
 
 import BirthChartScreen from '@/app/(home)/birth-chart-view';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
@@ -124,6 +125,46 @@ describe('BirthChartScreen', () => {
     expect(screen.getByRole('header', { name: 'Unlock Planets' })).toBeTruthy();
     fireEvent.press(screen.getByRole('button', { name: 'Unlock Now' }));
     expect(router.push).toHaveBeenCalledWith('/(settings)/paywall');
+  });
+
+  describe('analytics', () => {
+    const events = (name: string) =>
+      (logEvent as jest.Mock).mock.calls.filter(([, n]) => n === name).map(([, , p]) => p);
+
+    it('reports tab changes, and says when the tab was locked', () => {
+      render(<BirthChartScreen />);
+      fireEvent.press(tab('Natal Table'));
+      fireEvent.press(tab('Houses'));
+      fireEvent.press(tab('Planets, premium'));
+      fireEvent.press(screen.getByRole('button', { name: 'Unlock Now' }));
+
+      expect(events('ui_interaction')).toEqual([
+        { screen: 'birth_chart', feature: 'chart_tab', action: 'select', item: 'natal_table' },
+        { screen: 'birth_chart', feature: 'breakdown_tab', action: 'select', item: 'houses' },
+        { screen: 'birth_chart', feature: 'breakdown_tab_locked', action: 'select', item: 'planets' },
+        { screen: 'birth_chart', feature: 'premium_unlock', action: 'unlock', item: 'planets' },
+      ]);
+    });
+
+    // Tapping the tab already showing is not a choice the user made.
+    it('does not report re-tapping the current tab', () => {
+      render(<BirthChartScreen />);
+      fireEvent.press(tab('Natal Wheel'));
+      fireEvent.press(tab('Insights'));
+
+      expect(events('ui_interaction')).toEqual([]);
+    });
+
+    it('counts the breakdown as viewed once it is on screen', () => {
+      setAccess({ hasFullAccess: false, loading: true });
+      const { rerender } = render(<BirthChartScreen />);
+      expect(events('natal_breakdown_viewed')).toEqual([]);
+
+      setAccess({ hasFullAccess: true, loading: false });
+      rerender(<BirthChartScreen />);
+      rerender(<BirthChartScreen />);
+      expect(events('natal_breakdown_viewed')).toEqual([{ premium: true }]);
+    });
   });
 
   /**

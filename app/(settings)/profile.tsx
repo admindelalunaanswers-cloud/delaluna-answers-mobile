@@ -33,10 +33,14 @@ import {
 import HeaderNav from "@/src/components/shared/header-nav";
 import PolicyModal from "@/src/components/sign-up/policy-modals";
 import { ThemedView } from "@/src/components/themed-view";
+import WhatsNewSheet from "@/src/components/whats-new-sheet";
 import { C } from "@/src/constants/theme";
+import { WHATS_NEW } from "@/src/constants/whats-new";
 import { useHoroscope } from "@/src/context/horoscope-context";
 import { useRevenueCat } from "@/src/context/revenuecat-context";
 import { useUser } from "@/src/context/user-context";
+import { markWhatsNewSeen, useWhatsNewItems } from "@/src/hooks/use-whats-new";
+import { Events } from "@/src/services/analytics.service";
 import {
   registerForPushNotifications,
   unregisterPushToken,
@@ -116,6 +120,15 @@ export default function ProfileScreen() {
     "Privacy Policy" | "Terms & Conditions"
   >("Privacy Policy");
   const [uidCopied, setUidCopied] = useState(false);
+  const [whatsNewVisible, setWhatsNewVisible] = useState(false);
+  const whatsNewItems = useWhatsNewItems();
+
+  const openWhatsNew = () => {
+    setWhatsNewVisible(true);
+    // Seen here counts as seen: Home won't show it again afterwards.
+    markWhatsNewSeen();
+    Events.whatsNewShown({ release_id: WHATS_NEW.id, source: "profile" });
+  };
 
   const isPremium = hasFullAccess;
   const profileImageSource =
@@ -548,6 +561,31 @@ export default function ProfileScreen() {
 
           <View style={ss.rowDivider} />
 
+          {whatsNewItems.length > 0 ? (
+            <>
+              <TouchableOpacity
+                style={ss.settingsRow}
+                accessibilityRole="button"
+                onPress={openWhatsNew}
+                activeOpacity={0.75}
+              >
+                <Ionicons
+                  name="sparkles-outline"
+                  size={scale(18)}
+                  color="#ffffff"
+                  style={{ marginRight: scale(4) }}
+                />
+                <Text style={ss.rowText}>What&apos;s new</Text>
+                <Image
+                  source={require("@/src/assets/actions/arrow-right-icon.png")}
+                  style={ss.rowArrow}
+                />
+              </TouchableOpacity>
+
+              <View style={ss.rowDivider} />
+            </>
+          ) : null}
+
           <TouchableOpacity
             style={ss.settingsRow}
             accessibilityRole="button"
@@ -709,6 +747,21 @@ export default function ProfileScreen() {
 
         <View style={{ height: verticalScale(32) }} />
       </ScrollView>
+
+      <WhatsNewSheet
+        visible={whatsNewVisible}
+        release={WHATS_NEW}
+        items={whatsNewItems}
+        onClose={(reason) => {
+          setWhatsNewVisible(false);
+          Events.whatsNewDismissed({ release_id: WHATS_NEW.id, reason });
+        }}
+        onItemPress={(item) => {
+          setWhatsNewVisible(false);
+          Events.whatsNewCta({ release_id: WHATS_NEW.id, item_id: item.id });
+          if (item.cta) router.push(item.cta.route);
+        }}
+      />
 
       <PolicyModal
         visible={policyModalVisible}

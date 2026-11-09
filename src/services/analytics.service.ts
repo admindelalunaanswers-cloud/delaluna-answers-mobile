@@ -87,9 +87,17 @@ export function setUserProperties(
 
 // ─── Screen tracking ────────────────────────────────────────────────────────
 
-// Maps Expo Router pathnames to human-friendly screen names that show up in
-// GA4's "Pages and screens" report. Anything not listed falls back to the
-// raw path with the leading slash and group-segment parens stripped.
+// Maps Expo Router route templates to human-friendly screen names that show up
+// in GA4's "Pages and screens" report. Keys are `routeKeyForSegments()` output
+// — group segments kept, dynamic segments as their template (`[id]`) — so a
+// screen reached at /connection/abc123 is one row, not one per connection.
+// `usePathname()` is no use as a key: it drops the groups (so `/(main)/chat`
+// never matched) and carries the concrete id. Anything not listed falls back
+// to the prettified key.
+//
+// "/(main)/index" is a perf-log key (useScreenPerfLog), not a router key — the
+// router reports that screen as "/(main)". Its label is the slug its
+// performanceLogs history is stored under, so don't rename it casually.
 const ROUTE_LABELS: Record<string, string> = {
   "/(main)": "Home",
   "/(main)/home": "Home",
@@ -101,6 +109,9 @@ const ROUTE_LABELS: Record<string, string> = {
   "/(home)/birth-chart-view": "Birth Chart",
   "/connection/new": "New Connection",
   "/connection/SynastryScreen": "Synastry",
+  "/connection/[id]": "Connection Report",
+  "/connection/[id]/edit": "Edit Connection",
+  "/connection/[id]/synastry": "Synastry",
   "/(auth)/login": "Login",
   "/(auth)/sign-up": "Sign Up",
   "/(auth)/verify-email": "Verify Email",
@@ -110,8 +121,23 @@ const ROUTE_LABELS: Record<string, string> = {
   "/(settings)/edit-profile": "Edit Profile",
   "/(settings)/paywall": "Paywall",
   "/(settings)/accessibility": "Accessibility",
+  "/(settings)/purchased-reports": "Purchased Reports",
+  "/(settings)/select-avatar": "Select Avatar",
+  "/(settings)/update-password": "Update Password",
+  "/(settings)/update-theme.screen": "Update Theme",
+  "/(settings)/admin": "Admin",
   "/(util)/loading-screen": "Loading",
+  "/(util)/feedback": "Feedback",
+  "/(util)/support": "Support",
 };
+
+/**
+ * The route template for `useSegments()` output: `['connection', '[id]']` →
+ * `/connection/[id]`, `['(main)']` → `/(main)`. Never contains a concrete id.
+ */
+export function routeKeyForSegments(segments: readonly string[]): string {
+  return "/" + segments.join("/");
+}
 
 function fallbackLabel(pathname: string): string {
   return (
@@ -156,6 +182,85 @@ export function logEvent(name: string, params?: Params): Promise<void | void> {
   );
 }
 
+// ─── In-screen interactions ─────────────────────────────────────────────────
+// One event, `ui_interaction`, for everything a user does *inside* a screen,
+// so "what gets used most" is a single GA4 report broken down by
+// screen → feature → item. Register `screen`, `feature`, `action` and `item`
+// as event-scoped custom dimensions in the Firebase console, or GA4 collects
+// them without showing them anywhere.
+//
+// Every value must come from a fixed set the code chooses: a tab name, a house
+// number, a section id. Never a name, birth detail, connection id or anything
+// the user typed — GA4 keeps it, and it is joined to the user_id.
+
+export type InteractionScreen =
+  | "home"
+  | "birth_chart"
+  | "transits"
+  | "chat"
+  | "connections"
+  | "connection_report"
+  | "connection_new"
+  | "connection_edit"
+  | "synastry";
+
+export type InteractionAction =
+  | "tap" // a button or link
+  | "select" // a tab, date or option
+  | "expand"
+  | "collapse"
+  | "reveal" // a card turned over
+  | "unlock" // a locked item tapped — the paywall follows
+  | "view"; // a section scrolled into view (read depth), not a tap
+
+export interface Interaction {
+  screen: InteractionScreen;
+  /** The control: `date_switcher`, `breakdown_tab`, `house_card`… */
+  feature: string;
+  action: InteractionAction;
+  /** Which one: `today`, `aspects`, `house_7`… Optional. */
+  item?: string | number;
+}
+
+/** snake_case, ≤ 100 chars (GA4's string-value cap). `Natal Wheel` → `natal_wheel`. */
+export function toAnalyticsValue(value: string | number): string {
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 100);
+}
+
+export function trackInteraction({
+  screen,
+  feature,
+  action,
+  item,
+}: Interaction): Promise<void | void> {
+  return logEvent("ui_interaction", {
+    screen,
+    feature: toAnalyticsValue(feature),
+    action,
+    ...(item !== undefined && item !== "" ? { item: toAnalyticsValue(item) } : {}),
+  });
+}
+
+/** The day a date id is relative to today: what the date switchers report. */
+export function relativeDay(
+  dateId: string,
+  todayId: string,
+): "yesterday" | "today" | "tomorrow" | "other" {
+  if (dateId === todayId) return "today";
+  const day = 24 * 60 * 60 * 1000;
+  const diff = Math.round(
+    (Date.parse(`${dateId}T00:00:00Z`) - Date.parse(`${todayId}T00:00:00Z`)) / day,
+  );
+  if (diff === -1) return "yesterday";
+  if (diff === 1) return "tomorrow";
+  return "other";
+}
+
 // ─── Domain events ──────────────────────────────────────────────────────────
 // Keep names snake_case and stable — renaming breaks historical reports.
 
@@ -170,17 +275,37 @@ export const Events = {
   // Birth chart / core flows
   birthChartGenerated: (params?: { has_time?: boolean }) =>
     logEvent("birth_chart_generated", params),
+  // "Viewed" = the content was on screen, not just the route opened — the
+  // gap between these and screen_view is how often a screen showed a skeleton
+  // or a paygate instead.
   transitsViewed: () => logEvent("transits_viewed"),
-  horoscopeViewed: () => logEvent("horoscope_viewed"),
-  tarotDrawn: (card?: string) => logEvent("tarot_drawn", { card }),
+  horoscopeViewed: (params: { day: "yesterday" | "today" | "tomorrow" | "other" }) =>
+    logEvent("horoscope_viewed", params),
+  natalBreakdownViewed: (params: { premium: boolean }) =>
+    logEvent("natal_breakdown_viewed", params),
+  tarotDrawn: (params: { source: "home" | "chat"; cards: number }) =>
+    logEvent("tarot_drawn", params),
 
   // Connections / synastry
-  connectionCreated: () => logEvent("connection_created"),
+  connectionCreated: (params?: {
+    first_person: "me" | "someone_else";
+    /** The relationship option chosen — a fixed list in the form. */
+    relationship: string;
+  }) => logEvent("connection_created", params),
+  /** What the saved edit changed. `birth_details` regenerates the report. */
+  connectionUpdated: (params: { change: "pronouns_only" | "birth_details" | "details" }) =>
+    logEvent("connection_updated", params),
+  /** `count`: connections saved, from the list's first server snapshot. */
+  connectionsListViewed: (params: { count: number }) =>
+    logEvent("connections_list_viewed", params),
+  connectionReportViewed: () => logEvent("connection_report_viewed"),
   connectionDeleted: () => logEvent("connection_deleted"),
-  synastryViewed: () => logEvent("synastry_viewed"),
+  /** `saved`: an existing reading, rather than one generated for this visit. */
+  synastryViewed: (params: { saved: boolean }) =>
+    logEvent("synastry_viewed", params),
 
   // Chat
-  chatMessageSent: (params?: { length?: number }) =>
+  chatMessageSent: (params?: { length?: number; mode?: "astrology" | "tarot" }) =>
     logEvent("chat_message_sent", params),
   chatRetry: () => logEvent("chat_retry"),
   chatExported: (params: {
@@ -213,4 +338,15 @@ export const Events = {
 
   // Settings
   themeChanged: (theme: string) => logEvent("theme_changed", { theme }),
+
+  // What's new sheet. `release_id` and `item_id` come from
+  // src/constants/whats-new.ts — fixed strings, never user data.
+  whatsNewShown: (params: { release_id: string; source: "auto" | "profile" }) =>
+    logEvent("whats_new_shown", params),
+  whatsNewDismissed: (params: {
+    release_id: string;
+    reason: "button" | "backdrop" | "back";
+  }) => logEvent("whats_new_dismissed", params),
+  whatsNewCta: (params: { release_id: string; item_id: string }) =>
+    logEvent("whats_new_cta", params),
 } as const;

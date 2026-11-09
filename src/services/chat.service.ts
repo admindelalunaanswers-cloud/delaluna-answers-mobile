@@ -24,7 +24,7 @@ import type { DrawnTarotCard } from '@/src/types/tarot-cards.type';
 export type { ChatMode };
 
 /** Cards pulled per tarot question — a three-card spread, as on the home screen. */
-const TAROT_CHAT_CARD_COUNT = 3;
+export const TAROT_CHAT_CARD_COUNT = 3;
 
 /**
  * The card(s) the prompt for a given turn is built around.
