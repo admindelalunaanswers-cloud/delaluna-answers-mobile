@@ -317,6 +317,18 @@ export const Events = {
     includeBirthDetails: boolean;
   }) => logEvent("chat_exported", params),
 
+  // First-run tour (src/context/tour-context.tsx). `step_id` is from TOUR_STEPS.
+  tourOffered: () => logEvent("tour_offered"),
+  tourDeclined: () => logEvent("tour_declined"),
+  tourStarted: (params: { source: "offer" | "profile" }) =>
+    logEvent("tour_started", params),
+  tourStepViewed: (params: { step_id: string; step_index: number; spotlit: boolean }) =>
+    logEvent("tour_step_viewed", params),
+  tourSkipped: (params: { step_id: string; step_index: number }) =>
+    logEvent("tour_skipped", params),
+  tourCompleted: (params: { cta: "chat" | "connection" | "birth_chart" | "home" }) =>
+    logEvent("tour_completed", params),
+
   // Monetization (paywall + RevenueCat)
   paywallViewed: (source: string) => logEvent("paywall_viewed", { source }),
   paywallDismissed: (source: string) =>
