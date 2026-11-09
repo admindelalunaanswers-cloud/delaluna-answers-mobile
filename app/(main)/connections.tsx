@@ -130,6 +130,7 @@ export default function ConnectionsScreen() {
   const { authUser } = useUser();
   const { isAdmin, hasFullAccess } = useRevenueCat();
   const {
+    freeConnectionLimit: FREE_CONNECTION_LIMIT,
     premiumConnectionLimit: PREMIUM_CONNECTION_LIMIT,
   } = useAdmin();
   const insets = useSafeAreaInsets();
@@ -144,7 +145,7 @@ export default function ConnectionsScreen() {
   const headerHeight = insets.top + verticalScale(NAV_BAR_HEIGHT);
 
   // Connection allowance: admins are unmetered, premium subscribers get
-  // PREMIUM_CONNECTION_LIMIT, free users get 0. `isAdmin` comes from the
+  // PREMIUM_CONNECTION_LIMIT, free users get FREE_CONNECTION_LIMIT (1). `isAdmin` comes from the
   // RevenueCat context rather than the user doc directly so every screen reads
   // the admin carve-out from one place — nothing is gated on it server-side
   // (the rules already let any verified owner write their own connections), so
@@ -153,7 +154,7 @@ export default function ConnectionsScreen() {
     ? Number.POSITIVE_INFINITY
     : hasFullAccess
       ? PREMIUM_CONNECTION_LIMIT
-      : 0;
+      : FREE_CONNECTION_LIMIT;
   const canAddNew = connections.length < accessLimit;
 
   const presentUpgradePaywall = () => {
@@ -184,8 +185,10 @@ export default function ConnectionsScreen() {
         );
       } else {
         Alert.alert(
-          'Connections are a Premium feature',
-          `Upgrade to Premium to save up to ${PREMIUM_CONNECTION_LIMIT} connections.`,
+          'Connection limit reached',
+          accessLimit === 0
+            ? `Upgrade to Premium to save up to ${PREMIUM_CONNECTION_LIMIT} connections.`
+            : `Free accounts can save ${accessLimit} connection${accessLimit === 1 ? '' : 's'}. Upgrade to Premium to save up to ${PREMIUM_CONNECTION_LIMIT}, or remove one to add a new one.`,
           [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Upgrade', onPress: presentUpgradePaywall },
@@ -198,7 +201,9 @@ export default function ConnectionsScreen() {
   };
 
   const handleLockedPress = (connectionId?: string) => {
-    const message = 'Connections are a Premium feature. Upgrade to read this connection, or delete it to clean up your list.';
+    const message = accessLimit === 0
+      ? 'Connections are a Premium feature. Upgrade to read this connection, or delete it to clean up your list.'
+      : `Your plan includes ${accessLimit} connection${accessLimit === 1 ? '' : 's'}. Upgrade to read this one, or delete connections to make room.`;
     Alert.alert(
       'Connection locked',
       message,

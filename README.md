@@ -51,7 +51,7 @@ Delaluna Answers is a personalized astrology companion for iOS and Android that 
 - **Cloud Functions** -- 14 functions, all in `functions/src/index.ts`:
   - *Callable*: `sendVerificationCode`, `verifyCode`, `syncAdminClaim`, `revokeMyRefreshTokens`, `createConnection`, `deleteConnection`, `sendChatMessage`, `setEntitlementOverride`
   - *Firestore triggers*: `notifyBreakdownReady`, `notifyChatReply`, `notifySynastryReady`, `notifyTransitsReady`, `parseConnectionCompatibility`
-  - *Scheduled*: `dailyHoroscopeNotifications` (hourly), `clearDailyChatHistory` (00:00), `weeklyCleanup` (Sun 06:00), `aggregatePerfLogs` (02:00)
+  - *Scheduled*: `dailyHoroscopeNotifications` (hourly), `refreshConnectionReports` (hourly; Sun + Fri 05:00 local), `clearDailyChatHistory` (00:00), `weeklyCleanup` (Sun 06:00), `aggregatePerfLogs` (02:00)
 - **Firebase Extensions** for AI generation -- see [AI Generation Pipeline](#ai-generation-pipeline) below
 - **Firebase Emulators** (auth, functions, firestore, storage, eventarc, extensions) with seed import/export via `npm run dev`
 
