@@ -9,6 +9,7 @@ import {
 import { AppStatusBar } from "@/src/components/app-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { TourTarget } from "@/src/components/tour/tour-target";
 import { ThemeContext } from "@/src/context/theme-context";
 import { useResponsive } from "@/src/hooks/use-responsive";
 import { MAX_CONTENT_WIDTH } from "@/src/utils/layout";
@@ -37,6 +38,8 @@ type HeaderNavProps = {
   leftIconSource?: ImageSourcePropType;
   rightIconSource?: ImageSourcePropType;
   rightAvatarSource?: ImageSourcePropType;
+  /** Registers the avatar as a first-run tour target (Home's "Make it yours" step). */
+  rightTourTargetId?: string;
   onLeftPress?: () => void;
   onRightPress?: () => void;
   /** Screen-reader name for an icon-only side button. Back icons and the avatar get a default. */
@@ -65,6 +68,7 @@ export default function HeaderNav({
   leftIconSource,
   rightIconSource,
   rightAvatarSource,
+  rightTourTargetId,
   onLeftPress,
   onRightPress,
   leftAccessibilityLabel,
@@ -206,7 +210,11 @@ export default function HeaderNav({
               accessibilityLabel={rightA11yLabel}
               importantForAccessibility={rightHasContent ? "yes" : "no-hide-descendants"}
             >
-              {rightAvatarSource ? (
+              {rightAvatarSource && rightTourTargetId ? (
+                <TourTarget id={rightTourTargetId}>
+                  <Image source={rightAvatarSource} style={[styles.avatar, dynamic.avatarIcon]} />
+                </TourTarget>
+              ) : rightAvatarSource ? (
                 <Image source={rightAvatarSource} style={[styles.avatar, dynamic.avatarIcon]} />
               ) : rightIconName ? (
                 <Ionicons name={rightIconName} size={moderateScale(30)} color={tc} />
