@@ -818,11 +818,13 @@ const HOUR_SPAN = 3; // 8,9,10
 const SUNDAY = 0; // Date.getUTCDay()
 const FRIDAY = 5; // Date.getUTCDay()
 
-// Mirrors DEFAULT_PREMIUM_CONNECTION_LIMIT in src/context/admin-context.tsx —
-// the most connections any non-admin account can read. The scheduled refresh
-// regenerates at most this many per user, oldest first (the ones the
-// Connections screen leaves unlocked). Keep the two in step.
+// Mirror DEFAULT_PREMIUM_CONNECTION_LIMIT / DEFAULT_FREE_CONNECTION_LIMIT in
+// src/context/admin-context.tsx — how many connections each tier can read. The
+// scheduled refresh regenerates only those, oldest first (the ones the
+// Connections screen leaves unlocked), so a lapsed subscriber's locked
+// connections are not regenerated for nobody. Keep them in step.
 const MAX_REFRESHED_CONNECTIONS = 10;
+const FREE_READABLE_CONNECTIONS = 1;
 
 // Premium entitlement id used by RevenueCat (must match the entitlement
 // configured in the RC dashboard and used by useRevenueCat().isPro).
@@ -2888,8 +2890,10 @@ async function runAnchoredGeneration(opts: {
  * Regenerates compatibility reports twice a week: the weekday report on the
  * user's local Sunday and the weekend report on their local Friday, at
  * REPORT_REFRESH_LOCAL_HOUR (5 AM) so they are ready before the 8–10 AM
- * reminder push. Free and premium accounts follow the same rules; see
- * connection-refresh.ts.
+ * reminder push. Free and premium accounts follow the same rule — the
+ * connections you can read are refreshed — so a lapsed subscriber gets their
+ * one readable connection refreshed, not the ones the app shows as locked.
+ * See connection-refresh.ts.
  *
  * It only re-stamps `requestedAt` (plus the period) on each report document.
  * The stored prompt is unchanged, but the request hash covers `requestedAt`,
@@ -2902,7 +2906,8 @@ async function runAnchoredGeneration(opts: {
  * reminder push needs one too.
  */
 export const refreshConnectionReports = onSchedule(
-  { schedule: "every 1 hours" },
+  // The secret: this reaches isUserPremium (see REVIEW_ACCOUNT_UIDS).
+  { schedule: "every 1 hours", secrets: [reviewAccountUids] },
   async () => {
     const now = new Date();
     const offsets = offsetsDueForRefresh(now);
@@ -2919,13 +2924,20 @@ export const refreshConnectionReports = onSchedule(
         now,
         userDoc.data().timezoneOffsetMinutes,
       );
+      // Only the connections this user can read: premium (and admins) up to
+      // MAX_REFRESHED_CONNECTIONS, everyone else FREE_READABLE_CONNECTIONS.
+      // The admin lookup is an Auth call, so it is made only for non-premium.
+      const readable =
+        (await isUserPremium(userDoc.id)) || (await isAdminUid(userDoc.id))
+          ? MAX_REFRESHED_CONNECTIONS
+          : FREE_READABLE_CONNECTIONS;
       // Oldest first, matching which connections the Connections screen leaves
       // unlocked. Docs with no createTime are skipped by orderBy here exactly
       // as they are by the screen's own query, so nothing hidden is refreshed.
       const connections = await userDoc.ref
         .collection("connections")
         .orderBy("createTime", "asc")
-        .limit(MAX_REFRESHED_CONNECTIONS)
+        .limit(readable)
         .get();
       if (connections.empty) continue;
 

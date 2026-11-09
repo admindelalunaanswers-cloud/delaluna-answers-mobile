@@ -3,9 +3,10 @@
  *
  * Every connection report is regenerated on the user's local Sunday (the
  * weekday report, framed around Monday–Friday) and local Friday (the weekend
- * report, framed around Friday–Sunday). Same rules for free and premium
- * accounts: the only tier difference anywhere in connections is how many a user
- * can save, and synastry, which stays premium.
+ * report, framed around Friday–Sunday). Same rule for free and premium
+ * accounts: every connection the user can read is refreshed (premium 10, free
+ * 1, oldest first), and locked ones are not. The only tier differences anywhere
+ * in connections are that count and synastry, which stays premium.
  *
  * A report always belongs to a period. `createConnection` stamps the current
  * one, so a connection created on a Tuesday is framed around that week, and the
