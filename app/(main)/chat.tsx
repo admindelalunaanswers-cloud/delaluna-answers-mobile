@@ -107,6 +107,8 @@ import {
 import { checkForHarm, HARM_ALERTS } from "@/src/utils/harm-filter";
 import { getContentPadding, MAX_CONTENT_WIDTH } from "@/src/utils/layout";
 import { logger } from "@/src/utils/logger";
+import { useTourTarget } from "@/src/components/tour/tour-target";
+import { TOUR_TARGETS } from "@/src/constants/tour";
 import { plainRichText, renderRichText } from "@/src/utils/rich-text";
 
 const SUGGESTIONS = [
@@ -858,6 +860,8 @@ export default function ChatScreen() {
 
   // ─── Mode switch ───────────────────────────────────────────────────────────
 
+  const modeToggleTourTarget = useTourTarget(TOUR_TARGETS.chatModeToggle);
+
   // Both readers share the one conversation. The toggle picks who answers the
   // *next* question and nothing else: the thread stays open, and the handover
   // is made in the prompt (see `[[READER_CHANGE]]` in chat-continuity.ts) so
@@ -1379,6 +1383,7 @@ export default function ChatScreen() {
               ]}
             >
               <View
+                {...modeToggleTourTarget}
                 style={styles.modeTrack}
                 onLayout={(e) => setModeTrackWidth(e.nativeEvent.layout.width)}
               >
