@@ -44,11 +44,18 @@ export interface WhatsNewRelease {
   items: readonly WhatsNewItem[];
 }
 
-// TODO(release): set `releasedAt` to the 3.0 release day, and replace the draft
-// copy below with the final notes.
+// Release 4.0.0, from the Notion runbook. It ships as an OTA update to the
+// 3.0.0 binaries, so the label and id stay 3.0. If 4.0.0 goes to the stores
+// instead (runbook Phase 4B), change both to 4.0.
+//
+// TODO(release): `releasedAt` is the runbook's planned OTA day (Nov 11). If the
+// OTA moves, move this with it — accounts created after it skip the sheet.
+//
+// Interaction analytics and this sheet ship too, but users wouldn't notice
+// either, so neither gets an item.
 export const WHATS_NEW: WhatsNewRelease = {
   id: '3.0.0',
-  releasedAt: Date.parse('2026-11-08T00:00:00Z'),
+  releasedAt: Date.parse('2026-11-11T00:00:00-06:00'),
   versionLabel: 'Version 3.0',
   title: "What's new in Delaluna",
   subtitle: "Here's what changed since you last visited.",
@@ -58,31 +65,31 @@ export const WHATS_NEW: WhatsNewRelease = {
       icon: 'people-outline',
       audience: 'free',
       title: 'A connection on the free plan',
-      body: 'Add someone special and get a fresh compatibility report every weekday and weekend.',
-      cta: { label: 'Try it', route: '/(main)/connections' },
+      body: 'Save someone special and see how your charts match, no upgrade needed.',
+      cta: { label: 'Add a connection', route: '/(main)/connections' },
     },
     {
       id: 'twice_weekly_reports',
       icon: 'calendar-outline',
-      audience: 'premium',
-      title: 'Reports that refresh twice a week',
-      body: 'Your connections now get a new weekday report on Sunday and a weekend one on Friday.',
+      audience: 'all',
+      title: 'Connection reports, twice a week',
+      body: 'A fresh report every Sunday for the week ahead, and every Friday for the weekend. We’ll let you know when it’s ready.',
       cta: { label: 'See connections', route: '/(main)/connections' },
     },
     {
-      id: 'switch_readers',
-      icon: 'swap-horizontal-outline',
+      id: 'chats_kept_60_days',
+      icon: 'chatbubbles-outline',
       audience: 'all',
-      title: 'Switch readers mid-chat',
-      body: 'Ask the tarot reader a follow-up to your astrology question without starting over.',
+      title: 'Your chats stay for 60 days',
+      body: 'Chats no longer clear overnight. They move to your chat history and stay for 60 days after your last question.',
       cta: { label: 'Open chat', route: '/(main)/chat' },
     },
     {
-      id: 'accessibility_settings',
-      icon: 'text-outline',
+      id: 'privacy_policy_update',
+      icon: 'shield-checkmark-outline',
       audience: 'all',
-      title: 'Text size and motion settings',
-      body: 'Make text larger or calm the animations from Profile → Accessibility.',
+      title: 'An updated Privacy Policy',
+      body: 'Including how long we keep chats and which services we use. Read it any time in Profile.',
     },
   ],
 };
