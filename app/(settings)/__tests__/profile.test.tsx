@@ -46,6 +46,7 @@ jest.mock('@/src/context/revenuecat-context', () => {
     hasFullAccess: false,
     presentCustomerCenter: jest.fn(),
     restorePurchases: jest.fn(),
+    presentPaywall: jest.fn(() => Promise.resolve(false)),
   };
   return { useRevenueCat: () => value };
 });
@@ -163,6 +164,16 @@ describe('ProfileScreen', () => {
     ]) {
       expect(screen.getByRole('button', { name: new RegExp(name) })).toBeTruthy();
     }
+  });
+
+  it('opens the paywall in place from Upgrade to Premium', () => {
+    const { presentPaywall } = jest.requireMock('@/src/context/revenuecat-context').useRevenueCat();
+    render(<ProfileScreen />);
+
+    fireEvent.press(screen.getByRole('button', { name: /Upgrade to Premium/ }));
+
+    expect(presentPaywall).toHaveBeenCalledTimes(1);
+    expect(router.push).not.toHaveBeenCalledWith('/(settings)/paywall');
   });
 
   // The icon is a font glyph, so on iOS it joined the derived label as an

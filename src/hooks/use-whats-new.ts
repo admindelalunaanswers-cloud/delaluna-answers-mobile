@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { TOUR_RELEASED_AT } from '@/src/constants/tour';
 import { WHATS_NEW, type WhatsNewItem } from '@/src/constants/whats-new';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { useUser } from '@/src/context/user-context';
 import { Events } from '@/src/services/analytics.service';
 import { toDate } from '@/src/utils/firestore-date';
 import { logger } from '@/src/utils/logger';
+import { isNewAccount } from '@/src/utils/tour-policy';
 import {
   decideWhatsNew,
   itemsForAudience,
@@ -63,26 +65,39 @@ export function useWhatsNew(active: boolean) {
     // decision isn't made on placeholders and the list doesn't change under
     // someone already reading it.
     if (decided.current || !signedIn || !userDoc || purchasesLoading) return;
-    decided.current = true;
 
+    // Decided only once a read survives to be applied — same as the tour.
+    // A new `userDoc` snapshot cancels the read in flight, and marking it
+    // decided up front made the re-run bail, so the sheet never showed.
     let cancelled = false;
     Promise.resolve()
       .then(() => AsyncStorage.getItem(WHATS_NEW_SEEN_KEY))
       .then((raw) => {
         if (cancelled) return;
+        decided.current = true;
         const decision = decideWhatsNew({
           seenId: parseSeenId(raw),
           currentId: WHATS_NEW.id,
           accountCreatedAt: createdAtMs,
           releasedAt: WHATS_NEW.releasedAt,
           itemCount: items.length,
+          newAccount: isNewAccount({
+            accountCreatedAt: createdAtMs,
+            releasedAt: TOUR_RELEASED_AT,
+            now: Date.now(),
+          }),
         });
         if (decision === 'show') setEligible(true);
         else if (decision === 'stamp-silently') markWhatsNewSeen();
       })
       // Unreadable storage: don't show. Re-showing every launch would be worse
       // than missing one release.
-      .catch(logger.catchAsync('whats_new_read'));
+      .catch((err: unknown) => {
+        // A cancelled read has a successor that will report; this one doesn't.
+        if (cancelled) return;
+        decided.current = true;
+        logger.catchAsync('whats_new_read')(err);
+      });
     return () => {
       cancelled = true;
     };

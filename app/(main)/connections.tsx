@@ -129,7 +129,7 @@ const AnimatedConnectionItem = memo(
 
 export default function ConnectionsScreen() {
   const { authUser } = useUser();
-  const { isAdmin, hasFullAccess } = useRevenueCat();
+  const { isAdmin, hasFullAccess, presentPaywall } = useRevenueCat();
   const {
     freeConnectionLimit: FREE_CONNECTION_LIMIT,
     premiumConnectionLimit: PREMIUM_CONNECTION_LIMIT,
@@ -161,7 +161,7 @@ export default function ConnectionsScreen() {
   /** `feature` says which upgrade prompt was tapped. */
   const presentUpgradePaywall = (feature: 'paygate' | 'limit_alert' | 'locked_alert') => {
     trackInteraction({ screen: 'connections', feature, action: 'unlock' });
-    router.push('/(settings)/paywall');
+    void presentPaywall();
   };
 
   const handleOpenConnection = (connectionId: string) => {

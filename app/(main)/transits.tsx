@@ -3,7 +3,6 @@ import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Text } from '@/src/components/app-text';
 
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HeaderNav from '@/src/components/shared/header-nav';
@@ -156,7 +155,7 @@ export default function TransitsScreen() {
     loading,
   } = useHoroscope();
 
-  const { hasFullAccess, loading: rcLoading } = useRevenueCat();
+  const { hasFullAccess, loading: rcLoading, presentPaywall } = useRevenueCat();
   const { markReady } = useScreenPerfLog('/(main)/transits');
   const isPremium = rcLoading || hasFullAccess;
 
@@ -204,7 +203,7 @@ export default function TransitsScreen() {
   }, [transitReading]);
 
   const handleUnlock = () => {
-    router.push('/(settings)/paywall');
+    void presentPaywall();
   };
 
   // Once per mount: the reading was on screen, not a skeleton. Tabs stay

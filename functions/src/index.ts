@@ -2235,7 +2235,7 @@ async function sendExpoPush(
   token: string,
   payload: PushPayload,
   context: string,
-): Promise<void> {
+): Promise<boolean> {
   const message = {
     to: token,
     sound: "default" as const,
@@ -2266,16 +2266,126 @@ async function sendExpoPush(
         `[${context}] Push ticket error for user ${userId}:`,
         ticket,
       );
+      return false;
     }
+    return res.ok;
   } catch (err) {
     console.error(`[${context}] Push send failed for user ${userId}:`, err);
+    return false;
   }
 }
 
 // ─── notifyBreakdownReady ────────────────────────────────────────────────────
 
 /**
- * When the Firebase Extension writes a `response` to the natal chart breakdown
+ * How long after a breakdown was requested a push-token save may still
+ * announce it. The token is saved only once the email is verified, and the
+ * client deletes it on sign-out, so a token "appearing" also happens on every
+ * later sign-in — this keeps that from announcing a months-old chart.
+ */
+const BREAKDOWN_LATE_PUSH_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Sends "Your Birth Chart is Ready" at most once per generated breakdown.
+ *
+ * Two triggers reach this: `notifyBreakdownReady` when the response lands, and
+ * `notifyBreakdownOnTokenSaved` when the user's push token first appears. A
+ * new signup's breakdown usually lands while they are still on the
+ * verify-email screen — before they are verified and before the client has
+ * saved a token — so the first trigger skips and the second delivers it.
+ *
+ * The marker is `breakdownPushHash` on the chart doc, set to the doc's
+ * `requestHash`, so each generation is announced once and a regeneration
+ * (new hash) is announced again. It is claimed in a transaction *before*
+ * sending, so the two triggers cannot both send, and released if the send
+ * fails, so a later token save can retry. Writing it re-fires
+ * `generateNatalBreakdown` (hash matches, stops) and `notifyBreakdownReady`
+ * (response unchanged, skips).
+ */
+async function sendBreakdownReadyPush(
+  userId: string,
+  context: string,
+  opts: { maxAgeMs?: number } = {},
+): Promise<void> {
+  const chartRef = db
+    .collection("users")
+    .doc(userId)
+    .collection("natalChart")
+    .doc("details");
+
+  const userSnap = await db.collection("users").doc(userId).get();
+  const token = userSnap.data()?.expoPushToken;
+  if (typeof token !== "string" || !token) {
+    console.info(`[${context}] Skip — user ${userId} has no expoPushToken`);
+    return;
+  }
+  // Check the Auth record, not users/{uid}.isEmailVerified — the mirror is a
+  // display field that can lag an email change, and historically the client
+  // could seed it at signup.
+  const verified = await admin
+    .auth()
+    .getUser(userId)
+    .then((u) => u.emailVerified)
+    .catch(() => false);
+  if (!verified) {
+    console.info(`[${context}] Skip — user ${userId} email not verified`);
+    return;
+  }
+
+  const claimed = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(chartRef);
+    const data = snap.data();
+    const hash = data?.requestHash;
+    if (!data?.response || typeof hash !== "string" || !hash) return null;
+    if (data.breakdownPushHash === hash) return null;
+    if (opts.maxAgeMs !== undefined) {
+      const requestedAt = data.requestedAt;
+      if (
+        !(requestedAt instanceof Timestamp) ||
+        Date.now() - requestedAt.toMillis() > opts.maxAgeMs
+      ) {
+        return null;
+      }
+    }
+    tx.update(chartRef, { breakdownPushHash: hash });
+    return hash;
+  });
+  if (!claimed) {
+    console.info(`[${context}] Skip — no unannounced breakdown`);
+    return;
+  }
+
+  const sent = await sendExpoPush(
+    userId,
+    token,
+    {
+      title: "Your Birth Chart is Ready",
+      body: pickPushBody(
+        BIRTH_CHART_BODIES,
+        hashUid(userId, "birth-chart-copy"),
+      ),
+      data: { screen: "/(home)/birth-chart-view" },
+    },
+    context,
+  );
+  if (sent) return;
+
+  // Release the claim so a later token save can retry — but only if it is
+  // still ours; a regeneration may have moved the doc on meanwhile.
+  await db
+    .runTransaction(async (tx) => {
+      const snap = await tx.get(chartRef);
+      if (snap.data()?.breakdownPushHash === claimed) {
+        tx.update(chartRef, { breakdownPushHash: FieldValue.delete() });
+      }
+    })
+    .catch((err) =>
+      console.error(`[${context}] Failed to release push claim:`, err),
+    );
+}
+
+/**
+ * When the breakdown generation writes a `response` to the natal chart
  * document, send a push notification to the user — works whether the app is
  * in the foreground, background, or killed.
  */
@@ -2284,7 +2394,6 @@ export const notifyBreakdownReady = onDocumentUpdated(
   async (event) => {
     const before = event.data?.before?.data();
     const after = event.data?.after?.data();
-    const userId = event.params.userId;
 
     // Only fire when a new response appears
     if (!after?.response) {
@@ -2296,42 +2405,29 @@ export const notifyBreakdownReady = onDocumentUpdated(
       return;
     }
 
-    const userSnap = await db.collection("users").doc(userId).get();
-    const userData = userSnap.data();
-    const token = userData?.expoPushToken as string | undefined;
-    if (!token) {
-      console.info(
-        `[notifyBreakdownReady] Skip — user ${userId} has no expoPushToken`,
-      );
-      return;
-    }
-    // Check the Auth record, not users/{uid}.isEmailVerified — the mirror is a
-    // display field that can lag an email change, and historically the client
-    // could seed it at signup.
-    const verified = await admin
-      .auth()
-      .getUser(userId)
-      .then((u) => u.emailVerified)
-      .catch(() => false);
-    if (!verified) {
-      console.info(
-        `[notifyBreakdownReady] Skip — user ${userId} email not verified`,
-      );
-      return;
-    }
+    await sendBreakdownReadyPush(event.params.userId, "notifyBreakdownReady");
+  },
+);
 
-    await sendExpoPush(
-      userId,
-      token,
-      {
-        title: "Your Birth Chart is Ready",
-        body: pickPushBody(
-          BIRTH_CHART_BODIES,
-          hashUid(userId, "birth-chart-copy"),
-        ),
-        data: { screen: "/(home)/birth-chart-view" },
-      },
-      "notifyBreakdownReady",
+/**
+ * Delivers the breakdown push that `notifyBreakdownReady` had to skip because
+ * the user had no token yet — see `sendBreakdownReadyPush`. Fires on every
+ * users/{uid} write but bails on a field comparison unless `expoPushToken`
+ * went from absent to present.
+ */
+export const notifyBreakdownOnTokenSaved = onDocumentWritten(
+  "users/{userId}",
+  async (event) => {
+    const before = event.data?.before?.data()?.expoPushToken;
+    const after = event.data?.after?.data()?.expoPushToken;
+    const had = typeof before === "string" && before.length > 0;
+    const has = typeof after === "string" && after.length > 0;
+    if (had || !has) return;
+
+    await sendBreakdownReadyPush(
+      event.params.userId,
+      "notifyBreakdownOnTokenSaved",
+      { maxAgeMs: BREAKDOWN_LATE_PUSH_WINDOW_MS },
     );
   },
 );
@@ -2410,6 +2506,8 @@ export const notifyChatReply = onDocumentUpdated(
           CHAT_REPLY_BODIES,
           hashUid(userId, `chat-copy:${event.params.messageId}`),
         ),
+        // Must equal CHAT_SCREEN in src/utils/foreground-push-policy.ts: the
+        // app matches on it to hold this push back while the chat is open.
         data: { screen: "/(main)/chat" },
       },
       "notifyChatReply",

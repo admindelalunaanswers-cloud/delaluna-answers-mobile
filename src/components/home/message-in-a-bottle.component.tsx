@@ -10,6 +10,7 @@ import { Text, TextInput } from "@/src/components/app-text";
 import { Ionicons } from "@expo/vector-icons";
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { MESSAGE_IN_A_BOTTLE_RESPONSES } from "@/src/constants/strings";
+import { Events } from "@/src/services/analytics.service";
 import { checkForHarm, HARM_ALERTS } from "@/src/utils/harm-filter";
 
 interface MessageInABottleComponentProps {
@@ -46,6 +47,8 @@ export default function MessageInABottleComponent({
     const msg = message.trim();
     setMessage("");
     onSend?.(msg);
+    // Counts sends only — nothing about the message, and not blocked attempts.
+    Events.messageBottleSent();
 
     const randomIndex = Math.floor(Math.random() * MESSAGE_IN_A_BOTTLE_RESPONSES.length);
     setOverlayMessage(MESSAGE_IN_A_BOTTLE_RESPONSES[randomIndex]);

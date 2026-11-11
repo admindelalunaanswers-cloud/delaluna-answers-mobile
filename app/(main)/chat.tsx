@@ -6,7 +6,9 @@ import React, {
   useState,
 } from "react";
 
+import { Text, TextInput } from "@/src/components/app-text";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect, useIsFocused } from "expo-router";
 import {
   ActivityIndicator,
   Alert,
@@ -20,8 +22,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Text, TextInput } from "@/src/components/app-text";
-import { useFocusEffect, useIsFocused } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import ChatExportSheet from "@/src/components/chat/chat-export-sheet";
@@ -37,21 +37,28 @@ import ConsumablePlaceholder from "@/src/components/shared/consumable-placeholde
 import HeaderNav, { HEADER_ICON_GAP } from "@/src/components/shared/header-nav";
 import PaygateOverlay from "@/src/components/shared/paygate-overlay.component";
 import { ThemedView } from "@/src/components/themed-view";
+import { useTourTarget } from "@/src/components/tour/tour-target";
+import {
+  blockedMessage,
+  isFeatureBlocked,
+  type BlockableFeature,
+} from "@/src/constants/moderation";
 import { HOME_STRINGS } from "@/src/constants/strings";
 import { C, R, S } from "@/src/constants/theme";
-import { useAdmin } from "@/src/context/admin-context";
+import { TOUR_TARGETS } from "@/src/constants/tour";
 import { useReducedMotion } from "@/src/context/accessibility-context";
+import { useAdmin } from "@/src/context/admin-context";
 import { useHoroscope } from "@/src/context/horoscope-context";
 import { useRevenueCat } from "@/src/context/revenuecat-context";
 import { useUser } from "@/src/context/user-context";
-import { useResponsive } from "@/src/hooks/use-responsive";
 import { useReplyAnnouncements } from "@/src/hooks/use-reply-announcements";
+import { useResponsive } from "@/src/hooks/use-responsive";
 import { useScreenPerfLog } from "@/src/hooks/use-screen-perf-log";
-import { Events, trackInteraction } from "@/src/services/analytics.service";
 import {
   MAX_READER_SWITCHES,
   readerSwitchesUsed,
 } from "@/src/prompts/chat-continuity";
+import { Events, trackInteraction } from "@/src/services/analytics.service";
 import type {
   ChatConnectionContext,
   ChatMessageDoc,
@@ -66,31 +73,27 @@ import {
   deleteChatSession,
   drawForTurn,
   lastChatMode,
-  TAROT_CHAT_CARD_COUNT,
+  msUntilNextChatUsageDay,
   resumeChatSession,
   retryChatMessage,
   saveChatAndClear,
   sendChatMessage,
   subscribeToChatHistory,
-  msUntilNextChatUsageDay,
   subscribeToChatSessions,
   subscribeToChatUsage,
+  TAROT_CHAT_CARD_COUNT,
 } from "@/src/services/chat.service";
 import { buildConnectionContextSummary } from "@/src/services/connection-context.service";
 import { recordError } from "@/src/services/crashlytics.service";
 import { buildNatalChartSummary } from "@/src/services/natal-chart-breakdown.service";
+import { purchasedChatCredits } from "@/src/services/revenuecat.service";
 import {
   getRevealedChatDraws,
   markChatDrawRevealed,
 } from "@/src/services/tarotCache.service";
-import { purchasedChatCredits } from "@/src/services/revenuecat.service";
 import { ChatStore } from "@/src/stores/chat-store";
 import type { DrawnTarotCard } from "@/src/types/tarot-cards.type";
 import { resolveChatAllowance } from "@/src/utils/chat-allowance";
-import {
-  CHAT_ACCESS_DAYS,
-  chatExpiryLabel,
-} from "@/src/utils/chat-retention";
 import {
   countChatMessages,
   exportableFromSession,
@@ -99,11 +102,7 @@ import {
   messageCountLabel,
   type ExportableChat,
 } from "@/src/utils/chat-export-format";
-import {
-  blockedMessage,
-  isFeatureBlocked,
-  type BlockableFeature,
-} from "@/src/constants/moderation";
+import { CHAT_ACCESS_DAYS, chatExpiryLabel } from "@/src/utils/chat-retention";
 import { checkForHarm, HARM_ALERTS } from "@/src/utils/harm-filter";
 import { getContentPadding, MAX_CONTENT_WIDTH } from "@/src/utils/layout";
 import { logger } from "@/src/utils/logger";
@@ -214,6 +213,12 @@ const RETRY_ELIGIBLE_MS = 3 * 60 * 1000 + 5_000;
 
 /** When to admit the answer is running late, while still waiting on it. */
 const SLOW_REPLY_MS = 45_000;
+/**
+ * How long the optimistic question waits for its document once the send has
+ * succeeded. The snapshot normally follows within a second; past this the
+ * listener is presumed dead and the placeholder is dropped.
+ */
+const OPTIMISTIC_TIMEOUT_MS = 15_000;
 
 function MessageBubble({
   msg,
@@ -221,6 +226,7 @@ function MessageBubble({
   isRetrying = false,
   accessory,
   holdForDraw = false,
+  canRetry = true,
 }: {
   msg: ChatMessageDoc;
   onRetry: (msg: ChatMessageDoc) => void;
@@ -235,6 +241,11 @@ function MessageBubble({
    * top of the shuffle both spoils it and reads as two things at once.
    */
   holdForDraw?: boolean;
+  /**
+   * False for the optimistic placeholder: there is no document behind it, so a
+   * retry could only fail. A send that hangs ends in an error that removes it.
+   */
+  canRetry?: boolean;
 }) {
   // Nothing re-renders this bubble while a generation is in flight — the
   // snapshot that would is the very thing that hasn't arrived — so age the
@@ -247,7 +258,7 @@ function MessageBubble({
   }, [msg.isPending]);
 
   const age = now - msg.createdAt.getTime();
-  const isStuck = msg.isPending && age > RETRY_ELIGIBLE_MS;
+  const isStuck = canRetry && msg.isPending && age > RETRY_ELIGIBLE_MS;
   const isSlow = msg.isPending && !isStuck && age > SLOW_REPLY_MS;
   const showRetry = msg.isError || isStuck;
   const waiting = msg.isPending && !isStuck;
@@ -353,6 +364,21 @@ export default function ChatScreen() {
   const [messages, setMessages] = useState<ChatMessageDoc[]>([]);
   const [inputText, setInputText] = useState("");
   const [isSending, setIsSending] = useState(false);
+  /**
+   * The question just sent, drawn straight away. Without it nothing appeared
+   * until the `sendChatMessage` round trip and the snapshot after it — a
+   * second or more of a tapped suggestion doing nothing. It gives way to the
+   * real document — one the screen hadn't seen before, carrying the same
+   * question — and is dropped if the send fails, or if the send succeeds but
+   * no such document turns up (a dead listener) within OPTIMISTIC_TIMEOUT_MS.
+   */
+  const [optimistic, setOptimistic] = useState<{
+    msg: ChatMessageDoc;
+    /** Every id on screen at send time — parked turns included. */
+    knownIds: Set<string>;
+    /** Sent against a parked thread: hide its turns while they're deleted. */
+    replacesThread: boolean;
+  } | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [savedSessions, setSavedSessions] = useState<SavedChatSession[]>([]);
@@ -457,11 +483,11 @@ export default function ChatScreen() {
   // block to cover tarot, matching sendChatMessage.
   const blockedFeature: BlockableFeature | null = isFeatureBlocked(
     moderation,
-    'chat',
+    "chat",
   )
-    ? 'chat'
-    : isFeatureBlocked(moderation, 'tarot') && mode === 'tarot'
-      ? 'tarot'
+    ? "chat"
+    : isFeatureBlocked(moderation, "tarot") && mode === "tarot"
+      ? "tarot"
       : null;
 
   const { questionLimit, questionsRemaining, chatLocked } =
@@ -648,17 +674,6 @@ export default function ChatScreen() {
     return () => clearInterval(id);
   }, []);
 
-  // ─── Auto-scroll on new messages ──────────────────────────────────────────
-
-  useEffect(() => {
-    if (messages.length > 0) {
-      setTimeout(
-        () => flatListRef.current?.scrollToEnd({ animated: true }),
-        100,
-      );
-    }
-  }, [messages.length]);
-
   // Mark screen ready once the initial data is available
   useEffect(() => {
     if (!rcLoading) markReady();
@@ -694,8 +709,8 @@ export default function ChatScreen() {
       }
 
       if (blockedFeature) {
-        Alert.alert('Unavailable', blockedMessage(blockedFeature), [
-          { text: 'OK' },
+        Alert.alert("Unavailable", blockedMessage(blockedFeature), [
+          { text: "OK" },
         ]);
         return;
       }
@@ -708,6 +723,31 @@ export default function ChatScreen() {
       chatStarted.current = true;
       setInputText("");
       setIsSending(true);
+      const sentHistory = historyOverride ?? messages;
+      setOptimistic({
+        msg: {
+          id: `optimistic-${Date.now()}`,
+          prompt: "",
+          userMessage: msg,
+          response: null,
+          isPending: true,
+          isError: false,
+          createdAt: new Date(),
+          mode: modeOverride ?? mode,
+          ...(selectedConnection
+            ? {
+                connectionId: selectedConnection.id,
+                connectionName: selectedConnection.name,
+              }
+            : {}),
+        },
+        // Read through the ref, not the closure: the mode-choice path calls
+        // this after awaiting an Alert and a park, so `messages` here can be
+        // older than what is on screen. Parked turns are included on purpose —
+        // their deletion may land after the new document does.
+        knownIds: new Set(messagesRef.current.map((m) => m.id)),
+        replacesThread: !!historyOverride,
+      });
       const t = Date.now();
       try {
         // `history` is the conversation so far — the prompt builder needs it to
@@ -720,7 +760,7 @@ export default function ChatScreen() {
           natalChartSummary: chartSummary,
           connection: selectedConnection ?? undefined,
           pronouns: userDoc?.pronouns,
-          history: historyOverride ?? messages,
+          history: sentHistory,
         });
         logOp("chat_send", Date.now() - t);
         const sentMode = modeOverride ?? mode;
@@ -729,12 +769,16 @@ export default function ChatScreen() {
           Events.tarotDrawn({ source: "chat", cards: TAROT_CHAT_CARD_COUNT });
         }
       } catch (e) {
+        setOptimistic(null);
         // The server is the authority on the question allowance — the counter
         // above is only a display. If it says we're out, fall back to the paywall.
         if (e instanceof ChatQuotaExceededError) {
           handleLimitReached(msg);
           return;
         }
+        // Give the question back rather than lose it with the bubble — unless
+        // the user has started typing something else in the meantime.
+        setInputText((current) => current || msg);
         logPerfError(e instanceof Error ? e.message : String(e));
         logger.error("[chat] send failed", e, "chat_send");
         recordError(e, "chat_send");
@@ -858,6 +902,9 @@ export default function ChatScreen() {
 
   // ─── Mode switch ───────────────────────────────────────────────────────────
 
+  const astrologyTourTarget = useTourTarget(TOUR_TARGETS.chatModeAstrology);
+  const tarotTourTarget = useTourTarget(TOUR_TARGETS.chatModeTarot);
+
   // Both readers share the one conversation. The toggle picks who answers the
   // *next* question and nothing else: the thread stays open, and the handover
   // is made in the prompt (see `[[READER_CHANGE]]` in chat-continuity.ts) so
@@ -876,7 +923,12 @@ export default function ChatScreen() {
   const handleSelectMode = useCallback(
     async (next: ChatMode): Promise<boolean> => {
       if (next === mode) return false;
-      trackInteraction({ screen: "chat", feature: "reader_toggle", action: "select", item: next });
+      trackInteraction({
+        screen: "chat",
+        feature: "reader_toggle",
+        action: "select",
+        item: next,
+      });
 
       // The user has now had their say either way, so a later snapshot must not
       // put the toggle back on the reader the thread happens to have been in.
@@ -893,7 +945,11 @@ export default function ChatScreen() {
           `You've handed this conversation back and forth ${MAX_READER_SWITCHES} times — ` +
             "switching again starts a fresh one. This chat is saved to your history.",
           [
-            { text: "Stay here", style: "cancel", onPress: () => resolve(false) },
+            {
+              text: "Stay here",
+              style: "cancel",
+              onPress: () => resolve(false),
+            },
             { text: "Start new chat", onPress: () => resolve(true) },
           ],
           { onDismiss: () => resolve(false) },
@@ -975,7 +1031,52 @@ export default function ChatScreen() {
 
   // ─── Derived ───────────────────────────────────────────────────────────────
 
-  const showSuggestions = historyLoaded && messages.length === 0;
+  // The real document for the optimistic question: new to the screen and
+  // asking the same thing. Matching the text too keeps a concurrent retry's
+  // replacement document (also a new id) from being mistaken for it.
+  const optimisticLanded =
+    !!optimistic &&
+    messages.some(
+      (m) =>
+        !optimistic.knownIds.has(m.id) &&
+        m.userMessage === optimistic.msg.userMessage,
+    );
+
+  // Decided during render, not after it, so the frame the real document lands
+  // in doesn't draw the question twice. Once landed the state is left alone —
+  // the timeout below clears it, and the next send replaces it anyway.
+  const displayMessages = useMemo(() => {
+    if (!optimistic) return messages;
+    const base = optimistic.replacesThread
+      ? messages.filter((m) => !optimistic.knownIds.has(m.id))
+      : messages;
+    return optimisticLanded ? base : [...base, optimistic.msg];
+  }, [messages, optimistic, optimisticLanded]);
+
+  // A send that succeeded but whose document never arrives (the listener
+  // errored, or is offline) must not leave a typing bubble up for good. The
+  // same timer retires the state of one that did land.
+  useEffect(() => {
+    if (!optimistic || isSending) return;
+    const id = setTimeout(() => setOptimistic(null), OPTIMISTIC_TIMEOUT_MS);
+    return () => clearTimeout(id);
+  }, [optimistic, isSending]);
+
+  // ─── Auto-scroll on new messages ──────────────────────────────────────────
+
+  // Keyed on what is drawn, so the list moves to the optimistic question on tap
+  // and doesn't jump again when the real document takes its place.
+  const shownCount = displayMessages.length;
+  useEffect(() => {
+    if (shownCount > 0) {
+      setTimeout(
+        () => flatListRef.current?.scrollToEnd({ animated: true }),
+        100,
+      );
+    }
+  }, [shownCount]);
+
+  const showSuggestions = historyLoaded && displayMessages.length === 0;
   const sendDisabled = isSending || !inputText.trim();
 
   // Every tarot turn shows the spread it was read from — a thread holds both
@@ -998,7 +1099,10 @@ export default function ChatScreen() {
     if (!uid) return draws;
     messages.forEach((msg, index) => {
       if (msg.mode !== "tarot") return;
-      draws.set(msg.id, drawForTurn(uid, msg.userMessage, index, msg.createdAt));
+      draws.set(
+        msg.id,
+        drawForTurn(uid, msg.userMessage, index, msg.createdAt),
+      );
     });
     return draws;
   }, [uid, messages]);
@@ -1301,14 +1405,18 @@ export default function ChatScreen() {
                     <Text style={styles.historyEmptyText}>
                       No saved chats yet.
                     </Text>
-                    <Text style={styles.historyNote}>{HISTORY_RETENTION_NOTE}</Text>
+                    <Text style={styles.historyNote}>
+                      {HISTORY_RETENTION_NOTE}
+                    </Text>
                   </View>
                 ) : (
                   <ScrollView
                     contentContainerStyle={styles.historyList}
                     showsVerticalScrollIndicator={false}
                   >
-                    <Text style={styles.historyNote}>{HISTORY_RETENTION_NOTE}</Text>
+                    <Text style={styles.historyNote}>
+                      {HISTORY_RETENTION_NOTE}
+                    </Text>
                     {savedSessions.map((session) => (
                       // Siblings, not nested: inside the row's own touchable the
                       // delete button was swallowed into one VoiceOver element and
@@ -1404,11 +1512,16 @@ export default function ChatScreen() {
                 {CHAT_MODES.map((m) => (
                   <TouchableOpacity
                     key={m}
+                    {...(m === "astrology"
+                      ? astrologyTourTarget
+                      : tarotTourTarget)}
                     onPress={() => handleSelectMode(m)}
                     style={styles.modeTab}
                     activeOpacity={0.8}
                     accessibilityRole="tab"
-                    accessibilityLabel={m === "astrology" ? "Astrology" : "Tarot"}
+                    accessibilityLabel={
+                      m === "astrology" ? "Astrology" : "Tarot"
+                    }
                     accessibilityState={{ selected: mode === m }}
                   >
                     <Ionicons
@@ -1456,17 +1569,25 @@ export default function ChatScreen() {
               <FlatList
                 ref={flatListRef}
                 style={styles.flex}
-                data={messages}
+                data={displayMessages}
                 keyExtractor={(item) => item.id}
                 renderItem={({ item }) => {
                   const draw = tarotDraws.get(item.id);
                   const revealed = revealedDraws.includes(item.id);
+                  const isOptimistic = item.id === optimistic?.msg.id;
                   return (
                     <MessageBubble
                       msg={item}
                       onRetry={handleRetry}
                       isRetrying={retryingIds.includes(item.id)}
-                      holdForDraw={!!draw && !revealed}
+                      canRetry={!isOptimistic}
+                      // A tarot question's cards come with its real document.
+                      // Until then hold the reply row too, so it doesn't type
+                      // and then vanish behind the shuffle.
+                      holdForDraw={
+                        (!!draw && !revealed) ||
+                        (isOptimistic && item.mode === "tarot")
+                      }
                       accessory={
                         draw ? (
                           <ChatTarotDraw

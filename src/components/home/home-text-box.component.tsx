@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 import { Animated, View, StyleSheet, ViewStyle } from "react-native";
 import { Text } from "@/src/components/app-text";
@@ -133,7 +133,7 @@ export default function HomeTextBox({
   const isBottleSection = sectionName === "message";
   const isTarotSection = sectionName === "tarot";
   const isListStyleSection = Array.isArray(content);
-  const isHoriListSection = sectionName === "newLove" || sectionName === "luckyNumbers" || sectionName === "returns" || sectionName === "retrograde";
+  const isHoriListSection =sectionName === "newLove" || sectionName === "luckyNumbers" || sectionName === "returns" || sectionName === "retrograde";
   const isMoonSection = sectionName === "moon";
 
   // True when we have no real content yet and are actively waiting for it
@@ -182,19 +182,20 @@ export default function HomeTextBox({
         ) : (
           <View style={styles.newLoveRow}>
             {Array.isArray(content) ? content.map((item, index) => (
-              <React.Fragment key={index}>
+              // Item and its separator wrap as one unit, so a line never starts with a bullet.
+              <View key={index} style={styles.newLoveItem}>
                 <Text style={styles.newLoveText}>{item}</Text>
                 {/* Decorative — otherwise read aloud as "bullet" between every number */}
                 {index < content.length - 1 && (
                   <Text
-                    style={styles.separator}
+                    style={[styles.separator, sectionName === "luckyNumbers" && styles.separatorWide]}
                     accessibilityElementsHidden
                     importantForAccessibility="no"
                   >
                     •
                   </Text>
                 )}
-              </React.Fragment>
+              </View>
             )) : <Text style={styles.newLoveText}>{content}</Text>}
           </View>
         )
@@ -249,9 +250,20 @@ const styles = StyleSheet.create({
   },
   newLoveRow: {
     flexDirection: "row",
-    justifyContent: "space-evenly",
+    // Wrap long lists (e.g. several retrograde planets) instead of running off-screen.
+    flexWrap: "wrap",
+    justifyContent: "center",
+    alignItems: "center",
+    rowGap: scale(8),
     width: "100%",
-    padding: scale(20),
+    // SectionTitle already adds ~26pt below itself; a full top pad here doubled it.
+    paddingHorizontal: scale(20),
+    paddingTop: scale(12),
+    paddingBottom: scale(20),
+  },
+  newLoveItem: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   newLoveText: {
     fontSize: moderateScale(20),
@@ -264,5 +276,9 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     marginHorizontal: scale(6),
     alignSelf: "center",
+  },
+  // Short items (lucky numbers) read as cramped at the default spacing.
+  separatorWide: {
+    marginHorizontal: scale(16),
   },
 });

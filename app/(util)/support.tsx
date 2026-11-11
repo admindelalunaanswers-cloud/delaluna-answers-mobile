@@ -41,7 +41,7 @@ const FAQ: { q: string; a: string }[] = [
   {
     q: 'How do I read my birth chart?',
     // The wheel has no touch targets — this used to say "tap any planet or sign on the wheel".
-    a: 'Your birth chart maps where every planet was at the moment you were born. Open it with View Chart on Home: the Natal Table lists every placement, and the tabs below explain what each one means for you. Start with the Sun, Moon, and Rising — they form your core trio.',
+    a: 'Your birth chart maps where every planet was at the moment you were born. Open it with Natal Chart on Home: the Natal Table lists every placement, and the tabs below explain what each one means for you. Start with the Sun, Moon, and Rising — they form your core trio.',
   },
   {
     q: 'Why is my horoscope the same as yesterday?',

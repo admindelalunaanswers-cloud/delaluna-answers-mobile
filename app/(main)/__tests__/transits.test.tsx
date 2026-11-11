@@ -10,6 +10,8 @@ import type { TransitReadingResult } from '@/src/types/transit-reading.types';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 
+const presentPaywall = jest.fn(() => Promise.resolve(false));
+
 // The real contexts pull in Firebase and the RevenueCat native modules.
 jest.mock('@/src/context/horoscope-context', () => ({ useHoroscope: jest.fn() }));
 jest.mock('@/src/context/revenuecat-context', () => ({ useRevenueCat: jest.fn() }));
@@ -70,7 +72,7 @@ describe('TransitsScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     setHoroscope();
-    (useRevenueCat as jest.Mock).mockReturnValue({ hasFullAccess: false, loading: false });
+    (useRevenueCat as jest.Mock).mockReturnValue({ hasFullAccess: false, loading: false, presentPaywall });
   });
 
   // The chevron was an icon, so whether a card was open was never spoken.
@@ -91,7 +93,9 @@ describe('TransitsScreen', () => {
     expect(locked.props.accessibilityState?.expanded).toBeUndefined();
 
     fireEvent.press(locked);
-    expect(router.push).toHaveBeenCalledWith('/(settings)/paywall');
+    // Opened in place, not via the spinner route, so closing it lands straight back here.
+    expect(presentPaywall).toHaveBeenCalledTimes(1);
+    expect(router.push).not.toHaveBeenCalled();
   });
 
   describe('analytics', () => {

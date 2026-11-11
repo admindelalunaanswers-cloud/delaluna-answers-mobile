@@ -1,4 +1,5 @@
 import React from 'react';
+import { logEvent } from '@react-native-firebase/analytics';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import MessageInABottleComponent from '@/src/components/home/message-in-a-bottle.component';
@@ -6,7 +7,39 @@ import MessageInABottleComponent from '@/src/components/home/message-in-a-bottle
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('@/src/constants/strings', () => ({ MESSAGE_IN_A_BOTTLE_RESPONSES: ['The universe heard you.'] }));
 
+const mockHarm = jest.fn((_text: string): string | null => null);
+jest.mock('@/src/utils/harm-filter', () => ({
+  checkForHarm: (text: string) => mockHarm(text),
+  HARM_ALERTS: { selfHarm: { title: 'Title', message: 'Message' } },
+}));
+
+const events = () => (logEvent as jest.Mock).mock.calls.map(([, name, params]) => ({ name, params }));
+
 describe('MessageInABottleComponent', () => {
+  beforeEach(() => {
+    (logEvent as jest.Mock).mockClear();
+    mockHarm.mockReturnValue(null);
+  });
+
+  // A count of sends and nothing else: the message never leaves the device.
+  it('logs a send with no params', () => {
+    render(<MessageInABottleComponent placeholder="Message to the universe" />);
+    fireEvent.changeText(screen.getByLabelText('Message to the universe'), 'Something private');
+    fireEvent.press(screen.getByRole('button', { name: 'Send message' }));
+
+    expect(events()).toEqual([{ name: 'message_bottle_sent', params: undefined }]);
+  });
+
+  // Which harm category fired is sensitive, so a blocked attempt logs nothing.
+  it('logs nothing when the harm filter blocks the message', () => {
+    mockHarm.mockReturnValue('selfHarm');
+    render(<MessageInABottleComponent placeholder="Message to the universe" />);
+    fireEvent.changeText(screen.getByLabelText('Message to the universe'), 'blocked text');
+    fireEvent.press(screen.getByRole('button', { name: 'Send message' }));
+
+    expect(events()).toEqual([]);
+  });
+
   // Icon-only, so it had no name.
   it('names Send and reports it disabled until there is a message', () => {
     render(<MessageInABottleComponent placeholder="Message to the universe" />);

@@ -222,6 +222,115 @@ describe('ChatScreen', () => {
     );
   });
 
+  // The question used to appear only once the callable returned and the
+  // snapshot after it landed — a second or more of a tap doing nothing.
+  describe('shows the question before the send finishes', () => {
+    const q = 'What energies are influencing me right now?'; // one of the first five shown
+    let finish: (err?: Error) => void;
+
+    beforeEach(() => {
+      (sendChatMessage as jest.Mock).mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            finish = (err) => (err ? reject(err) : resolve());
+          }),
+      );
+    });
+
+    it('on a suggestion tap, with Delaluna typing', async () => {
+      await renderChat();
+      await deliverThread([]);
+
+      await act(async () => {
+        fireEvent.press(screen.getByText(q));
+      });
+
+      expect(screen.getByLabelText(`You: ${q}`)).toBeTruthy();
+      expect(screen.getByLabelText('Delaluna is typing')).toBeTruthy();
+      await act(async () => finish());
+    });
+
+    it('hands over to the real document without doubling it', async () => {
+      await renderChat();
+      await deliverThread([]);
+      await act(async () => {
+        fireEvent.press(screen.getByText(q));
+      });
+
+      await deliverThread([message('m1', { userMessage: q, isPending: true })]);
+      await act(async () => finish());
+
+      expect(screen.getAllByLabelText(`You: ${q}`)).toHaveLength(1);
+    });
+
+    it('takes it back off screen when the send fails', async () => {
+      await renderChat();
+      await deliverThread([]);
+      await act(async () => {
+        fireEvent.press(screen.getByText(q));
+      });
+
+      await act(async () => finish(new Error('unavailable')));
+
+      expect(screen.queryByLabelText(`You: ${q}`)).toBeNull();
+      // The question goes back in the composer rather than being lost.
+      expect(screen.getByLabelText('Message Delaluna')).toHaveProp('value', q);
+    });
+
+    // A document from something else — a retry's replacement — is a new id too.
+    it('is not replaced by a different new document', async () => {
+      await renderChat();
+      await deliverThread([]);
+      await act(async () => {
+        fireEvent.press(screen.getByText(q));
+      });
+
+      await deliverThread([message('m9', { userMessage: 'Something else?' })]);
+
+      expect(screen.getByLabelText(`You: ${q}`)).toBeTruthy();
+      await act(async () => finish());
+    });
+
+    // The cards come with the real document; typing first and then vanishing
+    // behind the shuffle is what the draw hold exists to avoid.
+    it('holds the reply row for a tarot question', async () => {
+      await renderChat();
+      await deliverThread([]);
+      fireEvent.press(screen.getByRole('tab', { name: 'Tarot' }));
+      await act(async () => {
+        fireEvent.press(screen.getByText(q));
+      });
+
+      expect(screen.getByLabelText(`You: ${q}`)).toBeTruthy();
+      expect(screen.queryByLabelText('Delaluna is typing')).toBeNull();
+      await act(async () => finish());
+    });
+
+    // A dead listener would otherwise leave the typing bubble up for good, and
+    // past the stuck threshold offer a Retry with no document behind it.
+    it('drops the placeholder if its document never arrives', async () => {
+      jest.useFakeTimers();
+      try {
+        await renderChat();
+        await deliverThread([]);
+        await act(async () => {
+          fireEvent.press(screen.getByText(q));
+        });
+        await act(async () => finish());
+        expect(screen.getByLabelText(`You: ${q}`)).toBeTruthy();
+        expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+
+        await act(async () => {
+          jest.advanceTimersByTime(15_000);
+        });
+
+        expect(screen.queryByLabelText(`You: ${q}`)).toBeNull();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+  });
+
   // Bubble side and colour are the only signal of who is speaking.
   it('says who is speaking in each bubble, without the markup', async () => {
     await renderChat();

@@ -5,6 +5,7 @@ import * as Notifications from 'expo-notifications';
 import { doc, setDoc } from 'firebase/firestore';
 
 import { db } from '@/firebaseConfig';
+import { shouldSuppressForegroundPush } from '@/src/utils/foreground-push-policy';
 import { logger } from '@/src/utils/logger';
 
 const EXPO_PROJECT_ID = 'a267fc5e-e587-4e94-b9ab-1cddd6decb94';
@@ -84,12 +85,19 @@ export async function unregisterPushToken(uid: string): Promise<void> {
  */
 export function setupNotificationHandlers(): () => void {
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
+    handleNotification: async (notification) => {
+      // A chat reply while the chat is on screen: the answer is already
+      // appearing live, so a banner on top of it is just noise.
+      const show = !shouldSuppressForegroundPush(
+        notification.request.content.data,
+      );
+      return {
+        shouldShowBanner: show,
+        shouldShowList: show,
+        shouldPlaySound: show,
+        shouldSetBadge: false,
+      };
+    },
   });
 
   return () => {};

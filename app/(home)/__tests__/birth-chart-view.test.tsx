@@ -72,8 +72,9 @@ jest.mock('react-native-safe-area-context', () => ({
 
 const horoscope = jest.requireMock('@/src/context/horoscope-context').__value;
 
+const presentPaywall = jest.fn(() => Promise.resolve(false));
 const setAccess = (access: { hasFullAccess: boolean; loading: boolean }) =>
-  (useRevenueCat as jest.Mock).mockReturnValue(access);
+  (useRevenueCat as jest.Mock).mockReturnValue({ ...access, presentPaywall });
 
 const tab = (name: string | RegExp) => screen.getByRole('tab', { name });
 
@@ -124,7 +125,9 @@ describe('BirthChartScreen', () => {
 
     expect(screen.getByRole('header', { name: 'Unlock Planets' })).toBeTruthy();
     fireEvent.press(screen.getByRole('button', { name: 'Unlock Now' }));
-    expect(router.push).toHaveBeenCalledWith('/(settings)/paywall');
+    // Opened in place, not via the spinner route, so closing it lands straight back here.
+    expect(presentPaywall).toHaveBeenCalledTimes(1);
+    expect(router.push).not.toHaveBeenCalled();
   });
 
   describe('analytics', () => {

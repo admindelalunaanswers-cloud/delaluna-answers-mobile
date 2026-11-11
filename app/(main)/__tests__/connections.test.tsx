@@ -9,6 +9,8 @@ import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { deleteConnection } from '@/src/services/connection.service';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
+
+const presentPaywall = jest.fn(() => Promise.resolve(false));
 jest.mock('@/firebaseConfig', () => ({ db: {}, functions: {} }));
 
 jest.mock('@/src/context/user-context', () => ({
@@ -82,7 +84,7 @@ const SECOND_CONNECTION = {
 };
 
 const renderWith = async (premium: boolean, connections = CONNECTIONS) => {
-  (useRevenueCat as jest.Mock).mockReturnValue({ isAdmin: false, hasFullAccess: premium });
+  (useRevenueCat as jest.Mock).mockReturnValue({ isAdmin: false, hasFullAccess: premium, presentPaywall });
   render(<ConnectionsScreen />);
   // Deliver the Firestore snapshot the screen subscribes to.
   const onNext = (onSnapshot as jest.Mock).mock.calls.at(-1)[1];
@@ -206,6 +208,7 @@ describe('ConnectionsScreen', () => {
         { screen: 'connections', feature: 'locked_connection', action: 'tap' },
         { screen: 'connections', feature: 'locked_alert', action: 'unlock' },
       ]);
+      expect(presentPaywall).toHaveBeenCalledTimes(1);
     });
 
     it('says which Add button was used', async () => {

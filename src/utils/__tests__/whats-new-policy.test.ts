@@ -12,6 +12,7 @@ const decide = (over: Partial<Parameters<typeof decideWhatsNew>[0]>) =>
     accountCreatedAt: BEFORE,
     releasedAt: RELEASED,
     itemCount: 3,
+    newAccount: false,
     ...over,
   });
 
@@ -24,6 +25,14 @@ describe('decideWhatsNew', () => {
     expect(decide({ seenId: '2.9.0' })).toBe('show');
     // Even for an account created after the release: the saved id proves an upgrade.
     expect(decide({ seenId: '2.9.0', accountCreatedAt: AFTER })).toBe('show');
+  });
+
+  // New accounts get the tour instead, whatever this device saved before.
+  it('stands aside for a new account, even after an upgrade', () => {
+    expect(decide({ newAccount: true })).toBe('stamp-silently');
+    expect(decide({ newAccount: true, seenId: '2.9.0' })).toBe('stamp-silently');
+    // Already seen still wins: nothing to stamp.
+    expect(decide({ newAccount: true, seenId: '3.0.0' })).toBe('skip');
   });
 
   // The first build with this feature: every existing user has nothing saved.
@@ -99,5 +108,32 @@ describe('WHATS_NEW content', () => {
     WHATS_NEW.items.forEach((i) => {
       if (i.cta) expect(String(i.cta.route)).toMatch(/^\//);
     });
+  });
+});
+
+describe('versionLabelFor', () => {
+  const { versionLabelFor } = require('@/src/constants/whats-new');
+
+  it('names the release by major.minor', () => {
+    expect(versionLabelFor('3.0.0')).toBe('Version 3.0');
+    expect(versionLabelFor('3.0.1')).toBe('Version 3.0');
+    expect(versionLabelFor('4.12.3')).toBe('Version 4.12');
+  });
+
+  it('tolerates a short version string', () => {
+    expect(versionLabelFor('5')).toBe('Version 5.0');
+  });
+});
+
+describe('releaseDate', () => {
+  const { releaseDate } = require('@/src/constants/whats-new');
+
+  it('is the start of that day on the device clock', () => {
+    expect(releaseDate('2026-11-11')).toBe(new Date(2026, 10, 11).getTime());
+  });
+
+  it('refuses anything but YYYY-MM-DD', () => {
+    expect(() => releaseDate('2026-11-11T10:00')).toThrow();
+    expect(() => releaseDate('11/11/2026')).toThrow();
   });
 });

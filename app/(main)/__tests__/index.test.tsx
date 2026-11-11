@@ -3,6 +3,7 @@ import { act, render } from '@testing-library/react-native';
 
 import HomeScreen from '@/app/(main)/index';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
+import { router } from 'expo-router';
 import { subscribeToHoroscope } from '@/src/services/horoscope.service';
 import { logEvent } from '@react-native-firebase/analytics';
 import DateSwitcher from '@/src/components/home/date-switcher.component';
@@ -45,7 +46,7 @@ jest.mock('@/src/components/home/date-switcher.component', () => jest.fn(() => n
 jest.mock('@/src/components/home/home-text-box.component', () => () => null);
 jest.mock('@/src/components/shared/header-nav', () => () => null);
 jest.mock('@/src/components/shared/signs-display.component', () => jest.fn(() => null));
-jest.mock('@/src/components/shared/paygate-overlay.component', () => () => null);
+jest.mock('@/src/components/shared/paygate-overlay.component', () => jest.fn(() => null));
 jest.mock('@/src/components/shared/ad-banner-full.component', () => () => null);
 jest.mock('@/src/components/shared/ad-banner-shop.component', () => () => null);
 jest.mock('@/src/components/shared/ad-banner.component', () => () => null);
@@ -59,6 +60,8 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 const subscribedDates = () => (subscribeToHoroscope as jest.Mock).mock.calls.map((c) => c[1]);
+
+const presentPaywall = jest.fn(() => Promise.resolve(false));
 
 describe('HomeScreen', () => {
   beforeEach(() => {
@@ -103,6 +106,20 @@ describe('HomeScreen', () => {
     await act(async () => {});
 
     expect(unsubscribe).toHaveBeenCalledTimes(2);
+  });
+
+  // Opened in place rather than through the spinner route, so closing it
+  // lands straight back on Home.
+  it('opens the paywall in place from the paygate', async () => {
+    (useRevenueCat as jest.Mock).mockReturnValue({ hasFullAccess: false, loading: false, presentPaywall });
+    render(<HomeScreen />);
+    await act(async () => {});
+
+    const PaygateOverlay = jest.requireMock('@/src/components/shared/paygate-overlay.component') as jest.Mock;
+    act(() => PaygateOverlay.mock.calls.at(-1)[0].onUnlock());
+
+    expect(presentPaywall).toHaveBeenCalledTimes(1);
+    expect(router.push).not.toHaveBeenCalled();
   });
 
   describe('analytics', () => {
