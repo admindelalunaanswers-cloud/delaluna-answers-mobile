@@ -104,7 +104,7 @@ const NAV_BAR_HEIGHT = 44;
 export default function ProfileScreen() {
   const { authUser, userDoc, loading: userLoading } = useUser();
   const {} = useHoroscope();
-  const { hasFullAccess, presentCustomerCenter, restorePurchases } =
+  const { hasFullAccess, presentCustomerCenter, restorePurchases, presentPaywall } =
     useRevenueCat();
   const insets = useSafeAreaInsets();
   const ud = userDoc as any;
@@ -164,7 +164,7 @@ export default function ProfileScreen() {
   // ── Subscription actions ────────���──────────────────────────────────────────────
 
   const handleUpgrade = () => {
-    router.push("/(settings)/paywall");
+    void presentPaywall();
   };
 
   const handleManageSubscription = () => {

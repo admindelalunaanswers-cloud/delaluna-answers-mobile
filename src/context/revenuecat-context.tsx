@@ -333,6 +333,19 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       result: PAYWALL_RESULT,
       source: "manual" | "gated",
     ): Promise<boolean> => {
+      // A close or "skip" changes nothing about entitlements, so don't hold the
+      // caller on a RevenueCat round-trip for it — refresh in the background.
+      // Only a purchase or restore waits, so `isPro` is current on return.
+      const changed =
+        result === PAYWALL_RESULT.PURCHASED ||
+        result === PAYWALL_RESULT.RESTORED;
+      if (!changed) {
+        void refresh();
+        if (result !== PAYWALL_RESULT.NOT_PRESENTED) {
+          Events.paywallDismissed(source);
+        }
+        return false;
+      }
       await refresh();
       if (result === PAYWALL_RESULT.PURCHASED) {
         Events.purchaseCompleted({
@@ -342,12 +355,8 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       }
       if (result === PAYWALL_RESULT.RESTORED) {
         Events.restorePurchases({ success: true });
-        return true;
       }
-      if (result !== PAYWALL_RESULT.NOT_PRESENTED) {
-        Events.paywallDismissed(source);
-      }
-      return false;
+      return true;
     },
     [refresh, resolvePurchasedProductId],
   );

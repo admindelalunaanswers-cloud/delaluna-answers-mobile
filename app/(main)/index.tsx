@@ -61,7 +61,7 @@ export default function HomeScreen() {
     transitMoon,
     breakdown,
   } = useHoroscope();
-  const { hasFullAccess, loading: rcLoading } = useRevenueCat();
+  const { hasFullAccess, loading: rcLoading, presentPaywall } = useRevenueCat();
   const { markReady } = useScreenPerfLog('/(main)/index');
   const hasPremiumAccess = rcLoading || hasFullAccess;
 
@@ -215,7 +215,7 @@ export default function HomeScreen() {
   /** `feature` says which upgrade prompt was tapped: the paygate or a banner. */
   const handleUnlock = (feature: 'paygate' | 'ad_banner_full' | 'ad_banner') => {
     trackInteraction({ screen: 'home', feature, action: 'unlock', item: relativeDay(selectedDate, todayDateId) });
-    router.push('/(settings)/paywall');
+    void presentPaywall();
   };
 
   /** The "ask Delaluna" buttons under New Love and Returns. */
