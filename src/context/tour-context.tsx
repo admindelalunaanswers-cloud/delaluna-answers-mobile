@@ -1,7 +1,7 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { createTourTargetRegistry, TourTargetContext } from '@/src/components/tour/tour-target';
-import { TOUR_ID, TOUR_RELEASED_AT, TOUR_STEPS, type TourFinishCta } from '@/src/constants/tour';
+import { TOUR_ID, TOUR_RELEASED_AT, TOUR_STEPS } from '@/src/constants/tour';
 import { useUser } from '@/src/context/user-context';
 import { setAnalyticsSuppressed } from '@/src/services/analytics.service';
 import { toDate } from '@/src/utils/firestore-date';
@@ -37,9 +37,8 @@ function markTourSeen(): void {
  * - `idle`: nothing on screen.
  * - `offer`: the welcome card ("Show me around"), shown on Home only.
  * - `running`: step `stepIndex` of TOUR_STEPS.
- * - `finished`: the "constellation complete" card.
  */
-export type TourStatus = 'idle' | 'offer' | 'running' | 'finished';
+export type TourStatus = 'idle' | 'offer' | 'running';
 
 export interface TourContextValue {
   status: TourStatus;
@@ -49,8 +48,9 @@ export interface TourContextValue {
   next(): void;
   back(): void;
   skip(): void;
-  complete(cta: TourFinishCta): void;
-  /** Profile → Replay app tour. Starts at step one, no offer card. */
+  /** Finish on the last step: closes the tour where it stands (Home). */
+  complete(): void;
+  /** Profile → Walkthrough. Starts at step one, no offer card. */
   replay(): void;
 }
 
@@ -146,13 +146,20 @@ export function TourProvider({ children }: { children: ReactNode }) {
     setAnalyticsSuppressed(true);
   }, [uid]);
 
+  const complete = useCallback(() => {
+    setStatus('idle');
+    setAnalyticsSuppressed(false);
+    markTourSeen();
+  }, []);
+
+  // There is no "you're done" screen: Finish on the last step just closes it.
   const next = useCallback(() => {
     if (stepIndex >= TOUR_STEPS.length - 1) {
-      setStatus('finished');
+      complete();
       return;
     }
     setStepIndex(stepIndex + 1);
-  }, [stepIndex]);
+  }, [stepIndex, complete]);
 
   const back = useCallback(() => {
     setStepIndex((i) => Math.max(0, i - 1));
@@ -164,15 +171,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
     markTourSeen();
   }, []);
 
-  // `cta` is which finish link was used; the overlay navigates after this
-  // returns, so that navigation is reported like any other.
-  const complete = useCallback((_cta: TourFinishCta) => {
-    setStatus('idle');
-    setAnalyticsSuppressed(false);
-    markTourSeen();
-  }, []);
-
-  const touring = status === 'running' || status === 'finished';
+  const touring = status === 'running';
   useEffect(() => {
     setAnalyticsSuppressed(touring);
   }, [touring]);
