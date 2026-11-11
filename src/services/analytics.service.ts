@@ -41,6 +41,15 @@ import { logger } from "@/src/utils/logger";
 
 type Params = Record<string, string | number | boolean | null | undefined>;
 
+// While the first-run tour is on screen nothing is reported: the tour moves
+// between tabs by itself, and those screen views and events aren't the user's.
+// Set by src/context/tour-context.tsx only.
+let suppressed = false;
+
+export function setAnalyticsSuppressed(on: boolean): void {
+  suppressed = on;
+}
+
 function safe<T>(fn: () => Promise<T>, label: string): Promise<T | void> {
   return fn().catch((err) => {
     logger.warn(`[analytics] ${label} failed:`, err);
@@ -163,6 +172,7 @@ export function logScreenView(
   screenName: string,
   screenClass?: string,
 ): Promise<void | void> {
+  if (suppressed) return Promise.resolve();
   return safe(
     () =>
       fbLogEvent(getAnalytics(), "screen_view", {
@@ -176,6 +186,7 @@ export function logScreenView(
 // ─── Generic event ──────────────────────────────────────────────────────────
 
 export function logEvent(name: string, params?: Params): Promise<void | void> {
+  if (suppressed) return Promise.resolve();
   return safe(
     () => fbLogEvent(getAnalytics(), name, params as any),
     `event:${name}`,
@@ -285,6 +296,9 @@ export const Events = {
     logEvent("natal_breakdown_viewed", params),
   tarotDrawn: (params: { source: "home" | "chat"; cards: number }) =>
     logEvent("tarot_drawn", params),
+  // No params, ever: the message is private (it isn't stored anywhere), and
+  // blocked attempts aren't logged — which harm category fired is sensitive.
+  messageBottleSent: () => logEvent("message_bottle_sent"),
 
   // Connections / synastry
   connectionCreated: (params?: {
