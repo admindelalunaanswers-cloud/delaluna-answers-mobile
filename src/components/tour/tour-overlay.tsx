@@ -18,7 +18,7 @@ import { Text } from '@/src/components/app-text';
 import ConstellationProgress from '@/src/components/tour/constellation-progress';
 import TourExampleChat from '@/src/components/tour/tour-example-chat';
 import { TourTargetContext } from '@/src/components/tour/tour-target';
-import { TOUR_FINISH_LINKS, TOUR_STEPS } from '@/src/constants/tour';
+import { TOUR_STEPS } from '@/src/constants/tour';
 import { C, R, S } from '@/src/constants/theme';
 import { useReducedMotion } from '@/src/context/accessibility-context';
 import { useTour } from '@/src/context/tour-context';
@@ -39,7 +39,7 @@ const SETTLE_REDUCED_MS = 120;
 export function useTourCoversScreen(): boolean {
   const { status } = useTour();
   const pathname = usePathname();
-  return status === 'running' || status === 'finished' || (status === 'offer' && pathname === '/');
+  return status === 'running' || (status === 'offer' && pathname === '/');
 }
 
 /**
@@ -151,18 +151,17 @@ export default function TourOverlay() {
   }, [screenKey]);
 
   // ── Android back: one step back, or out ────────────────────────────────
-  const { decline, back, skip, complete } = tour;
+  const { decline, back, skip } = tour;
   useEffect(() => {
     if (!covers) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (status === 'offer') decline();
-      else if (status === 'finished') complete('home');
       else if (stepIndex > 0) back();
       else skip();
       return true;
     });
     return () => sub.remove();
-  }, [covers, status, stepIndex, decline, back, skip, complete]);
+  }, [covers, status, stepIndex, decline, back, skip]);
 
   const onRootLayout = useCallback((e: { nativeEvent: { layout: { width: number; height: number } } }) => {
     const { width, height } = e.nativeEvent.layout;
@@ -191,44 +190,11 @@ export default function TourOverlay() {
               <PrimaryButton label="Show me around" onPress={tour.accept} />
               <OutlineButton label="I'll explore on my own" onPress={decline} />
             </View>
-            <Text style={styles.footnote}>You can replay the tour anytime from Profile.</Text>
+            <Text style={styles.footnote}>You can replay it anytime from Profile › Walkthrough.</Text>
           </ScrollView>
         </Animated.View>
       ) : null}
 
-      {status === 'finished' ? (
-        <Animated.View style={[styles.full, { opacity: fade }]}>
-          <ScrollView contentContainerStyle={[styles.fullContent, { paddingTop: insets.top + S.xl, paddingBottom: insets.bottom + S.xl }]}>
-            <ConstellationProgress total={TOUR_STEPS.length} current={0} complete width={Math.min(cardWidth, 300)} />
-            <View style={styles.centerText}>
-              <Text style={styles.eyebrow}>Constellation complete</Text>
-              <Text ref={titleRef} style={styles.heroTitle} accessibilityRole="header">
-                {firstName ? `You're all set, ${firstName}` : "You're all set"}
-              </Text>
-              <Text style={styles.heroBody}>Your stars are mapped. Where would you like to begin?</Text>
-            </View>
-            <View style={styles.stack}>
-              {TOUR_FINISH_LINKS.map((link) => (
-                <TouchableOpacity
-                  key={link.cta}
-                  style={styles.linkRow}
-                  accessibilityRole="button"
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    complete(link.cta);
-                    router.navigate(link.route);
-                  }}
-                >
-                  <Text style={styles.linkText}>{link.label}</Text>
-                  <Ionicons name="chevron-forward" size={18} color={C.goldBright} />
-                </TouchableOpacity>
-              ))}
-            </View>
-            <PrimaryButton label="Take me Home" onPress={() => complete('home')} />
-            <Text style={styles.footnote}>Replay anytime from Profile › Replay app tour</Text>
-          </ScrollView>
-        </Animated.View>
-      ) : null}
 
       {status === 'running' && step ? (
         <>
@@ -406,14 +372,6 @@ const styles = StyleSheet.create({
     gap: S.md - 4,
     maxWidth: CARD_MAX_W,
   },
-  eyebrow: {
-    fontSize: 13,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-    color: C.turquoise,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
   heroTitle: {
     fontFamily: 'Futura-Generic',
     fontSize: 30,
@@ -437,24 +395,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: C.muted,
     textAlign: 'center',
-  },
-  linkRow: {
-    minHeight: 56,
-    paddingHorizontal: S.md + 2,
-    paddingVertical: S.sm,
-    borderRadius: R.md + 4,
-    borderWidth: 1,
-    borderColor: C.purpleDim,
-    backgroundColor: C.starfield,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: S.sm,
-  },
-  linkText: {
-    flexShrink: 1,
-    fontSize: 15,
-    color: '#ffffff',
   },
   primary: {
     alignSelf: 'stretch',

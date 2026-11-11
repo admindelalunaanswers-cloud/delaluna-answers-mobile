@@ -179,21 +179,21 @@ describe('TourOverlay', () => {
     expect(screen.queryByRole('button', { name: 'Skip tour' })).toBeNull();
   });
 
-  it('ends on the finish card, which closes the tour', async () => {
+  // No "you're done" screen: Finish on the last step closes the tour outright.
+  it('closes on Finish, records it, and turns reporting back on', async () => {
     await renderTour();
     fireEvent.press(screen.getByRole('button', { name: 'Show me around' }));
     for (let i = 0; i < TOUR_STEPS.length; i++) {
       await showStep();
+      expect(suppressedNow()).toBe(true);
       const label = i === TOUR_STEPS.length - 1 ? 'Finish' : 'Next';
       fireEvent.press(screen.getByRole('button', { name: label }));
     }
     await act(async () => {});
 
-    expect(screen.getByRole('header', { name: "You're all set, Maya" })).toBeTruthy();
-    expect(suppressedNow()).toBe(true);
-    fireEvent.press(screen.getByRole('button', { name: 'Take me Home' }));
-    await act(async () => {});
+    expect(screen.queryByTestId('tour-root')).toBeNull();
+    expect(screen.queryByText(/all set/)).toBeNull();
     expect(suppressedNow()).toBe(false);
-    expect(screen.queryByText("You're all set, Maya")).toBeNull();
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(TOUR_SEEN_KEY, 'constellation_v1');
   });
 });
