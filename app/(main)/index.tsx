@@ -205,6 +205,11 @@ export default function HomeScreen() {
     setSelectedDate(todayDateId);
     scrollRef.current?.scrollTo({ y: Math.max(0, cardsSectionY.current - 24), animated: !reduceMotion });
   };
+  const bottleSectionY = useRef(0);
+  const showBottleForTour = () => {
+    setSelectedDate(todayDateId);
+    scrollRef.current?.scrollTo({ y: Math.max(0, bottleSectionY.current - 24), animated: !reduceMotion });
+  };
 
   const [adVariant] = useState<'upgrade-full' | 'upgrade-compact' | 'shop'>(() => {
     const variants = ['upgrade-full', 'upgrade-compact', 'shop'] as const;
@@ -249,16 +254,16 @@ export default function HomeScreen() {
       />
 
       <View style={[styles.content, { paddingTop: headerHeight }]}>
-        <TourTarget id={TOUR_TARGETS.homeSigns}>
-          <HomeSignsDisplay
-            sun={sunSign}
-            moon={moonSign}
-            rising={risingSign}
-            showViewChart={true}
-            birthChartReady={!!chartDetails && !!breakdown}
-            onViewChart={() => trackInteraction({ screen: 'home', feature: 'view_chart', action: 'tap' })}
-          />
-        </TourTarget>
+        <HomeSignsDisplay
+          sun={sunSign}
+          moon={moonSign}
+          rising={risingSign}
+          showViewChart={true}
+          birthChartReady={!!chartDetails && !!breakdown}
+          onViewChart={() => trackInteraction({ screen: 'home', feature: 'view_chart', action: 'tap' })}
+          signsTourTargetId={TOUR_TARGETS.homeSigns}
+          chartTourTargetId={TOUR_TARGETS.homeNatalChart}
+        />
         <TourTarget id={TOUR_TARGETS.homeDateSwitcher}>
         <DateSwitcher
           value={selectedDate}
@@ -315,8 +320,14 @@ export default function HomeScreen() {
             />
           </TourTarget>
 
-          <SectionTitle sectionName="message" title="Message in a Bottle" />
-          <HomeTextBox sectionName="message" />
+          <TourTarget
+            id={TOUR_TARGETS.homeMessageBottle}
+            onActivate={showBottleForTour}
+            onLayout={(e) => { bottleSectionY.current = e.nativeEvent.layout.y; }}
+          >
+            <SectionTitle sectionName="message" title="Message in a Bottle" />
+            <HomeTextBox sectionName="message" />
+          </TourTarget>
 
           <SectionTitle sectionName="moon" title="Moon Phase" />
           <HomeTextBox
