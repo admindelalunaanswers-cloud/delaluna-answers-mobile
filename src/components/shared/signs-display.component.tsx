@@ -4,6 +4,8 @@ import { Image, StyleSheet, TouchableOpacity } from "react-native";
 
 import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { router } from "expo-router";
+import type { ReactNode } from "react";
+import { TourTarget } from "../tour/tour-target";
 import { ThemedText } from "../themed-text";
 import { ThemedView } from "../themed-view";
 
@@ -13,8 +15,15 @@ interface HomeSignsDisplayProps {
   rising: string;
   showViewChart?: boolean;
   birthChartReady?: boolean;
-  /** Called when "View chart" is tapped, before navigating — for analytics. */
+  /** Called when "Natal Chart" is tapped, before navigating — for analytics. */
   onViewChart?: () => void;
+  /** Tour spotlight ids — the Big Three and the chart link are separate steps. */
+  signsTourTargetId?: string;
+  chartTourTargetId?: string;
+}
+
+function MaybeTourTarget({ id, children }: { id?: string; children: ReactNode }) {
+  return id ? <TourTarget id={id}>{children}</TourTarget> : <>{children}</>;
 }
 
 // The sun / moon / arrow icons are the only thing saying which sign is which;
@@ -23,7 +32,16 @@ export function signLabel(placement: "Sun" | "Moon" | "Rising", sign: string): s
   return sign && sign !== "—" ? `${placement} in ${sign}` : `${placement} sign not available yet`;
 }
 
-export default function HomeSignsDisplay({ sun, moon, rising, showViewChart = true, birthChartReady = false, onViewChart }: HomeSignsDisplayProps) {
+export default function HomeSignsDisplay({
+  sun,
+  moon,
+  rising,
+  showViewChart = true,
+  birthChartReady = false,
+  onViewChart,
+  signsTourTargetId,
+  chartTourTargetId,
+}: HomeSignsDisplayProps) {
   const goToBirthchart = () => {
     onViewChart?.();
     router.push('/(home)/birth-chart-view');
@@ -32,6 +50,7 @@ export default function HomeSignsDisplay({ sun, moon, rising, showViewChart = tr
   return (
     <ThemedView style={[styles.container, !showViewChart && { justifyContent: 'center' }]}>
 
+      <MaybeTourTarget id={signsTourTargetId}>
       <ThemedView style={{ flexDirection: "row", gap: scale(4), alignItems: "flex-start" }}>
         <ThemedView style={styles.signItem} accessible accessibilityLabel={signLabel("Sun", sun)}>
           <Image
@@ -59,10 +78,12 @@ export default function HomeSignsDisplay({ sun, moon, rising, showViewChart = tr
           <ThemedText style={styles.text}>{rising}</ThemedText>
         </ThemedView>
       </ThemedView>
+      </MaybeTourTarget>
 
       {/* Birth Chart */}
       <ThemedView style={{ flexDirection: "row", gap: scale(5), alignItems: "flex-start", justifyContent: "flex-end" }}>
         {showViewChart && (
+        <MaybeTourTarget id={chartTourTargetId}>
         <ThemedView style={styles.chartItem}>
           <TouchableOpacity
             onPress={goToBirthchart}
@@ -72,10 +93,11 @@ export default function HomeSignsDisplay({ sun, moon, rising, showViewChart = tr
             hitSlop={{ top: 14, bottom: 14, left: 10, right: 10 }}
           >
             <ThemedText style={[styles.birtChartText, !birthChartReady && styles.birtChartTextDisabled]}>
-              {birthChartReady ? "View Chart" : "Chart Loading..."}
+              {birthChartReady ? "Natal Chart" : "Natal Chart Loading..."}
             </ThemedText>
           </TouchableOpacity>
         </ThemedView>
+        </MaybeTourTarget>
       )}
       </ThemedView>
     </ThemedView>
