@@ -33,7 +33,8 @@ export const TOUR_TARGETS = {
   homeMessageBottle: 'home-message-bottle',
   tabConnections: 'tab-connections',
   tabTransits: 'tab-transits',
-  chatModeToggle: 'chat-mode-toggle',
+  chatModeAstrology: 'chat-mode-astrology',
+  chatModeTarot: 'chat-mode-tarot',
   homeProfile: 'home-profile',
 } as const;
 
@@ -138,14 +139,26 @@ export const TOUR_STEPS: readonly TourStep[] = [
     body: 'See where the planets are moving through your chart this week, house by house, and what it means for you.',
     schedule: 'New every Sunday',
   },
+  // Two chat steps, one per half of the reader toggle. The tour only spotlights
+  // them; it never switches reader, since a switch spends the thread's budget.
   {
-    id: 'chat',
-    target: TOUR_TARGETS.chatModeToggle,
+    id: 'chat_astrology',
+    target: TOUR_TARGETS.chatModeAstrology,
     route: '/chat',
     shape: 'rounded',
-    title: 'Two readers, one conversation',
-    body: 'Ask the Astrologer about your chart, or switch to Tarot and a spread is drawn for your question. Switch whenever you like, and the conversation carries on.',
-    note: 'You get a few free questions every day. Premium gives you more.',
+    title: 'Ask the Astrologer',
+    body: 'Questions about your chart, your day or your relationships, answered from your own birth chart.',
+    note: "Not sure what to ask? Tap a suggested question. Tap Add a Connection to ask about someone you've saved.",
+  },
+  {
+    id: 'chat_tarot',
+    target: TOUR_TARGETS.chatModeTarot,
+    route: '/chat',
+    shape: 'rounded',
+    title: 'Or ask the Tarot reader',
+    body: 'Switch to Tarot and a spread is drawn for each question you ask. Switch readers whenever you like, and the conversation carries on.',
+    schedule: 'Free questions reset every day at midnight',
+    note: 'Premium gives you more questions each day.',
   },
   {
     id: 'profile',
