@@ -1032,7 +1032,8 @@ export default function ChatScreen() {
     );
 
   // Decided during render, not after it, so the frame the real document lands
-  // in doesn't draw the question twice. The effect only tidies the state.
+  // in doesn't draw the question twice. Once landed the state is left alone —
+  // the timeout below clears it, and the next send replaces it anyway.
   const displayMessages = useMemo(() => {
     if (!optimistic) return messages;
     const base = optimistic.replacesThread
@@ -1041,12 +1042,9 @@ export default function ChatScreen() {
     return optimisticLanded ? base : [...base, optimistic.msg];
   }, [messages, optimistic, optimisticLanded]);
 
-  useEffect(() => {
-    if (optimisticLanded) setOptimistic(null);
-  }, [optimisticLanded]);
-
   // A send that succeeded but whose document never arrives (the listener
-  // errored, or is offline) must not leave a typing bubble up for good.
+  // errored, or is offline) must not leave a typing bubble up for good. The
+  // same timer retires the state of one that did land.
   useEffect(() => {
     if (!optimistic || isSending) return;
     const id = setTimeout(() => setOptimistic(null), OPTIMISTIC_TIMEOUT_MS);
