@@ -50,23 +50,22 @@ export interface TourStep {
   target: TourTargetId;
   /** The screen the step opens, as `usePathname()` reports it. */
   route: '/' | '/connections' | '/transits' | '/chat';
-  /** `circle` for icons (the tab bar, the avatar), `rounded` for regions. */
+  /** `circle` for icons (the avatar), `rounded` for regions and tab buttons. */
   shape: 'rounded' | 'circle';
   /**
    * Space between the target and the ring, in points. Defaults to 6 for a
-   * circle and 8 for a region. The tab targets are just the icon, so they need
-   * more to read as the whole tab.
+   * circle and 8 for a region. Tab targets are the whole tab button, so they
+   * take 0 and the ring sits on the square's edge.
    */
   padding?: number;
   title: string;
   body: string;
   chips?: readonly TourChip[];
+  /** When the section refreshes, shown with a clock under the body. Device-local times. */
+  schedule?: string;
   /** Small print under the body. */
   note?: string;
 }
-
-/** Tab icons are ~28pt; this rings icon and label together (~60pt across). */
-const TAB_SPOTLIGHT_PADDING = 16;
 
 export const TOUR_STEPS: readonly TourStep[] = [
   {
@@ -93,6 +92,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
     shape: 'rounded',
     title: 'Your daily horoscope',
     body: "A new reading every day, right here on Home: a quote, advice, your do's and don'ts, and an affirmation. Use the arrows to look back or read ahead.",
+    schedule: 'New every day at midnight',
     note: 'Yesterday and tomorrow are part of Premium.',
   },
   {
@@ -102,6 +102,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
     shape: 'rounded',
     title: 'Draw your daily cards',
     body: 'Fresh tarot cards every day. Tap to turn them over, then read what they mean for you.',
+    schedule: 'New cards every day at midnight',
   },
   {
     id: 'message_bottle',
@@ -116,12 +117,13 @@ export const TOUR_STEPS: readonly TourStep[] = [
     id: 'connections',
     target: TOUR_TARGETS.tabConnections,
     route: '/connections',
-    shape: 'circle',
-    padding: TAB_SPOTLIGHT_PADDING,
+    shape: 'rounded',
+    padding: 0,
     title: 'See how you connect',
-    body: "Add a partner, friend or crush with their birth details. Their compatibility report refreshes for the week, and again for the weekend.",
+    body: 'Add a partner, friend or crush with their birth details to see your compatibility, for the week ahead and for the weekend.',
+    schedule: 'Weekday report every Sunday · Weekend report every Friday',
     chips: [
-      { label: 'Compatibility' },
+      { label: 'Weekday connection report' },
       { label: 'Weekend romance report' },
       { label: 'Synastry', premium: true },
     ],
@@ -130,10 +132,11 @@ export const TOUR_STEPS: readonly TourStep[] = [
     id: 'transits',
     target: TOUR_TARGETS.tabTransits,
     route: '/transits',
-    shape: 'circle',
-    padding: TAB_SPOTLIGHT_PADDING,
+    shape: 'rounded',
+    padding: 0,
     title: "This week's planets",
     body: 'See where the planets are moving through your chart this week, house by house, and what it means for you.',
+    schedule: 'New every Sunday',
   },
   {
     id: 'chat',
