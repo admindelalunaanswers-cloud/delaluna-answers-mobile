@@ -25,7 +25,7 @@ Find laptop IP: `ipconfig getifaddr en0`
 | JS fix to already-shipped preview build       | `npm run update:preview "msg"`       |
 | New preview for testers                       | `npm run build:preview`              |
 | Store release                                 | `eas build --profile production`     |
-| Release with something to announce (store or OTA) | Edit `src/constants/whats-new.ts`: new `id`, `releasedAt`, `items` |
+| Release with something to announce (store or OTA) | In `src/constants/whats-new.ts` replace `items` and set `releasedAt` (`'YYYY-MM-DD'`); bump `version` in `app.config.js` (the id and label follow it) |
 
 **Before every release, store or OTA:** update `src/constants/whats-new.ts`, or
 confirm there is nothing to announce and leave it alone (an unchanged `id`

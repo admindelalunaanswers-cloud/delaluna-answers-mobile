@@ -115,3 +115,16 @@ describe('versionLabelFor', () => {
     expect(versionLabelFor('5')).toBe('Version 5.0');
   });
 });
+
+describe('releaseDate', () => {
+  const { releaseDate } = require('@/src/constants/whats-new');
+
+  it('is the start of that day on the device clock', () => {
+    expect(releaseDate('2026-11-11')).toBe(new Date(2026, 10, 11).getTime());
+  });
+
+  it('refuses anything but YYYY-MM-DD', () => {
+    expect(() => releaseDate('2026-11-11T10:00')).toThrow();
+    expect(() => releaseDate('11/11/2026')).toThrow();
+  });
+});
