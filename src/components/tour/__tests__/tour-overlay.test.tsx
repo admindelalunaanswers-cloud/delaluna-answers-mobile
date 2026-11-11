@@ -141,6 +141,22 @@ describe('TourOverlay', () => {
     expect(screen.getByText('New every day at midnight')).toBeTruthy();
   });
 
+  // Display only — the overlay imports nothing that can send or bill a chat.
+  it('shows a scripted tarot example with its spread, face up under reduced motion', async () => {
+    await renderTour();
+    fireEvent.press(screen.getByRole('button', { name: 'Show me around' }));
+    const index = TOUR_STEPS.findIndex((s) => s.id === 'chat_tarot');
+    for (let i = 0; i < index; i++) {
+      await showStep();
+      fireEvent.press(screen.getByRole('button', { name: 'Next' }));
+    }
+    await showStep();
+    expect(screen.getByLabelText('Example question: What energies are influencing me right now?')).toBeTruthy();
+    expect(screen.getByRole('image', { name: 'The Sun' })).toBeTruthy();
+    expect(screen.getByRole('image', { name: 'Ace of Swords, reversed' })).toBeTruthy();
+    expect(screen.getByRole('image', { name: 'Learning to Forgive' })).toBeTruthy();
+  });
+
   // A target that never mounts (a screen that failed to load) must not strand
   // the user behind a dimmed screen with no card.
   it('shows the card without a spotlight when the target is missing', async () => {

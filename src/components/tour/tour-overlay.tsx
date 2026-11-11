@@ -16,6 +16,7 @@ import Svg, { Path } from 'react-native-svg';
 
 import { Text } from '@/src/components/app-text';
 import ConstellationProgress from '@/src/components/tour/constellation-progress';
+import TourExampleChat from '@/src/components/tour/tour-example-chat';
 import { TourTargetContext } from '@/src/components/tour/tour-target';
 import { TOUR_FINISH_LINKS, TOUR_STEPS } from '@/src/constants/tour';
 import { C, R, S } from '@/src/constants/theme';
@@ -107,15 +108,14 @@ export default function TourOverlay() {
         root.measureInWindow((ox, oy) => {
           node.measureInWindow((x, y, width, height) => {
             if (width <= 0 || height <= 0) return done(null);
-            done(
-              spotlightHole(
-                { x, y, width, height },
-                { x: ox, y: oy },
-                step.shape,
-                size,
-                step.padding ?? (step.shape === 'circle' ? 6 : 8),
-              ),
+            const h = spotlightHole(
+              { x, y, width, height },
+              { x: ox, y: oy },
+              step.shape,
+              size,
+              step.padding ?? (step.shape === 'circle' ? 6 : 8),
             );
+            done(step.radius === undefined ? h : { ...h, radius: Math.min(step.radius, h.height / 2) });
           });
         });
       }, settle);
@@ -293,6 +293,9 @@ export default function TourOverlay() {
                   {step.title}
                 </Text>
                 <Text style={styles.cardText}>{step.body}</Text>
+                {step.example ? (
+                  <TourExampleChat key={step.id} example={step.example} reduceMotion={reduceMotion} />
+                ) : null}
                 {step.schedule ? (
                   <View style={styles.schedule}>
                     <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
