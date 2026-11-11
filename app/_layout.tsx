@@ -26,6 +26,7 @@ import { usePortraitLock } from '@/src/hooks/use-portrait-lock';
 import { useTheme } from '@/src/hooks/use-theme';
 import { UpdateRequiredScreen } from '@/src/components/update-required-screen';
 import { logScreenView, routeKeyForSegments, screenLabelForPath, setUserId } from '@/src/services/analytics.service';
+import { setForegroundRoute } from '@/src/utils/foreground-push-policy';
 import {
   installGlobalErrorHandler,
   logBreadcrumb,
@@ -63,6 +64,11 @@ function AuthGate() {
   // pathname too, so moving between two connections still counts as a view.
   // Also drop a Crashlytics breadcrumb so crash reports show the last screens.
   const routeKey = routeKeyForSegments(segments);
+  // Lets the notification handler hold back a chat-reply push while the chat
+  // is the screen in front (see foreground-push-policy.ts).
+  useEffect(() => {
+    setForegroundRoute(routeKey);
+  }, [routeKey]);
   useEffect(() => {
     if (!pathname) return;
     const label = screenLabelForPath(routeKey);
