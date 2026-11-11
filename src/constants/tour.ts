@@ -1,5 +1,3 @@
-import type { Href } from 'expo-router';
-
 /**
  * The first-run "Constellation Tour": a spotlight walk across the real screens,
  * one star of the progress constellation per step. Design:
@@ -20,7 +18,7 @@ export const TOUR_ID = 'constellation_v1';
 
 /**
  * Epoch ms. Accounts created before this never get the offer (they already
- * know the app; Profile → Replay app tour is there for them).
+ * know the app; Profile → Walkthrough is there for them).
  */
 export const TOUR_RELEASED_AT = Date.UTC(2026, 10, 8);
 
@@ -210,15 +208,6 @@ export const TOUR_STEPS: readonly TourStep[] = [
     route: '/',
     shape: 'circle',
     title: 'Make it yours',
-    body: 'Your profile holds themes, text size and other accessibility settings, notifications, and this tour if you want to see it again.',
+    body: 'Your profile holds themes, text size and other accessibility settings, notifications, and the Walkthrough if you want to see this again.',
   },
-];
-
-/** Where the finish screen's shortcuts lead. `home` just closes the tour. */
-export type TourFinishCta = 'chat' | 'connection' | 'birth_chart' | 'home';
-
-export const TOUR_FINISH_LINKS: readonly { cta: Exclude<TourFinishCta, 'home'>; label: string; route: Href }[] = [
-  { cta: 'chat', label: 'Ask your first question', route: '/chat' },
-  { cta: 'connection', label: 'Add your first connection', route: '/connection/new' },
-  { cta: 'birth_chart', label: 'Open my natal chart', route: '/(home)/birth-chart-view' },
 ];
