@@ -18,7 +18,6 @@ import { Text } from '@/src/components/app-text';
 import ConstellationProgress from '@/src/components/tour/constellation-progress';
 import TourExampleChat from '@/src/components/tour/tour-example-chat';
 import { TourTargetContext } from '@/src/components/tour/tour-target';
-import { trackTourButton } from '@/src/services/analytics.service';
 import { TOUR_STEPS } from '@/src/constants/tour';
 import { C, R, S } from '@/src/constants/theme';
 import { useReducedMotion } from '@/src/context/accessibility-context';
@@ -174,7 +173,6 @@ export default function TourOverlay() {
   const firstName = (userDoc as { firstName?: string } | null)?.firstName?.trim();
   const cardWidth = Math.min(Math.max(size.width - S.md * 2, 0), CARD_MAX_W);
   const cardLeft = (size.width - cardWidth) / 2;
-  const isLast = stepIndex === TOUR_STEPS.length - 1;
 
   return (
     <View ref={rootRef} testID="tour-root" style={styles.root} onLayout={onRootLayout} accessibilityViewIsModal>
@@ -189,20 +187,8 @@ export default function TourOverlay() {
               <Text style={styles.heroBody}>Want a one-minute tour of everything the stars can tell you here?</Text>
             </View>
             <View style={styles.stack}>
-              <PrimaryButton
-                label="Show me around"
-                onPress={() => {
-                  trackTourButton('offer', 'start');
-                  tour.accept();
-                }}
-              />
-              <OutlineButton
-                label="I'll explore on my own"
-                onPress={() => {
-                  trackTourButton('offer', 'decline');
-                  decline();
-                }}
-              />
+              <PrimaryButton label="Show me around" onPress={tour.accept} />
+              <OutlineButton label="I'll explore on my own" onPress={decline} />
             </View>
             <Text style={styles.footnote}>You can replay it anytime from Profile › Walkthrough.</Text>
           </ScrollView>
@@ -300,10 +286,7 @@ export default function TourOverlay() {
 
               <View style={styles.cardButtons}>
                 <TouchableOpacity
-                  onPress={() => {
-                    trackTourButton(step.id, 'skip');
-                    skip();
-                  }}
+                  onPress={skip}
                   style={styles.skip}
                   accessibilityRole="button"
                   accessibilityLabel="Skip tour"
@@ -312,22 +295,10 @@ export default function TourOverlay() {
                   <Text style={styles.skipText}>Skip tour</Text>
                 </TouchableOpacity>
                 <View style={styles.navButtons}>
-                  {stepIndex > 0 ? (
-                    <OutlineButton
-                      label="Back"
-                      onPress={() => {
-                        trackTourButton(step.id, 'back');
-                        back();
-                      }}
-                      compact
-                    />
-                  ) : null}
+                  {stepIndex > 0 ? <OutlineButton label="Back" onPress={back} compact /> : null}
                   <PrimaryButton
-                    label={isLast ? 'Finish' : 'Next'}
-                    onPress={() => {
-                      trackTourButton(step.id, isLast ? 'finish' : 'next');
-                      tour.next();
-                    }}
+                    label={stepIndex === TOUR_STEPS.length - 1 ? 'Finish' : 'Next'}
+                    onPress={tour.next}
                     compact
                   />
                 </View>
