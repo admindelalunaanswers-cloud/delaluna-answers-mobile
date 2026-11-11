@@ -1,9 +1,12 @@
 import { logEvent as fbLogEvent } from '@react-native-firebase/analytics';
 
 import {
+  logEvent,
+  logScreenView,
   relativeDay,
   routeKeyForSegments,
   screenLabelForPath,
+  setAnalyticsSuppressed,
   toAnalyticsValue,
   trackInteraction,
 } from '@/src/services/analytics.service';
@@ -57,6 +60,24 @@ describe('analytics.service', () => {
 
     it('crosses a month boundary', () => {
       expect(relativeDay('2026-11-01', '2026-10-31')).toBe('tomorrow');
+    });
+  });
+
+  // The first-run tour switches reporting off while it drives the app between
+  // tabs; none of that is the user's own activity.
+  describe('suppression during the tour', () => {
+    afterEach(() => setAnalyticsSuppressed(false));
+
+    it('reports nothing while suppressed, and resumes after', async () => {
+      setAnalyticsSuppressed(true);
+      await logScreenView('Connections', '/(main)/connections');
+      await logEvent('connections_list_viewed', { count: 2 });
+      await trackInteraction({ screen: 'home', feature: 'date_switcher', action: 'select', item: 'today' });
+      expect(logged()).toEqual([]);
+
+      setAnalyticsSuppressed(false);
+      await logEvent('transits_viewed');
+      expect(logged()).toEqual([{ name: 'transits_viewed', params: undefined }]);
     });
   });
 

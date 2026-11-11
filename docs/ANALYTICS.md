@@ -381,6 +381,11 @@ many times shouldn't outrank a control most people use once.
 
 ## Known gaps
 
+- **The first-run tour is invisible, by design.** Nothing is logged while it is on
+  screen (`setAnalyticsSuppressed`, set by `src/context/tour-context.tsx`), including
+  the screen views of the tabs it opens itself. A user who takes the tour shows no
+  Connections or Transits view until they open one on their own.
+
 - **`purchase_started` is never sent.** RevenueCat's own paywall UI owns the
   buy button, so the app can't see the moment a purchase begins. Funnels go
   straight from `paywall_viewed` to `purchase_completed` / `purchase_failed`.
