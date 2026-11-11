@@ -3,7 +3,7 @@ import { useWindowDimensions, View } from 'react-native';
 
 import { IconSymbol } from '@/src/components/ui/icon-symbol';
 import TourOverlay, { useTourCoversScreen } from '@/src/components/tour/tour-overlay';
-import { TourTarget } from '@/src/components/tour/tour-target';
+import { tourTabButton } from '@/src/components/tour/tour-tab-button';
 import WhatsNewSheet from '@/src/components/whats-new-sheet';
 import { TOUR_TARGETS } from '@/src/constants/tour';
 import { useTheme } from '@/src/hooks/use-theme';
@@ -29,6 +29,10 @@ function WhatsNewOnHome() {
     />
   );
 }
+
+// The tour spotlights these two tabs' whole buttons.
+const ConnectionsTabButton = tourTabButton(TOUR_TARGETS.tabConnections);
+const TransitsTabButton = tourTabButton(TOUR_TARGETS.tabTransits);
 
 export default function TabLayout() {
   const { theme: { colors: C } } = useTheme();
@@ -68,22 +72,16 @@ export default function TabLayout() {
           name="connections"
           options={{
             title: 'Connections',
-            tabBarIcon: ({ color }) => (
-              <TourTarget id={TOUR_TARGETS.tabConnections}>
-                <IconSymbol name={require('@/src/assets/tabs/connections.png')} size={iconSize} color={color} />
-              </TourTarget>
-            ),
+            tabBarButton: ConnectionsTabButton,
+            tabBarIcon: ({ color }) => <IconSymbol name={require('@/src/assets/tabs/connections.png')} size={iconSize} color={color} />,
           }}
         />
         <Tabs.Screen
           name="transits"
           options={{
             title: 'Transits',
-            tabBarIcon: ({ color }) => (
-              <TourTarget id={TOUR_TARGETS.tabTransits}>
-                <IconSymbol name={require('@/src/assets/tabs/transits.png')} size={iconSize} color={color} />
-              </TourTarget>
-            ),
+            tabBarButton: TransitsTabButton,
+            tabBarIcon: ({ color }) => <IconSymbol name={require('@/src/assets/tabs/transits.png')} size={iconSize} color={color} />,
           }}
         />
         <Tabs.Screen
