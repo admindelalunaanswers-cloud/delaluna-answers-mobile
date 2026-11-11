@@ -3,7 +3,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 import { createTourTargetRegistry, TourTargetContext } from '@/src/components/tour/tour-target';
 import { TOUR_ID, TOUR_RELEASED_AT, TOUR_STEPS, type TourFinishCta } from '@/src/constants/tour';
 import { useUser } from '@/src/context/user-context';
-import { Events } from '@/src/services/analytics.service';
+import { setAnalyticsSuppressed } from '@/src/services/analytics.service';
 import { toDate } from '@/src/utils/firestore-date';
 import { logger } from '@/src/utils/logger';
 import { decideTour, parseTourSeen, TOUR_SEEN_KEY } from '@/src/utils/tour-policy';
@@ -20,6 +20,12 @@ try {
 } catch {
   AsyncStorage = { getItem: async () => null, setItem: async () => {} };
 }
+
+// The tour is not reported to analytics, and neither is anything it causes:
+// it opens Connections, Transits and Chat itself, and those would otherwise log
+// screen views and events the user never chose. Switched synchronously in the
+// actions (so a finish link's navigation counts again) and backed by an effect
+// on `status` (so signing out mid-tour can't leave it on).
 
 function markTourSeen(): void {
   Promise.resolve()
@@ -108,7 +114,6 @@ export function TourProvider({ children }: { children: ReactNode }) {
         setStepIndex(0);
         if (decision === 'offer') {
           setStatus('offer');
-          Events.tourOffered();
         } else {
           setStatus('idle');
           if (decision === 'stamp-silently') markTourSeen();
@@ -125,20 +130,20 @@ export function TourProvider({ children }: { children: ReactNode }) {
   const accept = useCallback(() => {
     setStepIndex(0);
     setStatus('running');
-    Events.tourStarted({ source: 'offer' });
+    setAnalyticsSuppressed(true);
   }, []);
 
   const decline = useCallback(() => {
     setStatus('idle');
+    setAnalyticsSuppressed(false);
     markTourSeen();
-    Events.tourDeclined();
   }, []);
 
   const replay = useCallback(() => {
     setOwner(uid);
     setStepIndex(0);
     setStatus('running');
-    Events.tourStarted({ source: 'profile' });
+    setAnalyticsSuppressed(true);
   }, [uid]);
 
   const next = useCallback(() => {
@@ -154,17 +159,23 @@ export function TourProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const skip = useCallback(() => {
-    const step = TOUR_STEPS[stepIndex];
     setStatus('idle');
+    setAnalyticsSuppressed(false);
     markTourSeen();
-    if (step) Events.tourSkipped({ step_id: step.id, step_index: stepIndex });
-  }, [stepIndex]);
-
-  const complete = useCallback((cta: TourFinishCta) => {
-    setStatus('idle');
-    markTourSeen();
-    Events.tourCompleted({ cta });
   }, []);
+
+  // `cta` is which finish link was used; the overlay navigates after this
+  // returns, so that navigation is reported like any other.
+  const complete = useCallback((_cta: TourFinishCta) => {
+    setStatus('idle');
+    setAnalyticsSuppressed(false);
+    markTourSeen();
+  }, []);
+
+  const touring = status === 'running' || status === 'finished';
+  useEffect(() => {
+    setAnalyticsSuppressed(touring);
+  }, [touring]);
 
   const value = useMemo<TourContextValue>(
     () => ({ status, stepIndex, accept, decline, next, back, skip, complete, replay }),

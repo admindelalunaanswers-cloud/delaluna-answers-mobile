@@ -41,6 +41,15 @@ import { logger } from "@/src/utils/logger";
 
 type Params = Record<string, string | number | boolean | null | undefined>;
 
+// While the first-run tour is on screen nothing is reported: the tour moves
+// between tabs by itself, and those screen views and events aren't the user's.
+// Set by src/context/tour-context.tsx only.
+let suppressed = false;
+
+export function setAnalyticsSuppressed(on: boolean): void {
+  suppressed = on;
+}
+
 function safe<T>(fn: () => Promise<T>, label: string): Promise<T | void> {
   return fn().catch((err) => {
     logger.warn(`[analytics] ${label} failed:`, err);
@@ -163,6 +172,7 @@ export function logScreenView(
   screenName: string,
   screenClass?: string,
 ): Promise<void | void> {
+  if (suppressed) return Promise.resolve();
   return safe(
     () =>
       fbLogEvent(getAnalytics(), "screen_view", {
@@ -176,6 +186,7 @@ export function logScreenView(
 // ─── Generic event ──────────────────────────────────────────────────────────
 
 export function logEvent(name: string, params?: Params): Promise<void | void> {
+  if (suppressed) return Promise.resolve();
   return safe(
     () => fbLogEvent(getAnalytics(), name, params as any),
     `event:${name}`,
@@ -316,18 +327,6 @@ export const Events = {
     includeQuestions: boolean;
     includeBirthDetails: boolean;
   }) => logEvent("chat_exported", params),
-
-  // First-run tour (src/context/tour-context.tsx). `step_id` is from TOUR_STEPS.
-  tourOffered: () => logEvent("tour_offered"),
-  tourDeclined: () => logEvent("tour_declined"),
-  tourStarted: (params: { source: "offer" | "profile" }) =>
-    logEvent("tour_started", params),
-  tourStepViewed: (params: { step_id: string; step_index: number; spotlit: boolean }) =>
-    logEvent("tour_step_viewed", params),
-  tourSkipped: (params: { step_id: string; step_index: number }) =>
-    logEvent("tour_skipped", params),
-  tourCompleted: (params: { cta: "chat" | "connection" | "birth_chart" | "home" }) =>
-    logEvent("tour_completed", params),
 
   // Monetization (paywall + RevenueCat)
   paywallViewed: (source: string) => logEvent("paywall_viewed", { source }),
