@@ -45,6 +45,18 @@ export interface TourChip {
   premium?: boolean;
 }
 
+/**
+ * A scripted chat exchange shown on a step. Display only: it is never sent,
+ * billed or stored (see src/components/tour/tour-example-chat.tsx). Keep it
+ * generic — it is shown to everyone, whatever their chart.
+ */
+export interface TourExample {
+  question: string;
+  answer: string;
+  /** Tarot only: the spread, shuffled and flipped once. Ids from tarotCards.registry. */
+  cards?: readonly { id: number; name: string; reversed?: boolean }[];
+}
+
 export interface TourStep {
   /** Stable, snake_case — analytics `step_id`. */
   id: string;
@@ -59,6 +71,8 @@ export interface TourStep {
    * take 0 and the ring sits on the square's edge.
    */
   padding?: number;
+  /** Corner radius of the ring, to match a target with its own rounded shape. */
+  radius?: number;
   title: string;
   body: string;
   chips?: readonly TourChip[];
@@ -66,7 +80,11 @@ export interface TourStep {
   schedule?: string;
   /** Small print under the body. */
   note?: string;
+  example?: TourExample;
 }
+
+/** The chat reader toggle's selected pill (`modeThumb` in chat.tsx, R.md + 2). */
+const CHAT_MODE_RADIUS = 14;
 
 export const TOUR_STEPS: readonly TourStep[] = [
   {
@@ -146,8 +164,19 @@ export const TOUR_STEPS: readonly TourStep[] = [
     target: TOUR_TARGETS.chatModeAstrology,
     route: '/chat',
     shape: 'rounded',
+    padding: 0,
+    radius: CHAT_MODE_RADIUS,
     title: 'Ask the Astrologer',
     body: 'Questions about your chart, your day or your relationships, answered from your own birth chart.',
+    example: {
+      question: 'What does my rising sign reveal about me?',
+      answer:
+        "Pull up a chair, because your rising sign is your outer packaging: the energy you walk into a room with, long before anyone meets the real you.\n\n" +
+        "• It's the first impression, and why people read you the way they do before you've said a word.\n" +
+        "• It sets your default mode, whether that's the observant strategist or the warm welcome.\n" +
+        "• When people misread you, they're usually reacting to the packaging, not to you.\n\n" +
+        "Own the way you show up. Want me to pull a tarot card on how this energy is landing with someone in your orbit?",
+    },
     note: "Not sure what to ask? Tap a suggested question. Tap Add a Connection to ask about someone you've saved.",
   },
   {
@@ -155,8 +184,23 @@ export const TOUR_STEPS: readonly TourStep[] = [
     target: TOUR_TARGETS.chatModeTarot,
     route: '/chat',
     shape: 'rounded',
+    padding: 0,
+    radius: CHAT_MODE_RADIUS,
     title: 'Or ask the Tarot reader',
     body: 'Switch to Tarot and a spread is drawn for each question you ask. Switch readers whenever you like, and the conversation carries on.',
+    example: {
+      question: 'What energies are influencing me right now?',
+      cards: [
+        { id: 23, name: 'Learning to Forgive' },
+        { id: 73, name: 'The Sun' },
+        { id: 123, name: 'Ace of Swords', reversed: true },
+      ],
+      answer:
+        "The universe is handing you main-character energy on a silver platter, and you're too busy replaying an old argument to enjoy it.\n\n" +
+        'The Sun is begging you to step into the spotlight and soak up some real momentum, but an upside-down Ace of Swords is scrambling the signal with mental static and overthinking. ' +
+        "That's exactly why Learning to Forgive showed up: drop the mental audit on whoever tested your patience, because holding the grudge only clogs your own line.\n\n" +
+        'Your peace is the real prize here. Want me to pull another card on what needs an eviction notice?',
+    },
     schedule: 'Free questions reset every day at midnight',
     note: 'Premium gives you more questions each day.',
   },
