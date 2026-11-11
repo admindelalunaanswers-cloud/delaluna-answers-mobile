@@ -39,10 +39,13 @@ jest.mock('react-native-svg', () => {
   return { __esModule: true, default: View, Path: View, Circle: View, Polyline: View };
 });
 
-// The tour reports nothing, and switches reporting off while it drives the app.
+// The tour reports only its own button presses, and switches all other
+// reporting off while it drives the app.
 const mockSetSuppressed = jest.fn();
+const mockTourButton = jest.fn();
 jest.mock('@/src/services/analytics.service', () => ({
   setAnalyticsSuppressed: (on: boolean) => mockSetSuppressed(on),
+  trackTourButton: (stepId: string, button: string) => mockTourButton(stepId, button),
 }));
 const suppressedNow = () => mockSetSuppressed.mock.calls.at(-1)?.[0];
 
@@ -73,6 +76,7 @@ describe('TourOverlay', () => {
     (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
     (AsyncStorage.setItem as jest.Mock).mockResolvedValue(undefined);
     mockSetSuppressed.mockClear();
+    mockTourButton.mockClear();
   });
 
   afterEach(() => {
@@ -195,5 +199,35 @@ describe('TourOverlay', () => {
     expect(screen.queryByText(/all set/)).toBeNull();
     expect(suppressedNow()).toBe(false);
     expect(AsyncStorage.setItem).toHaveBeenCalledWith(TOUR_SEEN_KEY, 'constellation_v1');
+
+    // One report per button press: start, every Next, then Finish on the last step.
+    expect(mockTourButton).toHaveBeenNthCalledWith(1, 'offer', 'start');
+    expect(mockTourButton).toHaveBeenNthCalledWith(2, TOUR_STEPS[0].id, 'next');
+    expect(mockTourButton).toHaveBeenLastCalledWith(TOUR_STEPS[TOUR_STEPS.length - 1].id, 'finish');
+    expect(mockTourButton).toHaveBeenCalledTimes(TOUR_STEPS.length + 1);
+  });
+
+  it('reports Back, Skip and decline presses with the step they came from', async () => {
+    await renderTour();
+    fireEvent.press(screen.getByRole('button', { name: 'Show me around' }));
+    await showStep();
+    fireEvent.press(screen.getByRole('button', { name: 'Next' }));
+    await showStep();
+    fireEvent.press(screen.getByRole('button', { name: 'Back' }));
+    await showStep();
+    fireEvent.press(screen.getByRole('button', { name: 'Skip tour' }));
+    await act(async () => {});
+    expect(mockTourButton.mock.calls).toEqual([
+      ['offer', 'start'],
+      [TOUR_STEPS[0].id, 'next'],
+      [TOUR_STEPS[1].id, 'back'],
+      [TOUR_STEPS[0].id, 'skip'],
+    ]);
+  });
+
+  it('reports a decline on the offer', async () => {
+    await renderTour();
+    fireEvent.press(screen.getByRole('button', { name: "I'll explore on my own" }));
+    expect(mockTourButton).toHaveBeenCalledWith('offer', 'decline');
   });
 });
