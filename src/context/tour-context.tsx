@@ -97,13 +97,17 @@ export function TourProvider({ children }: { children: ReactNode }) {
   // loaded so the account's age is real rather than a placeholder.
   useEffect(() => {
     if (!signedIn || !userDoc || !uid || decidedFor.current === uid) return;
-    decidedFor.current = uid;
 
+    // `decidedFor` is set only once a read survives to be applied. A new
+    // `userDoc` snapshot (the pending `createdAt` resolving, a `lastActiveAt`
+    // write) cancels the read in flight, and marking the account decided up
+    // front made the re-run bail too, so the tour was never offered.
     let cancelled = false;
     Promise.resolve()
       .then(() => AsyncStorage.getItem(TOUR_SEEN_KEY))
       .then((raw) => {
         if (cancelled) return;
+        decidedFor.current = uid;
         const decision = decideTour({
           seenId: parseTourSeen(raw),
           accountCreatedAt: createdAtMs,
@@ -121,7 +125,13 @@ export function TourProvider({ children }: { children: ReactNode }) {
       })
       // Unreadable storage: don't offer. Offering on every launch would be
       // worse than a new user missing the tour; Profile can still replay it.
-      .catch(logger.catchAsync('tour_read'));
+      .catch((err: unknown) => {
+        // Decided too, or every later snapshot would retry and re-report. A
+        // cancelled read has a successor that will report; this one doesn't.
+        if (cancelled) return;
+        decidedFor.current = uid;
+        logger.catchAsync('tour_read')(err);
+      });
     return () => {
       cancelled = true;
     };

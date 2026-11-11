@@ -367,14 +367,17 @@ export default function ChatScreen() {
   /**
    * The question just sent, drawn straight away. Without it nothing appeared
    * until the `sendChatMessage` round trip and the snapshot after it — a
-   * second or more of a tapped suggestion doing nothing. It is replaced by the
-   * real document as soon as one the screen hadn't seen before arrives (sends
-   * are serialised by `isSending`, so that document is this question), and
-   * dropped if the send fails.
+   * second or more of a tapped suggestion doing nothing. It gives way to the
+   * real document — one the screen hadn't seen before, carrying the same
+   * question — and is dropped if the send fails, or if the send succeeds but
+   * no such document turns up (a dead listener) within OPTIMISTIC_TIMEOUT_MS.
    */
   const [optimistic, setOptimistic] = useState<{
     msg: ChatMessageDoc;
+    /** Every id on screen at send time — parked turns included. */
     knownIds: Set<string>;
+    /** Sent against a parked thread: hide its turns while they're deleted. */
+    replacesThread: boolean;
   } | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -738,9 +741,12 @@ export default function ChatScreen() {
               }
             : {}),
         },
-        // Every id on screen now — parked turns included, since their
-        // deletion may land after the new document does.
-        knownIds: new Set(messages.map((m) => m.id)),
+        // Read through the ref, not the closure: the mode-choice path calls
+        // this after awaiting an Alert and a park, so `messages` here can be
+        // older than what is on screen. Parked turns are included on purpose —
+        // their deletion may land after the new document does.
+        knownIds: new Set(messagesRef.current.map((m) => m.id)),
+        replacesThread: !!historyOverride,
       });
       const t = Date.now();
       try {
@@ -1025,17 +1031,50 @@ export default function ChatScreen() {
 
   // ─── Derived ───────────────────────────────────────────────────────────────
 
-  // Hand over to the real document the moment it lands.
-  useEffect(() => {
-    if (optimistic && messages.some((m) => !optimistic.knownIds.has(m.id))) {
-      setOptimistic(null);
-    }
-  }, [messages, optimistic]);
+  // The real document for the optimistic question: new to the screen and
+  // asking the same thing. Matching the text too keeps a concurrent retry's
+  // replacement document (also a new id) from being mistaken for it.
+  const optimisticLanded =
+    !!optimistic &&
+    messages.some(
+      (m) =>
+        !optimistic.knownIds.has(m.id) &&
+        m.userMessage === optimistic.msg.userMessage,
+    );
 
-  const displayMessages = useMemo(
-    () => (optimistic ? [...messages, optimistic.msg] : messages),
-    [messages, optimistic],
-  );
+  // Decided during render, not after it, so the frame the real document lands
+  // in doesn't draw the question twice. Once landed the state is left alone —
+  // the timeout below clears it, and the next send replaces it anyway.
+  const displayMessages = useMemo(() => {
+    if (!optimistic) return messages;
+    const base = optimistic.replacesThread
+      ? messages.filter((m) => !optimistic.knownIds.has(m.id))
+      : messages;
+    return optimisticLanded ? base : [...base, optimistic.msg];
+  }, [messages, optimistic, optimisticLanded]);
+
+  // A send that succeeded but whose document never arrives (the listener
+  // errored, or is offline) must not leave a typing bubble up for good. The
+  // same timer retires the state of one that did land.
+  useEffect(() => {
+    if (!optimistic || isSending) return;
+    const id = setTimeout(() => setOptimistic(null), OPTIMISTIC_TIMEOUT_MS);
+    return () => clearTimeout(id);
+  }, [optimistic, isSending]);
+
+  // ─── Auto-scroll on new messages ──────────────────────────────────────────
+
+  // Keyed on what is drawn, so the list moves to the optimistic question on tap
+  // and doesn't jump again when the real document takes its place.
+  const shownCount = displayMessages.length;
+  useEffect(() => {
+    if (shownCount > 0) {
+      setTimeout(
+        () => flatListRef.current?.scrollToEnd({ animated: true }),
+        100,
+      );
+    }
+  }, [shownCount]);
 
   const showSuggestions = historyLoaded && displayMessages.length === 0;
   const sendDisabled = isSending || !inputText.trim();

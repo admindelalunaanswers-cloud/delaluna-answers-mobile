@@ -1,3 +1,5 @@
+import { releaseDate } from '@/src/constants/whats-new';
+
 /**
  * The first-run "Constellation Tour": a spotlight walk across the real screens,
  * one star of the progress constellation per step. Design:
@@ -17,10 +19,13 @@
 export const TOUR_ID = 'constellation_v1';
 
 /**
- * Epoch ms. Accounts created before this never get the offer (they already
- * know the app; Profile → Walkthrough is there for them).
+ * Epoch ms, start of that day on the device clock. Accounts created on or
+ * after it, and under a week old, are new: they are offered the tour and never
+ * shown the What's new sheet (`isNewAccount` in tour-policy.ts). Accounts
+ * created before it never get the offer (they already know the app; Profile →
+ * Walkthrough is there for them).
  */
-export const TOUR_RELEASED_AT = Date.UTC(2026, 10, 8);
+export const TOUR_RELEASED_AT = releaseDate('2026-11-13');
 
 /** Ids of the elements the tour can spotlight. */
 export const TOUR_TARGETS = {

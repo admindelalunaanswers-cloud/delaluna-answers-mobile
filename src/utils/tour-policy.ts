@@ -14,6 +14,23 @@ export const TOUR_SEEN_KEY = 'tour:seen:v1';
 export const TOUR_NEW_ACCOUNT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
+ * Whether this account is new to the app: created on or after the tour's
+ * release and under a week old, or still a pending `serverTimestamp()` (null).
+ * New accounts get the tour, and the What's new sheet skips them — they never
+ * knew the app before this release, so there is nothing "new" to them.
+ */
+export function isNewAccount(args: {
+  accountCreatedAt: number | null;
+  releasedAt: number;
+  now: number;
+}): boolean {
+  const { accountCreatedAt, releasedAt, now } = args;
+  if (accountCreatedAt === null) return true;
+  if (accountCreatedAt < releasedAt) return false;
+  return now - accountCreatedAt <= TOUR_NEW_ACCOUNT_WINDOW_MS;
+}
+
+/**
  * - `offer`: show the welcome card on Home.
  * - `stamp-silently`: record it as seen without showing (an existing user).
  * - `skip`: do nothing (already seen on this device).
@@ -35,13 +52,9 @@ export function decideTour(args: {
   if (seenId !== null) return 'skip';
 
   // A just-created user doc reports its pending `serverTimestamp()` as null,
-  // and that is exactly the person the tour is for. This is also why it can't
-  // collide with the What's new sheet, which treats unknown age as "stamp".
-  if (accountCreatedAt === null) return 'offer';
-
-  if (accountCreatedAt < releasedAt) return 'stamp-silently';
-  if (now - accountCreatedAt > TOUR_NEW_ACCOUNT_WINDOW_MS) return 'stamp-silently';
-  return 'offer';
+  // and that is exactly the person the tour is for. The What's new sheet asks
+  // the same question and stands aside for these accounts.
+  return isNewAccount({ accountCreatedAt, releasedAt, now }) ? 'offer' : 'stamp-silently';
 }
 
 /** Storage can hand back anything; only a non-empty string is an id. */

@@ -24,13 +24,22 @@ export function decideWhatsNew(args: {
   releasedAt: number;
   /** Items left after the audience filter. */
   itemCount: number;
+  /**
+   * `isNewAccount` from tour-policy.ts. A new account gets the tour instead,
+   * even on a device that saved an older release here (a second account, or
+   * an update within the account's first week).
+   */
+  newAccount: boolean;
 }): WhatsNewDecision {
-  const { seenId, currentId, accountCreatedAt, releasedAt, itemCount } = args;
+  const { seenId, currentId, accountCreatedAt, releasedAt, itemCount, newAccount } = args;
 
   if (seenId === currentId) return 'skip';
   // Nothing for this user (e.g. every item is for the other plan): don't open an
   // empty sheet, and don't stamp either, so a later plan change still can.
   if (itemCount === 0) return 'skip';
+
+  // New to the app: the tour is theirs, and there is nothing "new" to them.
+  if (newAccount) return 'stamp-silently';
 
   // Saw an earlier release on this device: definitely an upgrade.
   if (seenId !== null) return 'show';
