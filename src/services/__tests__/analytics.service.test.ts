@@ -7,7 +7,6 @@ import {
   routeKeyForSegments,
   screenLabelForPath,
   setAnalyticsSuppressed,
-  trackTourButton,
   toAnalyticsValue,
   trackInteraction,
 } from '@/src/services/analytics.service';
@@ -79,15 +78,6 @@ describe('analytics.service', () => {
       setAnalyticsSuppressed(false);
       await logEvent('transits_viewed');
       expect(logged()).toEqual([{ name: 'transits_viewed', params: undefined }]);
-    });
-
-    // The tour's own buttons are the one thing still reported while it runs.
-    it('still reports tour button presses', async () => {
-      setAnalyticsSuppressed(true);
-      await trackTourButton('chat_tarot', 'next');
-      expect(logged()).toEqual([
-        { name: 'ui_interaction', params: { screen: 'tour', feature: 'chat_tarot', action: 'tap', item: 'next' } },
-      ]);
     });
   });
 

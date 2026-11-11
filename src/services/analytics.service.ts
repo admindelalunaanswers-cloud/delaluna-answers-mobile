@@ -43,8 +43,7 @@ type Params = Record<string, string | number | boolean | null | undefined>;
 
 // While the first-run tour is on screen nothing is reported: the tour moves
 // between tabs by itself, and those screen views and events aren't the user's.
-// Set by src/context/tour-context.tsx only. The one exception is the tour's own
-// buttons — see trackTourButton.
+// Set by src/context/tour-context.tsx only.
 let suppressed = false;
 
 export function setAnalyticsSuppressed(on: boolean): void {
@@ -214,8 +213,7 @@ export type InteractionScreen =
   | "connection_report"
   | "connection_new"
   | "connection_edit"
-  | "synastry"
-  | "tour"; // trackTourButton only
+  | "synastry";
 
 export type InteractionAction =
   | "tap" // a button or link
@@ -259,28 +257,6 @@ export function trackInteraction({
   });
 }
 
-/** A button on the first-run tour's cards. */
-export type TourButton = "start" | "decline" | "next" | "back" | "skip" | "finish";
-
-/**
- * A press on one of the tour's own buttons, as a `ui_interaction` with
- * `screen: "tour"`, the step id (or `offer`) as `feature` and the button as
- * `item`. The only thing reported while the tour runs: it deliberately skips
- * the suppression that silences everything the tour causes on its own.
- */
-export function trackTourButton(stepId: string, button: TourButton): Promise<void | void> {
-  return safe(
-    () =>
-      fbLogEvent(getAnalytics(), "ui_interaction", {
-        screen: "tour",
-        feature: toAnalyticsValue(stepId),
-        action: "tap",
-        item: button,
-      } as any),
-    `event:ui_interaction:tour`,
-  );
-}
-
 /** The day a date id is relative to today: what the date switchers report. */
 export function relativeDay(
   dateId: string,
@@ -320,6 +296,9 @@ export const Events = {
     logEvent("natal_breakdown_viewed", params),
   tarotDrawn: (params: { source: "home" | "chat"; cards: number }) =>
     logEvent("tarot_drawn", params),
+  // No params, ever: the message is private (it isn't stored anywhere), and
+  // blocked attempts aren't logged — which harm category fired is sensitive.
+  messageBottleSent: () => logEvent("message_bottle_sent"),
 
   // Connections / synastry
   connectionCreated: (params?: {
