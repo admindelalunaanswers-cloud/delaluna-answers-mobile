@@ -293,6 +293,14 @@ export default function TourOverlay() {
                   {step.title}
                 </Text>
                 <Text style={styles.cardText}>{step.body}</Text>
+                {step.schedule ? (
+                  <View style={styles.schedule}>
+                    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                      <Ionicons name="time-outline" size={15} color={C.turquoise} />
+                    </View>
+                    <Text style={styles.scheduleText}>{step.schedule}</Text>
+                  </View>
+                ) : null}
                 {step.chips ? (
                   <View style={styles.chips}>
                     {step.chips.map((chip) => (
@@ -529,6 +537,17 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 23,
     color: C.moonSilver,
+  },
+  schedule: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+  },
+  scheduleText: {
+    flexShrink: 1,
+    fontSize: 13,
+    lineHeight: 19,
+    color: C.turquoise,
   },
   cardNote: {
     fontSize: 13,
