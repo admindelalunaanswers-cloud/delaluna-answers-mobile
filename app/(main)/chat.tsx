@@ -662,14 +662,16 @@ export default function ChatScreen() {
 
   // ─── Auto-scroll on new messages ──────────────────────────────────────────
 
+  // Counts the optimistic question too, so the list scrolls to it on tap.
+  const shownCount = messages.length + (optimistic ? 1 : 0);
   useEffect(() => {
-    if (messages.length > 0) {
+    if (shownCount > 0) {
       setTimeout(
         () => flatListRef.current?.scrollToEnd({ animated: true }),
         100,
       );
     }
-  }, [messages.length]);
+  }, [shownCount]);
 
   // Mark screen ready once the initial data is available
   useEffect(() => {
