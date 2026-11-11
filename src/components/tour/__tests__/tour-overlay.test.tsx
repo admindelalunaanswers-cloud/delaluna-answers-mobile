@@ -120,10 +120,25 @@ describe('TourOverlay', () => {
     fireEvent.press(screen.getByRole('button', { name: 'Next' }));
     await showStep();
     expect(screen.getByRole('header', { name: `Step 2 of ${total}. ${TOUR_STEPS[1].title}` })).toBeTruthy();
+    // Sections that refresh say when. The natal chart never changes, so no schedule.
+    expect(TOUR_STEPS[1].schedule).toBeUndefined();
+    expect(TOUR_STEPS.find((s) => s.id === 'date_switcher')?.schedule).toBe('New every day at midnight');
 
     fireEvent.press(screen.getByRole('button', { name: 'Back' }));
     await showStep();
     expect(screen.getByRole('header', { name: `Step 1 of ${total}. ${TOUR_STEPS[0].title}` })).toBeTruthy();
+  });
+
+  it('shows when a section refreshes', async () => {
+    await renderTour();
+    fireEvent.press(screen.getByRole('button', { name: 'Show me around' }));
+    const index = TOUR_STEPS.findIndex((s) => s.id === 'date_switcher');
+    for (let i = 0; i < index; i++) {
+      await showStep();
+      fireEvent.press(screen.getByRole('button', { name: 'Next' }));
+    }
+    await showStep();
+    expect(screen.getByText('New every day at midnight')).toBeTruthy();
   });
 
   // A target that never mounts (a screen that failed to load) must not strand
