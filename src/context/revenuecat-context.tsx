@@ -146,6 +146,10 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [loading, setLoading] = useState(REVENUECAT_ENABLED);
   const configuredRef = useRef(false);
+  // Screens open the paywall straight from a tap, and offerings can take a
+  // moment to load before it appears — a second tap in that gap must not start
+  // a second presentation (which RevenueCatUI rejects, logging a bogus failure).
+  const presentingPaywallRef = useRef(false);
   /** True only when configureRevenueCat() actually initialised the SDK. */
   const sdkReadyRef = useRef(false);
   const loggedInUidRef = useRef<string | null>(null);
@@ -377,6 +381,8 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       logger.debug("[RevenueCat] disabled — skipping presentPaywall");
       return false;
     }
+    if (presentingPaywallRef.current) return false;
+    presentingPaywallRef.current = true;
     try {
       const { offering } = await resolveOffering();
       Events.paywallViewed("manual");
@@ -392,6 +398,8 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
         reason: String((err as any)?.message ?? err),
       });
       return false;
+    } finally {
+      presentingPaywallRef.current = false;
     }
   }, [handlePaywallResult, resolveOffering]);
 
