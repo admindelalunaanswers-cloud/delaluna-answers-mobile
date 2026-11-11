@@ -126,8 +126,10 @@ export function TourProvider({ children }: { children: ReactNode }) {
       // Unreadable storage: don't offer. Offering on every launch would be
       // worse than a new user missing the tour; Profile can still replay it.
       .catch((err: unknown) => {
-        // Decided too, or every later snapshot would retry and re-report.
-        if (!cancelled) decidedFor.current = uid;
+        // Decided too, or every later snapshot would retry and re-report. A
+        // cancelled read has a successor that will report; this one doesn't.
+        if (cancelled) return;
+        decidedFor.current = uid;
         logger.catchAsync('tour_read')(err);
       });
     return () => {
