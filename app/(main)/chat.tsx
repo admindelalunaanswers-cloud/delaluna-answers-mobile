@@ -214,6 +214,12 @@ const RETRY_ELIGIBLE_MS = 3 * 60 * 1000 + 5_000;
 
 /** When to admit the answer is running late, while still waiting on it. */
 const SLOW_REPLY_MS = 45_000;
+/**
+ * How long the optimistic question waits for its document once the send has
+ * succeeded. The snapshot normally follows within a second; past this the
+ * listener is presumed dead and the placeholder is dropped.
+ */
+const OPTIMISTIC_TIMEOUT_MS = 15_000;
 
 function MessageBubble({
   msg,
@@ -221,6 +227,7 @@ function MessageBubble({
   isRetrying = false,
   accessory,
   holdForDraw = false,
+  canRetry = true,
 }: {
   msg: ChatMessageDoc;
   onRetry: (msg: ChatMessageDoc) => void;
@@ -235,6 +242,11 @@ function MessageBubble({
    * top of the shuffle both spoils it and reads as two things at once.
    */
   holdForDraw?: boolean;
+  /**
+   * False for the optimistic placeholder: there is no document behind it, so a
+   * retry could only fail. A send that hangs ends in an error that removes it.
+   */
+  canRetry?: boolean;
 }) {
   // Nothing re-renders this bubble while a generation is in flight — the
   // snapshot that would is the very thing that hasn't arrived — so age the
@@ -247,7 +259,7 @@ function MessageBubble({
   }, [msg.isPending]);
 
   const age = now - msg.createdAt.getTime();
-  const isStuck = msg.isPending && age > RETRY_ELIGIBLE_MS;
+  const isStuck = canRetry && msg.isPending && age > RETRY_ELIGIBLE_MS;
   const isSlow = msg.isPending && !isStuck && age > SLOW_REPLY_MS;
   const showRetry = msg.isError || isStuck;
   const waiting = msg.isPending && !isStuck;
@@ -356,14 +368,17 @@ export default function ChatScreen() {
   /**
    * The question just sent, drawn straight away. Without it nothing appeared
    * until the `sendChatMessage` round trip and the snapshot after it — a
-   * second or more of a tapped suggestion doing nothing. It is replaced by the
-   * real document as soon as one the screen hadn't seen before arrives (sends
-   * are serialised by `isSending`, so that document is this question), and
-   * dropped if the send fails.
+   * second or more of a tapped suggestion doing nothing. It gives way to the
+   * real document — one the screen hadn't seen before, carrying the same
+   * question — and is dropped if the send fails, or if the send succeeds but
+   * no such document turns up (a dead listener) within OPTIMISTIC_TIMEOUT_MS.
    */
   const [optimistic, setOptimistic] = useState<{
     msg: ChatMessageDoc;
+    /** Every id on screen at send time — parked turns included. */
     knownIds: Set<string>;
+    /** Sent against a parked thread: hide its turns while they're deleted. */
+    replacesThread: boolean;
   } | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -660,19 +675,6 @@ export default function ChatScreen() {
     return () => clearInterval(id);
   }, []);
 
-  // ─── Auto-scroll on new messages ──────────────────────────────────────────
-
-  // Counts the optimistic question too, so the list scrolls to it on tap.
-  const shownCount = messages.length + (optimistic ? 1 : 0);
-  useEffect(() => {
-    if (shownCount > 0) {
-      setTimeout(
-        () => flatListRef.current?.scrollToEnd({ animated: true }),
-        100,
-      );
-    }
-  }, [shownCount]);
-
   // Mark screen ready once the initial data is available
   useEffect(() => {
     if (!rcLoading) markReady();
@@ -740,9 +742,12 @@ export default function ChatScreen() {
               }
             : {}),
         },
-        // Every id on screen now — parked turns included, since their
-        // deletion may land after the new document does.
-        knownIds: new Set(messages.map((m) => m.id)),
+        // Read through the ref, not the closure: the mode-choice path calls
+        // this after awaiting an Alert and a park, so `messages` here can be
+        // older than what is on screen. Parked turns are included on purpose —
+        // their deletion may land after the new document does.
+        knownIds: new Set(messagesRef.current.map((m) => m.id)),
+        replacesThread: !!historyOverride,
       });
       const t = Date.now();
       try {
@@ -772,6 +777,9 @@ export default function ChatScreen() {
           handleLimitReached(msg);
           return;
         }
+        // Give the question back rather than lose it with the bubble — unless
+        // the user has started typing something else in the meantime.
+        setInputText((current) => current || msg);
         logPerfError(e instanceof Error ? e.message : String(e));
         logger.error("[chat] send failed", e, "chat_send");
         recordError(e, "chat_send");
@@ -1012,17 +1020,52 @@ export default function ChatScreen() {
 
   // ─── Derived ───────────────────────────────────────────────────────────────
 
-  // Hand over to the real document the moment it lands.
-  useEffect(() => {
-    if (optimistic && messages.some((m) => !optimistic.knownIds.has(m.id))) {
-      setOptimistic(null);
-    }
-  }, [messages, optimistic]);
+  // The real document for the optimistic question: new to the screen and
+  // asking the same thing. Matching the text too keeps a concurrent retry's
+  // replacement document (also a new id) from being mistaken for it.
+  const optimisticLanded =
+    !!optimistic &&
+    messages.some(
+      (m) =>
+        !optimistic.knownIds.has(m.id) &&
+        m.userMessage === optimistic.msg.userMessage,
+    );
 
-  const displayMessages = useMemo(
-    () => (optimistic ? [...messages, optimistic.msg] : messages),
-    [messages, optimistic],
-  );
+  // Decided during render, not after it, so the frame the real document lands
+  // in doesn't draw the question twice. The effect only tidies the state.
+  const displayMessages = useMemo(() => {
+    if (!optimistic) return messages;
+    const base = optimistic.replacesThread
+      ? messages.filter((m) => !optimistic.knownIds.has(m.id))
+      : messages;
+    return optimisticLanded ? base : [...base, optimistic.msg];
+  }, [messages, optimistic, optimisticLanded]);
+
+  useEffect(() => {
+    if (optimisticLanded) setOptimistic(null);
+  }, [optimisticLanded]);
+
+  // A send that succeeded but whose document never arrives (the listener
+  // errored, or is offline) must not leave a typing bubble up for good.
+  useEffect(() => {
+    if (!optimistic || isSending) return;
+    const id = setTimeout(() => setOptimistic(null), OPTIMISTIC_TIMEOUT_MS);
+    return () => clearTimeout(id);
+  }, [optimistic, isSending]);
+
+  // ─── Auto-scroll on new messages ──────────────────────────────────────────
+
+  // Keyed on what is drawn, so the list moves to the optimistic question on tap
+  // and doesn't jump again when the real document takes its place.
+  const shownCount = displayMessages.length;
+  useEffect(() => {
+    if (shownCount > 0) {
+      setTimeout(
+        () => flatListRef.current?.scrollToEnd({ animated: true }),
+        100,
+      );
+    }
+  }, [shownCount]);
 
   const showSuggestions =
     historyLoaded && displayMessages.length === 0;
@@ -1511,12 +1554,20 @@ export default function ChatScreen() {
                 renderItem={({ item }) => {
                   const draw = tarotDraws.get(item.id);
                   const revealed = revealedDraws.includes(item.id);
+                  const isOptimistic = item.id === optimistic?.msg.id;
                   return (
                     <MessageBubble
                       msg={item}
                       onRetry={handleRetry}
                       isRetrying={retryingIds.includes(item.id)}
-                      holdForDraw={!!draw && !revealed}
+                      canRetry={!isOptimistic}
+                      // A tarot question's cards come with its real document.
+                      // Until then hold the reply row too, so it doesn't type
+                      // and then vanish behind the shuffle.
+                      holdForDraw={
+                        (!!draw && !revealed) ||
+                        (isOptimistic && item.mode === "tarot")
+                      }
                       accessory={
                         draw ? (
                           <ChatTarotDraw

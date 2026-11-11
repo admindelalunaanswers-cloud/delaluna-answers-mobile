@@ -273,7 +273,61 @@ describe('ChatScreen', () => {
       await act(async () => finish(new Error('unavailable')));
 
       expect(screen.queryByLabelText(`You: ${q}`)).toBeNull();
-      expect(screen.getByText(q)).toBeTruthy(); // suggestions are back
+      // The question goes back in the composer rather than being lost.
+      expect(screen.getByLabelText('Message Delaluna')).toHaveProp('value', q);
+    });
+
+    // A document from something else — a retry's replacement — is a new id too.
+    it('is not replaced by a different new document', async () => {
+      await renderChat();
+      await deliverThread([]);
+      await act(async () => {
+        fireEvent.press(screen.getByText(q));
+      });
+
+      await deliverThread([message('m9', { userMessage: 'Something else?' })]);
+
+      expect(screen.getByLabelText(`You: ${q}`)).toBeTruthy();
+      await act(async () => finish());
+    });
+
+    // The cards come with the real document; typing first and then vanishing
+    // behind the shuffle is what the draw hold exists to avoid.
+    it('holds the reply row for a tarot question', async () => {
+      await renderChat();
+      await deliverThread([]);
+      fireEvent.press(screen.getByRole('tab', { name: 'Tarot' }));
+      await act(async () => {
+        fireEvent.press(screen.getByText(q));
+      });
+
+      expect(screen.getByLabelText(`You: ${q}`)).toBeTruthy();
+      expect(screen.queryByLabelText('Delaluna is typing')).toBeNull();
+      await act(async () => finish());
+    });
+
+    // A dead listener would otherwise leave the typing bubble up for good, and
+    // past the stuck threshold offer a Retry with no document behind it.
+    it('drops the placeholder if its document never arrives', async () => {
+      jest.useFakeTimers();
+      try {
+        await renderChat();
+        await deliverThread([]);
+        await act(async () => {
+          fireEvent.press(screen.getByText(q));
+        });
+        await act(async () => finish());
+        expect(screen.getByLabelText(`You: ${q}`)).toBeTruthy();
+        expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+
+        await act(async () => {
+          jest.advanceTimersByTime(15_000);
+        });
+
+        expect(screen.queryByLabelText(`You: ${q}`)).toBeNull();
+      } finally {
+        jest.useRealTimers();
+      }
     });
   });
 
