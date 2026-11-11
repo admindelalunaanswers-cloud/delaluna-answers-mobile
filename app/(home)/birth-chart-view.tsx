@@ -21,6 +21,7 @@ import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
 import { renderRichText } from '@/src/utils/rich-text';
 import type { NatalChart } from '@/src/services/astroEngine';
 import type { NatalChartBreakdownResult } from '@/src/types/natal-chart-breakdown.types';
+import { Events, trackInteraction } from '@/src/services/analytics.service';
 
 const NAV_BAR_HEIGHT = 44;
 const CHART_FRAME_HEIGHT = verticalScale(330);
@@ -47,7 +48,18 @@ export default function BirthChartScreen() {
   const scrollRef      = useRef<ScrollViewType>(null);
   const scrollOffsets  = useRef<Partial<Record<BreakdownTab, number>>>({});
 
+  function selectChartTab(tab: ChartTab) {
+    if (tab !== chartTab) trackInteraction({ screen: 'birth_chart', feature: 'chart_tab', action: 'select', item: tab });
+    setChartTab(tab);
+  }
+
   function switchBreakdownTab(tab: BreakdownTab) {
+    if (tab !== breakdownTab) {
+      // A locked tab still opens (to its unlock card), so it counts as a select
+      // either way; `locked` says which one the user saw.
+      const locked = !isPremium && (tab === 'Planets' || tab === 'Aspects');
+      trackInteraction({ screen: 'birth_chart', feature: locked ? 'breakdown_tab_locked' : 'breakdown_tab', action: 'select', item: tab });
+    }
     // Save current position before leaving
     scrollOffsets.current[breakdownTab] = scrollOffsets.current[breakdownTab] ?? 0;
     // Switch tab
@@ -60,7 +72,7 @@ export default function BirthChartScreen() {
     });
   }
 
-  const { hasFullAccess, loading: rcLoading } = useRevenueCat();
+  const { hasFullAccess, loading: rcLoading, presentPaywall } = useRevenueCat();
   const { markReady } = useScreenPerfLog('/(home)/birth-chart-view');
   // Not `rcLoading || hasFullAccess`, as elsewhere: here the free and premium
   // breakdowns are one Firestore doc (horoscope-context), so assuming premium
@@ -92,6 +104,14 @@ export default function BirthChartScreen() {
   const isBreakdownLoading = rcLoading || (isPremium
     ? (!premiumBreakdown && premiumBreakdownGenerating)
     : (!breakdown && breakdownGenerating));
+
+  // Once per visit: the breakdown was on screen, not a skeleton.
+  const breakdownViewed = useRef(false);
+  useEffect(() => {
+    if (breakdownViewed.current || isBreakdownLoading || !activeBreakdown) return;
+    breakdownViewed.current = true;
+    Events.natalBreakdownViewed({ premium: isPremium });
+  }, [isBreakdownLoading, activeBreakdown, isPremium]);
 
   // ─── Render helpers ─────────────────────────────────────────────────────────
 
@@ -225,7 +245,10 @@ export default function BirthChartScreen() {
           message={messages[breakdownTab]}
           // PremiumUnlock only draws its button when given this — without it the
           // card was a dead end for every free user
-          onUnlock={() => router.push('/(settings)/paywall')}
+          onUnlock={() => {
+            trackInteraction({ screen: 'birth_chart', feature: 'premium_unlock', action: 'unlock', item: breakdownTab });
+            void presentPaywall();
+          }}
         />
       );
     }
@@ -256,7 +279,7 @@ export default function BirthChartScreen() {
               <Pressable
                 key={tab}
                 style={[styles.chartTab, chartTab === tab && styles.chartTabActive]}
-                onPress={() => setChartTab(tab)}
+                onPress={() => selectChartTab(tab)}
                 // Selection was only an underline
                 accessibilityRole="tab"
                 accessibilityState={{ selected: chartTab === tab }}

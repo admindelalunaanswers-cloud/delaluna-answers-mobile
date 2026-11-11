@@ -205,22 +205,26 @@ export async function getSubscriptionHistory(): Promise<{
 
 /**
  * Returns the offering ID and required entitlement ID to use when presenting
- * the subscription paywall, based on whether the user has ever subscribed.
+ * the subscription paywall.
  *
- * - First-time users  → sale (free-trial-paywall) / Pro-Trial
- * - Returning users   → default (Branded Paywall) / Delaluna Answers Pro
+ * Everyone gets the default (Branded Paywall) offering / Delaluna Answers Pro.
+ *
+ * The free trial is paused. First-time users used to be routed to the
+ * FREE_TRIAL_OFFERING_ID ("sale") offering with FREE_TRIAL_ENTITLEMENT_ID
+ * ("Pro-Trial"). To bring it back, restore that branch:
+ *
+ *   if (!hasEverHeldEntitlement(customerInfo)) {
+ *     return { offeringId: FREE_TRIAL_OFFERING_ID, entitlementId: FREE_TRIAL_ENTITLEMENT_ID };
+ *   }
+ *
+ * The constants stay exported because "Pro-Trial" is still a known entitlement
+ * (past trial records, admin grants — KNOWN_ENTITLEMENT_IDS in functions).
  */
-export function resolvePaywallOffering(customerInfo: CustomerInfo): {
+export function resolvePaywallOffering(_customerInfo: CustomerInfo): {
   offeringId: string;
   entitlementId: string;
 } {
-  if (hasEverHeldEntitlement(customerInfo)) {
-    return { offeringId: "default", entitlementId: ENTITLEMENT_ID };
-  }
-  return {
-    offeringId: FREE_TRIAL_OFFERING_ID,
-    entitlementId: FREE_TRIAL_ENTITLEMENT_ID,
-  };
+  return { offeringId: "default", entitlementId: ENTITLEMENT_ID };
 }
 
 // ─── Offerings & products ────────────────────────────────────────────────────

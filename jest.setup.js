@@ -119,6 +119,18 @@ jest.mock('@react-native-firebase/crashlytics', () => ({
   setUserId: jest.fn(),
 }));
 
+// analytics.service imports this at module scope, and the screens that track
+// interactions import analytics.service — so any of their tests reaches it.
+// Assert on `logEvent` here to check what a screen reported.
+jest.mock('@react-native-firebase/analytics', () => ({
+  getAnalytics: jest.fn(() => ({})),
+  logEvent: jest.fn(() => Promise.resolve()),
+  setAnalyticsCollectionEnabled: jest.fn(() => Promise.resolve()),
+  setUserId: jest.fn(() => Promise.resolve()),
+  setUserProperty: jest.fn(() => Promise.resolve()),
+  setUserProperties: jest.fn(() => Promise.resolve()),
+}));
+
 jest.mock('expo-device', () => ({
   isDevice: true,
 }));

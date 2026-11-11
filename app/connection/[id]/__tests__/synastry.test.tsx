@@ -1,6 +1,7 @@
 import React from 'react';
-import { AccessibilityInfo } from 'react-native';
-import { act, render, screen } from '@testing-library/react-native';
+import { AccessibilityInfo, ScrollView } from 'react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { logEvent } from '@react-native-firebase/analytics';
 
 import SynastryAnalysisScreen, { aspectLabel } from '@/app/connection/[id]/synastry';
 import { fetchSynastryReading, subscribeToSynastryReading } from '@/src/services/synastry-reading.service';
@@ -100,5 +101,59 @@ describe('SynastryAnalysisScreen', () => {
     await act(async () => {});
 
     expect(announce).not.toHaveBeenCalledWith('Synastry reading ready.');
+  });
+
+  describe('analytics', () => {
+    const events = (name: string) =>
+      (logEvent as jest.Mock).mock.calls.filter(([, n]) => n === name).map(([, , p]) => p);
+
+    /** The section's own View — the nearest ancestor of its heading with an onLayout. */
+    const sectionOf = (heading: string) => {
+      let node: any = screen.getByRole('header', { name: heading });
+      while (node && !node.props.onLayout) node = node.parent;
+      return node;
+    };
+    const layoutEvent = (y: number, height: number) => ({ nativeEvent: { layout: { x: 0, y, width: 300, height } } });
+
+    it('reports reading sections as they scroll into view, once each', async () => {
+      (fetchSynastryReading as jest.Mock).mockResolvedValue({
+        result: { loveLanguage: 'Words.', conflictStyle: 'Calm.', longevity: 'Long.' },
+      });
+      render(<SynastryAnalysisScreen />);
+      await act(async () => {});
+
+      const scroller = screen.UNSAFE_getByType(ScrollView);
+      act(() => {
+        fireEvent(scroller, 'layout', layoutEvent(0, 700));
+        fireEvent(sectionOf('KEY ASPECT'), 'layout', layoutEvent(400, 200));
+        fireEvent(sectionOf('LOVE LANGUAGE'), 'layout', layoutEvent(800, 200));
+        fireEvent(sectionOf('CONFLICT STYLE'), 'layout', layoutEvent(1100, 200));
+        fireEvent(sectionOf('LONGEVITY'), 'layout', layoutEvent(1400, 200));
+      });
+      act(() => {
+        fireEvent.scroll(scroller, { nativeEvent: { contentOffset: { x: 0, y: 500 } } });
+        fireEvent.scroll(scroller, { nativeEvent: { contentOffset: { x: 0, y: 0 } } });
+        fireEvent.scroll(scroller, { nativeEvent: { contentOffset: { x: 0, y: 500 } } });
+      });
+
+      expect(events('ui_interaction')).toEqual([
+        { screen: 'synastry', feature: 'reading_section', action: 'view', item: 'key_aspect' },
+        { screen: 'synastry', feature: 'reading_section', action: 'view', item: 'love_language' },
+        { screen: 'synastry', feature: 'reading_section', action: 'view', item: 'conflict_style' },
+      ]);
+    });
+
+    it('does not count sections that are still loading', async () => {
+      (fetchSynastryReading as jest.Mock).mockResolvedValue({ result: null, pending: true });
+      render(<SynastryAnalysisScreen />);
+      await act(async () => {});
+
+      act(() => {
+        fireEvent(screen.UNSAFE_getByType(ScrollView), 'layout', layoutEvent(0, 2000));
+        fireEvent(sectionOf('LOVE LANGUAGE'), 'layout', layoutEvent(800, 200));
+      });
+
+      expect(events('ui_interaction')).toEqual([]);
+    });
   });
 });

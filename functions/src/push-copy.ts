@@ -13,7 +13,11 @@
  * produces. Keep the variation in the body.
  */
 
-/** Sunday connection update and Thursday weekend romance report. */
+/**
+ * "Connection Report Ready" — a report the user asked for by creating or
+ * editing a connection. The scheduled Sunday / Friday reports have their own
+ * pools below.
+ */
 export const COMPATIBILITY_BODIES: readonly string[] = [
   "True love or just delulu? Your compatibility scores got updated.",
   "The compatibility scores just dropped.",
@@ -56,6 +60,44 @@ export const COMPATIBILITY_BODIES: readonly string[] = [
   "These scores aren't the cutest in my book.",
   "Lowkey kinda liking these scores. Look…",
   "Time to deep dive on these compatibility scores.",
+];
+
+/** Sunday — the weekday connection report (refreshConnectionReports). */
+export const WEEKDAY_REPORT_BODIES: readonly string[] = [
+  "The compatibility scores for the week are OUT.",
+  "New week, new scores. See where you two stand.",
+  "Check these new scores before you reply to that text.",
+  "Don't trust this week. Check these scores.",
+  "The truth on your scores this week is kind of harsh.",
+  "You won't believe who is getting savage this week.",
+  "Your week's scores dropped and honestly? Mm..",
+  "High chemistry, low compatibility this week.",
+  "Your weekday game plan for them just dropped.",
+  "Monday's coming. Know who's worth the energy first.",
+  "Who's texting back on a Tuesday? The scores know.",
+  "This week's advice said lock in, not lock eyes.",
+  "Midweek drama forecast: unlocked. Tap in.",
+  "The scores for the week said someone moving shady.",
+  "A real simp this week. Look at these fresh numbers.",
+];
+
+/** Friday — the weekend romance report (refreshConnectionReports). */
+export const WEEKEND_REPORT_BODIES: readonly string[] = [
+  "Your weekend compatibility reveals a massive blind spot.",
+  "Want to know your biggest green flag this weekend? Tap in.",
+  "Before you make weekend plans, read this.",
+  "Date night or do not disturb? Your weekend report is in.",
+  "The weekend scores just dropped, and YIKES.",
+  "Read this before you text them \"wyd\" tonight.",
+  "Weekend forecast: high attraction, zero peace.",
+  "Your weekend romance report is giving… a lot.",
+  "Cuffed or canceled by Sunday? Check the scores.",
+  "This weekend's chemistry is NOT playing. Tap in.",
+  "Don't crash out this weekend. Read your report first.",
+  "Weekend plans with them? The scores have notes.",
+  "The weekend said let them fumble you.",
+  "Lowkey kinda liking these weekend scores. Look…",
+  "Is it a date or a situationship? Your weekend report knows.",
 ];
 
 /** `notifyBreakdownReady` — the natal chart breakdown finished generating. */

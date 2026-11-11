@@ -36,7 +36,7 @@ import { moderateScale, scale, verticalScale } from "@/src/utils/responsive";
 import { ThemedText } from "@/src/components/themed-text";
 import { C } from "@/src/constants/theme";
 import { buildCompatibilityPrompt } from "@/src/prompts/compatibility-prompt";
-import { Events } from "@/src/services/analytics.service";
+import { Events, toAnalyticsValue, trackInteraction } from "@/src/services/analytics.service";
 import { measure } from "@/src/services/performance.service";
 import { recordError } from "@/src/services/crashlytics.service";
 import { logger } from "@/src/utils/logger";
@@ -196,6 +196,7 @@ export default function SingleConnectionCreateScreen() {
     Object.values(person).some((val) => val != null && String(val).trim() !== "");
 
   const handleCancel = () => {
+    trackInteraction({ screen: 'connection_new', feature: 'cancel', action: 'tap' });
     const hasFirstData = personHasData(firstPerson);
     const hasSecondData = personHasData(secondPerson);
     if ((isMe && !hasSecondData) || (!isMe && !hasFirstData && !hasSecondData)) {
@@ -205,8 +206,19 @@ export default function SingleConnectionCreateScreen() {
         "Discard Changes?",
         "You have unsaved changes. Are you sure you want to leave?",
         [
-          { text: "Keep Editing", style: "cancel" },
-          { text: "Discard", style: "destructive", onPress: () => router.replace("/(main)/connections") },
+          {
+            text: "Keep Editing",
+            style: "cancel",
+            onPress: () => trackInteraction({ screen: 'connection_new', feature: 'discard_alert', action: 'tap', item: 'keep_editing' }),
+          },
+          {
+            text: "Discard",
+            style: "destructive",
+            onPress: () => {
+              trackInteraction({ screen: 'connection_new', feature: 'discard_alert', action: 'tap', item: 'discard' });
+              router.replace("/(main)/connections");
+            },
+          },
         ]
       );
     }
@@ -228,6 +240,8 @@ export default function SingleConnectionCreateScreen() {
           ? { "First Name": firstNameRef, "Last Name": firstLastNameRef, "Place of Birth": firstLocationRef }
           : { "First Name": secondNameRef, "Last Name": secondLastNameRef, "Place of Birth": secondLocationRef };
       const target = refs[missing[0]];
+      // Which required field stops people — its name, never what was typed.
+      trackInteraction({ screen: 'connection_new', feature: 'save_blocked', action: 'tap', item: `${label}_${missing[0]}` });
       Alert.alert(
         "Missing Information",
         `${label}: please enter ${missing.join(", ")}.`,
@@ -240,6 +254,7 @@ export default function SingleConnectionCreateScreen() {
 
   const handleSaveConnection = async () => {
     dismissAllSuggestions();
+    trackInteraction({ screen: 'connection_new', feature: 'save', action: 'tap' });
     setLoading(true);
 
     
@@ -247,6 +262,7 @@ export default function SingleConnectionCreateScreen() {
       if (!isMe && !validatePerson(firstPerson, "First Person")) { setLoading(false); return; }
       if (!validatePerson(secondPerson, "Second Person")) { setLoading(false); return; }
       if (!relationshipType) {
+        trackInteraction({ screen: 'connection_new', feature: 'save_blocked', action: 'tap', item: 'relationship_type' });
         Alert.alert("Missing Relationship Type", "Please select a relationship type.");
         setLoading(false);
         return;
@@ -360,7 +376,10 @@ export default function SingleConnectionCreateScreen() {
         { attributes: { is_me: String(isMe) } },
       );
 
-      Events.connectionCreated();
+      Events.connectionCreated({
+        first_person: isMe ? 'me' : 'someone_else',
+        relationship: toAnalyticsValue(relationshipType!),
+      });
 
       router.replace({
         pathname: "/connection/[id]",
@@ -432,7 +451,14 @@ export default function SingleConnectionCreateScreen() {
               <ThemedView style={styles.section}>
                 <ThemedView style={styles.userRow}>
                   <ThemedText style={styles.titleText} accessibilityRole="header">{item.title}</ThemedText>
-                  {item.toggle && <DelalunaToggle label="Use my chart" value={isMe} onToggle={setIsMe} />}
+                  {item.toggle && <DelalunaToggle
+                      label="Use my chart"
+                      value={isMe}
+                      onToggle={(next) => {
+                        trackInteraction({ screen: 'connection_new', feature: 'use_my_chart', action: 'select', item: next ? 'on' : 'off' });
+                        setIsMe(next);
+                      }}
+                    />}
                 </ThemedView>
 
                 <ThemedView style={styles.divider} />
@@ -552,7 +578,13 @@ export default function SingleConnectionCreateScreen() {
                         <TouchableOpacity
                           key={option}
                           style={[styles.relationshipButton, relationshipType === option && styles.relationshipSelected]}
-                          onPress={() => { dismissAllSuggestions(); setRelationshipType(option); }}
+                          onPress={() => {
+                            dismissAllSuggestions();
+                            if (option !== relationshipType) {
+                              trackInteraction({ screen: 'connection_new', feature: 'relationship_type', action: 'select', item: option });
+                            }
+                            setRelationshipType(option);
+                          }}
                           activeOpacity={0.8}
                           // Image-only: the option names existed only in code, and this
                           // field is required to save — a screen-reader user couldn't finish

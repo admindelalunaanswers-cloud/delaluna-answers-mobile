@@ -5,6 +5,7 @@ import { onSnapshot } from 'firebase/firestore';
 
 import ConnectionViewScreen from '@/app/connection/[id]';
 import { calculateNatalChart } from '@/src/services/astroEngine';
+import { logEvent } from '@react-native-firebase/analytics';
 
 jest.mock('@/firebaseConfig', () => ({ db: {} }));
 jest.mock('expo-router', () => ({
@@ -122,5 +123,52 @@ describe('ConnectionViewScreen', () => {
       fireEvent.press(screen.getByRole('button', { name: 'View Synastry Analysis' }));
     });
     expect(alertSpy).toHaveBeenCalledWith("Can't open synastry", expect.any(String));
+  });
+
+  describe('analytics', () => {
+    const events = (name: string) =>
+      (logEvent as jest.Mock).mock.calls.filter(([, n]) => n === name).map(([, , p]) => p);
+
+    it('counts the report as viewed once it arrives, and only once', async () => {
+      render(<ConnectionViewScreen />);
+      await deliver({ ...PEOPLE, status: { state: 'pending' } });
+      expect(events('connection_report_viewed')).toHaveLength(0);
+
+      await deliver({ ...PEOPLE, compatibility: REPORT });
+      await deliver({ ...PEOPLE, compatibility: REPORT });
+      expect(events('connection_report_viewed')).toHaveLength(1);
+    });
+
+    // The item is the app's own definition key, never a name or connection id.
+    it('reports score definitions opening and closing', async () => {
+      render(<ConnectionViewScreen />);
+      await deliver({ ...PEOPLE, compatibility: REPORT });
+
+      fireEvent.press(screen.getByRole('button', { name: 'Interest, 78 percent' }));
+      fireEvent.press(screen.getByRole('button', { name: 'Interest, 78 percent' }));
+
+      expect(events('ui_interaction')).toEqual([
+        { screen: 'connection_report', feature: 'score_definition', action: 'expand', item: 'interest' },
+        { screen: 'connection_report', feature: 'score_definition', action: 'collapse', item: 'interest' },
+      ]);
+    });
+
+    it('reports the synastry and chat buttons', async () => {
+      (calculateNatalChart as jest.Mock).mockRejectedValue(new Error('swisseph'));
+      render(<ConnectionViewScreen />);
+      await deliver({ ...PEOPLE, compatibility: REPORT });
+
+      await act(async () => {
+        fireEvent.press(screen.getByRole('button', { name: 'View Synastry Analysis' }));
+      });
+      fireEvent.press(screen.getByRole('button', { name: 'Talk to Delaluna About It' }));
+
+      expect(events('ui_interaction')).toEqual([
+        { screen: 'connection_report', feature: 'synastry', action: 'tap' },
+        { screen: 'connection_report', feature: 'talk_to_delaluna', action: 'tap' },
+      ]);
+      const sent = JSON.stringify((logEvent as jest.Mock).mock.calls);
+      expect(sent).not.toMatch(/c1|Luna|Sol/);
+    });
   });
 });
