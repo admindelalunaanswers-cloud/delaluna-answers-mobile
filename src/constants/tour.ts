@@ -12,7 +12,7 @@ import type { Href } from 'expo-router';
  * Copy can change freely. A step's `target` must match a `useTourTarget` /
  * `<TourTarget>` id mounted on its `route`; a target that never mounts is not
  * an error, the card just shows without a spotlight. Keep `id` values stable
- * and snake_case: they go to analytics as `step_id`.
+ * and snake_case. The tour reports nothing to analytics — see tour-context.
  */
 
 /** Stored on this device once the tour is finished, skipped or declined. */
@@ -27,8 +27,10 @@ export const TOUR_RELEASED_AT = Date.UTC(2026, 10, 8);
 /** Ids of the elements the tour can spotlight. */
 export const TOUR_TARGETS = {
   homeSigns: 'home-signs',
+  homeNatalChart: 'home-natal-chart',
   homeDateSwitcher: 'home-date-switcher',
   homeCards: 'home-cards',
+  homeMessageBottle: 'home-message-bottle',
   tabConnections: 'tab-connections',
   tabTransits: 'tab-transits',
   chatModeToggle: 'chat-mode-toggle',
@@ -46,16 +48,25 @@ export interface TourStep {
   /** Stable, snake_case — analytics `step_id`. */
   id: string;
   target: TourTargetId;
-  /** The tab the target lives on, as `usePathname()` reports it. */
-  route: '/' | '/chat';
-  /** `circle` for icons (the tab bar), `rounded` for regions. */
+  /** The screen the step opens, as `usePathname()` reports it. */
+  route: '/' | '/connections' | '/transits' | '/chat';
+  /** `circle` for icons (the tab bar, the avatar), `rounded` for regions. */
   shape: 'rounded' | 'circle';
+  /**
+   * Space between the target and the ring, in points. Defaults to 6 for a
+   * circle and 8 for a region. The tab targets are just the icon, so they need
+   * more to read as the whole tab.
+   */
+  padding?: number;
   title: string;
   body: string;
   chips?: readonly TourChip[];
   /** Small print under the body. */
   note?: string;
 }
+
+/** Tab icons are ~28pt; this rings icon and label together (~60pt across). */
+const TAB_SPOTLIGHT_PADDING = 16;
 
 export const TOUR_STEPS: readonly TourStep[] = [
   {
@@ -64,15 +75,24 @@ export const TOUR_STEPS: readonly TourStep[] = [
     route: '/',
     shape: 'rounded',
     title: 'Your Big Three',
-    body: 'Sun, Moon and Rising, worked out from your exact birth time and place. Tap here any time to open your full birth chart and its breakdown.',
+    body: 'Sun, Moon and Rising, worked out from your exact birth time and place. Together they sketch who you are, how you feel and how others see you.',
+  },
+  {
+    id: 'natal_chart',
+    target: TOUR_TARGETS.homeNatalChart,
+    route: '/',
+    shape: 'rounded',
+    title: 'Your natal chart',
+    body: 'Every planet and house at the moment you were born, with a breakdown of what each placement means for you. Tap Natal Chart to open it.',
+    note: "If it says Natal Chart Loading, your breakdown is still being written. We'll send you a notification when it's ready.",
   },
   {
     id: 'date_switcher',
     target: TOUR_TARGETS.homeDateSwitcher,
     route: '/',
     shape: 'rounded',
-    title: 'Yesterday, today, tomorrow',
-    body: 'A new horoscope every day. Switch days here to look back or read ahead.',
+    title: 'Your daily horoscope',
+    body: "A new reading every day, right here on Home: a quote, advice, your do's and don'ts, and an affirmation. Use the arrows to look back or read ahead.",
     note: 'Yesterday and tomorrow are part of Premium.',
   },
   {
@@ -84,10 +104,20 @@ export const TOUR_STEPS: readonly TourStep[] = [
     body: 'Fresh tarot cards every day. Tap to turn them over, then read what they mean for you.',
   },
   {
+    id: 'message_bottle',
+    target: TOUR_TARGETS.homeMessageBottle,
+    route: '/',
+    shape: 'rounded',
+    title: 'Message in a Bottle',
+    body: "Something you need to let go of? Write it here and send it out to the universe.",
+    note: "It isn't saved or shared anywhere. It's just for you.",
+  },
+  {
     id: 'connections',
     target: TOUR_TARGETS.tabConnections,
-    route: '/',
+    route: '/connections',
     shape: 'circle',
+    padding: TAB_SPOTLIGHT_PADDING,
     title: 'See how you connect',
     body: "Add a partner, friend or crush with their birth details. Their compatibility report refreshes for the week, and again for the weekend.",
     chips: [
@@ -99,8 +129,9 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: 'transits',
     target: TOUR_TARGETS.tabTransits,
-    route: '/',
+    route: '/transits',
     shape: 'circle',
+    padding: TAB_SPOTLIGHT_PADDING,
     title: "This week's planets",
     body: 'See where the planets are moving through your chart this week, house by house, and what it means for you.',
   },
@@ -129,5 +160,5 @@ export type TourFinishCta = 'chat' | 'connection' | 'birth_chart' | 'home';
 export const TOUR_FINISH_LINKS: readonly { cta: Exclude<TourFinishCta, 'home'>; label: string; route: Href }[] = [
   { cta: 'chat', label: 'Ask your first question', route: '/chat' },
   { cta: 'connection', label: 'Add your first connection', route: '/connection/new' },
-  { cta: 'birth_chart', label: 'Open my birth chart', route: '/(home)/birth-chart-view' },
+  { cta: 'birth_chart', label: 'Open my natal chart', route: '/(home)/birth-chart-view' },
 ];
