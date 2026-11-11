@@ -27,8 +27,8 @@ describe('createTourTargetRegistry', () => {
 
   it('forgets an id once its last mount is gone', () => {
     const registry = createTourTargetRegistry();
-    const unregister = registry.register('chat-mode-toggle', entry());
+    const unregister = registry.register('chat-mode-tarot', entry());
     unregister();
-    expect(registry.get('chat-mode-toggle')).toBeUndefined();
+    expect(registry.get('chat-mode-tarot')).toBeUndefined();
   });
 });
