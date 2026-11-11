@@ -27,6 +27,7 @@ import { usePortraitLock } from '@/src/hooks/use-portrait-lock';
 import { useTheme } from '@/src/hooks/use-theme';
 import { UpdateRequiredScreen } from '@/src/components/update-required-screen';
 import { logScreenView, routeKeyForSegments, screenLabelForPath, setUserId } from '@/src/services/analytics.service';
+import { CHAT_SCREEN, setForegroundRoute } from '@/src/utils/foreground-push-policy';
 import {
   installGlobalErrorHandler,
   logBreadcrumb,
@@ -64,6 +65,14 @@ function AuthGate() {
   // pathname too, so moving between two connections still counts as a view.
   // Also drop a Crashlytics breadcrumb so crash reports show the last screens.
   const routeKey = routeKeyForSegments(segments);
+  // Lets the notification handler hold back a chat-reply push while the chat
+  // is the screen in front (see foreground-push-policy.ts).
+  // Cleared on unmount so a stale "/(main)/chat" can't outlive the gate — a
+  // reply arriving mid sign-out would otherwise be held back with no chat up.
+  useEffect(() => {
+    setForegroundRoute(routeKey);
+    return () => setForegroundRoute(null);
+  }, [routeKey]);
   useEffect(() => {
     if (!pathname) return;
     const label = screenLabelForPath(routeKey);
@@ -102,7 +111,7 @@ function AuthGate() {
       if (!screen || !authUser) return;
       let path = String(screen);
       if (data.connectionId) path = path.replace('[id]', String(data.connectionId));
-      if (path.includes('chat')) {
+      if (path === CHAT_SCREEN) {
         require('@/src/stores/chat-store').ChatStore.setFromNotification(true);
       }
       router.push(path as any);
