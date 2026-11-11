@@ -20,6 +20,7 @@ import { HoroscopeProvider, useHoroscope } from '@/src/context/horoscope-context
 import { UserProvider, useUser } from '@/src/context/user-context';
 import { RevenueCatProvider } from '@/src/context/revenuecat-context';
 import { AdminProvider } from '@/src/context/admin-context';
+import { TourProvider } from '@/src/context/tour-context';
 import { useColorScheme } from '@/src/hooks/use-color-scheme';
 import { useMinVersion } from '@/src/hooks/use-min-version';
 import { usePortraitLock } from '@/src/hooks/use-portrait-lock';
@@ -319,7 +320,9 @@ export default function RootLayout() {
                 <AdminProvider>
                   <ThemeProvider>
                     <HoroscopeProvider>
-                      <AuthGate />
+                      <TourProvider>
+                        <AuthGate />
+                      </TourProvider>
                     </HoroscopeProvider>
                   </ThemeProvider>
                 </AdminProvider>

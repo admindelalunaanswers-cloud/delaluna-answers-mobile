@@ -1,0 +1,199 @@
+import React from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
+
+import TourOverlay from '@/src/components/tour/tour-overlay';
+import { TOUR_STEPS } from '@/src/constants/tour';
+import { TourProvider } from '@/src/context/tour-context';
+import { TOUR_SEEN_KEY } from '@/src/utils/tour-policy';
+
+// Same object every render — see "Mocked hooks" in CLAUDE.md.
+jest.mock('@/src/context/user-context', () => {
+  const value = {
+    authUser: { uid: 'u1', emailVerified: true },
+    userDoc: { firstName: 'Maya', createdAt: new Date() },
+  };
+  return { useUser: () => value };
+});
+
+let mockPathname = '/';
+jest.mock('expo-router', () => ({
+  usePathname: () => mockPathname,
+  router: { navigate: jest.fn() },
+}));
+
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
+
+// Reduced motion: no fades to wait on.
+jest.mock('@/src/context/accessibility-context', () => ({
+  useReducedMotion: () => true,
+  useFontScale: () => 1,
+}));
+
+jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
+
+jest.mock('react-native-svg', () => {
+  const { View } = jest.requireActual('react-native');
+  return { __esModule: true, default: View, Path: View, Circle: View, Polyline: View };
+});
+
+// The tour reports nothing, and switches reporting off while it drives the app.
+const mockSetSuppressed = jest.fn();
+jest.mock('@/src/services/analytics.service', () => ({
+  setAnalyticsSuppressed: (on: boolean) => mockSetSuppressed(on),
+}));
+const suppressedNow = () => mockSetSuppressed.mock.calls.at(-1)?.[0];
+
+async function renderTour() {
+  render(
+    <TourProvider>
+      <TourOverlay />
+    </TourProvider>,
+  );
+  // The storage read that decides the offer.
+  await act(async () => {});
+}
+
+/** Give the overlay a size, then let the target search give up (nothing is registered here). */
+async function showStep() {
+  fireEvent(screen.getByTestId('tour-root'), 'layout', {
+    nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 844 } },
+  });
+  await act(async () => {
+    jest.advanceTimersByTime(5000);
+  });
+}
+
+describe('TourOverlay', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    mockPathname = '/';
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
+    (AsyncStorage.setItem as jest.Mock).mockResolvedValue(undefined);
+    mockSetSuppressed.mockClear();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('offers the tour to a new account on Home, by name', async () => {
+    await renderTour();
+    expect(screen.getByRole('header', { name: 'Welcome to Delaluna, Maya' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Show me around' })).toBeTruthy();
+    expect(suppressedNow()).not.toBe(true);
+  });
+
+  // A push that deep-links to Chat lands there first; the offer waits for Home.
+  it('keeps the offer off every screen but Home', async () => {
+    mockPathname = '/chat';
+    await renderTour();
+    expect(screen.queryByText('Show me around')).toBeNull();
+  });
+
+  it('stays away once it has been seen on this device', async () => {
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValue('constellation_v1');
+    await renderTour();
+    expect(screen.queryByText('Show me around')).toBeNull();
+  });
+
+  it('records a decline so it is not offered again', async () => {
+    await renderTour();
+    fireEvent.press(screen.getByRole('button', { name: "I'll explore on my own" }));
+    await act(async () => {});
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(TOUR_SEEN_KEY, 'constellation_v1');
+    expect(screen.queryByText('Show me around')).toBeNull();
+  });
+
+  it('walks the steps, names each one with its position, and goes back', async () => {
+    await renderTour();
+    fireEvent.press(screen.getByRole('button', { name: 'Show me around' }));
+    await showStep();
+
+    const total = TOUR_STEPS.length;
+    expect(screen.getByRole('header', { name: `Step 1 of ${total}. ${TOUR_STEPS[0].title}` })).toBeTruthy();
+    // No Back on the first step.
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Next' }));
+    await showStep();
+    expect(screen.getByRole('header', { name: `Step 2 of ${total}. ${TOUR_STEPS[1].title}` })).toBeTruthy();
+    // Sections that refresh say when. The natal chart never changes, so no schedule.
+    expect(TOUR_STEPS[1].schedule).toBeUndefined();
+    expect(TOUR_STEPS.find((s) => s.id === 'date_switcher')?.schedule).toBe('New every day at midnight');
+
+    fireEvent.press(screen.getByRole('button', { name: 'Back' }));
+    await showStep();
+    expect(screen.getByRole('header', { name: `Step 1 of ${total}. ${TOUR_STEPS[0].title}` })).toBeTruthy();
+  });
+
+  it('shows when a section refreshes', async () => {
+    await renderTour();
+    fireEvent.press(screen.getByRole('button', { name: 'Show me around' }));
+    const index = TOUR_STEPS.findIndex((s) => s.id === 'date_switcher');
+    for (let i = 0; i < index; i++) {
+      await showStep();
+      fireEvent.press(screen.getByRole('button', { name: 'Next' }));
+    }
+    await showStep();
+    expect(screen.getByText('New every day at midnight')).toBeTruthy();
+  });
+
+  // Display only — the overlay imports nothing that can send or bill a chat.
+  it('shows a scripted tarot example with its spread, face up under reduced motion', async () => {
+    await renderTour();
+    fireEvent.press(screen.getByRole('button', { name: 'Show me around' }));
+    const index = TOUR_STEPS.findIndex((s) => s.id === 'chat_tarot');
+    for (let i = 0; i < index; i++) {
+      await showStep();
+      fireEvent.press(screen.getByRole('button', { name: 'Next' }));
+    }
+    await showStep();
+    expect(screen.getByLabelText('Example question: What energies are influencing me right now?')).toBeTruthy();
+    expect(screen.getByRole('image', { name: 'The Sun' })).toBeTruthy();
+    expect(screen.getByRole('image', { name: 'Ace of Swords, reversed' })).toBeTruthy();
+    expect(screen.getByRole('image', { name: 'Learning to Forgive' })).toBeTruthy();
+  });
+
+  // A target that never mounts (a screen that failed to load) must not strand
+  // the user behind a dimmed screen with no card.
+  it('shows the card without a spotlight when the target is missing', async () => {
+    await renderTour();
+    fireEvent.press(screen.getByRole('button', { name: 'Show me around' }));
+    await showStep();
+    expect(screen.getByRole('button', { name: 'Skip tour' })).toBeTruthy();
+  });
+
+  it('skips from any step and records it', async () => {
+    await renderTour();
+    fireEvent.press(screen.getByRole('button', { name: 'Show me around' }));
+    await showStep();
+    expect(suppressedNow()).toBe(true);
+    fireEvent.press(screen.getByRole('button', { name: 'Skip tour' }));
+    await act(async () => {});
+
+    expect(suppressedNow()).toBe(false);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(TOUR_SEEN_KEY, 'constellation_v1');
+    expect(screen.queryByRole('button', { name: 'Skip tour' })).toBeNull();
+  });
+
+  // No "you're done" screen: Finish on the last step closes the tour outright.
+  it('closes on Finish, records it, and turns reporting back on', async () => {
+    await renderTour();
+    fireEvent.press(screen.getByRole('button', { name: 'Show me around' }));
+    for (let i = 0; i < TOUR_STEPS.length; i++) {
+      await showStep();
+      expect(suppressedNow()).toBe(true);
+      const label = i === TOUR_STEPS.length - 1 ? 'Finish' : 'Next';
+      fireEvent.press(screen.getByRole('button', { name: label }));
+    }
+    await act(async () => {});
+
+    expect(screen.queryByTestId('tour-root')).toBeNull();
+    expect(screen.queryByText(/all set/)).toBeNull();
+    expect(suppressedNow()).toBe(false);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(TOUR_SEEN_KEY, 'constellation_v1');
+  });
+});
