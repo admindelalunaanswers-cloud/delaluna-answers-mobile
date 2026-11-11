@@ -151,6 +151,8 @@ paywall opens.
 | `connection_new` | `discard_alert` | `tap` | `discard`, `keep_editing` |
 | `connection_edit` | `delete_connection` | `tap` | none (the confirmed delete is `connection_deleted`) |
 | `synastry` | `reading_section` | `view` | `key_aspect`, `love_language`, `conflict_style`, `longevity` |
+| `tour` | `offer` | `tap` | `start`, `decline` |
+| `tour` | the step id (`big_three` … `profile`, from `TOUR_STEPS`) | `tap` | `next`, `back`, `skip`, `finish` |
 
 `save_blocked` sends the **name** of the first required field that was empty,
 never anything the user typed. Comparing it against `save` shows which field
@@ -381,10 +383,14 @@ many times shouldn't outrank a control most people use once.
 
 ## Known gaps
 
-- **The first-run tour is invisible, by design.** Nothing is logged while it is on
-  screen (`setAnalyticsSuppressed`, set by `src/context/tour-context.tsx`), including
-  the screen views of the tabs it opens itself. A user who takes the tour shows no
-  Connections or Transits view until they open one on their own.
+- **The first-run tour reports only its button presses.** While it is on screen
+  nothing else is logged (`setAnalyticsSuppressed`, set by
+  `src/context/tour-context.tsx`), including the screen views of the tabs it opens
+  itself, so a user who takes the tour shows no Connections or Transits view until
+  they open one on their own. The tour's on-screen buttons go through
+  `trackTourButton`, which bypasses that suppression (`screen: tour` rows above).
+  Android's hardware back button is not reported. To read the funnel: `start` vs
+  `decline` on `offer`; `finish` vs `skip` and where `skip` happens.
 
 - **`purchase_started` is never sent.** RevenueCat's own paywall UI owns the
   buy button, so the app can't see the moment a purchase begins. Funnels go
