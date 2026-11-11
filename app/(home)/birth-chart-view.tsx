@@ -72,7 +72,7 @@ export default function BirthChartScreen() {
     });
   }
 
-  const { hasFullAccess, loading: rcLoading } = useRevenueCat();
+  const { hasFullAccess, loading: rcLoading, presentPaywall } = useRevenueCat();
   const { markReady } = useScreenPerfLog('/(home)/birth-chart-view');
   // Not `rcLoading || hasFullAccess`, as elsewhere: here the free and premium
   // breakdowns are one Firestore doc (horoscope-context), so assuming premium
@@ -247,7 +247,7 @@ export default function BirthChartScreen() {
           // card was a dead end for every free user
           onUnlock={() => {
             trackInteraction({ screen: 'birth_chart', feature: 'premium_unlock', action: 'unlock', item: breakdownTab });
-            router.push('/(settings)/paywall');
+            void presentPaywall();
           }}
         />
       );

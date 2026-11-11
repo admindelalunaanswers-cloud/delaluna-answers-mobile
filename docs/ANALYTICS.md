@@ -72,8 +72,13 @@ connection into its own screen and send connection ids to GA4.
 | `/connection/[id]` | Connection Report |
 | `/connection/[id]/edit` | Edit Connection |
 | `/connection/[id]/synastry` | Synastry |
-| `/(settings)/…` | Profile, Edit Profile, Paywall, Accessibility, Purchased Reports, Select Avatar, Update Password, Update Theme, Admin |
+| `/(settings)/…` | Profile, Edit Profile, Paywall¹, Accessibility, Purchased Reports, Select Avatar, Update Password, Update Theme, Admin |
 | `/(auth)/…`, `/(startup)/welcome`, `/(util)/…` | Login, Sign Up, Verify Email, Forgot Password, Welcome, Loading, Feedback, Support |
+
+¹ Since 2026-11-11 no in-app button opens the paywall through this route. The
+native paywall is presented over the current screen, so it logs no `screen_view`.
+Count paywall opens with `paywall_viewed`; a funnel built on the `Paywall`
+screen view drops to zero from that release.
 
 A route with no entry in `ROUTE_LABELS` falls back to a prettified version of
 its template, for example `/(settings)/something-new` → "Something New". When
