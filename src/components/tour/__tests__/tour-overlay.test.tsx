@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 import TourOverlay from '@/src/components/tour/tour-overlay';
-import { TOUR_STEPS } from '@/src/constants/tour';
+import { TOUR_RELEASED_AT, TOUR_STEPS } from '@/src/constants/tour';
 import { TourProvider } from '@/src/context/tour-context';
 import { TOUR_SEEN_KEY } from '@/src/utils/tour-policy';
 
@@ -69,6 +69,8 @@ async function showStep() {
 describe('TourOverlay', () => {
   beforeEach(() => {
     jest.useFakeTimers();
+    // A day into the tour's release, so the account below is new whatever today is.
+    jest.setSystemTime(TOUR_RELEASED_AT + 86_400_000);
     mockPathname = '/';
     mockUser = makeUser();
     (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { TOUR_RELEASED_AT } from '@/src/constants/tour';
 import { WHATS_NEW, type WhatsNewItem } from '@/src/constants/whats-new';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { useUser } from '@/src/context/user-context';
 import { Events } from '@/src/services/analytics.service';
 import { toDate } from '@/src/utils/firestore-date';
 import { logger } from '@/src/utils/logger';
+import { isNewAccount } from '@/src/utils/tour-policy';
 import {
   decideWhatsNew,
   itemsForAudience,
@@ -79,6 +81,11 @@ export function useWhatsNew(active: boolean) {
           accountCreatedAt: createdAtMs,
           releasedAt: WHATS_NEW.releasedAt,
           itemCount: items.length,
+          newAccount: isNewAccount({
+            accountCreatedAt: createdAtMs,
+            releasedAt: TOUR_RELEASED_AT,
+            now: Date.now(),
+          }),
         });
         if (decision === 'show') setEligible(true);
         else if (decision === 'stamp-silently') markWhatsNewSeen();

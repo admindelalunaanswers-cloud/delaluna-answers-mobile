@@ -52,10 +52,11 @@ export interface WhatsNewRelease {
 // everything user-visible since 3.0.0.
 //
 // Also shipping, deliberately without an item:
-// - The Constellation Tour. It is offered only to accounts created on or after
-//   TOUR_RELEASED_AT, which this sheet stamps silently, so nobody who sees this
-//   sheet is ever offered the tour. Announcing it would point existing users at
-//   Profile → Walkthrough for a tour written for new ones.
+// - The Constellation Tour. It is offered only to new accounts (`isNewAccount`:
+//   created on or after TOUR_RELEASED_AT and under a week old), and this sheet
+//   stamps exactly those silently, so nobody is shown both. Announcing it would
+//   point existing users at Profile → Walkthrough for a tour written for new
+//   ones.
 // - Instant chat send (the question shows before the server answers), and no
 //   chat-reply push while the chat is on screen. Felt, not features.
 // - "Your Birth Chart is Ready" reaching signups who verify later. New

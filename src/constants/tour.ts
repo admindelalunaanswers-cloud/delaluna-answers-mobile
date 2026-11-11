@@ -1,4 +1,4 @@
-import { WHATS_NEW } from '@/src/constants/whats-new';
+import { releaseDate } from '@/src/constants/whats-new';
 
 /**
  * The first-run "Constellation Tour": a spotlight walk across the real screens,
@@ -19,15 +19,13 @@ import { WHATS_NEW } from '@/src/constants/whats-new';
 export const TOUR_ID = 'constellation_v1';
 
 /**
- * Epoch ms. Accounts created before this never get the offer (they already
- * know the app; Profile → Walkthrough is there for them).
- *
- * The What's new sheet's own date, on purpose: the sheet shows to accounts
- * created before it and the tour offers to accounts created on or after it,
- * so the two never open together. A separate date (this was Nov 8 UTC against
- * the sheet's Nov 11) gave accounts created in between both at once.
+ * Epoch ms, start of that day on the device clock. Accounts created on or
+ * after it, and under a week old, are new: they are offered the tour and never
+ * shown the What's new sheet (`isNewAccount` in tour-policy.ts). Accounts
+ * created before it never get the offer (they already know the app; Profile →
+ * Walkthrough is there for them).
  */
-export const TOUR_RELEASED_AT = WHATS_NEW.releasedAt;
+export const TOUR_RELEASED_AT = releaseDate('2026-11-13');
 
 /** Ids of the elements the tour can spotlight. */
 export const TOUR_TARGETS = {

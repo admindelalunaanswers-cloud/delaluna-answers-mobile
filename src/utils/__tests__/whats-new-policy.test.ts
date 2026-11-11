@@ -12,6 +12,7 @@ const decide = (over: Partial<Parameters<typeof decideWhatsNew>[0]>) =>
     accountCreatedAt: BEFORE,
     releasedAt: RELEASED,
     itemCount: 3,
+    newAccount: false,
     ...over,
   });
 
@@ -24,6 +25,14 @@ describe('decideWhatsNew', () => {
     expect(decide({ seenId: '2.9.0' })).toBe('show');
     // Even for an account created after the release: the saved id proves an upgrade.
     expect(decide({ seenId: '2.9.0', accountCreatedAt: AFTER })).toBe('show');
+  });
+
+  // New accounts get the tour instead, whatever this device saved before.
+  it('stands aside for a new account, even after an upgrade', () => {
+    expect(decide({ newAccount: true })).toBe('stamp-silently');
+    expect(decide({ newAccount: true, seenId: '2.9.0' })).toBe('stamp-silently');
+    // Already seen still wins: nothing to stamp.
+    expect(decide({ newAccount: true, seenId: '3.0.0' })).toBe('skip');
   });
 
   // The first build with this feature: every existing user has nothing saved.

@@ -1,6 +1,7 @@
 import {
   cardTop,
   decideTour,
+  isNewAccount,
   overlayPath,
   parseTourSeen,
   spotlightHole,
@@ -9,6 +10,28 @@ import {
 
 const RELEASED = Date.UTC(2026, 10, 8);
 const NOW = RELEASED + 2 * 24 * 60 * 60 * 1000;
+
+describe('isNewAccount', () => {
+  const args = { releasedAt: RELEASED, now: NOW };
+
+  it('is new from the release on, for a week', () => {
+    expect(isNewAccount({ ...args, accountCreatedAt: RELEASED })).toBe(true);
+    // A month on, so a week back is still after the release.
+    const later = RELEASED + 30 * 24 * 60 * 60 * 1000;
+    const at = (createdAt: number) =>
+      isNewAccount({ releasedAt: RELEASED, now: later, accountCreatedAt: createdAt });
+    expect(at(later - TOUR_NEW_ACCOUNT_WINDOW_MS)).toBe(true);
+    expect(at(later - TOUR_NEW_ACCOUNT_WINDOW_MS - 1)).toBe(false);
+  });
+
+  it('is not new from before the release', () => {
+    expect(isNewAccount({ ...args, accountCreatedAt: RELEASED - 1 })).toBe(false);
+  });
+
+  it('treats a pending createdAt as new', () => {
+    expect(isNewAccount({ ...args, accountCreatedAt: null })).toBe(true);
+  });
+});
 
 describe('decideTour', () => {
   const base = { seenId: null, accountCreatedAt: NOW - 60_000, releasedAt: RELEASED, now: NOW };
