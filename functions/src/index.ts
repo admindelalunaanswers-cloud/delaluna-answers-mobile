@@ -2410,6 +2410,8 @@ export const notifyChatReply = onDocumentUpdated(
           CHAT_REPLY_BODIES,
           hashUid(userId, `chat-copy:${event.params.messageId}`),
         ),
+        // Must equal CHAT_SCREEN in src/utils/foreground-push-policy.ts: the
+        // app matches on it to hold this push back while the chat is open.
         data: { screen: "/(main)/chat" },
       },
       "notifyChatReply",

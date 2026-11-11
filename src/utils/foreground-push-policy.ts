@@ -1,5 +1,6 @@
 /**
- * Which pushes to hold back while the app is open.
+ * Which pushes to hold back while the app is open, and the screen the app is
+ * showing that the decision is made against.
  *
  * `notifyChatReply` skips users whose `lastActiveAt` is under 30s old, but that
  * field is only written when the app comes to the foreground — so anyone who
@@ -7,12 +8,18 @@
  * a banner over the very chat that is already showing the answer. The server
  * cannot know which screen is up; the device can, so the decision lives here.
  *
- * Pure and dependency-free on purpose: the root layout writes the route and the
- * notification handler (loaded lazily) reads it, without either importing the
- * other.
+ * Not a pure policy like `whats-new-policy.ts`: it holds one piece of
+ * module-level state, the current route, which the root layout writes and the
+ * notification handler (loaded lazily) reads, without either importing the
+ * other. `shouldSuppressForegroundPush` itself is pure when passed a route.
+ * It has no dependencies, so either side can import it cheaply.
  */
 
-/** The route key (`routeKeyForSegments`) and push `data.screen` of the chat tab. */
+/**
+ * The route key (`routeKeyForSegments`) and push `data.screen` of the chat tab.
+ * Duplicated by hand in `notifyChatReply` (functions/src/index.ts), which the
+ * tests cannot see — change both together.
+ */
 export const CHAT_SCREEN = '/(main)/chat';
 
 let currentRoute: string | null = null;
