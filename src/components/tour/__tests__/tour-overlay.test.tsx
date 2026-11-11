@@ -7,14 +7,14 @@ import { TOUR_STEPS } from '@/src/constants/tour';
 import { TourProvider } from '@/src/context/tour-context';
 import { TOUR_SEEN_KEY } from '@/src/utils/tour-policy';
 
-// Same object every render — see "Mocked hooks" in CLAUDE.md.
-jest.mock('@/src/context/user-context', () => {
-  const value = {
-    authUser: { uid: 'u1', emailVerified: true },
-    userDoc: { firstName: 'Maya', createdAt: new Date() },
-  };
-  return { useUser: () => value };
+// Same object every render — see "Mocked hooks" in CLAUDE.md. Reassigned only
+// to simulate a new user-doc snapshot.
+const makeUser = () => ({
+  authUser: { uid: 'u1', emailVerified: true },
+  userDoc: { firstName: 'Maya', createdAt: new Date() },
 });
+let mockUser = makeUser();
+jest.mock('@/src/context/user-context', () => ({ useUser: () => mockUser }));
 
 let mockPathname = '/';
 jest.mock('expo-router', () => ({
@@ -70,6 +70,7 @@ describe('TourOverlay', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     mockPathname = '/';
+    mockUser = makeUser();
     (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
     (AsyncStorage.setItem as jest.Mock).mockResolvedValue(undefined);
     mockSetSuppressed.mockClear();
@@ -84,6 +85,34 @@ describe('TourOverlay', () => {
     expect(screen.getByRole('header', { name: 'Welcome to Delaluna, Maya' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Show me around' })).toBeTruthy();
     expect(suppressedNow()).not.toBe(true);
+  });
+
+  // A new user-doc snapshot while the storage read is in flight (the pending
+  // createdAt resolving, a lastActiveAt write) cancels that read. The re-run
+  // must still decide, or the tour is never offered.
+  it('still offers the tour when the user doc updates mid-decision', async () => {
+    let resolveRead: (raw: string | null) => void = () => {};
+    (AsyncStorage.getItem as jest.Mock).mockImplementationOnce(
+      () => new Promise((resolve) => { resolveRead = resolve; }),
+    );
+    const tree = (
+      <TourProvider>
+        <TourOverlay />
+      </TourProvider>
+    );
+    const { rerender } = render(tree);
+    await act(async () => {});
+
+    mockUser = { ...mockUser, userDoc: { ...mockUser.userDoc } };
+    rerender(
+      <TourProvider>
+        <TourOverlay />
+      </TourProvider>,
+    );
+    await act(async () => {});
+    await act(async () => resolveRead(null));
+
+    expect(screen.getByRole('button', { name: 'Show me around' })).toBeTruthy();
   });
 
   // A push that deep-links to Chat lands there first; the offer waits for Home.
