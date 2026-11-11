@@ -48,11 +48,22 @@ export interface WhatsNewRelease {
 }
 
 // Release 4.0.0 — a store build (it adds expo-media-library, so it can't ship
-// as an OTA to 3.0 binaries). Covers everything user-visible since 3.0.0.
+// as an OTA to 3.0 binaries; runtimeVersion moves to 4.0.0 with it). Covers
+// everything user-visible since 3.0.0.
 //
-// Interaction analytics, paywall fixes and this sheet ship too, but users
-// wouldn't notice them as features, so none gets an item. Each plan sees at
-// most four items, which is why the Privacy Policy note rides on the chat one.
+// Also shipping, deliberately without an item:
+// - The Constellation Tour. It is offered only to accounts created on or after
+//   TOUR_RELEASED_AT, which this sheet stamps silently, so nobody who sees this
+//   sheet is ever offered the tour. Announcing it would point existing users at
+//   Profile → Walkthrough for a tour written for new ones.
+// - Instant chat send (the question shows before the server answers), and no
+//   chat-reply push while the chat is on screen. Felt, not features.
+// - "Your Birth Chart is Ready" reaching signups who verify later. New
+//   accounts only, and the sheet skips those.
+// - Interaction analytics, paywall fixes and this sheet itself.
+//
+// Each plan sees at most four items, which is why the Privacy Policy note
+// rides on the chat one.
 const APP_VERSION = Constants?.expoConfig?.version ?? '0.0.0';
 
 /** "3.0.1" → "Version 3.0": the pill names the release, not the patch. */
@@ -75,8 +86,7 @@ export function releaseDate(ymd: string): number {
 
 export const WHATS_NEW: WhatsNewRelease = {
   id: APP_VERSION,
-  // TODO(release): the day 4.0.0 reaches users. Accounts created on or after it
-  // skip the sheet.
+  // The day 4.0.0 reaches users. Accounts created on or after it skip the sheet.
   releasedAt: releaseDate('2026-11-11'),
   versionLabel: versionLabelFor(APP_VERSION),
   title: "What's new in Delaluna",
