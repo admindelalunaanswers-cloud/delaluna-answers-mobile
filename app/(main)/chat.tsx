@@ -860,7 +860,8 @@ export default function ChatScreen() {
 
   // ─── Mode switch ───────────────────────────────────────────────────────────
 
-  const modeToggleTourTarget = useTourTarget(TOUR_TARGETS.chatModeToggle);
+  const astrologyTourTarget = useTourTarget(TOUR_TARGETS.chatModeAstrology);
+  const tarotTourTarget = useTourTarget(TOUR_TARGETS.chatModeTarot);
 
   // Both readers share the one conversation. The toggle picks who answers the
   // *next* question and nothing else: the thread stays open, and the handover
@@ -1383,7 +1384,6 @@ export default function ChatScreen() {
               ]}
             >
               <View
-                {...modeToggleTourTarget}
                 style={styles.modeTrack}
                 onLayout={(e) => setModeTrackWidth(e.nativeEvent.layout.width)}
               >
@@ -1409,6 +1409,7 @@ export default function ChatScreen() {
                 {CHAT_MODES.map((m) => (
                   <TouchableOpacity
                     key={m}
+                    {...(m === "astrology" ? astrologyTourTarget : tarotTourTarget)}
                     onPress={() => handleSelectMode(m)}
                     style={styles.modeTab}
                     activeOpacity={0.8}
