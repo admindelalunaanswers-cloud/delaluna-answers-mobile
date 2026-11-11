@@ -26,7 +26,7 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
-// Reduced motion: no fades or pulse to wait on.
+// Reduced motion: no fades to wait on.
 jest.mock('@/src/context/accessibility-context', () => ({
   useReducedMotion: () => true,
   useFontScale: () => 1,
@@ -39,19 +39,12 @@ jest.mock('react-native-svg', () => {
   return { __esModule: true, default: View, Path: View, Circle: View, Polyline: View };
 });
 
-const mockEvents = {
-  tourOffered: jest.fn(),
-  tourDeclined: jest.fn(),
-  tourStarted: jest.fn(),
-  tourStepViewed: jest.fn(),
-  tourSkipped: jest.fn(),
-  tourCompleted: jest.fn(),
-};
+// The tour reports nothing, and switches reporting off while it drives the app.
+const mockSetSuppressed = jest.fn();
 jest.mock('@/src/services/analytics.service', () => ({
-  get Events() {
-    return mockEvents;
-  },
+  setAnalyticsSuppressed: (on: boolean) => mockSetSuppressed(on),
 }));
+const suppressedNow = () => mockSetSuppressed.mock.calls.at(-1)?.[0];
 
 async function renderTour() {
   render(
@@ -79,7 +72,7 @@ describe('TourOverlay', () => {
     mockPathname = '/';
     (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
     (AsyncStorage.setItem as jest.Mock).mockResolvedValue(undefined);
-    Object.values(mockEvents).forEach((fn) => fn.mockClear());
+    mockSetSuppressed.mockClear();
   });
 
   afterEach(() => {
@@ -90,7 +83,7 @@ describe('TourOverlay', () => {
     await renderTour();
     expect(screen.getByRole('header', { name: 'Welcome to Delaluna, Maya' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Show me around' })).toBeTruthy();
-    expect(mockEvents.tourOffered).toHaveBeenCalled();
+    expect(suppressedNow()).not.toBe(true);
   });
 
   // A push that deep-links to Chat lands there first; the offer waits for Home.
@@ -140,17 +133,17 @@ describe('TourOverlay', () => {
     fireEvent.press(screen.getByRole('button', { name: 'Show me around' }));
     await showStep();
     expect(screen.getByRole('button', { name: 'Skip tour' })).toBeTruthy();
-    expect(mockEvents.tourStepViewed).toHaveBeenCalledWith({ step_id: 'big_three', step_index: 0, spotlit: false });
   });
 
   it('skips from any step and records it', async () => {
     await renderTour();
     fireEvent.press(screen.getByRole('button', { name: 'Show me around' }));
     await showStep();
+    expect(suppressedNow()).toBe(true);
     fireEvent.press(screen.getByRole('button', { name: 'Skip tour' }));
     await act(async () => {});
 
-    expect(mockEvents.tourSkipped).toHaveBeenCalledWith({ step_id: 'big_three', step_index: 0 });
+    expect(suppressedNow()).toBe(false);
     expect(AsyncStorage.setItem).toHaveBeenCalledWith(TOUR_SEEN_KEY, 'constellation_v1');
     expect(screen.queryByRole('button', { name: 'Skip tour' })).toBeNull();
   });
@@ -166,9 +159,10 @@ describe('TourOverlay', () => {
     await act(async () => {});
 
     expect(screen.getByRole('header', { name: "You're all set, Maya" })).toBeTruthy();
+    expect(suppressedNow()).toBe(true);
     fireEvent.press(screen.getByRole('button', { name: 'Take me Home' }));
     await act(async () => {});
-    expect(mockEvents.tourCompleted).toHaveBeenCalledWith({ cta: 'home' });
+    expect(suppressedNow()).toBe(false);
     expect(screen.queryByText("You're all set, Maya")).toBeNull();
   });
 });

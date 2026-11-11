@@ -22,7 +22,6 @@ import { C, R, S } from '@/src/constants/theme';
 import { useReducedMotion } from '@/src/context/accessibility-context';
 import { useTour } from '@/src/context/tour-context';
 import { useUser } from '@/src/context/user-context';
-import { Events } from '@/src/services/analytics.service';
 import { cardTop, type Hole, overlayPath, spotlightHole } from '@/src/utils/tour-policy';
 
 const DIM = 'rgba(2,1,5,0.78)';
@@ -64,7 +63,6 @@ export default function TourOverlay() {
   const [cardHeight, setCardHeight] = useState(0);
   const [measured, setMeasured] = useState<{ key: string; hole: Hole | null } | null>(null);
   const [fade] = useState(() => new Animated.Value(1));
-  const [pulse] = useState(() => new Animated.Value(1));
 
   useEffect(() => {
     pathnameRef.current = pathname;
@@ -115,7 +113,7 @@ export default function TourOverlay() {
                 { x: ox, y: oy },
                 step.shape,
                 size,
-                step.shape === 'circle' ? 6 : 8,
+                step.padding ?? (step.shape === 'circle' ? 6 : 8),
               ),
             );
           });
@@ -130,12 +128,8 @@ export default function TourOverlay() {
     };
   }, [step, stepKey, size, registry, reduceMotion]);
 
-  useEffect(() => {
-    if (!ready || !step) return;
-    Events.tourStepViewed({ step_id: step.id, step_index: stepIndex, spotlit: !!hole });
-  }, [ready, step, stepIndex, hole]);
 
-  // ── Motion: a cross-fade per card, a slow pulse on the ring ────────────
+  // ── Motion: a cross-fade per card. The spotlight ring is static. ───────
   useEffect(() => {
     if (!screenKey) return;
     if (reduceMotion) {
@@ -145,21 +139,6 @@ export default function TourOverlay() {
     fade.setValue(0);
     Animated.timing(fade, { toValue: 1, duration: 240, useNativeDriver: true }).start();
   }, [screenKey, reduceMotion, fade]);
-
-  useEffect(() => {
-    if (!hole || reduceMotion) {
-      pulse.setValue(1);
-      return;
-    }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 0.45, duration: 1100, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 1, duration: 1100, useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [hole, reduceMotion, pulse]);
 
   // ── Screen reader: start each card on its title ────────────────────────
   useEffect(() => {
@@ -203,7 +182,6 @@ export default function TourOverlay() {
           <ScrollView contentContainerStyle={[styles.fullContent, { paddingTop: insets.top + S.xl, paddingBottom: insets.bottom + S.xl }]}>
             <MoonMark />
             <View style={styles.centerText}>
-              <Text style={styles.eyebrow}>Your chart is ready</Text>
               <Text ref={titleRef} style={styles.heroTitle} accessibilityRole="header">
                 {firstName ? `Welcome to Delaluna, ${firstName}` : 'Welcome to Delaluna'}
               </Text>
@@ -267,13 +245,13 @@ export default function TourOverlay() {
           ) : null}
 
           {hole ? (
-            <Animated.View
+            <View
               pointerEvents="none"
               accessibilityElementsHidden
               importantForAccessibility="no-hide-descendants"
               style={[
                 styles.ring,
-                { left: hole.x, top: hole.y, width: hole.width, height: hole.height, borderRadius: hole.radius, opacity: pulse },
+                { left: hole.x, top: hole.y, width: hole.width, height: hole.height, borderRadius: hole.radius },
               ]}
             />
           ) : null}
