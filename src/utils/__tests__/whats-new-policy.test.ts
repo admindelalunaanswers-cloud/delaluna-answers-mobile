@@ -101,3 +101,17 @@ describe('WHATS_NEW content', () => {
     });
   });
 });
+
+describe('versionLabelFor', () => {
+  const { versionLabelFor } = require('@/src/constants/whats-new');
+
+  it('names the release by major.minor', () => {
+    expect(versionLabelFor('3.0.0')).toBe('Version 3.0');
+    expect(versionLabelFor('3.0.1')).toBe('Version 3.0');
+    expect(versionLabelFor('4.12.3')).toBe('Version 4.12');
+  });
+
+  it('tolerates a short version string', () => {
+    expect(versionLabelFor('5')).toBe('Version 5.0');
+  });
+});

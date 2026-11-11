@@ -1,19 +1,22 @@
 import type { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import type { Href } from 'expo-router';
 
 /**
  * The "What's new" sheet shown on the first Home visit after an update.
  *
  * ── Each release ──────────────────────────────────────────────────────────
- * Something to announce: replace `items`, change `id`, set `releasedAt` to the
- * day the release reaches users. Nothing to announce: leave this file alone —
- * an unchanged `id` means nobody sees the sheet.
+ * `id` is the app version from app.config.js (`expoConfig.version`), so the
+ * sheet re-shows whenever `version` is bumped. Something to announce: replace
+ * `items`, bump `version` in app.config.js, set `releasedAt` to the day the
+ * release reaches users.
  *
- * Fixing a typo after release: edit the copy and KEEP the `id`. Changing it
- * shows the sheet again to everyone who already closed it.
+ * Bumping `version` with nothing new here re-shows the previous release's copy
+ * to everyone — update `items` in the same change. Fixing a typo: edit the copy
+ * and leave `version` alone.
  *
- * `id` is deliberately not `expoConfig.version`: an OTA update doesn't change
- * the binary version, and it should still be able to announce something.
+ * An OTA-only release announces only if it also bumps `version`; an update's
+ * manifest carries the config it was published with.
  *
  * `releasedAt` keeps the sheet from new accounts: someone who signed up after
  * it never knew the app without these changes. See whats-new-policy.ts.
@@ -45,18 +48,27 @@ export interface WhatsNewRelease {
 }
 
 // Release 4.0.0, from the Notion runbook. It ships as an OTA update to the
-// 3.0.0 binaries, so the label and id stay 3.0. If 4.0.0 goes to the stores
-// instead (runbook Phase 4B), change both to 4.0.
+// 3.0.0 binaries, so `version` (and with it the id and label) stays 3.0. If
+// 4.0.0 goes to the stores instead (runbook Phase 4B), bump `version` in
+// app.config.js; the id and label follow.
 //
 // TODO(release): `releasedAt` is the runbook's planned OTA day (Nov 11). If the
 // OTA moves, move this with it — accounts created after it skip the sheet.
 //
 // Interaction analytics and this sheet ship too, but users wouldn't notice
 // either, so neither gets an item.
+const APP_VERSION = Constants?.expoConfig?.version ?? '0.0.0';
+
+/** "3.0.1" → "Version 3.0": the pill names the release, not the patch. */
+export function versionLabelFor(version: string): string {
+  const [major = '0', minor = '0'] = version.split('.');
+  return `Version ${major}.${minor}`;
+}
+
 export const WHATS_NEW: WhatsNewRelease = {
-  id: '3.0.0',
+  id: APP_VERSION,
   releasedAt: Date.parse('2026-11-11T00:00:00-06:00'),
-  versionLabel: 'Version 3.0',
+  versionLabel: versionLabelFor(APP_VERSION),
   title: "What's new in Delaluna",
   subtitle: "Here's what changed since you last visited.",
   items: [
