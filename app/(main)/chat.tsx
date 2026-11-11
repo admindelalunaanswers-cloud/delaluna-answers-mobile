@@ -353,6 +353,18 @@ export default function ChatScreen() {
   const [messages, setMessages] = useState<ChatMessageDoc[]>([]);
   const [inputText, setInputText] = useState("");
   const [isSending, setIsSending] = useState(false);
+  /**
+   * The question just sent, drawn straight away. Without it nothing appeared
+   * until the `sendChatMessage` round trip and the snapshot after it — a
+   * second or more of a tapped suggestion doing nothing. It is replaced by the
+   * real document as soon as one the screen hadn't seen before arrives (sends
+   * are serialised by `isSending`, so that document is this question), and
+   * dropped if the send fails.
+   */
+  const [optimistic, setOptimistic] = useState<{
+    msg: ChatMessageDoc;
+    knownIds: Set<string>;
+  } | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [savedSessions, setSavedSessions] = useState<SavedChatSession[]>([]);
@@ -708,6 +720,28 @@ export default function ChatScreen() {
       chatStarted.current = true;
       setInputText("");
       setIsSending(true);
+      const sentHistory = historyOverride ?? messages;
+      setOptimistic({
+        msg: {
+          id: `optimistic-${Date.now()}`,
+          prompt: "",
+          userMessage: msg,
+          response: null,
+          isPending: true,
+          isError: false,
+          createdAt: new Date(),
+          mode: modeOverride ?? mode,
+          ...(selectedConnection
+            ? {
+                connectionId: selectedConnection.id,
+                connectionName: selectedConnection.name,
+              }
+            : {}),
+        },
+        // Every id on screen now — parked turns included, since their
+        // deletion may land after the new document does.
+        knownIds: new Set(messages.map((m) => m.id)),
+      });
       const t = Date.now();
       try {
         // `history` is the conversation so far — the prompt builder needs it to
@@ -720,7 +754,7 @@ export default function ChatScreen() {
           natalChartSummary: chartSummary,
           connection: selectedConnection ?? undefined,
           pronouns: userDoc?.pronouns,
-          history: historyOverride ?? messages,
+          history: sentHistory,
         });
         logOp("chat_send", Date.now() - t);
         const sentMode = modeOverride ?? mode;
@@ -729,6 +763,7 @@ export default function ChatScreen() {
           Events.tarotDrawn({ source: "chat", cards: TAROT_CHAT_CARD_COUNT });
         }
       } catch (e) {
+        setOptimistic(null);
         // The server is the authority on the question allowance — the counter
         // above is only a display. If it says we're out, fall back to the paywall.
         if (e instanceof ChatQuotaExceededError) {
@@ -975,7 +1010,20 @@ export default function ChatScreen() {
 
   // ─── Derived ───────────────────────────────────────────────────────────────
 
-  const showSuggestions = historyLoaded && messages.length === 0;
+  // Hand over to the real document the moment it lands.
+  useEffect(() => {
+    if (optimistic && messages.some((m) => !optimistic.knownIds.has(m.id))) {
+      setOptimistic(null);
+    }
+  }, [messages, optimistic]);
+
+  const displayMessages = useMemo(
+    () => (optimistic ? [...messages, optimistic.msg] : messages),
+    [messages, optimistic],
+  );
+
+  const showSuggestions =
+    historyLoaded && displayMessages.length === 0;
   const sendDisabled = isSending || !inputText.trim();
 
   // Every tarot turn shows the spread it was read from — a thread holds both
@@ -1456,7 +1504,7 @@ export default function ChatScreen() {
               <FlatList
                 ref={flatListRef}
                 style={styles.flex}
-                data={messages}
+                data={displayMessages}
                 keyExtractor={(item) => item.id}
                 renderItem={({ item }) => {
                   const draw = tarotDraws.get(item.id);
