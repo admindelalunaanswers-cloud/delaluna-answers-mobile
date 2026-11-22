@@ -1,6 +1,7 @@
 import { logEvent as fbLogEvent } from '@react-native-firebase/analytics';
 
 import {
+  Events,
   logEvent,
   logScreenView,
   relativeDay,
@@ -45,6 +46,18 @@ describe('analytics.service', () => {
 
     it('stays within GA4’s 100-character value cap', () => {
       expect(toAnalyticsValue('x'.repeat(150))).toHaveLength(100);
+    });
+  });
+
+  describe('sign-up funnel events', () => {
+    it('log the step reached and why a submit failed', async () => {
+      await Events.signUpStep({ step: 'birth_time', step_number: 5 });
+      await Events.signUpFailed({ reason: 'email_in_use' });
+
+      expect(logged()).toEqual([
+        { name: 'sign_up_step', params: { step: 'birth_time', step_number: 5 } },
+        { name: 'sign_up_failed', params: { reason: 'email_in_use' } },
+      ]);
     });
   });
 

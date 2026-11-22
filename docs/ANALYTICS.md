@@ -200,7 +200,9 @@ tab screens stay mounted. Use `screen_view` to count visits.
 
 | Event | Params | Fired from |
 |---|---|---|
-| `sign_up` | `method` | `app/(auth)/sign-up.tsx` |
+| `sign_up` | `method` | `app/(auth)/sign-up.tsx`. Fires once the Auth account exists, before the profile and chart are saved |
+| `sign_up_step` | `step`, `step_number` (1–9) | `app/(auth)/sign-up.tsx`. A question reached for the first time this visit: `first_name`, `last_name`, `pronouns`, `birthday`, `birth_time`, `place_of_birth`, `email`, `password`, `confirm`. Going back doesn't re-log. Names in `src/utils/sign-up-funnel.ts` |
+| `sign_up_failed` | `reason` | `app/(auth)/sign-up.tsx`. Submit failed: `email_in_use`, `invalid_email`, `weak_password`, `network`, `too_many_requests`, `auth_other`, or `setup` (account created, profile or chart save failed) |
 | `login` | `method` | `app/(auth)/login.tsx` |
 | `email_verified` | none | `app/(auth)/verify-email.tsx` |
 | `birth_chart_generated` | `has_time` | `app/(auth)/sign-up.tsx` |
@@ -295,8 +297,9 @@ retroactive.
 | `first_person`, `relationship`, `change` | `connection_created`, `connection_updated` |
 | `format`, `destination` | `chat_exported` |
 | `method`, `product_id` | auth and purchase events |
+| `step`, `reason` | `sign_up_step`, `sign_up_failed` |
 
-`length`, `cards` and `count` are numbers; register them as **custom metrics** if you
+`length`, `cards`, `count` and `step_number` are numbers; register them as **custom metrics** if you
 want sums or averages.
 
 There are 50 event-scoped dimension slots per property. Register what you will
@@ -363,6 +366,10 @@ DebugView shows events within seconds instead of the usual reporting delay.
   next to `paywall_viewed` and `purchase_completed` in a funnel exploration.
 - *Content actually seen:* `horoscope_viewed` by `day`, against `screen_view`
   for Home.
+- *Where sign-up loses people:* Explore → Funnel exploration, open funnel,
+  one step per `sign_up_step` filtered on `step` (`first_name` … `confirm`),
+  then `sign_up`. Break down `sign_up_failed` by `reason` to see the submits
+  that bounced. The gap between `confirm` and `sign_up` is those failures.
 
 **In BigQuery,** once the export is linked: the most-used features over the
 last 28 days, by distinct users. Replace `XXXXXXXXX` with the dataset id that

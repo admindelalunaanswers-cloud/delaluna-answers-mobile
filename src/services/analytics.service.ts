@@ -22,6 +22,7 @@ import {
 
 import { APP_ENV, isProduction } from "@/src/constants/env";
 import { logger } from "@/src/utils/logger";
+import type { SignUpFailureReason } from "@/src/utils/sign-up-funnel";
 
 // Disable collection outside production. Runs at module load — before any
 // event is logged. Note: setAnalyticsCollectionEnabled is persisted across
@@ -279,6 +280,16 @@ export const Events = {
   // Auth
   signUp: (method: "email" | "apple" | "google") =>
     logEvent("sign_up", { method }),
+  /**
+   * A sign-up question reached for the first time this visit. Going back and
+   * forward again doesn't re-log, so each step counts a user once and the
+   * steps chain into a GA4 funnel. `step` comes from `signUpStepName()`.
+   */
+  signUpStep: (params: { step: string; step_number: number }) =>
+    logEvent("sign_up_step", params),
+  /** Submitting the last step failed. `reason` from `signUpFailureReason()`. */
+  signUpFailed: (params: { reason: SignUpFailureReason }) =>
+    logEvent("sign_up_failed", params),
   login: (method: "email" | "apple" | "google") =>
     logEvent("login", { method }),
   emailVerified: () => logEvent("email_verified"),
