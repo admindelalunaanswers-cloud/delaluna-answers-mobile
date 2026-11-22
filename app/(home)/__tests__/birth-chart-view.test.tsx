@@ -1,5 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
+import { ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import { logEvent } from '@react-native-firebase/analytics';
 
@@ -167,6 +168,62 @@ describe('BirthChartScreen', () => {
       rerender(<BirthChartScreen />);
       rerender(<BirthChartScreen />);
       expect(events('natal_breakdown_viewed')).toEqual([{ premium: true }]);
+    });
+
+    describe('read depth', () => {
+      const layoutEvent = (y: number, height: number) => ({ nativeEvent: { layout: { x: 0, y, width: 300, height } } });
+      const scrollEvent = (y: number) => ({ nativeEvent: { contentOffset: { x: 0, y } } });
+      /** The breakdown list — the one ScrollView reporting its scroll. */
+      const scroller = () => screen.UNSAFE_getAllByType(ScrollView).find((s) => s.props.onScroll)!;
+      /** A card's own View — the nearest ancestor of its heading with an onLayout. */
+      const cardOf = (heading: string | RegExp) => {
+        let node: any = screen.getByRole('header', { name: heading });
+        while (node && !node.props.onLayout) node = node.parent;
+        return node;
+      };
+      const sectionViews = () => events('ui_interaction').filter((e: any) => e.action === 'view');
+
+      it('reports each card as it scrolls into view, per tab', () => {
+        render(<BirthChartScreen />);
+        fireEvent(scroller(), 'layout', layoutEvent(0, 500));
+        fireEvent(cardOf('Overview'), 'layout', layoutEvent(0, 300));
+        fireEvent(cardOf('Big Picture'), 'layout', layoutEvent(900, 300));
+
+        // Houses replaces the Insights cards. Big Picture's old position must
+        // not be counted against the Houses scroll.
+        fireEvent.press(tab('Houses'));
+        fireEvent(cardOf(/^House 1,/), 'layout', layoutEvent(0, 300));
+        fireEvent.scroll(scroller(), scrollEvent(600));
+
+        expect(sectionViews()).toEqual([
+          { screen: 'birth_chart', feature: 'insights_section', action: 'view', item: 'overview' },
+          { screen: 'birth_chart', feature: 'houses_section', action: 'view', item: 'house_1' },
+        ]);
+      });
+
+      // A free user's locked house is a header with no reading under it.
+      it('does not measure locked houses', () => {
+        render(<BirthChartScreen />);
+        fireEvent.press(tab('Houses'));
+
+        /** The house's card: the nearest ancestor of its heading with padding. */
+        const houseCard = (heading: RegExp) => {
+          let node: any = screen.getByRole('header', { name: heading });
+          do node = node.parent; while (!node.props.style?.padding);
+          return node;
+        };
+        expect(houseCard(/^House 1,/).props.onLayout).toEqual(expect.any(Function));
+        expect(houseCard(/^House 5,.*Premium$/).props.onLayout).toBeUndefined();
+      });
+
+      it('counts nothing while the breakdown is loading', () => {
+        setAccess({ hasFullAccess: false, loading: true });
+        render(<BirthChartScreen />);
+        fireEvent(scroller(), 'layout', layoutEvent(0, 2000));
+        fireEvent.scroll(scroller(), scrollEvent(0));
+
+        expect(sectionViews()).toEqual([]);
+      });
     });
   });
 

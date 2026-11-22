@@ -131,10 +131,15 @@ paywall opens.
 | `home` | `view_chart` | `tap` | none |
 | `home` | `chat_prompt` | `tap` | `new_love`, `returns_1`, `returns_2` |
 | `home` | `paygate`, `ad_banner_full`, `ad_banner` | `unlock` | relative day |
+| `home` | `reading_section` | `view` | `quote`, `advice`, `dos`, `donts`, `affirmation`, `tarot`, `message`, `moon`, `retrograde`, `new_love`, `returns`, `lucky_numbers`, `warning` |
 | `birth_chart` | `chart_tab` | `select` | `natal_wheel`, `natal_table` |
 | `birth_chart` | `breakdown_tab` | `select` | `insights`, `houses`, `planets`, `aspects` |
 | `birth_chart` | `breakdown_tab_locked` | `select` | `planets`, `aspects` (free user) |
 | `birth_chart` | `premium_unlock` | `unlock` | the locked tab |
+| `birth_chart` | `insights_section` | `view` | the card: `overview`, `big_picture`, `love`, `career`, `growth`, `advice`, `warning`, `affirmation`, `release` |
+| `birth_chart` | `houses_section` | `view` | `house_1` … `house_12` (unlocked houses only) |
+| `birth_chart` | `planets_section` | `view` | the planet, e.g. `venus` |
+| `birth_chart` | `aspects_section` | `view` | position in the list, `aspect_1`, `aspect_2`… (never the planet pair) |
 | `transits` | `house_card` | `expand` / `collapse` / `unlock` | `house_1` … `house_12` |
 | `chat` | `reader_toggle` | `select` | `astrology`, `tarot` |
 | `chat` | `reader_switch_limit` | `tap` | `start_new_chat`, `stay` |
@@ -161,13 +166,29 @@ paywall opens.
 never anything the user typed. Comparing it against `save` shows which field
 people get stuck on.
 
-`view` is the one action that isn't a tap. `useSectionsReached`
-(`src/hooks/use-sections-reached.ts`) reports each section of a long scroll the
-first time at least 80pt of it is on screen, so Synastry's counts are its read
-depth. It reports nothing until the reading has loaded, so a section that was
-scrolled past while still a skeleton isn't counted. To measure read depth on
-another long screen, reuse the hook: put `onLayout(key)` on each section, and
-`onScroll` and `onViewportLayout` on the ScrollView.
+`view` is the one action that isn't a tap: it is **read depth**.
+`useSectionsReached` (`src/hooks/use-sections-reached.ts`) reports each section
+of a long scroll the first time at least 80pt of it is on screen. It reports
+nothing until the content has loaded, so a section scrolled past while still a
+skeleton isn't counted. Three screens use it:
+
+- **Synastry**: once per section per visit.
+- **Home**: once per section **per day**. Switching day starts the count again
+  from the top, so the same section can be counted for today and tomorrow.
+  Nothing is counted on a paygated day or while the reading is generating, nor
+  while the first-run tour is running (it scrolls the list itself).
+- **Birth chart breakdown**: once per card per visit, reported under the tab it
+  belongs to (`houses_section`, …). Returning to a tab doesn't count its cards
+  again.
+
+Compare a section's users with the first section's (`quote`, `overview`,
+`key_aspect`) to see how far down people get.
+
+To measure read depth on another long screen, reuse the hook: put
+`onLayout(key)` on each section, and `onScroll` and `onViewportLayout` on the
+ScrollView. If the content changes in place, pass a `resetKey` (Home's day) or
+call `clearLayouts()` before swapping one set of sections for another (the
+birth chart's tabs). The hook's header explains which to use.
 
 Re-tapping the tab that is already selected is not logged; the user made no
 choice. Dates are always sent relative to today, never as the date itself.
@@ -408,8 +429,7 @@ many times shouldn't outrank a control most people use once.
   before building a report on them. If they are dropped, convert them to
   strings in `logEvent`, accepting that it changes the stored type for events
   that already have history.
-- **Read depth only on Synastry.** Home and the birth-chart breakdown are long
-  scrolls too, but nothing yet records how far down people read them.
-  `useSectionsReached` is the hook to add for that.
+- **Read depth covers Synastry, Home and the birth-chart breakdown only.**
+  Transits and the connection report are long scrolls too.
 - **No in-app opt-out.** `setAnalyticsEnabled()` exists, but no settings
   control calls it.

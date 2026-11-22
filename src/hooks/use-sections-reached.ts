@@ -9,6 +9,22 @@
  *
  * Nothing is reported while `enabled` is false, so a section passed over while
  * it was still a loading skeleton is counted later, when it holds content.
+ *
+ * Two ways to start over, for screens whose content changes in place:
+ *
+ * - `resetKey` (Home's selected day): when it changes, every section can be
+ *   reported again. Positions are kept: the same sections stay mounted and
+ *   re-fire `onLayout` whenever they move, so what is stored stays true.
+ *   **The screen must scroll back to the top when the key changes**, as Home
+ *   does. The hook assumes it and counts from there at once, because the
+ *   programmatic scroll's own onScroll arrives later, or never if the list was
+ *   already at the top.
+ * - `clearLayouts()` (the birth chart's breakdown tabs): forget every stored
+ *   position, for when one set of sections is swapped for another. Call it
+ *   before the swap; the incoming sections report their own layout on mount.
+ *   Without it the outgoing sections' positions linger and get counted against
+ *   whatever is now scrolled over them. Keys must then be unique across the
+ *   sets (`houses/house_7`), since what was reached is still remembered.
  */
 import { useCallback, useEffect, useRef } from 'react';
 import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
@@ -38,7 +54,11 @@ export function sectionsInView(
     .map(([key]) => key);
 }
 
-export function useSectionsReached(onReach: (key: string) => void, enabled = true) {
+export function useSectionsReached(
+  onReach: (key: string) => void,
+  enabled = true,
+  resetKey?: string | number,
+) {
   const layouts = useRef<Record<string, SectionLayout>>({});
   const reached = useRef(new Set<string>());
   const scrollY = useRef(0);
@@ -61,6 +81,18 @@ export function useSectionsReached(onReach: (key: string) => void, enabled = tru
       onReachRef.current(key);
     }
   }, []);
+
+  // A new resetKey forgets what was reached and starts again from the top (see
+  // the header). Runs after the sync effect above, so `enabled` is already the
+  // new content's — a reset onto a paygated or still-loading day counts nothing.
+  const lastResetKey = useRef(resetKey);
+  useEffect(() => {
+    if (lastResetKey.current === resetKey) return;
+    lastResetKey.current = resetKey;
+    reached.current.clear();
+    scrollY.current = 0;
+    check();
+  }, [resetKey, check]);
 
   // Turning on (the content arrived) counts whatever is already on screen.
   useEffect(() => {
@@ -92,5 +124,9 @@ export function useSectionsReached(onReach: (key: string) => void, enabled = tru
     [check],
   );
 
-  return { onLayout, onScroll, onViewportLayout };
+  const clearLayouts = useCallback(() => {
+    layouts.current = {};
+  }, []);
+
+  return { onLayout, onScroll, onViewportLayout, clearLayouts };
 }

@@ -60,3 +60,60 @@ describe('useSectionsReached', () => {
     expect(onReach.mock.calls).toEqual([['a']]);
   });
 });
+
+describe('useSectionsReached — starting over', () => {
+  // Home: a new day is a new reading, read from the top again.
+  it('counts every section again after resetKey changes, from the top', () => {
+    const onReach = jest.fn();
+    const { result, rerender } = renderHook(
+      ({ day }: { day: string }) => useSectionsReached(onReach, true, day),
+      { initialProps: { day: 'today' } },
+    );
+
+    act(() => {
+      result.current.onViewportLayout(layout(0, 500));
+      result.current.onLayout('a')(layout(0, 300));
+      result.current.onLayout('b')(layout(900, 300));
+      result.current.onScroll(scroll(600));
+    });
+    expect(onReach.mock.calls).toEqual([['a'], ['b']]);
+
+    // The screen jumps to the top; its onScroll hasn't arrived yet.
+    rerender({ day: 'tomorrow' });
+    expect(onReach.mock.calls).toEqual([['a'], ['b'], ['a']]);
+  });
+
+  it('counts nothing on a reset onto content that is not readable yet', () => {
+    const onReach = jest.fn();
+    const { result, rerender } = renderHook(
+      ({ day, enabled }: { day: string; enabled: boolean }) => useSectionsReached(onReach, enabled, day),
+      { initialProps: { day: 'today', enabled: true } },
+    );
+    act(() => {
+      result.current.onViewportLayout(layout(0, 500));
+      result.current.onLayout('a')(layout(0, 300));
+    });
+
+    rerender({ day: 'tomorrow', enabled: false });
+    expect(onReach.mock.calls).toEqual([['a']]);
+  });
+
+  // Birth chart: one tab's cards swapped for another's.
+  it('forgets positions on clearLayouts, so swapped-out sections are not counted', () => {
+    const onReach = jest.fn();
+    const { result } = renderHook(() => useSectionsReached(onReach));
+
+    act(() => {
+      result.current.onViewportLayout(layout(0, 500));
+      result.current.onLayout('insights/overview')(layout(0, 300));
+      result.current.onLayout('insights/warning')(layout(900, 300));
+    });
+    act(() => {
+      result.current.clearLayouts();
+      result.current.onLayout('houses/house_1')(layout(0, 300));
+      result.current.onScroll(scroll(600));
+    });
+
+    expect(onReach.mock.calls).toEqual([['insights/overview'], ['houses/house_1']]);
+  });
+});
