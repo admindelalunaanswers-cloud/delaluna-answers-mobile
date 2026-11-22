@@ -221,6 +221,10 @@ tab screens stay mounted. Use `screen_view` to count visits.
 |---|---|---|
 | `paywall_viewed` | `paywall` (`subscription`/`chat_pack`), `source` (`manual`/`gated`) | `src/context/revenuecat-context.tsx` |
 | `paywall_dismissed` | `paywall`, `source` | `src/context/revenuecat-context.tsx` |
+| `purchase_completed` | `product_id`, `price?`, `currency?` | `revenuecat-context.tsx`, `consumable-placeholder.component.tsx` |
+| `purchase_failed` | `product_id`, `reason?`, `user_cancelled?` | same |
+| `restore_purchases` | `success` | `revenuecat-context.tsx`, including a restore from inside either paywall |
+| `purchase_started` | `product_id` | **Not called anywhere.** See [Known gaps](#known-gaps) |
 
 `paywall` was added on 2026-11-20. Before that, the chat-pack sheet also logged
 `source: "manual"` and nothing else, so it can't be told apart from the
@@ -234,10 +238,6 @@ Also fixed on 2026-11-20, so older data reads differently:
 - `paywall_viewed` with `source: "gated"` was logged before RevenueCat decided
   whether to show anything, so it counted paywalls that never appeared. It is
   now logged only once one was shown.
-| `purchase_completed` | `product_id`, `price?`, `currency?` | `revenuecat-context.tsx`, `consumable-placeholder.component.tsx` |
-| `purchase_failed` | `product_id`, `reason?`, `user_cancelled?` | same |
-| `restore_purchases` | `success` | `revenuecat-context.tsx`, including a restore from inside either paywall |
-| `purchase_started` | `product_id` | **Not called anywhere.** See [Known gaps](#known-gaps) |
 
 Revenue itself is better read from RevenueCat than from these events.
 RevenueCat sees refunds, renewals and sandbox purchases; these events don't.
