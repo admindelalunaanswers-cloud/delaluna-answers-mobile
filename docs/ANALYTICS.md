@@ -34,7 +34,13 @@ There are three layers, from broadest to most specific:
 | Outcomes | Named events (`horoscope_viewed`, `chat_message_sent`, …) | Things worth counting or putting in a funnel by themselves |
 
 GA4 also collects its own automatic events (`first_open`, `session_start`,
-`user_engagement`, `app_update`, and so on). `user_engagement` carries
+`user_engagement`, `app_update`, and so on). Its automatic **screen** reporting
+is switched off in `firebase.json`
+(`react-native.google_analytics_automatic_screen_reporting_enabled: false`), so
+every `screen_view` comes from the root layout below. Left on, the native SDK
+adds its own for iOS view controllers and Android's `MainActivity`, which
+inflate screen counts and add rows no route produced. It's read at native
+build time, so builds made before 2026-11-20 still send those extra events. `user_engagement` carries
 engagement time per screen, which is where the time-on-screen figures in the
 Pages and screens report come from.
 
