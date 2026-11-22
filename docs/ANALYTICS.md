@@ -385,6 +385,27 @@ ORDER BY users DESC;
 Rank by `users` rather than `interactions`. A few people tapping a control
 many times shouldn't outrank a control most people use once.
 
+## Apple Ads attribution
+
+Not GA4: RevenueCat. On iOS, `configureRevenueCat()`
+(`src/services/revenuecat.service.ts`) calls
+`Purchases.enableAdServicesAttributionTokenCollection()` right after
+`configure`. RevenueCat exchanges the AdServices token with Apple and records
+the campaign, ad group and keyword on the customer, so accounts and subscribers
+can be counted per campaign rather than stopping at Apple's install count. No
+ATT prompt is involved. Only installs from an Apple Ads tap carry attribution;
+everyone else is recorded as organic.
+
+It is in the native bridge of the installed `react-native-purchases`, so it
+ships in an OTA update. It records only users who launch a build that has it,
+and nothing retroactively. The RevenueCat customer exists from launch and is
+linked to the account by `loginUser()` at sign-in, so a user who installs from
+an ad and signs up later is still credited.
+
+Reading it: the RevenueCat dashboard, Apple Search Ads integration (customer
+attributes `$mediaSource`, `$campaign`, `$adGroup`, `$keyword`, and the
+charts filtered by them).
+
 ## Known gaps
 
 - **The first-run tour is invisible, by design.** Nothing is logged while it is on

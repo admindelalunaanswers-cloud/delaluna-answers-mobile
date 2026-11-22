@@ -117,6 +117,17 @@ export function configureRevenueCat(): boolean {
   Purchases.configure({ apiKey: API_KEY });
   _configured = true;
   logger.debug("[RevenueCat] SDK configured");
+
+  // Apple Ads attribution: RevenueCat sends the AdServices token to Apple and
+  // stamps the campaign, ad group and keyword onto the customer, so accounts and
+  // subscribers can be counted per campaign. Needs no ATT prompt. iOS only, and
+  // already in the native bridge, so it ships in an OTA update. It has to follow
+  // `configure`, which it rejects without.
+  if (Platform.OS === "ios") {
+    Purchases.enableAdServicesAttributionTokenCollection().catch(
+      logger.catchAsync("rc_adservices"),
+    );
+  }
   return true;
 }
 

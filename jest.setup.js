@@ -79,6 +79,7 @@ jest.mock('react-native-purchases', () => {
     purchasePackage: jest.fn(),
     purchaseStoreProduct: jest.fn(),
     restorePurchases: jest.fn(),
+    enableAdServicesAttributionTokenCollection: jest.fn(() => Promise.resolve()),
     addCustomerInfoUpdateListener: jest.fn(),
     removeCustomerInfoUpdateListener: jest.fn(),
   };
