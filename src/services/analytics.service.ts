@@ -275,6 +275,11 @@ export function relativeDay(
 // ─── Domain events ──────────────────────────────────────────────────────────
 // Keep names snake_case and stable — renaming breaks historical reports.
 
+export type PaywallEventParams = {
+  paywall: "subscription" | "chat_pack";
+  source: "manual" | "gated";
+};
+
 export const Events = {
   // Auth
   signUp: (method: "email" | "apple" | "google") =>
@@ -332,9 +337,15 @@ export const Events = {
   }) => logEvent("chat_exported", params),
 
   // Monetization (paywall + RevenueCat)
-  paywallViewed: (source: string) => logEvent("paywall_viewed", { source }),
-  paywallDismissed: (source: string) =>
-    logEvent("paywall_dismissed", { source }),
+  /**
+   * `paywall`: which offering was shown — the subscription paywall or the
+   * chat-pack (consumable) sheet. `source`: `manual` when the user opened it,
+   * `gated` when a locked feature presented it.
+   */
+  paywallViewed: (params: PaywallEventParams) =>
+    logEvent("paywall_viewed", params),
+  paywallDismissed: (params: PaywallEventParams) =>
+    logEvent("paywall_dismissed", params),
   purchaseStarted: (productId: string) =>
     logEvent("purchase_started", { product_id: productId }),
   purchaseCompleted: (params: {

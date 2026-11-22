@@ -219,12 +219,25 @@ tab screens stay mounted. Use `screen_view` to count visits.
 
 | Event | Params | Fired from |
 |---|---|---|
-| `paywall_viewed` | `source` (`manual`/`gated`) | `src/context/revenuecat-context.tsx` |
-| `paywall_dismissed` | `source` | `src/context/revenuecat-context.tsx` |
+| `paywall_viewed` | `paywall` (`subscription`/`chat_pack`), `source` (`manual`/`gated`) | `src/context/revenuecat-context.tsx` |
+| `paywall_dismissed` | `paywall`, `source` | `src/context/revenuecat-context.tsx` |
 | `purchase_completed` | `product_id`, `price?`, `currency?` | `revenuecat-context.tsx`, `consumable-placeholder.component.tsx` |
 | `purchase_failed` | `product_id`, `reason?`, `user_cancelled?` | same |
-| `restore_purchases` | `success` | `revenuecat-context.tsx` |
+| `restore_purchases` | `success` | `revenuecat-context.tsx`, including a restore from inside either paywall |
 | `purchase_started` | `product_id` | **Not called anywhere.** See [Known gaps](#known-gaps) |
+
+`paywall` was added on 2026-11-20. Before that, the chat-pack sheet also logged
+`source: "manual"` and nothing else, so it can't be told apart from the
+subscription paywall in older data, and dismissing the chat-pack sheet logged no
+`paywall_dismissed` at all.
+
+Also fixed on 2026-11-20, so older data reads differently:
+
+- A restore from inside the chat-pack sheet was logged as `purchase_completed`
+  for the newest pack ever bought. It is now `restore_purchases`.
+- `paywall_viewed` with `source: "gated"` was logged before RevenueCat decided
+  whether to show anything, so it counted paywalls that never appeared. It is
+  now logged only once one was shown.
 
 Revenue itself is better read from RevenueCat than from these events.
 RevenueCat sees refunds, renewals and sandbox purchases; these events don't.
@@ -291,6 +304,7 @@ retroactive.
 | `screen`, `feature`, `action`, `item` | `ui_interaction`. **Register these first** |
 | `day` | `horoscope_viewed` |
 | `source` | `tarot_drawn`, `paywall_viewed`, `paywall_dismissed`, `chat_exported` |
+| `paywall` | `paywall_viewed`, `paywall_dismissed` |
 | `saved`, `premium`, `mode` | `synastry_viewed`, `natal_breakdown_viewed`, `chat_message_sent` |
 | `first_person`, `relationship`, `change` | `connection_created`, `connection_updated` |
 | `format`, `destination` | `chat_exported` |
@@ -361,6 +375,8 @@ DebugView shows events within seconds instead of the usual reporting delay.
   as values. Add `item` as a nested row to see which tab or house.
 - *Teaser → paywall:* `ui_interaction` with `action = unlock`, by `feature`,
   next to `paywall_viewed` and `purchase_completed` in a funnel exploration.
+  Filter `paywall_viewed` on `paywall = subscription` or `chat_pack` to keep
+  the two funnels apart.
 - *Content actually seen:* `horoscope_viewed` by `day`, against `screen_view`
   for Home.
 
@@ -395,8 +411,6 @@ many times shouldn't outrank a control most people use once.
 - **`purchase_started` is never sent.** RevenueCat's own paywall UI owns the
   buy button, so the app can't see the moment a purchase begins. Funnels go
   straight from `paywall_viewed` to `purchase_completed` / `purchase_failed`.
-- **`paywall_viewed` with `source: "manual"` also covers the chat-pack sheet.**
-  It can't be told apart from the subscription paywall.
 - **Not yet instrumented:** the settings screens, and the auth and utility
   screens, have screen views only, with no `ui_interaction`.
 - **Score names come from the model.** `score_definition` is only reported for
