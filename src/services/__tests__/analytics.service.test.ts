@@ -1,6 +1,7 @@
 import { logEvent as fbLogEvent } from '@react-native-firebase/analytics';
 
 import {
+  Events,
   logEvent,
   logScreenView,
   relativeDay,
@@ -78,6 +79,20 @@ describe('analytics.service', () => {
       setAnalyticsSuppressed(false);
       await logEvent('transits_viewed');
       expect(logged()).toEqual([{ name: 'transits_viewed', params: undefined }]);
+    });
+  });
+
+  // The chat-pack sheet and the subscription paywall used to both log
+  // `source: "manual"` and nothing else, so they could not be told apart.
+  describe('paywall events', () => {
+    it('say which paywall was shown, alongside how it was opened', async () => {
+      await Events.paywallViewed({ paywall: 'chat_pack', source: 'manual' });
+      await Events.paywallDismissed({ paywall: 'subscription', source: 'gated' });
+
+      expect(logged()).toEqual([
+        { name: 'paywall_viewed', params: { paywall: 'chat_pack', source: 'manual' } },
+        { name: 'paywall_dismissed', params: { paywall: 'subscription', source: 'gated' } },
+      ]);
     });
   });
 

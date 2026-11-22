@@ -346,7 +346,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       if (!changed) {
         void refresh();
         if (result !== PAYWALL_RESULT.NOT_PRESENTED) {
-          Events.paywallDismissed(source);
+          Events.paywallDismissed({ paywall: "subscription", source });
         }
         return false;
       }
@@ -385,7 +385,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
     presentingPaywallRef.current = true;
     try {
       const { offering } = await resolveOffering();
-      Events.paywallViewed("manual");
+      Events.paywallViewed({ paywall: "subscription", source: "manual" });
       const result: PAYWALL_RESULT = await RevenueCatUI.presentPaywall(
         offering ? { offering } : undefined,
       );
@@ -411,11 +411,17 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
     try {
       if (customerInfo && hasEntitlement(customerInfo)) return false;
       const { offering, entitlementId } = await resolveOffering();
-      Events.paywallViewed("gated");
       const result: PAYWALL_RESULT = await RevenueCatUI.presentPaywallIfNeeded({
         requiredEntitlementIdentifier: entitlementId,
         ...(offering ? { offering } : {}),
       });
+      // Logged after, not before: presentPaywallIfNeeded can decide the user
+      // already has the entitlement and show nothing, which the check above
+      // doesn't always catch (a stale customerInfo). Still ahead of the
+      // purchase/dismiss event handlePaywallResult logs, so funnels keep order.
+      if (result !== PAYWALL_RESULT.NOT_PRESENTED) {
+        Events.paywallViewed({ paywall: "subscription", source: "gated" });
+      }
       return await handlePaywallResult(result, "gated");
     } catch (err) {
       logger.error("[RevenueCat] presentPaywallIfNeeded failed", err, "rc_present_paywall_if_needed");
@@ -439,19 +445,30 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
         logger.warn("[RevenueCat] in-app-purchases offering not found");
         return "unavailable";
       }
-      Events.paywallViewed("manual");
+      Events.paywallViewed({ paywall: "chat_pack", source: "manual" });
       const result: PAYWALL_RESULT = await RevenueCatUI.presentPaywall({
         offering,
       });
       if (
         result !== PAYWALL_RESULT.PURCHASED &&
         result !== PAYWALL_RESULT.RESTORED
-      )
+      ) {
+        if (result !== PAYWALL_RESULT.NOT_PRESENTED) {
+          Events.paywallDismissed({ paywall: "chat_pack", source: "manual" });
+        }
         return "dismissed";
+      }
 
-      // Resolve quantity from the most recent non-subscription transaction
       const info = await getCustomerInfo();
       setCustomerInfo(info);
+      // A restore inside the sheet buys nothing. It used to fall through and log
+      // the newest past pack as a fresh purchase_completed.
+      if (result === PAYWALL_RESULT.RESTORED) {
+        Events.restorePurchases({ success: true });
+        return { purchased: true, quantity: 0 };
+      }
+
+      // Resolve quantity from the most recent non-subscription transaction
       const recent = info.nonSubscriptionTransactions
         .slice()
         .sort(
