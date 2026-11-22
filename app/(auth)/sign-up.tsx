@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { AppStatusBar } from '@/src/components/app-status-bar';
 import { updateProfile } from 'firebase/auth';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   ImageBackground,
@@ -36,6 +36,7 @@ import { moderateScale, scale, verticalScale } from '@/src/utils/responsive';
 import { Ionicons } from '@expo/vector-icons';
 import LoadingScreen from '../(util)/loading-screen';
 import { logger } from '@/src/utils/logger';
+import { signUpFailureReason, signUpStepName } from '@/src/utils/sign-up-funnel';
 
 // ─── Fallback coordinates (Greenwich) ─────────────────────────────────────────
 
@@ -144,6 +145,7 @@ export default function SignUpChatScreen() {
       } catch (err: any) {
         setIsLoading(false);
         setIsSigningUp(false);
+        Events.signUpFailed({ reason: signUpFailureReason(err) });
         if (err?.code === 'auth/email-already-in-use') {
           // Navigate back to email step — ChatFlow stays mounted so answers are preserved
           const emailStepIdx = steps.findIndex(s => s.key === 'email');
@@ -242,6 +244,8 @@ export default function SignUpChatScreen() {
       router.replace('/(auth)/verify-email');
 
     } catch (err: any) {
+      // Past account creation: the profile, user doc or chart failed to save.
+      Events.signUpFailed({ reason: 'setup' });
       Alert.alert('Sign Up Error', parseAuthError(err));
       setIsLoading(false);
       setIsSigningUp(false);
@@ -270,6 +274,16 @@ export default function SignUpChatScreen() {
     { key: 'final',        inputType: 'final',
     },
   ];
+
+  // Funnel: log each step the first time it is reached. Back-and-forth and the
+  // email-in-use bounce revisit steps already logged, so they don't re-count.
+  const stepsReached = useRef(new Set<number>());
+  const stepKey = steps[step]?.key;
+  useEffect(() => {
+    if (stepKey === undefined || stepsReached.current.has(step)) return;
+    stepsReached.current.add(step);
+    Events.signUpStep({ step: signUpStepName(stepKey), step_number: step + 1 });
+  }, [step, stepKey]);
 
   return (
     <ImageBackground source={theme.backgroundImage} style={styles.background} resizeMode="cover">
