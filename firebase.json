@@ -61,5 +61,8 @@
   },
   "storage": {
     "rules": "storage.rules"
+  },
+  "react-native": {
+    "google_analytics_automatic_screen_reporting_enabled": false
   }
 }
