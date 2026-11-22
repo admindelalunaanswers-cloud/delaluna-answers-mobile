@@ -21,6 +21,7 @@ import SectionTitle from '@/src/components/shared/section-title.component';
 import { TourTarget } from '@/src/components/tour/tour-target';
 import { TOUR_TARGETS } from '@/src/constants/tour';
 import { useReducedMotion } from '@/src/context/accessibility-context';
+import { useTour } from '@/src/context/tour-context';
 import { ThemedView } from '@/src/components/themed-view';
 import { HOME_STRINGS } from '@/src/constants/strings';
 import type { DailyCardPack } from '@/src/schemas/dailyCardPack.schema';
@@ -37,6 +38,7 @@ import { useResponsive } from '@/src/hooks/use-responsive';
 import { verticalScale } from '@/src/utils/responsive';
 import { getContentPadding } from '@/src/utils/layout';
 import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
+import { useSectionsReached } from '@/src/hooks/use-sections-reached';
 import { logger } from '@/src/utils/logger';
 import { Events, relativeDay, trackInteraction } from '@/src/services/analytics.service';
 
@@ -229,6 +231,18 @@ export default function HomeScreen() {
     Events.horoscopeViewed({ day: relativeDay(selectedDate, todayDateId) });
   }, [activeHoroscope, isPaygated, selectedDate, todayDateId]);
 
+  // Read depth: which sections of the day's reading people scroll far enough to
+  // see. Counted per day (`resetKey`), and only while that day's reading is
+  // actually readable — not generating, not under the paygate. Off while the
+  // first-run tour runs: it scrolls this list itself, and anything it marked as
+  // reached would never be counted when the user later scrolls there.
+  const { status: tourStatus } = useTour();
+  const sections = useSectionsReached(
+    (key) => trackInteraction({ screen: 'home', feature: 'reading_section', action: 'view', item: key }),
+    !!activeHoroscope && !isPaygated && tourStatus !== 'running',
+    selectedDate,
+  );
+
   /** `feature` says which upgrade prompt was tapped: the paygate or a banner. */
   const handleUnlock = (feature: 'paygate' | 'ad_banner_full' | 'ad_banner') => {
     trackInteraction({ screen: 'home', feature, action: 'unlock', item: relativeDay(selectedDate, todayDateId) });
@@ -288,26 +302,44 @@ export default function HomeScreen() {
           style={styles.scroll}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: verticalScale(2), paddingHorizontal: getContentPadding(screenWidth) }]}
           showsVerticalScrollIndicator={false}
+          onScroll={sections.onScroll}
+          onLayout={sections.onViewportLayout}
+          scrollEventThrottle={250}
         >
-          <SectionTitle sectionName="quote" title="Quote" />
-          <HomeTextBox sectionName="quote" content={activeHoroscope?.quote} generating={isGenerating} />
+          {/* Each section is wrapped in a View only so read depth can measure
+              it; a plain View adds no layout of its own. */}
+          <View onLayout={sections.onLayout('quote')}>
+            <SectionTitle sectionName="quote" title="Quote" />
+            <HomeTextBox sectionName="quote" content={activeHoroscope?.quote} generating={isGenerating} />
+          </View>
 
-          <SectionTitle sectionName="advice" title="Advice" />
-          <HomeTextBox sectionName="advice" content={activeHoroscope?.advice} generating={isGenerating} />
+          <View onLayout={sections.onLayout('advice')}>
+            <SectionTitle sectionName="advice" title="Advice" />
+            <HomeTextBox sectionName="advice" content={activeHoroscope?.advice} generating={isGenerating} />
+          </View>
 
-          <SectionTitle sectionName="dos" title="Do's" />
-          <HomeTextBox sectionName="dos" content={activeHoroscope?.do ?? []} generating={isGenerating} />
+          <View onLayout={sections.onLayout('dos')}>
+            <SectionTitle sectionName="dos" title="Do's" />
+            <HomeTextBox sectionName="dos" content={activeHoroscope?.do ?? []} generating={isGenerating} />
+          </View>
 
-          <SectionTitle sectionName="donts" title="Don'ts" />
-          <HomeTextBox sectionName="donts" content={activeHoroscope?.dont ?? []} generating={isGenerating} />
+          <View onLayout={sections.onLayout('donts')}>
+            <SectionTitle sectionName="donts" title="Don'ts" />
+            <HomeTextBox sectionName="donts" content={activeHoroscope?.dont ?? []} generating={isGenerating} />
+          </View>
 
-          <SectionTitle sectionName="affirmation" title="Affirmation" />
-          <HomeTextBox sectionName="affirmation" content={activeHoroscope?.affirmation} generating={isGenerating} />
+          <View onLayout={sections.onLayout('affirmation')}>
+            <SectionTitle sectionName="affirmation" title="Affirmation" />
+            <HomeTextBox sectionName="affirmation" content={activeHoroscope?.affirmation} generating={isGenerating} />
+          </View>
 
           <TourTarget
             id={TOUR_TARGETS.homeCards}
             onActivate={showCardsForTour}
-            onLayout={(e) => { cardsSectionY.current = e.nativeEvent.layout.y; }}
+            onLayout={(e) => {
+              cardsSectionY.current = e.nativeEvent.layout.y;
+              sections.onLayout('tarot')(e);
+            }}
           >
             <SectionTitle sectionName="tarot" title="Today's Cards" />
             <HomeTextBox
@@ -323,24 +355,32 @@ export default function HomeScreen() {
           <TourTarget
             id={TOUR_TARGETS.homeMessageBottle}
             onActivate={showBottleForTour}
-            onLayout={(e) => { bottleSectionY.current = e.nativeEvent.layout.y; }}
+            onLayout={(e) => {
+              bottleSectionY.current = e.nativeEvent.layout.y;
+              sections.onLayout('message')(e);
+            }}
           >
             <SectionTitle sectionName="message" title="Message in a Bottle" />
             <HomeTextBox sectionName="message" />
           </TourTarget>
 
-          <SectionTitle sectionName="moon" title="Moon Phase" />
-          <HomeTextBox
-            sectionName="moon"
-            content={activeHoroscope?.moon}
-            contentTwo={activeHoroscope?.moonPhaseDetails}
-            moonData={activeMoonData}
-            generating={isGenerating}
-          />
+          <View onLayout={sections.onLayout('moon')}>
+            <SectionTitle sectionName="moon" title="Moon Phase" />
+            <HomeTextBox
+              sectionName="moon"
+              content={activeHoroscope?.moon}
+              contentTwo={activeHoroscope?.moonPhaseDetails}
+              moonData={activeMoonData}
+              generating={isGenerating}
+            />
+          </View>
 
-          <SectionTitle sectionName="retrograde" title="Planets in Retrograde" />
-          <HomeTextBox sectionName="retrograde" content={isGenerating ? [] : retrogrades} generating={isGenerating} />
+          <View onLayout={sections.onLayout('retrograde')}>
+            <SectionTitle sectionName="retrograde" title="Planets in Retrograde" />
+            <HomeTextBox sectionName="retrograde" content={isGenerating ? [] : retrogrades} generating={isGenerating} />
+          </View>
 
+          <View onLayout={sections.onLayout('new_love')}>
           <SectionTitle sectionName="newLove" title="New Love" />
           <Text style={styles.sectionDefinition}>{HOME_STRINGS.newLove.definition}</Text>
           <HomeTextBox sectionName="newLove" content={activeHoroscope?.newLove ?? []} generating={isGenerating} />
@@ -353,7 +393,9 @@ export default function HomeScreen() {
           >
             <Text style={styles.questionButtonText}>{HOME_STRINGS.newLove.questionFunnel}</Text>
           </TouchableOpacity>
+          </View>
 
+          <View onLayout={sections.onLayout('returns')}>
           <SectionTitle sectionName="returns" title="Returns" />
           <Text style={styles.sectionDefinition}>{HOME_STRINGS.returns.definition}</Text>
           <HomeTextBox sectionName="returns" content={activeHoroscope?.returns ?? []} generating={isGenerating} />
@@ -375,12 +417,17 @@ export default function HomeScreen() {
           >
             <Text style={styles.questionButtonText}>{HOME_STRINGS.returns.questionFunnel2}</Text>
           </TouchableOpacity>
+          </View>
 
-          <SectionTitle sectionName="luckyNumbers" title="Lucky Numbers" />
-          <HomeTextBox sectionName="luckyNumbers" content={activeHoroscope?.luckyNumbers ?? []} generating={isGenerating} />
+          <View onLayout={sections.onLayout('lucky_numbers')}>
+            <SectionTitle sectionName="luckyNumbers" title="Lucky Numbers" />
+            <HomeTextBox sectionName="luckyNumbers" content={activeHoroscope?.luckyNumbers ?? []} generating={isGenerating} />
+          </View>
 
-          <SectionTitle sectionName="warning" title="Warning" />
-          <HomeTextBox sectionName="warning" content={activeHoroscope?.warning} generating={isGenerating} />
+          <View onLayout={sections.onLayout('warning')}>
+            <SectionTitle sectionName="warning" title="Warning" />
+            <HomeTextBox sectionName="warning" content={activeHoroscope?.warning} generating={isGenerating} />
+          </View>
         </ScrollView>
         {!hasPremiumAccess && (() => {
           // Free users get a 3-way rotation; premium + trial see nothing.

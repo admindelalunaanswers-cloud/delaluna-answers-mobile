@@ -1,5 +1,6 @@
 import React from 'react';
-import { act, render } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { ScrollView, View } from 'react-native';
 
 import HomeScreen from '@/app/(main)/index';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
@@ -30,8 +31,8 @@ jest.mock('@/src/context/user-context', () => {
   return { useUser: () => value };
 });
 jest.mock('@/src/context/horoscope-context', () => {
-  const value = { chartDetails: null, horoscope: null, transitMoon: null, breakdown: null };
-  return { useHoroscope: () => value };
+  const value = { chartDetails: null, horoscope: null as unknown, transitMoon: null, breakdown: null };
+  return { useHoroscope: () => value, __value: value };
 });
 jest.mock('@/src/context/revenuecat-context', () => ({ useRevenueCat: jest.fn() }));
 jest.mock('@/src/hooks/use-screen-perf-log', () => {
@@ -146,6 +147,78 @@ describe('HomeScreen', () => {
         { screen: 'home', feature: 'date_switcher', action: 'select', item: 'tomorrow' },
         { screen: 'home', feature: 'date_switcher', action: 'select', item: 'yesterday' },
       ]);
+    });
+
+    describe('read depth', () => {
+      const horoscope = (jest.requireMock('@/src/context/horoscope-context') as any).__value;
+      const PaygateOverlay = jest.requireMock('@/src/components/shared/paygate-overlay.component') as jest.Mock;
+      const layoutEvent = (y: number, height: number) => ({ nativeEvent: { layout: { x: 0, y, width: 300, height } } });
+      const scrollEvent = (y: number) => ({ nativeEvent: { contentOffset: { x: 0, y } } });
+      const sectionViews = () => interactions().filter((e: any) => e.feature === 'reading_section');
+      const reading = { quote: 'q', advice: 'a', do: [], dont: [], planetsRetrograde: [] };
+
+      /** The reading's section wrappers, top to bottom: quote … warning. */
+      const sections = () =>
+        screen.UNSAFE_getByType(ScrollView).findAll((n) => n.type === View && !!n.props.onLayout);
+      /** Lay the list out: a 500pt viewport over quote (0), advice (250) and warning (3000). */
+      const layOut = () => {
+        const [quote, advice] = sections();
+        const warning = sections().at(-1)!;
+        fireEvent(screen.UNSAFE_getByType(ScrollView), 'layout', layoutEvent(0, 500));
+        fireEvent(quote, 'layout', layoutEvent(0, 200));
+        fireEvent(advice, 'layout', layoutEvent(250, 200));
+        fireEvent(warning, 'layout', layoutEvent(3000, 200));
+      };
+      const view = (item: string) => ({ screen: 'home', feature: 'reading_section', action: 'view', item });
+
+      beforeEach(() => {
+        // Draw the list under the paygate, which these tests need to scroll.
+        PaygateOverlay.mockImplementation(({ children }) => children);
+        horoscope.horoscope = reading;
+      });
+      afterEach(() => {
+        PaygateOverlay.mockImplementation(() => null);
+        horoscope.horoscope = null;
+      });
+
+      it('measures every section of the reading', async () => {
+        render(<HomeScreen />);
+        await act(async () => {});
+
+        expect(sections()).toHaveLength(13);
+      });
+
+      it('reports each section once per day, as it scrolls into view', async () => {
+        render(<HomeScreen />);
+        await act(async () => {});
+        layOut();
+        fireEvent.scroll(screen.UNSAFE_getByType(ScrollView), scrollEvent(2900));
+        fireEvent.scroll(screen.UNSAFE_getByType(ScrollView), scrollEvent(0));
+        expect(sectionViews()).toEqual([view('quote'), view('advice'), view('warning')]);
+
+        // Tomorrow's reading lands, and the user switches to it: read from the top again.
+        // (Tomorrow's id comes from the real clock, unlike the mocked today: the later of the two.)
+        const [, tomorrow] = [...(subscribeToHoroscope as jest.Mock).mock.calls].sort((x, y) => x[1].localeCompare(y[1]));
+        await act(async () => tomorrow[2](reading));
+        await act(async () => lastProps(DateSwitcher).onChange(tomorrow[1]));
+
+        expect(sectionViews()).toEqual([
+          view('quote'), view('advice'), view('warning'),
+          view('quote'), view('advice'),
+        ]);
+      });
+
+      // Under the paygate a free user sees a blurred skeleton, not the reading.
+      it('counts nothing on a paygated day', async () => {
+        (useRevenueCat as jest.Mock).mockReturnValue({ hasFullAccess: false, loading: false });
+        render(<HomeScreen />);
+        await act(async () => {});
+        await act(async () => lastProps(DateSwitcher).onChange('2026-10-20'));
+        layOut();
+        fireEvent.scroll(screen.UNSAFE_getByType(ScrollView), scrollEvent(2900));
+
+        expect(sectionViews()).toEqual([]);
+      });
     });
 
     it('reports the View chart link', async () => {

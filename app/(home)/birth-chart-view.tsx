@@ -15,6 +15,7 @@ import NatalTable from '@/src/components/natalChart/natal-chart-table.tab';
 import { useHoroscope } from '@/src/context/horoscope-context';
 import { useRevenueCat } from '@/src/context/revenuecat-context';
 import { useScreenPerfLog } from '@/src/hooks/use-screen-perf-log';
+import { useSectionsReached } from '@/src/hooks/use-sections-reached';
 import PremiumUnlock from '@/src/components/shared/premium-unlock.component';
 import SkeletonLines from '@/src/components/shared/skeleton-lines';
 import { scale, verticalScale, moderateScale } from '@/src/utils/responsive';
@@ -60,6 +61,9 @@ export default function BirthChartScreen() {
       const locked = !isPremium && (tab === 'Planets' || tab === 'Aspects');
       trackInteraction({ screen: 'birth_chart', feature: locked ? 'breakdown_tab_locked' : 'breakdown_tab', action: 'select', item: tab });
     }
+    // The outgoing tab's cards are about to unmount; their positions would
+    // otherwise be counted against the incoming tab's scroll.
+    if (tab !== breakdownTab) sections.clearLayouts();
     // Save current position before leaving
     scrollOffsets.current[breakdownTab] = scrollOffsets.current[breakdownTab] ?? 0;
     // Switch tab
@@ -113,13 +117,27 @@ export default function BirthChartScreen() {
     Events.natalBreakdownViewed({ premium: isPremium });
   }, [isBreakdownLoading, activeBreakdown, isPremium]);
 
+  // Read depth: which cards of each breakdown tab people scroll far enough to
+  // see. Keys are `tab/item` (`houses/house_7`), reported as feature
+  // `houses_section`, item `house_7`. Once per card per visit — switching back
+  // to a tab doesn't count its cards again. Held off while the breakdown loads.
+  const sections = useSectionsReached(
+    (key) => {
+      const [tab, item] = key.split('/');
+      trackInteraction({ screen: 'birth_chart', feature: `${tab}_section`, action: 'view', item });
+    },
+    !isBreakdownLoading && !!activeBreakdown,
+  );
+  /** `onLayout` for one card of the current tab. */
+  const sectionLayout = (item: string) => sections.onLayout(`${breakdownTab.toLowerCase()}/${item}`);
+
   // ─── Render helpers ─────────────────────────────────────────────────────────
 
   /** A labeled card used in the Insights tab */
   function renderInsightCard(label: string, content: string | undefined, title?: string) {
     if (!content) return null;
     return (
-      <ThemedView key={label} style={styles.insightCard}>
+      <ThemedView key={label} style={styles.insightCard} onLayout={sectionLayout(label.toLowerCase().replace(/ /g, '_'))}>
         {/* Headings, so the rotor can jump card to card */}
         <ThemedText style={styles.insightLabel} accessibilityRole="header">{label}</ThemedText>
         {title ? <ThemedText style={styles.insightTitle}>{title}</ThemedText> : null}
@@ -158,7 +176,8 @@ export default function BirthChartScreen() {
       ? houses
       : houses.map(h => ({ ...h, locked: !freeUnlockedHouses.has(h.house) }));
     return displayHouses.map((h) => (
-      <ThemedView key={h.house} style={styles.card}>
+      // Locked houses show only a header — nothing to read, so not measured.
+      <ThemedView key={h.house} style={styles.card} onLayout={h.locked ? undefined : sectionLayout(`house_${h.house}`)}>
         <ThemedView
           style={styles.cardHeader}
           accessible
@@ -187,7 +206,7 @@ export default function BirthChartScreen() {
   function renderPlanets(planets: NatalChartBreakdownResult['planets']) {
     if (!planets?.length) return <ThemedText style={styles.emptyText}>No planet data.</ThemedText>;
     return planets.map((p) => (
-      <ThemedView key={p.name} style={styles.card}>
+      <ThemedView key={p.name} style={styles.card} onLayout={sectionLayout(String(p.name).toLowerCase())}>
         <ThemedView style={styles.cardHeader} accessible accessibilityRole="header">
           <ThemedText style={styles.cardTitle}>
             {p.name} in {p.sign} {p.degree}
@@ -202,7 +221,8 @@ export default function BirthChartScreen() {
   function renderAspects(aspects: NatalChartBreakdownResult['aspects']) {
     if (!aspects?.length) return <ThemedText style={styles.emptyText}>No aspect data.</ThemedText>;
     return aspects.map((a, i) => (
-      <ThemedView key={i} style={styles.card}>
+      // By position, not by the planet pair: depth is what's being measured.
+      <ThemedView key={i} style={styles.card} onLayout={sectionLayout(`aspect_${i + 1}`)}>
         <ThemedView style={styles.cardHeader} accessible accessibilityRole="header">
           <ThemedText style={styles.cardTitle}>
             {a.planet1} {a.aspect} {a.planet2}
@@ -354,7 +374,9 @@ export default function BirthChartScreen() {
             showsVerticalScrollIndicator={false}
             onScroll={e => {
               scrollOffsets.current[breakdownTab] = e.nativeEvent.contentOffset.y;
+              sections.onScroll(e);
             }}
+            onLayout={sections.onViewportLayout}
             scrollEventThrottle={16}
           >
             {renderBreakdownContent()}
